@@ -410,6 +410,8 @@ module Runner {
                 "sourcePath": str(source.resolve()),
                 "bodyStart": source.read_bytes().index(b"{"),
                 "bodyEnd": len(source.read_bytes().rstrip()) - 1,
+                "start": source.read_bytes().index(b"module Runner"),
+                "end": len(source.read_bytes().rstrip()),
             },
         ],
         "imports": [

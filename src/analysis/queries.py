@@ -7,11 +7,11 @@ from pathlib import Path
 
 from standard_library import is_allowed_dafny_standard_library_symbol
 
+from .kinds import DefinitionKind
 from .models import (
     DafnyDefinitionSemanticFingerprint,
     DafnySourceSemanticFingerprint,
     DefinitionInfo,
-    DefinitionKind,
     DefinitionSourceFacts,
 )
 
@@ -81,6 +81,8 @@ def spec_dependency_closure(
         DefinitionKind.PREDICATE,
         DefinitionKind.TWOSTATE_FUNCTION,
         DefinitionKind.TWOSTATE_PREDICATE,
+        DefinitionKind.LEAST_PREDICATE,
+        DefinitionKind.GREATEST_PREDICATE,
     }
     roots: list[DefinitionInfo] = []
     for source_path, full_name in resolved_entries:
@@ -96,11 +98,27 @@ def spec_dependency_closure(
             )
         roots.append(root)
 
+    return definition_dependency_closure(
+        infos, source_paths=source_paths, root_symbols={root.full_name for root in roots}
+    )
+
+
+def definition_dependency_closure(
+    infos: Collection[DefinitionInfo],
+    *,
+    source_paths: Collection[Path],
+    root_symbols: Collection[str],
+    boundary_symbols: Collection[str] = (),
+) -> tuple[DefinitionInfo, ...]:
+    """Follow authored declarations up to already-retained source boundaries."""
+    allowed_paths = {str(path.resolve()) for path in source_paths}
+    by_full_name = _definition_infos_by_full_name(infos)
+    boundaries = set(boundary_symbols)
     closure: dict[str, DefinitionInfo] = {}
-    pending = sorted({root.full_name for root in roots}, reverse=True)
+    pending = sorted(set(root_symbols), reverse=True)
     while pending:
         full_name = pending.pop()
-        if full_name in closure:
+        if full_name in closure or full_name in boundaries:
             continue
         if is_allowed_dafny_standard_library_symbol(full_name):
             continue

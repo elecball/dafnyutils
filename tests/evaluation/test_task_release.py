@@ -1,5 +1,6 @@
 """Black-box contracts for public release publication and restoration."""
 
+import hashlib
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -8,6 +9,7 @@ import pytest
 
 import benchmarks.generated_profile as generated_profile
 import evaluation.task.release as release_module
+from analysis.kinds import DefinitionKind
 from benchmarks.task import TaskProfile
 from evaluation.task.release import load_release, prepare_release, publish_release
 
@@ -88,6 +90,53 @@ def test_public_release_materializes_declared_resources(
     ).read_bytes()
     assert "bench/utils/true/Tests.dfy" not in manifest.files
     assert "bench/utils/true/Makefile" not in manifest.files
+
+
+# A freshly published Paste task retains its alias and restores protected formal resources.
+def test_public_release_restores_paste_type_alias(tmp_path: Path) -> None:
+    directory = tmp_path / "release"
+    manifest = publish_release(("paste",), directory)
+    restored = prepare_release(directory, tmp_path / "workspace")
+    task = restored.tasks["paste"]
+    public = TaskProfile.from_json_file(task.input_layout.task_path)
+    contract = task.input_layout.prepared_task.entry_analysis.manifest
+
+    assert restored.release_id == manifest.release_id
+    assert tuple(restored.tasks) == ("paste",)
+    assert public == manifest.tasks["paste"].profile
+    assert any(
+        definition.symbol == "PasteSpec.DelimPlan"
+        and definition.kind is DefinitionKind.TYPE_SYNONYM
+        for definition in contract.spec_definitions
+    )
+    assert contract.execution_entry.model_dump() == public.dafny.execution_entry.model_dump()
+    assert "bench/utils/paste/PasteSpec.dfy" in manifest.fixed_files
+    for resource in public.resources:
+        artifact = task.input_layout.visible_artifacts[resource.resource_id]
+        assert (
+            hashlib.sha256(artifact.read_bytes()).hexdigest() == manifest.fixed_files[resource.path]
+        )
+    task.input_layout.prepared_task.validate_source_identity(repository_root=restored.workspace)
+
+
+# The retained CLI scaffold preserves specification helpers outside RunCore's own contract.
+def test_public_release_restores_link_cli_dependencies(tmp_path: Path) -> None:
+    directory = tmp_path / "release"
+    manifest = publish_release(("link",), directory)
+    restored = prepare_release(directory, tmp_path / "workspace")
+    prepared = restored.tasks["link"].input_layout.prepared_task
+    contract = prepared.entry_analysis.manifest
+
+    assert {entry.symbol for entry in contract.spec_entries} == {"LinkSpec.Spec"}
+    assert "LinkSpec.ParseErrorText" in {
+        definition.symbol for definition in contract.spec_definitions
+    }
+    assert "bench/utils/link/LinkSpec.dfy::LinkSpec.ParseErrorText" in (
+        contract.spec_definition_sha256
+    )
+    assert "bench/utils/link/LinkCore.dfy" not in manifest.fixed_files
+    assert "bench/utils/link/LinkProof.dfy" not in manifest.fixed_files
+    prepared.validate_source_identity(repository_root=restored.workspace)
 
 
 # Publication rejects a formal resource if its filtered public source was not generated.

@@ -308,3 +308,22 @@ def test_trx_counts_rejects_invalid_report(tmp_path: Path) -> None:
         _trx_counts(report)
     with pytest.raises(OSError):
         _trx_counts(tmp_path / "missing.trx")
+
+
+# Newly inventoried constrained types must still fail verification when their witness is invalid.
+@pytest.mark.parametrize("type_keyword", ("type", "newtype"))
+def test_run_rejects_invalid_type_witness(tmp_path: Path, capfd, type_keyword: str) -> None:
+    workspace_root, utility_root, manifest_path, _ = _write_contract(tmp_path)
+    (utility_root / "Proof.dfy").write_text(
+        f"module Proof {{ {type_keyword} Positive = value: int | value > 0 witness 0 }}\n",
+        encoding="utf-8",
+    )
+    manifest = create_manifest(
+        workspace_root,
+        utility_root,
+        DafnyEntry("bench/utils/toy/Entry.dfy", "Runner.RunCore"),
+    )
+    manifest_path.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")
+
+    assert run(workspace_root, utility_root, manifest_path, dafny_command()) == 1
+    assert "DAFNY_VERIFICATION_OUTCOME=verification_failure phase=verify" in capfd.readouterr().out

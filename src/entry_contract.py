@@ -23,6 +23,7 @@ from analysis.models import (
     DefinitionInfo,
 )
 from analysis.queries import (
+    definition_dependency_closure,
     definition_semantic_fingerprint,
     source_semantic_fingerprint,
     spec_dependency_closure,
@@ -429,6 +430,27 @@ def _resolve_contract(
             source_paths=analysis_inputs,
             spec_entries=tuple((Path(info.source_path), info.full_name) for info in spec_entries),
         )
+        scaffold_closure = definition_dependency_closure(
+            infos,
+            source_paths=analysis_inputs,
+            root_symbols={
+                *execution.header_dependencies,
+                *(
+                    info.full_name
+                    for info in infos
+                    if info.source_path == str(execution_source)
+                    and info.full_name != execution.full_name
+                ),
+            },
+            boundary_symbols=(execution.full_name,),
+        )
+        retained = {info.full_name: info for info in closure}
+        retained.update(
+            (info.full_name, info)
+            for info in scaffold_closure
+            if info.source_path != str(execution_source)
+        )
+        closure = tuple(retained[name] for name in sorted(retained))
     except RuntimeError as error:
         raise EntryValidationFailure(str(error)) from error
     return _ResolvedContract(

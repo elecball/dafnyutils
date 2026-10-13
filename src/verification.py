@@ -100,7 +100,21 @@ def _verify_sources(
     libraries: tuple[Path, ...] = (),
 ) -> tuple[int, int] | None:
     if any(
-        definition.body_start is None and definition.kind is not DefinitionKind.DATATYPE
+        definition.body_start is None
+        and definition.kind
+        in {
+            DefinitionKind.METHOD,
+            DefinitionKind.CONSTRUCTOR,
+            DefinitionKind.CONSTANT,
+            DefinitionKind.FUNCTION,
+            DefinitionKind.PREDICATE,
+            DefinitionKind.TWOSTATE_FUNCTION,
+            DefinitionKind.TWOSTATE_PREDICATE,
+            DefinitionKind.ITERATOR,
+            DefinitionKind.FUNCTION_BY_METHOD,
+            DefinitionKind.LEAST_PREDICATE,
+            DefinitionKind.GREATEST_PREDICATE,
+        }
         for definition in contract.verification_definitions
     ):
         _emit_outcome("verification_failure", "verify")

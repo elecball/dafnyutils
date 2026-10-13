@@ -142,6 +142,35 @@ def test_entry_contract_derives_split_specification_entries(tmp_path: Path) -> N
     )
 
 
+# Mutating an alias used only in RunCore's header violates the protected declaration contract.
+def test_entry_contract_rejects_header_type_dependency_mutation(tmp_path: Path) -> None:
+    contract = _workspace(tmp_path)
+    pre = contract[1] / "Pre.dfy"
+    pre.write_text(
+        pre.read_text(encoding="utf-8").replace(
+            "  import Shared", "  import Shared\n  type Input = int"
+        ),
+        encoding="utf-8",
+    )
+    implementation = contract[1] / "Implementation.dfy"
+    implementation.write_text(
+        implementation.read_text(encoding="utf-8").replace(
+            "RunCore(value: int)", "RunCore(value: Pre.Input)"
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = create_manifest(*contract)
+
+    assert "Pre.Input" in {definition.symbol for definition in manifest.spec_definitions}
+    pre.write_text(
+        pre.read_text(encoding="utf-8").replace("type Input = int", "type Input = nat"),
+        encoding="utf-8",
+    )
+    with pytest.raises(EntryValidationFailure, match="specification definition changed"):
+        validate_manifest(contract[0], contract[1], manifest)
+
+
 # Semantic fingerprints must allow body and comment edits outside the locked contract.
 def test_entry_contract_allows_candidate_body_and_comment_edits(tmp_path: Path) -> None:
     contract, manifest = _manifest(tmp_path)
@@ -376,9 +405,15 @@ def test_chmod_entry_contract_records_split_specification_sources() -> None:
         for definition in generated.dafny.spec_definitions
     )
     assert {key.split("::", 1)[0] for key in manifest.spec_definition_sha256} == {
+        "bench/core/BenchmarkItem.dfy",
+        "bench/core/CliExtern.dfy",
+        "bench/core/CliModel.dfy",
+        "bench/core/CliTypes.dfy",
         "bench/core/Errno.dfy",
         "bench/core/IO.dfy",
         "bench/core/IOContract.dfy",
+        "bench/core/Result.dfy",
+        "bench/core/SecurityModel.dfy",
         "bench/core/Utf8.dfy",
         "bench/core/World.dfy",
         "bench/core/WorldLookupProof.dfy",

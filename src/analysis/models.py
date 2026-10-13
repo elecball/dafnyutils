@@ -66,6 +66,8 @@ class DefinitionAnalysisModule(BaseModel):
     source_path: StrictStr = Field(alias="sourcePath")
     body_start: StrictInt = Field(alias="bodyStart")
     body_end: StrictInt = Field(alias="bodyEnd")
+    start: StrictInt
+    end: StrictInt
 
 
 class DefinitionAnalysisImport(BaseModel):
@@ -341,6 +343,11 @@ class DefinitionInfo(BaseModel):
     contract_header_with_axiom: StrictStr = Field(default="", alias="contractHeaderWithAxiom")
     references: tuple[DefinitionReference, ...]
     dependencies: tuple[StrictStr, ...] = ()
+    children: tuple[DafnyFingerprintSpan, ...] = ()
+    source_group: DafnyFingerprintSpan | None = Field(default=None, alias="sourceGroup")
+    yield_requires: tuple[StrictStr, ...] = Field(default=(), alias="yieldRequires")
+    yield_ensures: tuple[StrictStr, ...] = Field(default=(), alias="yieldEnsures")
+    header_dependencies: tuple[StrictStr, ...] = Field(default=(), alias="headerDependencies")
 
 
 DEFINITION_INFO_LIST = TypeAdapter(list[DefinitionInfo])
