@@ -17,6 +17,12 @@ if [[ ! -f "$exclude_file" ]] || ! grep -Fxq '/m4/extern-inline.m4' "$exclude_fi
     printf '\n/m4/extern-inline.m4\n' >> "$exclude_file"
 fi
 export PATH="/workspace/dafnyutils/.venv/bin:$PATH"
+mkdir -p /workspace/tmp/update-z3-rebuild
+solver_setup_directory=$(mktemp -d /workspace/tmp/update-z3-rebuild/dafnyutils-devcontainer-XXXXXX)
+(
+    cd "$solver_setup_directory"
+    make -f /workspace/dafnyutils/dafny/Makefile z3-ubuntu
+)
 make build-dafny
 make check-environment
 
@@ -29,6 +35,10 @@ versions_log="${setup_log%.log}-versions.txt"
     git submodule status --recursive
     printf '\nDafny\n'
     dafny-benchmark --version
+    printf '\nZ3\n'
+    z3 --version
+    dafny/Binaries/z3/bin/z3-4.16.0 --version
+    dafny/Binaries/z3/bin/z3-4.12.1 --version
     printf '\n.NET SDKs and runtimes\n'
     dotnet --list-sdks
     dotnet --list-runtimes

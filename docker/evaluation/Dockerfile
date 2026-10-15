@@ -50,7 +50,6 @@ RUN apt-get update \
         unzip \
         wget \
         xz-utils \
-        z3 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb \
@@ -90,7 +89,10 @@ ENV PATH="/run/tools:/opt/dafnyutils-tools:/opt/pytools/bin:/opt/eval-cache/carg
     PYTHONPYCACHEPREFIX=/run/pycache
 
 COPY dafny/Binaries/ /opt/dafnyutils-dafny/Binaries/
-RUN ln -s /opt/dafnyutils-dafny/Binaries/Dafny /usr/bin/dafny-benchmark
+RUN ln -s /opt/dafnyutils-dafny/Binaries/Dafny /usr/bin/dafny-benchmark \
+    && test -x /opt/dafnyutils-dafny/Binaries/z3/bin/z3-4.16.0 \
+    && ln -s /opt/dafnyutils-dafny/Binaries/z3/bin/z3-4.16.0 /usr/local/bin/z3 \
+    && z3 --version | grep -F "Z3 version 4.16.0 "
 
 RUN mkdir -p \
         /workspace/_build \

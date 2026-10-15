@@ -70,7 +70,10 @@ The container name is `<USER>-dafnyutils`, where `<USER>` is the value of `USER`
 on your host. For example, if `USER` is `duncan`, the name is `duncan-dafnyutils`.
 Inside the container, the repository is `/workspace/dafnyutils`.
 
-Setup installs Python 3.12, .NET 8, Rust, Z3, tmux and native build tools.
+Setup installs Python 3.12, .NET 8, Rust, Z3 4.16.0, tmux and native build tools.
+Before building Dafny, setup runs its native `z3-ubuntu` target from a fresh directory
+under `/workspace/tmp/update-z3-rebuild/`, installing bundled Z3 4.16.0 and compatibility
+4.12.1 beside the owner executable. The setup version record includes all three solver commands.
 Budget 10–30 minutes for initial downloads and compilation.
 A clean Linux x86-64 setup used up to about 10 GiB of memory, excluding the image build.
 

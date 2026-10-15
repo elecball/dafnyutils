@@ -1,6 +1,8 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG Z3_VERSION=4.16.0
+ARG Z3_RELEASE=snapshot-2026-04-03
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -57,8 +59,15 @@ RUN apt-get update \
         wget \
         xz-utils \
         zsh \
-        z3 \
     && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /opt/z3/bin \
+    && curl -fsSL "https://github.com/dafny-lang/solver-builds/releases/download/${Z3_RELEASE}/z3-${Z3_VERSION}-x64-ubuntu-24.04-bin.zip" -o /tmp/z3.zip \
+    && unzip /tmp/z3.zip -d /opt/z3/bin \
+    && rm /tmp/z3.zip \
+    && chmod +x "/opt/z3/bin/z3-${Z3_VERSION}" \
+    && ln -s "/opt/z3/bin/z3-${Z3_VERSION}" /usr/local/bin/z3 \
+    && z3 --version | grep -F "Z3 version ${Z3_VERSION} "
 
 RUN ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime \
     && echo "${TZ}" > /etc/timezone
@@ -74,7 +83,8 @@ RUN ln -s /workspace/dafnyutils/dafny/Binaries/Dafny /usr/bin/dafny-benchmark
 
 ENV PATH="/home/vscode/.cargo/bin:${PATH}"
 
-RUN usermod --shell /usr/bin/zsh vscode
+RUN usermod --shell /usr/bin/zsh vscode \
+    && install -d -m 0755 -o vscode -g vscode /workspace/tmp
 
 USER vscode
 
