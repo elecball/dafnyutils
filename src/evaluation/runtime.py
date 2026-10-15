@@ -23,18 +23,22 @@ DAFNY_VERIFY_DOTNET_HEAP_LIMIT = hex(DAFNY_VERIFY_MEMORY_LIMIT_BYTES)
 
 
 def model_json(payload: BaseModel) -> dict[str, Any]:
+    """Serialize a model into JSON-compatible values without absent fields."""
     return payload.model_dump(mode="json", exclude_none=True)
 
 
 def utc_now() -> datetime:
+    """Return the current timezone-aware UTC timestamp."""
     return datetime.now(timezone.utc)
 
 
 def iso(dt: datetime) -> str:
+    """Format a timestamp as ISO8601 with second precision."""
     return dt.isoformat(timespec="seconds")
 
 
 def append_jsonl_dict(path: Path, payload: dict[str, Any]) -> None:
+    """Append one dictionary as a sorted JSON line, creating parent directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(payload, sort_keys=True) + "\n")
@@ -61,6 +65,7 @@ def _append_command_trace_event(
 
 
 def safe_log_name(name: str) -> str:
+    """Replace characters unsuitable for a log filename with hyphens."""
     out = []
     for ch in name:
         if ch.isalnum() or ch in {"-", "_"}:
@@ -71,10 +76,12 @@ def safe_log_name(name: str) -> str:
 
 
 def sha256_hex(payload: bytes) -> str:
+    """Return the hexadecimal SHA256 digest of raw output bytes."""
     return hashlib.sha256(payload).hexdigest()
 
 
 def count_text_lines(payload: bytes) -> int:
+    """Count newline-delimited lines, including a final unterminated line."""
     if not payload:
         return 0
     count = payload.count(b"\n")
@@ -84,6 +91,7 @@ def count_text_lines(payload: bytes) -> int:
 
 
 def utf8_preview(payload: bytes, *, max_chars: int = 4000) -> str:
+    """Decode output and retain its head and tail when the preview is truncated."""
     text = payload.decode("utf-8", errors="replace")
     if len(text) <= max_chars:
         return text
@@ -93,6 +101,7 @@ def utf8_preview(payload: bytes, *, max_chars: int = 4000) -> str:
 
 
 def output_metadata(payload: bytes) -> OutputMetadataModel:
+    """Describe output size, line count, digest and a bounded text preview."""
     return OutputMetadataModel(
         bytes=len(payload),
         line_count=count_text_lines(payload),
@@ -115,7 +124,9 @@ def run_command_capture_bytes(
     trace_context: dict[str, Any] | None = None,
     stdout_path: Path | None = None,
     stderr_path: Path | None = None,
+    collector_exit_grace_sec: float | None = None,
 ) -> tuple[bool, int | None, bytes, bytes]:
+    """Capture a shell command and trace its launch, completion or capture failure."""
     command_trace_context = dict(trace_context or {})
 
     _append_command_trace_event(
@@ -129,6 +140,7 @@ def run_command_capture_bytes(
             cwd=cwd if cwd is not None else REPO_ROOT,
             env=env,
             timeout_sec=timeout_sec,
+            collector_exit_grace_sec=collector_exit_grace_sec,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
             stdout_observer=stdout_observer,
@@ -169,9 +181,11 @@ _SECRET_ENV_KEY_RE = re.compile(
 
 
 def looks_secret_env_key(name: str) -> bool:
+    """Identify environment keys whose names indicate secret-bearing values."""
     return bool(_SECRET_ENV_KEY_RE.search(name))
 
 
 def append_jsonl(path: Path, payload: BaseModel) -> None:
+    """Append one serialized model as a sorted JSON line."""
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(model_json(payload), sort_keys=True) + "\n")
