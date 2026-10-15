@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
 
 import benchmarks.contracts as task_contract
 import evaluation.task.preparation as task_materialization
-import evaluation.task.workspace as benchmark_workspace
 from benchmarks.generated_profile import generate_task_profile
 from benchmarks.paths import REPO_ROOT
 from benchmarks.profiles import ResolvedBenchmark
@@ -113,34 +111,6 @@ def test_prepared_task_reuses_contract_analysis(
 
     assert analysis_calls == 1
     assert Path("bench/utils/cat/CatQuoteSpec.dfy") in task_spec.read_only_paths
-
-
-# A prepared task rejects source edits before workspace generation can slice stale spans.
-def test_prepared_task_rejects_source_edit_before_workspace_generation(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    repository_root = tmp_path / "repository"
-    shutil.copytree(REPO_ROOT / "bench", repository_root / "bench")
-    monkeypatch.setattr(task_materialization, "REPO_ROOT", repository_root)
-    monkeypatch.setattr(task_contract, "REPO_ROOT", repository_root)
-    monkeypatch.setattr(benchmark_workspace, "REPO_ROOT", repository_root)
-    utility = _utility_cfg("cat")
-    layout = task_materialization.materialize_task_inputs(
-        run_dir=tmp_path / "run",
-        utility_cfg=utility,
-        utility_name="cat",
-        validated_profile=_generated_profile("cat", repository_root),
-    )
-    source = repository_root / "bench/utils/cat/Cat.dfy"
-    source.write_text("// source edit\n" + source.read_text(encoding="utf-8"), encoding="utf-8")
-
-    with pytest.raises(ValueError, match="prepared task source snapshot changed"):
-        task_workspace_spec(
-            utility_cfg=utility,
-            utility_name="cat",
-            prepared_task=layout.prepared_task,
-        )
 
 
 # An external task JSON cannot omit a source required by its formal specification closure.

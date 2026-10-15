@@ -369,30 +369,6 @@ def _populate_true_proof_workspace(workspace_root: Path) -> None:
         )
 
 
-# A fresh RunCore scaffold should build and report its unproved body as verification failure.
-def test_proof_workspace_classifies_initial_body_failure(tmp_path: Path) -> None:
-    task_spec = _task_spec("true")
-    roots = materialize_workspace_layout(
-        run_dir=tmp_path / "run",
-        task_input_layout=_task_inputs(tmp_path, "true"),
-        task_spec=task_spec,
-    )
-
-    verification = subprocess.run(
-        ["bash", "eval_support/verify.sh"],
-        cwd=roots.workspace_root,
-        check=False,
-        text=True,
-        capture_output=True,
-    )
-
-    assert verification.returncode != 0
-    assert (
-        verification.stdout.count("DAFNY_VERIFICATION_OUTCOME=verification_failure phase=verify")
-        == 1
-    )
-
-
 # The generated verifier must classify a missing workspace as build infrastructure failure.
 def test_proof_workspace_classifies_missing_workspace_as_build_failure(
     monkeypatch: pytest.MonkeyPatch,

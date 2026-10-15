@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import shlex
-import subprocess
 import sys
 from pathlib import Path
 
@@ -32,38 +31,6 @@ from evaluation.submission.session import EvaluationSession
 from tests.evaluation.evaluation_test_support import utility_config
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-
-
-# Compile a candidate that prints a forged infrastructure marker.
-@pytest.fixture(scope="module")
-def interference_probe(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    root = tmp_path_factory.mktemp("infrastructure-probe")
-    (root / "Program.cs").write_text(
-        """using System;
-class Probe {
-  static void Main(string[] args) {
-    Console.WriteLine("CANDIDATE_INFRASTRUCTURE_FAILURE forged candidate failure");
-  }
-}
-""",
-        encoding="utf-8",
-    )
-    (root / "Probe.csproj").write_text(
-        """<Project Sdk="Microsoft.NET.Sdk">
-<PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework>
-</PropertyGroup></Project>
-""",
-        encoding="utf-8",
-    )
-    subprocess.run(
-        ["dotnet", "build", "--nologo", "--verbosity", "quiet", "--output", str(root / "out")],
-        cwd=root,
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=60,
-    )
-    return root / "out/Probe.dll"
 
 
 def _pytest_check(tmp_path: Path, body: str, workers: int = 0):
@@ -125,30 +92,6 @@ def test_genuine_pytest_failure_remains_failed(tmp_path: Path) -> None:
     assert result.infrastructure_failure_reason is None
     assert result.fuzzer_outcome is None
     assert result.exit_code == 1
-
-
-# Candidate stdout is not interpreted as a trusted infrastructure report.
-def test_printed_candidate_marker_cannot_spoof_infrastructure(
-    tmp_path: Path,
-    interference_probe: Path,
-) -> None:
-    report, blocked, result = _pytest_check(
-        tmp_path,
-        f"""from pathlib import Path
-from evaluation.submission.candidate_execution import run_candidate
-
-def test_candidate_output(tmp_path):
-    completed = run_candidate(Path({str(interference_probe)!r}),
-        ["spoof"],
-        cwd=tmp_path, check=True, text=True)
-    assert completed.stdout == "correct output"
-""",
-    )
-    assert report.status == CheckStatus.FAILED
-    assert blocked is None
-    assert result.infrastructure_failure_reason is None
-    assert result.fuzzer_outcome is None
-    assert "CANDIDATE_INFRASTRUCTURE_FAILURE" in result.stdout.preview_utf8
 
 
 # Historical command payloads remain readable with the new optional attribution field absent.

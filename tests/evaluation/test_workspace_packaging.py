@@ -155,27 +155,6 @@ def test_package_unreadable_entry_cleans_temporary(
     assert not tuple(tmp_path.glob(".result.tar.gz.*.tmp"))
 
 
-# Iterative collection handles directory depth beyond Python's recursion limit.
-def test_package_deep_tree(released_workspace, tmp_path: Path) -> None:
-    manifest, workspace = _copy_workspace(released_workspace, tmp_path)
-    current = workspace / manifest.task_roots[0]
-    directories: list[Path] = []
-    for _ in range(1050):
-        current /= "d"
-        current.mkdir()
-        directories.append(current)
-    (current / "leaf").write_bytes(b"deep")
-    try:
-        output = tmp_path / "result.tar.gz"
-        package_workspace(workspace, manifest, output)
-        with tarfile.open(output, "r:gz") as archive:
-            assert archive.extractfile(f"{manifest.task_roots[0]}/" + "d/" * 1050 + "leaf")
-    finally:
-        (current / "leaf").unlink(missing_ok=True)
-        for directory in reversed(directories):
-            directory.rmdir()
-
-
 # Manifest file-size limits stop packaging before an oversized result is committed.
 def test_package_file_limit(released_workspace, tmp_path: Path) -> None:
     manifest, workspace = _copy_workspace(released_workspace, tmp_path)

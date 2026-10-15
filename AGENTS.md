@@ -143,6 +143,14 @@ we compare its behavior with the original GNU coreutils binaries.
   Add a one-line intention comment immediately above the test or its decorators.
 - Do not test whether a prompt substring appears or does not appear in an LLM
   payload. Test the relevant behavior or structured contract instead.
+- Never add tests whose setup, execution, or teardown can make disk I/O a
+  bottleneck or create substantial filesystem pressure. This includes bulk copies
+  of repository or runtime trees; deep or large temporary trees and excessive file
+  or directory entries; large real file, archive, compiler, or tool outputs written
+  to disk; disk stress tests; and `fsync`, `fdatasync`, or equivalent sync workloads.
+  Bounded tiny files and directories needed to verify behavior remain allowed. Do
+  not justify risky tests by fast local storage, opt-in settings, or skip markers;
+  test boundary behavior with small fixtures, fakes, or mocked I/O.
 - If no Dafny source file changes, exclude `tests/bench` from routine regression
   testing. This does not excuse skipping checks affected by changes to generated
   specifications, verifier invocation, toolchains, or evaluation code. Use focused
