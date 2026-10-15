@@ -118,6 +118,7 @@ def _manifest(
 
 
 # A RunCore with split preconditions and postconditions derives every direct specification root.
+@pytest.mark.integration
 def test_entry_contract_derives_split_specification_entries(tmp_path: Path) -> None:
     contract, manifest = _manifest(tmp_path)
 
@@ -143,6 +144,7 @@ def test_entry_contract_derives_split_specification_entries(tmp_path: Path) -> N
 
 
 # Mutating an alias used only in RunCore's header violates the protected declaration contract.
+@pytest.mark.integration
 def test_entry_contract_rejects_header_type_dependency_mutation(tmp_path: Path) -> None:
     contract = _workspace(tmp_path)
     pre = contract[1] / "Pre.dfy"
@@ -172,6 +174,7 @@ def test_entry_contract_rejects_header_type_dependency_mutation(tmp_path: Path) 
 
 
 # Semantic fingerprints must allow body and comment edits outside the locked contract.
+@pytest.mark.integration
 def test_entry_contract_allows_candidate_body_and_comment_edits(tmp_path: Path) -> None:
     contract, manifest = _manifest(tmp_path)
     implementation = contract[1] / "Implementation.dfy"
@@ -206,6 +209,7 @@ def test_entry_contract_allows_candidate_body_and_comment_edits(tmp_path: Path) 
 
 
 # A changed RunCore specification clause invalidates the derived entry contract.
+@pytest.mark.integration
 def test_entry_contract_rejects_run_core_contract_mutation(tmp_path: Path) -> None:
     contract, manifest = _manifest(tmp_path)
     implementation = contract[1] / "Implementation.dfy"
@@ -221,6 +225,7 @@ def test_entry_contract_rejects_run_core_contract_mutation(tmp_path: Path) -> No
 
 
 # Every source containing a reachable specification definition is immutable.
+@pytest.mark.integration
 def test_entry_contract_rejects_reachable_specification_mutation(tmp_path: Path) -> None:
     contract, manifest = _manifest(tmp_path)
     shared = contract[1] / "Shared.dfy"
@@ -234,6 +239,7 @@ def test_entry_contract_rejects_reachable_specification_mutation(tmp_path: Path)
 
 
 # The command-line build source remains immutable without becoming an execution entry.
+@pytest.mark.integration
 def test_entry_contract_rejects_build_support_source_mutation(tmp_path: Path) -> None:
     contract, manifest = _manifest(tmp_path)
     runtime = contract[3][0]
@@ -250,6 +256,7 @@ def test_entry_contract_rejects_build_support_source_mutation(tmp_path: Path) ->
 
 
 # A utility-local source added after baseline creation is still part of integrity analysis.
+@pytest.mark.integration
 def test_entry_contract_includes_unreferenced_new_file(tmp_path: Path) -> None:
     contract, manifest = _manifest(tmp_path)
     extra = contract[1] / "proofs" / "Extra.dfy"
@@ -261,6 +268,7 @@ def test_entry_contract_includes_unreferenced_new_file(tmp_path: Path) -> None:
 
 
 # Verification sources include reachable candidate files but exclude immutable specifications.
+@pytest.mark.integration
 def test_entry_contract_derives_reachable_candidate_verification_sources(
     tmp_path: Path,
 ) -> None:
@@ -276,6 +284,7 @@ def test_entry_contract_derives_reachable_candidate_verification_sources(
 
 
 # An include escaping the workspace is rejected before verification.
+@pytest.mark.integration
 def test_entry_contract_rejects_include_escape(tmp_path: Path) -> None:
     contract, manifest = _manifest(tmp_path / "workspace")
     _write(tmp_path / "Outside.dfy", "module Outside {}\n")
@@ -286,6 +295,7 @@ def test_entry_contract_rejects_include_escape(tmp_path: Path) -> None:
 
 
 # A candidate cannot resolve any packaged standard-library module before verification.
+@pytest.mark.integration
 def test_entry_contract_rejects_standard_library_import(tmp_path: Path) -> None:
     contract, manifest = _manifest(tmp_path)
     implementation = contract[1] / "Implementation.dfy"
@@ -302,6 +312,7 @@ def test_entry_contract_rejects_standard_library_import(tmp_path: Path) -> None:
 
 
 # A contract result can be reused only while the raw candidate source snapshot is unchanged.
+@pytest.mark.integration
 def test_entry_contract_session_rejects_raw_source_change(tmp_path: Path) -> None:
     contract, manifest = _manifest(tmp_path)
     session = EntryContractCheckSession(contract[0], contract[1], manifest)
@@ -319,6 +330,7 @@ def test_entry_contract_session_rejects_raw_source_change(tmp_path: Path) -> Non
 
 
 # A contract session binds an external include's lexical path and resolved target.
+@pytest.mark.integration
 def test_entry_contract_session_rejects_external_include_retarget(tmp_path: Path) -> None:
     contract = _workspace(tmp_path)
     support_root = tmp_path / "bench" / "core"
@@ -342,6 +354,7 @@ def test_entry_contract_session_rejects_external_include_retarget(tmp_path: Path
 
 
 # An explicitly analyzed support module can provide a specification without an include edge.
+@pytest.mark.integration
 def test_entry_contract_retains_explicit_external_support_specification(tmp_path: Path) -> None:
     utility_root = tmp_path / "bench/utils/toy"
     _write(
@@ -379,6 +392,7 @@ def test_entry_contract_retains_explicit_external_support_specification(tmp_path
 
 
 # The generated chmod contract spans every source containing its reachable definitions.
+@pytest.mark.integration
 def test_chmod_entry_contract_records_split_specification_sources() -> None:
     root = Path(__file__).parents[2]
     manifest = create_manifest(

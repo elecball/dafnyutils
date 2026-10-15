@@ -6,8 +6,12 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from evaluation.submission.container_mounts import build_docker_compose_check_command
 from evaluation.submission.infrastructure import CANDIDATE_INFRASTRUCTURE_REPORT_ENV
+
+pytestmark = pytest.mark.integration
 
 
 def _run_check(

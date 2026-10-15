@@ -11,6 +11,8 @@ from analysis.models import (
 )
 from analysis.source_fingerprints import dafny_source_fingerprints
 
+pytestmark = pytest.mark.integration
+
 
 def _region(
     region_id: str,

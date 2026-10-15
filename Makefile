@@ -1,4 +1,4 @@
-.PHONY: build build-dafny build-image test check check-environment build-coreutils clean
+.PHONY: build build-dafny build-image test test-unit test-integration test-final check check-environment build-coreutils clean
 
 build:
 	@python3 -m benchmarks.make_tasks build --task "$(TASK)"
@@ -13,7 +13,20 @@ build-image:
 	@python3 -m tools.build_image
 
 test:
+ifneq ($(strip $(TASK)),)
 	@python3 -m benchmarks.make_tasks test --task "$(TASK)"
+else
+	@$(MAKE) --no-print-directory test-unit
+endif
+
+test-unit:
+	@python3 -m pytest -c pytest-dev.ini -q
+
+test-integration:
+	@python3 -m pytest -c pytest-dev.ini -q -m integration
+
+test-final:
+	@$(MAKE) --no-print-directory test-unit && $(MAKE) --no-print-directory test-integration
 
 check:
 	@test -n "$$TASK" || { echo 'TASK=<task-id> is required' >&2; exit 2; }

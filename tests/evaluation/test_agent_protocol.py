@@ -83,6 +83,7 @@ def _validate(report: AgentReport, task: AgentTaskPayload, tmp_path: Path) -> st
 
 
 # Delivery preserves the fixed release bytes and projects the complete public contract.
+@pytest.mark.integration
 def test_delivery_preserves_release(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     original = prepared.input_layout.task_path.read_bytes()
@@ -107,6 +108,7 @@ def test_delivery_preserves_release(public_release, tmp_path: Path) -> None:
 
 
 # Agent task delivery cannot replace the published task directory.
+@pytest.mark.integration
 def test_delivery_rejects_public_directory(public_release) -> None:
     manifest, prepared = public_release
     with pytest.raises(ValueError, match="separate"):
@@ -114,6 +116,7 @@ def test_delivery_rejects_public_directory(public_release) -> None:
 
 
 # Delivery rejects a public resource replaced by a symlink before reading it.
+@pytest.mark.integration
 def test_delivery_rejects_linked_resource(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     workspace = tmp_path / "workspace"
@@ -129,6 +132,7 @@ def test_delivery_rejects_linked_resource(public_release, tmp_path: Path) -> Non
 
 
 # The launcher command uses the benchmark's candidate layout and a nonempty prompt.
+@pytest.mark.integration
 def test_agent_command_layout(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     payload = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -141,6 +145,7 @@ def test_agent_command_layout(public_release, tmp_path: Path) -> None:
 
 
 # An invalid agent task schema is rejected when the payload is read.
+@pytest.mark.integration
 def test_agent_task_rejects_schema(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     payload = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -151,6 +156,7 @@ def test_agent_task_rejects_schema(public_release, tmp_path: Path) -> None:
 
 
 # Agent task resource paths cannot escape the delivered task directory.
+@pytest.mark.integration
 def test_agent_task_rejects_resource_traversal(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     payload = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -175,6 +181,7 @@ def test_agent_report_rejects_invalid_json(tmp_path: Path) -> None:
 
 
 # Benchmark identity labels remain opaque to allow independent harnesses.
+@pytest.mark.integration
 def test_agent_report_accepts_opaque_identity(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -184,6 +191,7 @@ def test_agent_report_accepts_opaque_identity(public_release, tmp_path: Path) ->
 
 
 # Completion accounts for every public resource, including support resources.
+@pytest.mark.integration
 def test_completed_report_records_all_resources(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -192,6 +200,7 @@ def test_completed_report_records_all_resources(public_release, tmp_path: Path) 
 
 
 # A successful process cannot hide an omitted public resource in its consumption record.
+@pytest.mark.integration
 def test_completed_report_rejects_partial_consumption(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -202,6 +211,7 @@ def test_completed_report_rejects_partial_consumption(public_release, tmp_path: 
 
 
 # A failed report may record no consumption or the complete contract, never a subset.
+@pytest.mark.integration
 def test_failed_report_rejects_partial_consumption(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -216,6 +226,7 @@ def test_failed_report_rejects_partial_consumption(public_release, tmp_path: Pat
 
 
 # An invalid-task report cannot claim it consumed a public resource.
+@pytest.mark.integration
 def test_invalid_task_rejects_consumption(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -229,6 +240,7 @@ def test_invalid_task_rejects_consumption(public_release, tmp_path: Path) -> Non
 
 
 # A report's declared identity must match the invocation labels passed by the root.
+@pytest.mark.integration
 def test_report_rejects_identity_mismatch(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -238,6 +250,7 @@ def test_report_rejects_identity_mismatch(public_release, tmp_path: Path) -> Non
 
 
 # The report exit code must match the observed container exit status.
+@pytest.mark.integration
 def test_report_rejects_exit_mismatch(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -262,6 +275,7 @@ def test_report_rejects_exit_mismatch(public_release, tmp_path: Path) -> None:
 
 
 # Artifact digest checking rejects a changed candidate file.
+@pytest.mark.integration
 def test_report_rejects_artifact_digest_mismatch(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -285,6 +299,7 @@ def test_report_rejects_artifact_digest_mismatch(public_release, tmp_path: Path)
 
 
 # A report artifact must exist in its declared root.
+@pytest.mark.integration
 def test_report_rejects_missing_artifact(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -304,6 +319,7 @@ def test_report_rejects_missing_artifact(public_release, tmp_path: Path) -> None
 
 
 # A linked artifact cannot redirect the report reader outside the declared root.
+@pytest.mark.integration
 def test_report_rejects_linked_artifact(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")
@@ -326,6 +342,7 @@ def test_report_rejects_linked_artifact(public_release, tmp_path: Path) -> None:
 
 
 # Candidate mounts expose writable outputs and read-only public task and bundle paths.
+@pytest.mark.integration
 def test_candidate_container_plan(public_release, tmp_path: Path) -> None:
     _, prepared = public_release
     staged = tmp_path / "staged"
@@ -382,6 +399,7 @@ def test_normal_termination_detail() -> None:
 
 
 # Negative turn accounting cannot enter a current candidate result.
+@pytest.mark.integration
 def test_report_rejects_negative_turn_accounting(public_release, tmp_path: Path) -> None:
     manifest, prepared = public_release
     task = write_agent_task(prepared, manifest, tmp_path / "agent-task")

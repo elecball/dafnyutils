@@ -32,6 +32,7 @@ def _write(path: Path, text: str) -> None:
 
 
 # Registered definitions preserve canonical IDs across utility and algorithm directory layouts.
+@pytest.mark.integration
 def test_repository_round_trips_every_registered_task() -> None:
     repository = BenchmarkRepository.open(ROOT)
 
@@ -318,6 +319,7 @@ def test_check_plan_rejects_unimplemented_required_check(
 
 
 # The verification gate enumerates included Core and Proof files, not only the wrapper entry.
+@pytest.mark.integration
 def test_verification_session_includes_algorithm_core_and_proof() -> None:
     contract = local_verification_contract(ROOT / "bench/algorithm/1")
 
@@ -327,6 +329,7 @@ def test_verification_session_includes_algorithm_core_and_proof() -> None:
 
 
 # A verifier failure in an included proof makes the canonical benchmark proof gate fail.
+@pytest.mark.integration
 def test_verification_gate_rejects_invalid_included_proof(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -354,6 +357,7 @@ def test_verification_gate_rejects_invalid_included_proof(
 
 
 # A failed mandatory command stops the check and is never reported as success.
+@pytest.mark.integration
 def test_check_fails_on_first_failed_mandatory_command(monkeypatch: pytest.MonkeyPatch) -> None:
     repository = BenchmarkRepository.open(ROOT)
     validated = load_validated_benchmark(repository, "cat")
@@ -375,6 +379,7 @@ def test_check_fails_on_first_failed_mandatory_command(monkeypatch: pytest.Monke
 
 
 # Moving the principal Spec call into a precondition cannot satisfy the final proof obligation.
+@pytest.mark.integration
 def test_validation_rejects_principal_spec_moved_out_of_postcondition(tmp_path: Path) -> None:
     shutil.copytree(ROOT / "bench/algorithm/1", tmp_path / "bench/algorithm/1")
     shutil.copytree(ROOT / "bench/core", tmp_path / "bench/core")
@@ -398,6 +403,7 @@ def test_validation_rejects_principal_spec_moved_out_of_postcondition(tmp_path: 
 
 
 # A generated profile rejects a missing natural specification before publication.
+@pytest.mark.integration
 def test_generated_profile_rejects_missing_resource(tmp_path: Path) -> None:
     shutil.copytree(ROOT / "bench/algorithm/1", tmp_path / "bench/algorithm/1")
     shutil.copytree(ROOT / "bench/core", tmp_path / "bench/core")
@@ -410,6 +416,7 @@ def test_generated_profile_rejects_missing_resource(tmp_path: Path) -> None:
 
 
 # A real pytest artifact containing only skipped cases is not valid mandatory-test evidence.
+@pytest.mark.integration
 def test_pytest_evidence_rejects_all_skipped_suite(tmp_path: Path) -> None:
     test_path = tmp_path / "test_skipped.py"
     report_path = tmp_path / "report.xml"
@@ -442,6 +449,7 @@ def test_semantics():
 
 
 # A real pytest artifact remains valid when at least one case executes beside allowed skips.
+@pytest.mark.integration
 def test_pytest_evidence_accepts_executed_case_with_skip(tmp_path: Path) -> None:
     test_path = tmp_path / "test_mixed.py"
     report_path = tmp_path / "report.xml"

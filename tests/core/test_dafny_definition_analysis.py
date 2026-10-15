@@ -27,6 +27,8 @@ from analysis.queries import (
 )
 from analysis.source_fingerprints import dafny_source_fingerprints
 
+pytestmark = pytest.mark.integration
+
 
 def _raise_definition_analysis_timeout(*_args, **kwargs):  # noqa: ANN003
     assert kwargs["timeout"] == 300

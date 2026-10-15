@@ -13,6 +13,8 @@ from analysis.kinds import DefinitionKind
 from benchmarks.task import TaskProfile
 from evaluation.task.release import load_release, prepare_release, publish_release
 
+pytestmark = pytest.mark.integration
+
 
 # Publication reuses one source analysis to publish runnable public inputs without oracle data.
 def test_public_release_contains_only_public_material(

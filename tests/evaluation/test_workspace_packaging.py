@@ -13,6 +13,8 @@ import evaluation.submission.archive as archive_module
 from evaluation.submission.archive import package_workspace, receive_submission
 from evaluation.task.release import prepare_release, publish_release
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(scope="module")
 def released_workspace(tmp_path_factory: pytest.TempPathFactory):

@@ -151,6 +151,18 @@ we compare its behavior with the original GNU coreutils binaries.
   Bounded tiny files and directories needed to verify behavior remain allowed. Do
   not justify risky tests by fast local storage, opt-in settings, or skip markers;
   test boundary behavior with small fixtures, fakes, or mocked I/O.
+- Classify development tests by execution weight with the registered
+  `integration` marker. Unmarked tests are serial units; mark tests that invoke
+  native Dafny tools, real subprocesses or shell scripts, concurrent process
+  lifecycles, or multi-component evaluation/release/archive workflows as
+  integration. Use function-level markers in mixed modules when practical.
+  Keep `dafny_verify` for its existing benchmark test-selection meaning; it is
+  not an execution-weight marker.
+- From the Dafnyutils root, `make test` without `TASK` and `make test-unit` run
+  the development unit tier serially. Run `make test-integration` only for final
+  validation after implementation and routine checks; `make test-final` runs
+  unit and integration tiers sequentially. `make test TASK=<utility>` keeps its
+  existing benchmark oracle selection and scoring behavior.
 - If no Dafny source file changes, exclude `tests/bench` from routine regression
   testing. This does not excuse skipping checks affected by changes to generated
   specifications, verifier invocation, toolchains, or evaluation code. Use focused

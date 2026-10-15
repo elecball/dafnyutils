@@ -12,6 +12,8 @@ import pytest
 from evaluation.submission.archive import SubmissionError, receive_submission
 from evaluation.task.release import ArchiveLimits, TaskReleaseManifest, publish_release
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(scope="module")
 def release(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, TaskReleaseManifest]:

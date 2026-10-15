@@ -9,6 +9,8 @@ from analysis.kinds import DefinitionKind
 from analysis.queries import definition_semantic_fingerprint, spec_dependency_closure
 from evaluation.task.specification_source import filtered_specification_source
 
+pytestmark = pytest.mark.integration
+
 
 # Every parser-authored type and member family is visible through the native analysis contract.
 @pytest.mark.parametrize(

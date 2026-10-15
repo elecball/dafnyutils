@@ -18,6 +18,8 @@ from entry_contract import analyze_entry_contract as shared_analyze_entry_contra
 from evaluation.task.workspace import task_workspace_spec
 from tests.evaluation.evaluation_test_support import utility_config
 
+pytestmark = pytest.mark.integration
+
 
 def _utility_cfg(utility_name: str) -> ResolvedBenchmark:
     return utility_config(utility_name)

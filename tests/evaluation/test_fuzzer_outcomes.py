@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 
+import pytest
+
 from benchmarks.checks import OracleExecutionLocation
 from evaluation.enums import CheckStatus
 from evaluation.models import FuzzerOutcome
@@ -74,6 +76,7 @@ def test_unmarked_fuzzer_failure_keeps_existing_fallback() -> None:
 
 
 # Real fuzzer infrastructure evidence blocks the later verification process.
+@pytest.mark.integration
 def test_logged_fuzzer_infrastructure_failure_blocks_remaining_checks(tmp_path: Path) -> None:
     session = EvaluationSession(tmp_path)
     marker = "FUZZER_OUTCOME=fuzzer_infrastructure_failure"
@@ -126,6 +129,7 @@ def test_logged_fuzzer_infrastructure_failure_blocks_remaining_checks(tmp_path: 
 
 
 # A real Cargo/build failure still fails fuzzing with candidate-failure semantics.
+@pytest.mark.integration
 def test_logged_build_failure_remains_failed_fuzzing(tmp_path: Path) -> None:
     session = EvaluationSession(tmp_path)
     command = CheckCommand(
@@ -149,6 +153,7 @@ def test_logged_build_failure_remains_failed_fuzzing(tmp_path: Path) -> None:
 
 
 # A testcase failure remains failed when later fuzzing infrastructure becomes unavailable.
+@pytest.mark.integration
 def test_prior_candidate_failure_remains_failed_with_later_infrastructure(tmp_path: Path) -> None:
     session = EvaluationSession(tmp_path)
     testcase = CaseEvaluation(

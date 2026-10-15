@@ -63,6 +63,7 @@ def _pytest_check(tmp_path: Path, body: str, workers: int = 0):
 
 
 # Trusted pytest setup errors block the stage without blaming the candidate.
+@pytest.mark.integration
 def test_pytest_trusted_setup_failure_is_blocked(tmp_path: Path) -> None:
     report, blocked, result = _pytest_check(
         tmp_path,
@@ -83,6 +84,7 @@ def test_setup(monkeypatch, tmp_path):
 
 
 # Genuine pytest assertion failures remain failed candidate checks.
+@pytest.mark.integration
 def test_genuine_pytest_failure_remains_failed(tmp_path: Path) -> None:
     report, blocked, result = _pytest_check(
         tmp_path, "def test_wrong_output():\n    assert 1 == 2\n"
@@ -95,6 +97,7 @@ def test_genuine_pytest_failure_remains_failed(tmp_path: Path) -> None:
 
 
 # Historical command payloads remain readable with the new optional attribution field absent.
+@pytest.mark.integration
 def test_older_command_payload_defaults_infrastructure_reason(tmp_path: Path) -> None:
     _, _, result = _pytest_check(tmp_path, "def test_wrong_output():\n    assert False\n")
     payload = result.model_dump(mode="json")
@@ -154,6 +157,7 @@ def test_containerized_command_reads_mapped_private_journal(
 
 
 # A host fuzzer failure records its own journal while preceding evaluator checks use /run.
+@pytest.mark.integration
 def test_mixed_evaluation_collects_host_fuzzer_infrastructure_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -216,6 +220,7 @@ def test_mixed_evaluation_collects_host_fuzzer_infrastructure_report(
 
 # Wrong-output failure retains FAILED alongside setup failure in one pytest command.
 @pytest.mark.parametrize("workers", [0, 2])
+@pytest.mark.integration
 def test_same_pytest_command_preserves_real_failure_with_infrastructure(
     tmp_path: Path, workers: int
 ) -> None:
@@ -240,6 +245,7 @@ def test_later_setup():
 
 
 # Infrastructure-only pytest failures do not produce a real failed-check journal.
+@pytest.mark.integration
 def test_setup_only_has_no_genuine_failure_evidence(tmp_path: Path) -> None:
     report, _, result = _pytest_check(
         tmp_path,

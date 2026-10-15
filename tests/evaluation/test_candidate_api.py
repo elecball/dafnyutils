@@ -23,6 +23,8 @@ from evaluation.submission.sandbox import SandboxContext
 from evaluation.task.api import prepare_task
 from evaluation.task.release import PreparedRelease, prepare_release, publish_release
 
+pytestmark = pytest.mark.integration
+
 
 def _archive_candidate(candidate: PreparedRelease, path: Path) -> Path:
     with tarfile.open(path, "w:gz") as archive:

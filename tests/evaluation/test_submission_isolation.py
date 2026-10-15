@@ -15,6 +15,8 @@ from evaluation.submission.api import CandidateEvaluationOptions, evaluate_submi
 from evaluation.submission.sandbox import SandboxContext
 from evaluation.task.release import prepare_release, publish_release
 
+pytestmark = pytest.mark.integration
+
 
 # Evaluation reconstructs candidate additions after deleting the entire original workspace.
 def test_archive_evaluation_survives_candidate_deletion(

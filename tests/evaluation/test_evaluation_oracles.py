@@ -80,6 +80,7 @@ def test_coreutils_oracles_use_generated_entry_gates() -> None:
         ("algorithm-63", "spec_consistency"),
     ),
 )
+@pytest.mark.integration
 def test_specification_oracles_use_configured_dafny(
     tmp_path: Path,
     utility_name: str,

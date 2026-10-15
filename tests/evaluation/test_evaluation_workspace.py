@@ -69,6 +69,7 @@ def _task_inputs(tmp_path: Path, utility_name: str):
 
 
 # A coreutils workspace must protect formal inputs and receive its complete support surface.
+@pytest.mark.integration
 def test_workspace_uses_generic_entry_contract_support(tmp_path: Path) -> None:
     utility_name = "cat"
     task_inputs = _task_inputs(tmp_path, utility_name)
@@ -156,6 +157,7 @@ def test_workspace_uses_generic_entry_contract_support(tmp_path: Path) -> None:
 
 
 # Touch candidate materialization excludes the evaluator-owned parser source and binary.
+@pytest.mark.integration
 def test_touch_workspace_does_not_expose_trusted_time_parser(tmp_path: Path) -> None:
     task_inputs = _task_inputs(tmp_path, "touch")
     task = TaskProfile.from_json_file(task_inputs.task_path)
@@ -185,6 +187,7 @@ def test_touch_workspace_does_not_expose_trusted_time_parser(tmp_path: Path) -> 
 
 # Changing a copied system model is rejected through the immutable support baseline.
 @pytest.mark.parametrize("model_name", SYSTEM_SUPPORT_MODELS)
+@pytest.mark.integration
 def test_modified_system_support_is_rejected_during_capture(
     tmp_path: Path, model_name: str
 ) -> None:
@@ -212,6 +215,7 @@ def test_modified_system_support_is_rejected_during_capture(
 
 
 # Chmod's split specification workspace must retain every include without exposing implementations.
+@pytest.mark.integration
 def test_materialized_chmod_split_specification_passes_layout_check(tmp_path: Path) -> None:
     roots = materialize_workspace_layout(
         run_dir=tmp_path / "run",
@@ -242,6 +246,7 @@ def test_materialized_chmod_split_specification_passes_layout_check(tmp_path: Pa
 
 
 # An algorithm workspace must seed its formal inputs and accept the trusted candidate tree.
+@pytest.mark.integration
 def test_materialized_algorithm_accepts_the_trusted_candidate_tree(tmp_path: Path) -> None:
     task_spec = _task_spec("algorithm-75")
     roots = materialize_workspace_layout(
@@ -272,6 +277,7 @@ def test_materialized_algorithm_accepts_the_trusted_candidate_tree(tmp_path: Pat
 
 
 # Retry refreshes support scripts without erasing files on the candidate synchronization path.
+@pytest.mark.integration
 def test_refresh_preserves_candidate_run_core_body(tmp_path: Path) -> None:
     task_inputs = _task_inputs(tmp_path, "algorithm-75")
     task_spec = _task_spec("algorithm-75")
@@ -296,6 +302,7 @@ def test_refresh_preserves_candidate_run_core_body(tmp_path: Path) -> None:
 
 
 # The evaluator overlays candidate source while keeping tests outside its workspace.
+@pytest.mark.integration
 def test_evaluator_target_is_fresh_workspace_with_only_candidate_outputs(
     tmp_path: Path,
 ) -> None:
@@ -338,6 +345,7 @@ def test_evaluator_target_is_fresh_workspace_with_only_candidate_outputs(
 
 
 # Candidate-created evaluator test paths fail output capture before they can be overlaid.
+@pytest.mark.integration
 def test_candidate_cannot_capture_evaluator_only_utility_tests(tmp_path: Path) -> None:
     task_spec = _task_spec("cat")
     task_inputs = _task_inputs(tmp_path, "cat")
@@ -370,6 +378,7 @@ def _populate_true_proof_workspace(workspace_root: Path) -> None:
 
 
 # The generated verifier must classify a missing workspace as build infrastructure failure.
+@pytest.mark.integration
 def test_proof_workspace_classifies_missing_workspace_as_build_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -399,6 +408,7 @@ def test_proof_workspace_classifies_missing_workspace_as_build_failure(
 
 
 # The generated verifier reports missing installed checker modules as infrastructure failures.
+@pytest.mark.integration
 def test_proof_workspace_classifies_missing_installed_checker_as_evidence_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -434,6 +444,7 @@ def test_proof_workspace_classifies_missing_installed_checker_as_evidence_failur
 
 
 # A verifier-trusted expect must fail before the verification rubric marker is emitted.
+@pytest.mark.integration
 def test_proof_workspace_rejects_model_added_expect(tmp_path: Path) -> None:
     task_spec = _task_spec("true")
     roots = materialize_workspace_layout(

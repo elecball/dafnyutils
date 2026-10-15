@@ -103,6 +103,35 @@ Z3, tmux and the bundled `dafny-benchmark`. It verifies the [StreamCopy client](
 `Environment ready` and a verifier result of `4 verified, 0 errors`. This checks
 the tools. Setup runs the same check automatically.
 
+## Developer test tiers
+
+Run the serial unit suite during development:
+
+```sh
+make test
+```
+
+This is equivalent to `make test-unit`. Tests that invoke Dafny, run a process or
+shell script, or exercise a composed evaluation/release/archive workflow carry
+the `integration` marker and are excluded from the routine unit command.
+
+Run integration tests only for final validation after implementation and routine
+checks:
+
+```sh
+make test-integration
+```
+
+To run both tiers in order:
+
+```sh
+make test-final
+```
+
+Benchmark oracle tests remain task-scoped and separate from development tiers.
+For example, `make test TASK=cat` keeps the benchmark runner's existing selection
+of `bench/utils/cat/Tests.py` and its scoring semantics.
+
 ## Repository structure
 
 ```text

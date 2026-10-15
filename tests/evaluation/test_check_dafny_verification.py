@@ -72,6 +72,7 @@ module Runner {
 
 
 # Sequential verification announces every target and the active file before running its proof.
+@pytest.mark.integration
 def test_run_verifies_reachable_candidate_sources_sequentially(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -128,6 +129,7 @@ def test_run_verifies_reachable_candidate_sources_sequentially(
 
 
 # Final verification must reject warnings that do not come from its core library boundary.
+@pytest.mark.integration
 def test_run_rejects_non_library_warning(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -161,6 +163,7 @@ def test_run_rejects_non_library_warning(
 
 
 # Build, proof-layout, and verification phases reuse one checked contract in one process.
+@pytest.mark.integration
 def test_run_full_session_reuses_contract_analysis(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -205,6 +208,7 @@ def test_run_full_session_reuses_contract_analysis(
 
 
 # A source edit during the build phase must fail the proof-layout boundary before verification.
+@pytest.mark.integration
 def test_run_full_session_rejects_build_source_mutation(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -235,6 +239,7 @@ def test_run_full_session_rejects_build_source_mutation(
 
 
 # An abstract constant must remain a rejected external contract rather than a zero-obligation value.
+@pytest.mark.integration
 def test_run_rejects_abstract_constant(tmp_path: Path, capfd) -> None:
     workspace_root, utility_root, manifest_path, _ = _write_contract(tmp_path)
     proof = utility_root / "Proof.dfy"
@@ -256,6 +261,7 @@ def test_run_rejects_abstract_constant(tmp_path: Path, capfd) -> None:
 
 
 # An unproved condition in the include closure should fail without a success marker.
+@pytest.mark.integration
 def test_run_rejects_failed_included_verification_condition(tmp_path: Path, capfd) -> None:
     workspace_root, utility_root, manifest_path, _ = _write_contract(
         tmp_path,
@@ -272,6 +278,7 @@ def test_run_rejects_failed_included_verification_condition(tmp_path: Path, capf
 
 
 # A bodyless declaration should not pass merely because Dafny reports zero errors.
+@pytest.mark.integration
 def test_run_rejects_real_bodyless_declaration(tmp_path: Path, capfd) -> None:
     workspace_root, utility_root, manifest_path, _ = _write_contract(tmp_path)
     (utility_root / "Proof.dfy").write_text(
@@ -286,6 +293,7 @@ def test_run_rejects_real_bodyless_declaration(tmp_path: Path, capfd) -> None:
 
 
 # A missing trusted entry contract must emit one evidence-infrastructure outcome.
+@pytest.mark.integration
 def test_run_classifies_missing_manifest_as_evidence_infrastructure(
     tmp_path: Path,
     capfd,
@@ -312,6 +320,7 @@ def test_trx_counts_rejects_invalid_report(tmp_path: Path) -> None:
 
 # Newly inventoried constrained types must still fail verification when their witness is invalid.
 @pytest.mark.parametrize("type_keyword", ("type", "newtype"))
+@pytest.mark.integration
 def test_run_rejects_invalid_type_witness(tmp_path: Path, capfd, type_keyword: str) -> None:
     workspace_root, utility_root, manifest_path, _ = _write_contract(tmp_path)
     (utility_root / "Proof.dfy").write_text(
