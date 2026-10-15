@@ -42,6 +42,7 @@ from evaluation.task.workspace import WorkspaceRoots
 
 _LAYOUT = CandidateLayout()
 _STAGING_SERVICE = "task-staging"
+_OWNERSHIP_HANDOFF_SERVICE = "ownership-handoff"
 _AGENT_RUNTIME_ENV_KEYS = (
     "DOTNET_GCHeapHardLimit",
     "COMPlus_GCHeapHardLimit",
@@ -75,6 +76,13 @@ class SandboxProfile(StrEnum):
     NESTED_USER_NAMESPACE = "nested-user-namespace"
 
 
+class HarnessExecutionIdentity(StrEnum):
+    """Select the harness controller user independently of model execution."""
+
+    AGENT = "agent"
+    TRUSTED_ROOT = "0:0"
+
+
 @dataclass(frozen=True)
 class AgentPreparationContext:
     """Host staging locations and protected model inputs for a harness."""
@@ -92,13 +100,19 @@ class AgentPreparationContext:
 
 @dataclass(frozen=True)
 class AgentLaunchSpec:
+    """Declare a harness image and its controller isolation requirements."""
+
     image: str
     environment: Mapping[str, str] = field(default_factory=dict)
     forwarded_secret_environment: tuple[str, ...] = ()
     sandbox_profile: SandboxProfile = SandboxProfile.DEFAULT
     notes: tuple[str, ...] = ()
+    controller_identity: HarnessExecutionIdentity = HarnessExecutionIdentity.AGENT
 
     def __post_init__(self) -> None:
+        """Validate the image, controller identity and forwarded environment keys."""
+        if not isinstance(self.controller_identity, HarnessExecutionIdentity):
+            raise TypeError("controller_identity must be a HarnessExecutionIdentity")
         if not self.image.strip():
             raise ValueError("agent image must not be empty")
         for key in (*self.environment.keys(), *self.forwarded_secret_environment):
@@ -123,6 +137,9 @@ class AgentSandboxContext:
     notes: tuple[str, ...]
     bundle_directory: Path | None = None
     control_dir: Path | None = None
+    ownership_handoff_command: tuple[str, ...] = ()
+    ownership_handoff_complete_path: Path | None = None
+    ownership_handoff_validation_command: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -135,6 +152,10 @@ class CandidateRunContext:
 
 class CandidateTerminationError(RuntimeError):
     """The candidate environment could not be confirmed to have stopped."""
+
+
+class CandidateOwnershipError(RuntimeError):
+    """Terminated candidate metadata could not be handed back to its host owner."""
 
 
 def sandbox_environment(env: Mapping[str, str]) -> dict[str, str]:
@@ -179,7 +200,7 @@ def write_compose_override(
     agent_service: dict[str, object] = {
         "container_name": agent_container_name,
         "working_dir": agent_plan.working_dir,
-        "user": "agent",
+        "user": agent_launch.controller_identity.value,
         "build": {"args": {"AGENT_UID": str(os.getuid()), "AGENT_GID": str(os.getgid())}},
         "image": agent_launch.image,
         # Compose interpolates dollar signs even in YAML argument lists.
@@ -205,7 +226,11 @@ def write_compose_override(
     path.parent.mkdir(parents=True, exist_ok=True)
     staging_service: dict[str, object] = {
         "container_name": staging_container_name,
-        "image": "dafnyutils-task:latest",
+        "image": (
+            agent_launch.image
+            if agent_launch.controller_identity is HarnessExecutionIdentity.TRUSTED_ROOT
+            else "dafnyutils-task:latest"
+        ),
         "command": ["sleep", "infinity"],
         "network_mode": "none",
         "labels": labels,
@@ -215,10 +240,82 @@ def write_compose_override(
             ).as_compose_volume()
         ],
     }
+    services = {"agent-workflow": agent_service, _STAGING_SERVICE: staging_service}
+    if agent_launch.controller_identity is HarnessExecutionIdentity.TRUSTED_ROOT:
+        services[_OWNERSHIP_HANDOFF_SERVICE] = _ownership_handoff_service(
+            agent_plan, agent_launch, labels
+        )
     path.write_text(
-        _compose_yaml({"agent-workflow": agent_service, _STAGING_SERVICE: staging_service}),
+        _compose_yaml(services),
         encoding="utf-8",
     )
+
+
+def _ownership_handoff_service(
+    plan: ContainerWorkspacePlan, launch: AgentLaunchSpec, labels: dict[str, str]
+) -> dict[str, object]:
+    selected, protected = _ownership_handoff_targets(plan)
+    command = [
+        "python3",
+        "-I",
+        "-c",
+        Path(__file__).with_name("ownership.py").read_text(encoding="utf-8"),
+        str(os.getuid()),
+        str(os.getgid()),
+    ]
+    volumes = []
+    for index, mount in enumerate(selected):
+        source = mount.source.absolute()
+        target = Path(f"/handoff/{index}")
+        volumes.append(
+            ContainerMount(mount.source, str(target), MountMode.READ_WRITE).as_compose_volume()
+        )
+        command.extend(("--root", str(target)))
+        for path in protected:
+            if path.is_relative_to(source):
+                command.extend(("--exclude", str(target / path.relative_to(source))))
+    return {
+        "image": launch.image,
+        "user": "0:0",
+        "working_dir": "/",
+        "entrypoint": [],
+        "command": [argument.replace("$", "$$") for argument in command],
+        "network_mode": "none",
+        "read_only": True,
+        "cap_drop": ["ALL"],
+        "cap_add": ["CHOWN", "FOWNER", "DAC_OVERRIDE"],
+        "security_opt": ["no-new-privileges:true"],
+        "pids_limit": 16,
+        "mem_limit": "64m",
+        "labels": labels,
+        "volumes": volumes,
+    }
+
+
+def _ownership_handoff_targets(
+    plan: ContainerWorkspacePlan,
+) -> tuple[tuple[ContainerMount, ...], tuple[Path, ...]]:
+    protected = tuple(
+        mount.source.absolute()
+        for mount in plan.mounts
+        if mount.mode is MountMode.READ_ONLY or mount.target == _LAYOUT.home_directory
+    )
+    protected += tuple(
+        mount.source.absolute() / "tools"
+        for mount in plan.mounts
+        if mount.target == _LAYOUT.run_directory
+    )
+    selected: list[ContainerMount] = []
+    for mount in plan.mounts:
+        source = mount.source.absolute()
+        if (
+            mount.mode is not MountMode.READ_WRITE
+            or _path_within_any_root(source, protected)
+            or any(source.is_relative_to(item.source.absolute()) for item in selected)
+        ):
+            continue
+        selected.append(mount)
+    return tuple(selected), protected
 
 
 def build_docker_compose_agent_command(
@@ -229,6 +326,10 @@ def build_docker_compose_agent_command(
     container_name: str,
     staging_container_name: str,
     workspace_dir: Path,
+    ownership_handoff_command: tuple[str, ...] = (),
+    ownership_handoff_complete_path: Path | None = None,
+    container_cleanup_label: str | None = None,
+    ownership_handoff_validation_command: tuple[str, ...] = (),
 ) -> str:
     parts = ["docker", "compose"]
     parts.extend(("-p", project_name))
@@ -248,11 +349,40 @@ def build_docker_compose_agent_command(
     start = shlex.join(("docker", "start", container_name))
     logs = shlex.join(("docker", "logs", "--follow", container_name))
     wait = shlex.join(("docker", "wait", container_name))
+    handoff = ""
+    if ownership_handoff_command:
+        if (
+            ownership_handoff_complete_path is None
+            or container_cleanup_label is None
+            or not ownership_handoff_validation_command
+        ):
+            raise ValueError("ownership handoff requires source validation, host marker and label")
+        active = shlex.join(
+            (
+                "docker",
+                "ps",
+                "-q",
+                "--filter",
+                f"label={_DOCKER_EVAL_RUN_LABEL}={container_cleanup_label}",
+            )
+        )
+        handoff = (
+            f"active_candidates=$({active}); "
+            'if [ -n "$active_candidates" ]; then '
+            "printf '%s\\n' 'candidate ownership handoff refused: containers remain active' >&2; "
+            "exit 125; fi; "
+            f"if ! {shlex.join(ownership_handoff_validation_command)}; then "
+            "printf '%s\\n' 'candidate ownership handoff source validation failed' >&2; "
+            "exit 125; fi; "
+            f"if ! {shlex.join(ownership_handoff_command)}; then "
+            "printf '%s\\n' 'candidate output ownership handoff failed' >&2; exit 125; fi; "
+            f": > {shlex.quote(str(ownership_handoff_complete_path))}; "
+        )
     # Keep errexit out of the caller's login-shell logout hooks.
     return (
         f"(set -e; {create_staging}; {copy}; {remove_staging} >/dev/null; "
         f"{create}; {start} >/dev/null; {logs}; "
-        f'agent_status=$({wait}); exit "$agent_status")'
+        f'agent_status=$({wait}); {handoff}exit "$agent_status")'
     )
 
 
@@ -406,6 +536,37 @@ def _prepare_agent_sandbox_context(
         },
     )
     record_launch(launch_command, prompt)
+    ownership_handoff_command: tuple[str, ...] = ()
+    ownership_handoff_complete_path = None
+    ownership_handoff_validation_command: tuple[str, ...] = ()
+    if agent_launch.controller_identity is HarnessExecutionIdentity.TRUSTED_ROOT:
+        compose_command = ["docker", "compose", "-p", project_name]
+        for compose_path in compose_files:
+            compose_command.extend(("-f", str(compose_path)))
+        ownership_handoff_command = (
+            *compose_command,
+            "run",
+            "--rm",
+            "--no-deps",
+            "-T",
+            _OWNERSHIP_HANDOFF_SERVICE,
+        )
+        ownership_handoff_complete_path = control_dir / "ownership-handoff-complete"
+        selected, protected = _ownership_handoff_targets(agent_plan)
+        validation_arguments = [
+            sys.executable,
+            "-I",
+            "-c",
+            Path(__file__).with_name("ownership.py").read_text(encoding="utf-8"),
+            str(os.getuid()),
+            str(os.getgid()),
+            "--validate-sources",
+        ]
+        for mount in selected:
+            validation_arguments.extend(("--root", str(mount.source.absolute())))
+        for source in protected:
+            validation_arguments.extend(("--protect", str(source)))
+        ownership_handoff_validation_command = tuple(validation_arguments)
     notes = [
         "sandbox mode fixed to docker compose workspace isolation",
         "verified public workspace is copied into a stopped staging container before agent start",
@@ -437,11 +598,18 @@ def _prepare_agent_sandbox_context(
             container_name=agent_container_name,
             staging_container_name=staging_container_name,
             workspace_dir=roots.workspace_root,
+            ownership_handoff_command=ownership_handoff_command,
+            ownership_handoff_complete_path=ownership_handoff_complete_path,
+            container_cleanup_label=cleanup_label,
+            ownership_handoff_validation_command=ownership_handoff_validation_command,
         ),
         env=command_env,
         notes=tuple(notes),
         control_dir=control_dir,
         bundle_directory=launcher_root,
+        ownership_handoff_command=ownership_handoff_command,
+        ownership_handoff_complete_path=ownership_handoff_complete_path,
+        ownership_handoff_validation_command=ownership_handoff_validation_command,
     )
 
 
@@ -498,9 +666,43 @@ def cleanup_agent_sandbox_context(context: AgentSandboxContext) -> None:
     cleanup_agent_sandbox_containers(context.container_cleanup_label, context.env)
 
 
+def handoff_agent_sandbox_ownership(context: AgentSandboxContext) -> None:
+    """Return stopped-controller output metadata to its host before host collection."""
+    if not context.ownership_handoff_command:
+        return
+    marker = context.ownership_handoff_complete_path
+    if marker is None:
+        raise CandidateOwnershipError("candidate ownership handoff has no completion marker")
+    if not context.ownership_handoff_validation_command:
+        raise CandidateOwnershipError("candidate ownership handoff has no source validation")
+    if marker.is_file():
+        return
+    try:
+        subprocess.run(
+            context.ownership_handoff_validation_command,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=_SANDBOX_CLEANUP_TIMEOUT_SEC,
+        )
+        subprocess.run(
+            context.ownership_handoff_command,
+            env=docker_command_environment(context.env, forwarded_secret_environment=()),
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=_SANDBOX_CLEANUP_TIMEOUT_SEC,
+        )
+        marker.touch()
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise CandidateOwnershipError("candidate output ownership handoff failed") from exc
+
+
 def cleanup_sandbox_control_files(context: AgentSandboxContext) -> None:
+    """Remove private control directories after shutdown and ownership confirmation."""
     if context.control_dir is not None:
-        shutil.rmtree(context.control_dir, ignore_errors=True)
+        _make_owner_writable_tree(context.control_dir, (), directories_only=True)
+        shutil.rmtree(context.control_dir)
 
 
 def cleanup_agent_sandbox_containers(
@@ -588,16 +790,20 @@ def _docker_name_component(raw: str, *, fallback: str = "unknown") -> str:
     return sanitized or fallback
 
 
-def _make_owner_writable_tree(path: Path, read_only_roots: tuple[Path, ...]) -> None:
+def _make_owner_writable_tree(
+    path: Path, read_only_roots: tuple[Path, ...], *, directories_only: bool = False
+) -> None:
     if (
         not path.exists()
         or path.is_symlink()
         or _path_within_any_root(path.resolve(), read_only_roots)
     ):
         return
-    _make_owner_writable(path)
     if not path.is_dir():
+        if not directories_only:
+            _make_owner_writable(path)
         return
+    _make_owner_writable(path)
     for root, dirs, files in os.walk(path, topdown=True):
         root_path = Path(root)
         dirs[:] = [
@@ -608,7 +814,7 @@ def _make_owner_writable_tree(path: Path, read_only_roots: tuple[Path, ...]) -> 
         _make_owner_writable(root_path)
         for name in dirs:
             _make_owner_writable(root_path / name)
-        for name in files:
+        for name in () if directories_only else files:
             child = root_path / name
             if not _path_within_any_root(child.resolve(), read_only_roots):
                 _make_owner_writable(child)
@@ -665,21 +871,36 @@ def run_candidate_lifecycle(
 
     execution: CandidateExecution[T] | None = None
     termination_error: str | None = None
+    ownership_error: str | None = None
+    control_cleanup_error: str | None = None
+    control_cleanup_allowed = False
     try:
         execution = execute(context)
     finally:
         try:
             stop_agent_sandbox_containers(context.container_cleanup_label, context.env)
+            try:
+                handoff_agent_sandbox_ownership(context)
+                control_cleanup_allowed = True
+            except CandidateOwnershipError as exc:
+                ownership_error = str(exc)
         except CandidateTerminationError as exc:
             termination_error = str(exc)
         finally:
             try:
                 cleanup_agent_sandbox_context(context)
             finally:
-                cleanup_sandbox_control_files(context)
+                if control_cleanup_allowed:
+                    try:
+                        cleanup_sandbox_control_files(context)
+                    except OSError as exc:
+                        control_cleanup_error = f"host sandbox control cleanup failed: {exc}"
 
     if termination_error is not None:
         return CandidateLifecycleOutcome(context, execution, termination_error, None, True)
+    host_error = ownership_error or control_cleanup_error
+    if host_error is not None:
+        return CandidateLifecycleOutcome(context, execution, host_error, None, False)
     detail = normal_termination_detail(
         execution_present=execution.execution_present if execution else False,
         exit_code=execution.exit_code if execution else None,
