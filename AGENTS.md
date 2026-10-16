@@ -203,10 +203,12 @@ we compare its behavior with the original GNU coreutils binaries.
 - `Subject` must be one short word without spaces, begin with an uppercase letter,
   and name the changed area. The description must begin with a lowercase verb.
 - Example: `[Proof] simplify the sequence preservation lemma`.
-- Write the entire commit message in English. Include a detailed body after the
-  subject that explains the problem, approach, affected specification,
-  implementation, proof, evaluation, or benchmark boundaries, validation
-  commands and results, and known limitations or follow-up work.
+- Write the entire commit message in English. After the subject, write a short
+  body of about three to four sentences that states what the problem was and what
+  the commit changes to fix it, naming any affected specification,
+  implementation, proof, evaluator, dataset, or scoring layer. Do not describe
+  validation commands, test counts or results, or process notes; mention a
+  limitation only when a reader needs it.
 - Include an accurate `Co-authored-by: Full Name <email>` trailer for every
   co-author who materially contributed including Codex.
 - Never create merge commits. Integrate branches by rebasing onto the target
