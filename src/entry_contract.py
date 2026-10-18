@@ -21,6 +21,7 @@ from analysis.models import (
     DefinitionAnalysisDocument,
     DefinitionAnalysisInclude,
     DefinitionInfo,
+    DefinitionVerificationTarget,
 )
 from analysis.queries import (
     definition_dependency_closure,
@@ -222,6 +223,7 @@ class ValidatedEntryContract:
     utility_sources: tuple[Path, ...]
     verification_sources: tuple[Path, ...]
     verification_definitions: tuple[DefinitionInfo, ...]
+    verification_targets: tuple[DefinitionVerificationTarget, ...]
     analysis_sources: tuple[Path, ...] = ()
 
 
@@ -286,7 +288,7 @@ def _analyze_document(
     sources: tuple[Path, ...],
 ) -> DefinitionAnalysisDocument:
     try:
-        return definition_analysis_document_from_paths(sources)
+        return definition_analysis_document_from_paths(sources, include_verification_facts=True)
     except (OSError, RuntimeError, ValueError) as error:
         raise EntryValidationFailure(f"Dafny definition analysis failed: {error}") from error
 
@@ -351,6 +353,28 @@ def _trust_scan(sources: tuple[Path, ...], infos: tuple[DefinitionInfo, ...]) ->
             raise EntryValidationFailure(
                 f"{info.source_path} disables verification in {info.full_name}"
             )
+
+
+def _reject_candidate_verification_limits(
+    sources: tuple[Path, ...],
+    infos: Sequence[DefinitionInfo | DefinitionVerificationTarget],
+    immutable_sources: set[Path],
+) -> None:
+    editable_sources = {str(source) for source in sources if source not in immutable_sources}
+    for info in infos:
+        if info.source_path not in editable_sources:
+            continue
+        for attribute in info.attributes:
+            if attribute.name in {
+                "timeLimit",
+                "timeLimitMultiplier",
+                "_timeLimit",
+                "TimeLimit",
+                "TimeLimitMultiplier",
+            }:
+                raise EntryValidationFailure(
+                    f"{info.source_path} overrides the verification time limit in {info.full_name}"
+                )
 
 
 def _resolve_entry(
@@ -848,6 +872,11 @@ def validated_entry_contract(
             *(definition.source_path for definition in manifest.spec_definitions),
         )
     }
+    _reject_candidate_verification_limits(
+        resolved.sources,
+        (*resolved.infos, *(resolved.document.source_facts.verification_targets or ())),
+        immutable_sources,
+    )
     return _verification_contract(resolved, immutable_sources)
 
 
@@ -863,11 +892,19 @@ def _verification_contract(
     verification_definitions = tuple(
         info for info in resolved.infos if Path(info.source_path).resolve() in verification_sources
     )
+    native_targets = resolved.document.source_facts.verification_targets
+    if native_targets is None:
+        raise EntryValidationFailure("Dafny analysis omitted native verification targets")
     return ValidatedEntryContract(
         execution_source=resolved.execution_source,
         utility_sources=resolved.sources,
         verification_sources=verification_sources,
         verification_definitions=verification_definitions,
+        verification_targets=tuple(
+            target
+            for target in native_targets
+            if Path(target.source_path).resolve() in verification_sources
+        ),
         analysis_sources=_resolved_analysis_sources(resolved),
     )
 

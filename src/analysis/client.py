@@ -78,6 +78,7 @@ def definition_analysis_document_from_paths(
     *,
     timeout_seconds: float = DAFNY_TOOL_TIMEOUT_SEC,
     include_semantic_facts: bool = True,
+    include_verification_facts: bool = False,
 ) -> DefinitionAnalysisDocument:
     """Analyze source structure, optionally requesting semantic facts in the same run."""
 
@@ -98,6 +99,8 @@ def definition_analysis_document_from_paths(
     ]
     if include_semantic_facts:
         command.append("--include-semantic-facts")
+    if include_verification_facts:
+        command.append("--include-verification-facts")
     command.extend(str(path) for path in sorted_paths)
     completed = _run_definition_analysis(
         command,
@@ -116,6 +119,8 @@ def definition_analysis_document_from_paths(
     document = DefinitionAnalysisDocument.model_validate(payload)
     if include_semantic_facts and document.source_facts.semantic_facts is None:
         raise RuntimeError("dafny definition-analysis omitted requested semantic facts")
+    if include_verification_facts and document.source_facts.verification_targets is None:
+        raise RuntimeError("dafny definition-analysis omitted requested verification facts")
     return document
 
 

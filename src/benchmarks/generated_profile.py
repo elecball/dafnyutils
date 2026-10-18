@@ -128,6 +128,16 @@ def _profile_payload(
                 ),
             },
             {
+                "rule_id": "verification-policy",
+                "title": "Use the fixed verification policy",
+                "description": (
+                    "Verification uses measure-complexity with three mutations, random seed 0, "
+                    "isolated assertions, a 30-second limit per verification condition per "
+                    "mutation, and a 100-second process limit per declaration. Do not set "
+                    "timeLimit, timeLimitMultiplier, or equivalent verification-limit overrides."
+                ),
+            },
+            {
                 "rule_id": "workspace-boundary",
                 "title": "Respect the editable boundary",
                 "description": "Only modify paths declared editable by this task contract.",

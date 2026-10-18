@@ -138,6 +138,25 @@ class DafnySemanticFacts(BaseModel):
         return {key: tuple(items) for key, items in found.items()}
 
 
+class DefinitionAttribute(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: StrictStr
+    arguments: tuple[StrictStr, ...]
+    start: StrictInt
+    end: StrictInt
+
+
+class DefinitionVerificationTarget(BaseModel):
+    """One native Dafny verification unit and its authored verification attributes."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    full_name: StrictStr = Field(alias="fullName")
+    source_path: StrictStr = Field(alias="sourcePath")
+    attributes: tuple[DefinitionAttribute, ...]
+
+
 class DefinitionSourceFacts(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
@@ -145,6 +164,9 @@ class DefinitionSourceFacts(BaseModel):
     imports: tuple[DefinitionAnalysisImport, ...]
     includes: tuple[DefinitionAnalysisInclude, ...]
     semantic_facts: DafnySemanticFacts | None = Field(default=None, alias="semanticFacts")
+    verification_targets: tuple[DefinitionVerificationTarget, ...] | None = Field(
+        default=None, alias="verificationTargets"
+    )
 
 
 class DefinitionFormal(BaseModel):
@@ -153,15 +175,6 @@ class DefinitionFormal(BaseModel):
     name: StrictStr
     type: StrictStr
     ghost: StrictBool
-
-
-class DefinitionAttribute(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    name: StrictStr
-    arguments: tuple[StrictStr, ...]
-    start: StrictInt
-    end: StrictInt
 
 
 class DefinitionStatement(BaseModel):

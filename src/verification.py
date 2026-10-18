@@ -12,6 +12,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from analysis.kinds import DefinitionKind
+from analysis.models import DefinitionVerificationTarget
 from dafny_cli import dafny_command
 from entry_contract import (
     EntryContractCheckSession,
@@ -19,6 +20,7 @@ from entry_contract import (
     EntryValidationFailure,
     ValidatedEntryContract,
 )
+from runtime.process import CapturedProcess, run_process_capture_bytes
 from standard_library import (
     DAFNY_BENCH_CORE_LIBRARY_OPTION,
     DAFNY_STANDARD_LIBRARY_OPTION,
@@ -29,6 +31,9 @@ from standard_library import (
 )
 
 DAFNY_VERIFICATION_TIME_LIMIT_SEC = 30
+DAFNY_VERIFICATION_TARGET_TIMEOUT_SEC = 100
+DAFNY_VERIFICATION_MUTATIONS = 3
+DAFNY_VERIFICATION_RANDOM_SEED = 0
 
 
 def _verification_options(workspace_root: Path) -> tuple[str, ...]:
@@ -60,13 +65,13 @@ def _run_verification_command(
     command: list[str],
     *,
     cwd: Path,
-) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(
+) -> CapturedProcess:
+    return run_process_capture_bytes(
         command,
         cwd=cwd,
         env={**os.environ, "TMPDIR": "/tmp"},
-        check=False,
-        capture_output=True,
+        timeout_sec=DAFNY_VERIFICATION_TARGET_TIMEOUT_SEC,
+        start_new_session=True,
     )
 
 
@@ -89,6 +94,62 @@ def _run_build_command(
     cwd: Path,
 ) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(command, cwd=cwd, env={**os.environ, "TMPDIR": "/tmp"}, check=False)
+
+
+def _verify_target(
+    target: DefinitionVerificationTarget,
+    contract: ValidatedEntryContract,
+    workspace_root: Path,
+    dafny: str,
+    report_path: Path,
+    options: tuple[str, ...],
+    libraries: tuple[Path, ...],
+) -> tuple[int, int] | None:
+    source_path = Path(target.source_path).relative_to(workspace_root).as_posix()
+    try:
+        result = _run_verification_command(
+            [
+                dafny,
+                "measure-complexity",
+                options[0],
+                str(contract.execution_source),
+                *options[1:],
+                "--mutations",
+                str(DAFNY_VERIFICATION_MUTATIONS),
+                "--random-seed",
+                str(DAFNY_VERIFICATION_RANDOM_SEED),
+                f"--filter-position={source_path}",
+                f"--filter-symbol={target.full_name}.",
+                "--log-format",
+                f"trx;LogFileName={report_path}",
+            ],
+            cwd=workspace_root,
+        )
+    except OSError:
+        _emit_outcome("infrastructure_failure", "build")
+        return None
+    stdout = _stream_text(result.stdout)
+    stderr = _stream_text(result.stderr)
+    if DAFNY_BENCH_CORE_LIBRARY_OPTION in options:
+        stdout = without_expected_dafny_library_warnings(stdout, workspace_root)
+        stderr = without_expected_dafny_library_warnings(stderr, workspace_root)
+    if libraries:
+        stdout = without_expected_library_warnings(stdout, libraries)
+        stderr = without_expected_library_warnings(stderr, libraries)
+    _emit_process_output(stdout, stderr)
+    if (
+        result.timed_out
+        or has_dafny_warning(stdout)
+        or has_dafny_warning(stderr)
+        or result.returncode != 0
+    ):
+        _emit_outcome("verification_failure", "verify")
+        return None
+    try:
+        return _trx_counts(report_path)
+    except (OSError, ElementTree.ParseError):
+        _emit_outcome("infrastructure_failure", "evidence")
+        return None
 
 
 def _verify_sources(
@@ -119,54 +180,29 @@ def _verify_sources(
     ):
         _emit_outcome("verification_failure", "verify")
         return None
+    targets = contract.verification_targets
+    if not targets:
+        _emit_outcome("infrastructure_failure", "evidence")
+        return None
     total = 0
     failed = 0
-    sources = contract.verification_sources
-    print(f"Verification targets ({len(sources)} files):", flush=True)
-    for source in sources:
-        print(f"  {source.relative_to(workspace_root).as_posix()}", flush=True)
-    for index, source in enumerate(sources):
-        progress = f"[{index + 1}/{len(sources)}]"
-        source_path = source.relative_to(workspace_root).as_posix()
-        print(f"{progress} Verifying {source_path}", flush=True)
-        report_path = report_dir / f"{index}.trx"
-        try:
-            result = _run_verification_command(
-                [
-                    dafny,
-                    "verify",
-                    verification_options[0],
-                    str(contract.execution_source),
-                    *verification_options[1:],
-                    f"--filter-position={source_path}",
-                    "--log-format",
-                    f"trx;LogFileName={report_path}",
-                ],
-                cwd=workspace_root,
-            )
-        except OSError:
-            _emit_outcome("infrastructure_failure", "build")
+    print(f"Verification targets ({len(targets)} declarations):", flush=True)
+    for index, target in enumerate(targets):
+        progress = f"[{index + 1}/{len(targets)}]"
+        source_path = Path(target.source_path).relative_to(workspace_root).as_posix()
+        print(f"{progress} Verifying {source_path}::{target.full_name}", flush=True)
+        counts = _verify_target(
+            target,
+            contract,
+            workspace_root,
+            dafny,
+            report_dir / f"{index}.trx",
+            verification_options,
+            libraries,
+        )
+        if counts is None:
             return None
-        stdout = _stream_text(result.stdout)
-        stderr = _stream_text(result.stderr)
-        if DAFNY_BENCH_CORE_LIBRARY_OPTION in verification_options:
-            stdout = without_expected_dafny_library_warnings(stdout, workspace_root)
-            stderr = without_expected_dafny_library_warnings(stderr, workspace_root)
-        if libraries:
-            stdout = without_expected_library_warnings(stdout, libraries)
-            stderr = without_expected_library_warnings(stderr, libraries)
-        _emit_process_output(stdout, stderr)
-        if has_dafny_warning(stdout) or has_dafny_warning(stderr):
-            _emit_outcome("verification_failure", "verify")
-            return None
-        if result.returncode != 0:
-            _emit_outcome("verification_failure", "verify")
-            return None
-        try:
-            report_total, report_failed = _trx_counts(report_path)
-        except (OSError, ElementTree.ParseError):
-            _emit_outcome("infrastructure_failure", "evidence")
-            return None
+        report_total, report_failed = counts
         total += report_total
         failed += report_failed
         print(
