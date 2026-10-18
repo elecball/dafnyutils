@@ -18,7 +18,7 @@ from benchmarks.profiles import (
     is_algorithm_utility,
     utility_paths,
 )
-from benchmarks.task import TaskProfile
+from benchmarks.task import PublicRule, TaskProfile
 from entry_contract import EntryContractAnalysis
 
 
@@ -28,6 +28,24 @@ class GeneratedTaskProfile:
 
     profile: TaskProfile
     entry_analysis: EntryContractAnalysis
+
+
+def individual_verification_rule(support_directory: Path = Path("eval_support")) -> PublicRule:
+    """Describe optional declaration feedback using its delivered support directory."""
+    helper = f"./{support_directory.as_posix()}/verify-target.sh"
+    full_gate = f"./{support_directory.as_posix()}/verify.sh"
+    return PublicRule(
+        rule_id="individual-verification",
+        title="Check individual declarations while developing",
+        description=(
+            f"For optional feedback without a .NET build, run {helper} --list to discover "
+            f"exact native targets, then {helper} --source PATH --symbol FULL_NAME using "
+            "one listed source and symbol. Quote symbols containing shell metacharacters. "
+            "This uses the same fixed verification policy and reports only that target; "
+            "ambiguous native filters fail closed, and targets without verification obligations "
+            f"return a no_obligations outcome. Run the complete {full_gate} gate before finishing."
+        ),
+    )
 
 
 def generate_task_profile(
@@ -137,6 +155,7 @@ def _profile_payload(
                     "timeLimit, timeLimitMultiplier, or equivalent verification-limit overrides."
                 ),
             },
+            individual_verification_rule().model_dump(mode="json"),
             {
                 "rule_id": "workspace-boundary",
                 "title": "Respect the editable boundary",

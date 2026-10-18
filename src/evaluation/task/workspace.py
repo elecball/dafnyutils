@@ -66,7 +66,7 @@ class TaskWorkspaceSpec:
     read_only_paths: tuple[Path, ...] = ()
 
 
-_SUPPORT_SCRIPT_NAMES = ("build.sh", "check_proof_layout.sh", "verify.sh")
+_SUPPORT_SCRIPT_NAMES = ("build.sh", "check_proof_layout.sh", "verify.sh", "verify-target.sh")
 
 
 def _support_directory(public_task_id: str | None) -> Path:

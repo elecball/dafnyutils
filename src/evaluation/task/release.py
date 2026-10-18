@@ -18,7 +18,7 @@ from pathlib import Path
 
 from pydantic import Field, field_validator, model_validator
 
-from benchmarks.generated_profile import GeneratedTaskProfile
+from benchmarks.generated_profile import GeneratedTaskProfile, individual_verification_rule
 from benchmarks.paths import REPO_ROOT
 from benchmarks.profiles import ResolvedBenchmark
 from benchmarks.repository import BenchmarkRepository
@@ -229,7 +229,13 @@ def _public_profile(profile: TaskProfile, task_id: str) -> TaskProfile:
         )
         for check in profile.public_checks
     )
-    return profile.model_copy(update={"public_checks": checks})
+    rules = tuple(
+        individual_verification_rule(Path("eval_support") / task_id)
+        if rule.rule_id == "individual-verification"
+        else rule
+        for rule in profile.public_rules
+    )
+    return profile.model_copy(update={"public_checks": checks, "public_rules": rules})
 
 
 def _public_file(path: Path, content: bytes) -> _PublicFile:
