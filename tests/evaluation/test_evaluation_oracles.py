@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -69,50 +67,6 @@ def test_coreutils_oracles_use_generated_entry_gates() -> None:
         assert "--allow-warnings" not in commands[command_name]
     assert "--allow-external-contracts" in commands["spec_shape"]
     assert "--dont-verify-dependencies" in commands["spec_shape"]
-
-
-# Generated specification checks select the benchmark override when PATH has another Dafny.
-@pytest.mark.parametrize(
-    ("utility_name", "command_name"),
-    (
-        ("cat", "spec_shape"),
-        ("algorithm-63", "spec_shape"),
-        ("algorithm-63", "spec_consistency"),
-    ),
-)
-@pytest.mark.integration
-def test_specification_oracles_use_configured_dafny(
-    tmp_path: Path,
-    utility_name: str,
-    command_name: str,
-) -> None:
-    configured_dafny = tmp_path / "configured-dafny"
-    path_dir = tmp_path / "path"
-    path_dafny = path_dir / "dafny-benchmark"
-    path_dir.mkdir()
-    for executable, marker in ((configured_dafny, "configured"), (path_dafny, "path")):
-        executable.write_text(
-            f"#!/usr/bin/env bash\nprintf '%s\\n' {marker}\n",
-            encoding="utf-8",
-        )
-        executable.chmod(0o755)
-    env = {
-        **os.environ,
-        "DAFNY": str(path_dafny),
-        "DAFNY_BENCHMARK": str(configured_dafny),
-        "PATH": f"{path_dir}:{os.environ['PATH']}",
-        "EVAL_TARGET_ROOT": str(tmp_path),
-    }
-
-    completed = subprocess.run(
-        ["bash", "-c", derived_oracle_commands(_utility_cfg(utility_name))[command_name]],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-
-    assert completed.stdout.strip() == "configured"
 
 
 # Coreutils evaluation fuzzing compares stderr unless a caller explicitly opts out.

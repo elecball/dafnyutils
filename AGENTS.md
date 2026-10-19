@@ -143,14 +143,39 @@ we compare its behavior with the original GNU coreutils binaries.
   Add a one-line intention comment immediately above the test or its decorators.
 - Do not test whether a prompt substring appears or does not appear in an LLM
   payload. Test the relevant behavior or structured contract instead.
-- Never add tests whose setup, execution, or teardown can make disk I/O a
-  bottleneck or create substantial filesystem pressure. This includes bulk copies
-  of repository or runtime trees; deep or large temporary trees and excessive file
-  or directory entries; large real file, archive, compiler, or tool outputs written
-  to disk; disk stress tests; and `fsync`, `fdatasync`, or equivalent sync workloads.
-  Bounded tiny files and directories needed to verify behavior remain allowed. Do
-  not justify risky tests by fast local storage, opt-in settings, or skip markers;
-  test boundary behavior with small fixtures, fakes, or mocked I/O.
+- Remove existing development tests whose setup, execution, or teardown can make
+  disk I/O a bottleneck or create substantial filesystem pressure. Never add or
+  reintroduce them under new names, helpers, fixtures, scripts, or markers. This
+  includes bulk repository, benchmark-support, or runtime tree copying; repeated
+  native builds and generated compiler/build trees; bulk or deep temporary trees;
+  large file/archive payloads, logs, or subprocess output captured to disk;
+  repeated real writes; disk stress; and `fsync`, `fdatasync`, `sync`, or equivalent sync
+  workloads, even when the synchronized files are tiny. Include delayed pytest
+  temporary-directory cleanup in this review.
+- Never add or retain development tests that bulk-read or hash whole installed
+  toolchain or runtime trees, including through fixtures or digest helpers. Use a
+  tiny, fixed synthetic tree or fake the digest boundary instead. Warm filesystem
+  caches and process caches do not exempt this workload or justify reintroducing
+  it under another name, helper, script, or marker.
+- Before authoring or retaining a development test, trace transitive calls through
+  helpers, fixtures (including shared and autouse fixtures), scripts, native tools,
+  and production code, including atomic-save and forced-sync implementations.
+  Bound file count, size, depth, reads, writes, sync calls, and cleanup across
+  parametrization and fixture lifetimes; fake providers or command transports do
+  not make real workspace publication or copying safe. If disk cost is uncertain,
+  do not add the test. Never execute suspect workloads merely to identify them.
+- Never add or retain Python development tests that create, use, or delete temporary
+  directories, directly or through fixtures, helpers, native tools, production
+  calls, or delayed cleanup. This includes `tmp_path`, `tmpdir`, their factories,
+  `tempfile.TemporaryDirectory`, `mkdtemp`, and equivalent APIs. Tiny or fixed
+  temporary fixtures, session scope, skips, opt-ins, integration markers, and
+  faster storage are not exceptions. Delete offending tests and exclusive support;
+  use in-memory data and fake external boundaries without relocating the workload.
+  Preserve benchmark datasets, oracle/scoring fixtures, and fixed task contracts.
+- When real Docker development tests are necessary, create at most one shared
+  container for the entire test session and run all checks there. Do not create
+  and remove containers repeatedly per test or parametrized case; keep meaningful
+  isolation assertions within the shared session lifecycle.
 - Classify development tests by execution weight with the registered
   `integration` marker. Unmarked tests are serial units; mark tests that invoke
   native Dafny tools, real subprocesses or shell scripts, concurrent process
