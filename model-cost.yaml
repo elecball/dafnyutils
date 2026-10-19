@@ -2,18 +2,23 @@ schema_version: model_cost.v1
 models:
   # Sources: https://developers.openai.com/api/docs/pricing and
   # https://developers.openai.com/api/docs/models/gpt-6-sol,
-  # https://developers.openai.com/api/docs/models/gpt-6-luna (2026-09-23).
-  # USD per 1M tokens, Standard, input <=272K; this schema excludes cache and
-  # long-context pricing adjustments.
+  # https://developers.openai.com/api/docs/models/gpt-6-luna,
+  # https://developers.openai.com/api/docs/models/gpt-6-astra (read 2026-10-18).
+  # USD per 1M tokens, Standard tier, input <=272K. cached_input_per_1m is optional
+  # per model; runs of a model without it have no cache-aware cost. Cache-write
+  # premiums, long-context pricing and Batch/Flex/Fast tier adjustments are excluded.
   gpt-6-sol:
     input_per_1m: 2.00
     output_per_1m: 10.00
+    cached_input_per_1m: 0.20
   gpt-6-luna:
     input_per_1m: 0.10
     output_per_1m: 0.50
+    cached_input_per_1m: 0.01
   gpt-6-astra:
     input_per_1m: 10.00
     output_per_1m: 50.00
+    cached_input_per_1m: 1.00
   gpt-5.6-sol:
     input_per_1m: 5.00
     output_per_1m: 30.00
