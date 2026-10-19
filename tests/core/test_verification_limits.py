@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 import entry_contract
 from analysis import client
@@ -46,6 +47,81 @@ def _definition(attribute: str, *, source: str = "/workspace/toy/Proof.dfy") -> 
         callees=(),
         references=(),
     )
+
+
+# Native body visibility parses with its camel-case wire names and round-trips unchanged.
+def test_definition_info_parses_native_body_visibility() -> None:
+    payload = _definition("helper").model_dump(mode="json", by_alias=True, exclude_none=True)
+    payload["bodyVisibility"] = {
+        "referencedDeclarations": ["Proof.Helper", "Proof.Secret"],
+        "isOpaque": True,
+        "revealedFunctions": ["Proof.Public"],
+        "revealsAllFunctions": False,
+    }
+
+    definition = DefinitionInfo.model_validate_json(json.dumps(payload))
+
+    assert definition.body_visibility is not None
+    assert definition.body_visibility.referenced_declarations == ("Proof.Helper", "Proof.Secret")
+    assert definition.body_visibility.is_opaque is True
+    assert definition.body_visibility.revealed_functions == ("Proof.Public",)
+    assert definition.body_visibility.reveals_all_functions is False
+    assert (
+        definition.model_dump(mode="json", by_alias=True)["bodyVisibility"]
+        == payload["bodyVisibility"]
+    )
+
+
+# Existing native results that omit optional body visibility retain the None default.
+def test_definition_info_accepts_missing_body_visibility() -> None:
+    payload = _definition("helper").model_dump(mode="json", by_alias=True, exclude_none=True)
+
+    definition = DefinitionInfo.model_validate_json(json.dumps(payload))
+
+    assert definition.body_visibility is None
+
+
+# Body visibility booleans reject string coercion at the JSON boundary.
+def test_definition_info_rejects_coerced_body_visibility_boolean() -> None:
+    payload = _definition("helper").model_dump(mode="json", by_alias=True, exclude_none=True)
+    payload["bodyVisibility"] = {
+        "referencedDeclarations": [],
+        "isOpaque": "true",
+        "revealedFunctions": [],
+        "revealsAllFunctions": False,
+    }
+
+    with pytest.raises(ValidationError):
+        DefinitionInfo.model_validate_json(json.dumps(payload))
+
+
+# Body visibility declaration names reject non-string JSON values.
+def test_definition_info_rejects_non_string_body_visibility_declaration() -> None:
+    payload = _definition("helper").model_dump(mode="json", by_alias=True, exclude_none=True)
+    payload["bodyVisibility"] = {
+        "referencedDeclarations": [7],
+        "isOpaque": False,
+        "revealedFunctions": [],
+        "revealsAllFunctions": False,
+    }
+
+    with pytest.raises(ValidationError):
+        DefinitionInfo.model_validate_json(json.dumps(payload))
+
+
+# The nested body visibility object remains closed to unknown wire fields.
+def test_definition_info_rejects_extra_body_visibility_field() -> None:
+    payload = _definition("helper").model_dump(mode="json", by_alias=True, exclude_none=True)
+    payload["bodyVisibility"] = {
+        "referencedDeclarations": [],
+        "isOpaque": False,
+        "revealedFunctions": [],
+        "revealsAllFunctions": False,
+        "unexpected": True,
+    }
+
+    with pytest.raises(ValidationError):
+        DefinitionInfo.model_validate_json(json.dumps(payload))
 
 
 # An editable proof cannot override either the base time budget or an equivalent multiplier.

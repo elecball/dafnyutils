@@ -61,3 +61,5 @@
 - [Align candidate and Top-down verification](2026-10-18-align-codex-topdown-verification.md) — done; shared mutation/limit policy, native coverage and candidate override enforcement accepted by local and fresh independent checks; parent owns commit/landing.
 
 - [Commit existing native changes in logical units](2026-10-19-commit-native-working-trees.md) — done; local commit maintenance, no push.
+
+- [Unify native Dafny revisions](2026-10-19-unify-dafny.md) — done; both native pins and default commands use10dca3ba4a29; strict consumers and independent90-case native gate accepted.

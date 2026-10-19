@@ -266,6 +266,17 @@ class DefinitionReference(BaseModel):
     end: StrictInt
 
 
+class DefinitionBodyVisibility(BaseModel):
+    """Describe effective opacity and revealed bodies in a resolved proof context."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    referenced_declarations: tuple[StrictStr, ...] = Field(alias="referencedDeclarations")
+    is_opaque: StrictBool = Field(alias="isOpaque")
+    revealed_functions: tuple[StrictStr, ...] = Field(alias="revealedFunctions")
+    reveals_all_functions: StrictBool = Field(alias="revealsAllFunctions")
+
+
 class DefinitionInfo(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
@@ -356,6 +367,7 @@ class DefinitionInfo(BaseModel):
     contract_header_with_axiom: StrictStr = Field(default="", alias="contractHeaderWithAxiom")
     references: tuple[DefinitionReference, ...]
     dependencies: tuple[StrictStr, ...] = ()
+    body_visibility: DefinitionBodyVisibility | None = Field(default=None, alias="bodyVisibility")
     children: tuple[DafnyFingerprintSpan, ...] = ()
     source_group: DafnyFingerprintSpan | None = Field(default=None, alias="sourceGroup")
     yield_requires: tuple[StrictStr, ...] = Field(default=(), alias="yieldRequires")
