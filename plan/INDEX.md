@@ -59,3 +59,5 @@
 - [Restore task-level upstream marker checks](2026-09-30-task-upstream-markers.md) — done; selected task preflight and independent checks pass, with 25 existing module annotation failures recorded for separate repair.
 
 - [Align candidate and Top-down verification](2026-10-18-align-codex-topdown-verification.md) — done; shared mutation/limit policy, native coverage and candidate override enforcement accepted by local and fresh independent checks; parent owns commit/landing.
+
+- [Commit existing native changes in logical units](2026-10-19-commit-native-working-trees.md) — done; local commit maintenance, no push.
