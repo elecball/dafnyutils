@@ -20,6 +20,11 @@ from benchmarks.profiles import (
 )
 from benchmarks.task import PublicRule, TaskProfile
 from entry_contract import EntryContractAnalysis
+from verification import (
+    DAFNY_VERIFICATION_RANDOM_SEED,
+    DAFNY_VERIFICATION_TARGET_TIMEOUT_SEC,
+    DAFNY_VERIFICATION_TIME_LIMIT_SEC,
+)
 
 
 @dataclass(frozen=True)
@@ -149,9 +154,11 @@ def _profile_payload(
                 "rule_id": "verification-policy",
                 "title": "Use the fixed verification policy",
                 "description": (
-                    "Verification uses measure-complexity with three mutations, random seed 0, "
-                    "isolated assertions, a 30-second limit per verification condition per "
-                    "mutation, and a 100-second process limit per declaration. Do not set "
+                    "Verification uses a single verify pass with fixed random seed "
+                    f"{DAFNY_VERIFICATION_RANDOM_SEED}, isolated assertions, a "
+                    f"{DAFNY_VERIFICATION_TIME_LIMIT_SEC}-second limit per verification condition, "
+                    f"and a {DAFNY_VERIFICATION_TARGET_TIMEOUT_SEC}-second process limit per "
+                    "declaration. Do not set "
                     "timeLimit, timeLimitMultiplier, or equivalent verification-limit overrides."
                 ),
             },

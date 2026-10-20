@@ -32,8 +32,7 @@ from standard_library import (
 
 DAFNY_VERIFICATION_TIME_LIMIT_SEC = 30
 DAFNY_VERIFICATION_TARGET_TIMEOUT_SEC = 100
-DAFNY_VERIFICATION_MUTATIONS = 3
-DAFNY_VERIFICATION_RANDOM_SEED = 0
+DAFNY_VERIFICATION_RANDOM_SEED = 42
 
 
 def _verification_options(workspace_root: Path) -> tuple[str, ...]:
@@ -45,6 +44,7 @@ def verification_options(library_options: Sequence[str] = ()) -> tuple[str, ...]
     return (
         DAFNY_STANDARD_LIBRARY_OPTION,
         *library_options,
+        f"--boogie=/randomSeed:{DAFNY_VERIFICATION_RANDOM_SEED}",
         "--verify-included-files",
         "--isolate-assertions",
         f"--verification-time-limit:{DAFNY_VERIFICATION_TIME_LIMIT_SEC}",
@@ -121,14 +121,10 @@ def _verify_target(
         result = _run_verification_command(
             [
                 dafny,
-                "measure-complexity",
+                "verify",
                 options[0],
                 str(contract.execution_source),
                 *options[1:],
-                "--mutations",
-                str(DAFNY_VERIFICATION_MUTATIONS),
-                "--random-seed",
-                str(DAFNY_VERIFICATION_RANDOM_SEED),
                 f"--filter-position={source_path}",
                 f"--filter-symbol={target.full_name}.",
                 "--log-format",

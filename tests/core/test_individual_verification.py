@@ -31,7 +31,7 @@ def _contract(*targets: DefinitionVerificationTarget):
     return ValidatedEntryContract(source, (source,), (source,), (), tuple(targets))
 
 
-def _boundaries(monkeypatch, contract=None, *, outcomes=("Passed",) * 3):
+def _boundaries(monkeypatch, contract=None, *, outcomes=("Passed",)):
     contract = contract if contract is not None else _contract(_target())
     calls = []
     validations = []
@@ -83,7 +83,7 @@ def test_list_native_targets(monkeypatch, capsys):
     assert calls == []
 
 
-# Exact native selection runs one mutation process and emits only scoped success.
+# Exact native selection uses the global fixed seed and emits only scoped success.
 def test_individual_policy_and_scoped_receipt(monkeypatch, capsys):
     session, calls, validations = _boundaries(
         monkeypatch, _contract(_target(), _target("Proof.Other"))
@@ -92,11 +92,10 @@ def test_individual_policy_and_scoped_receipt(monkeypatch, capsys):
     assert _check(session) == 0
     assert len(calls) == 1
     command, kwargs = calls[0]
-    assert command[1] == "measure-complexity"
+    assert command[1] == "verify"
     assert "--filter-position=/workspace/toy/Proof.dfy" in command
     assert "--filter-symbol=Proof.Check." in command
-    assert command[command.index("--mutations") + 1] == "3"
-    assert command[command.index("--random-seed") + 1] == "0"
+    assert "--boogie=/randomSeed:42" in command
     assert "--verification-time-limit:30" in command
     assert "--isolate-assertions" in command
     assert kwargs["timeout_sec"] == 100
@@ -195,8 +194,8 @@ def test_constructor_target_selector(monkeypatch):
     assert "--filter-symbol=#Proof.Choice.Some." in calls[0][0]
 
 
-# A failed mutation fails the target despite successful process exit.
-def test_failed_mutation_rejects(monkeypatch):
+# A failed obligation fails the target despite successful process exit.
+def test_failed_obligation_rejects(monkeypatch):
     session, _, _ = _boundaries(monkeypatch, outcomes=("Passed", "Failed", "Passed"))
 
     assert _check(session) == 1

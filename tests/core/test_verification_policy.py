@@ -98,17 +98,16 @@ def _verify(contract: ValidatedEntryContract, *, validate=lambda: None) -> int:
     )
 
 
-# Multiple targets in the same file each receive the complete mutation and process budget.
+# Multiple targets share one fixed seed and each receive the complete process budget.
 def test_each_target_gets_topdown_policy(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = _fake_boundaries(monkeypatch, (("Passed",) * 3, ("Passed",) * 3))
+    calls = _fake_boundaries(monkeypatch, (("Passed",), ("Passed",)))
     contract = _contract(_definition("Runner.RunCore"), _definition("Runner.Helper"))
 
     assert _verify(contract) == 0
     assert len(calls) == 2
-    assert {call[0][call[0].index("--mutations") + 1] for call in calls} == {"3"}
-    assert {call[0][call[0].index("--random-seed") + 1] for call in calls} == {"0"}
     for command, kwargs in calls:
-        assert command[1] == "measure-complexity"
+        assert command[1] == "verify"
+        assert "--boogie=/randomSeed:42" in command
         assert "--verification-time-limit:30" in command
         assert "--isolate-assertions" in command
         assert "--verify-included-files" in command
@@ -123,8 +122,8 @@ def test_each_target_gets_topdown_policy(monkeypatch: pytest.MonkeyPatch) -> Non
     }
 
 
-# A failed mutation receipt rejects the candidate even if the native process exits successfully.
-def test_failed_mutation_receipt_rejects(monkeypatch: pytest.MonkeyPatch) -> None:
+# A failed obligation rejects the candidate even if the native process exits successfully.
+def test_failed_obligation_receipt_rejects(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_boundaries(monkeypatch, (("Passed", "Failed", "Passed"),))
 
     assert _verify(_contract(_definition("Runner.RunCore"))) == 1
@@ -145,7 +144,7 @@ def test_outer_timeout_rejects(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
 
 # A zero-obligation helper does not invalidate successful evidence for the complete surface.
 def test_empty_target_receipt_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
-    _fake_boundaries(monkeypatch, ((), ("Passed",) * 3))
+    _fake_boundaries(monkeypatch, ((), ("Passed",)))
 
     assert _verify(_contract(_definition("Runner.Helper"), _definition("Runner.RunCore"))) == 0
 
@@ -207,7 +206,7 @@ def test_bodyless_callable_rejects(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls == []
 
 
-# A native warning cannot be hidden by a passing mutation report.
+# A native warning cannot be hidden by a passing verification report.
 def test_warning_rejects(monkeypatch: pytest.MonkeyPatch) -> None:
     _fake_boundaries(monkeypatch)
     monkeypatch.setattr(
