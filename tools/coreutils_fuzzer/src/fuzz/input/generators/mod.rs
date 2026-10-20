@@ -27,6 +27,7 @@ pub(crate) mod printf;
 pub(crate) mod pwd;
 pub(crate) mod readlink;
 pub(crate) mod rm;
+pub(crate) mod rmdir;
 pub(crate) mod seq;
 pub(crate) mod stat;
 pub(crate) mod tail;

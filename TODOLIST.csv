@@ -68,7 +68,7 @@ benchmark,pwd,system_information,GNU-compatible supported subset,released,Existi
 benchmark,readlink,filesystem_and_paths,GNU-compatible supported subset,released,Existing benchmark,
 candidate,realpath,filesystem_and_paths,Explicit -m -s; -z and -q; one or more nonempty/empty operands in the fixed Linux filesystem namespace.,open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
 benchmark,rm,filesystem_and_paths,"Noninteractive ordinary and recursive removal; force, verbose, directory, root and device safeguards; ordered operands and partial progress.",released,Filesystem benchmark: bench/utils/rm/rm.md,Prompt-dependent modes need isatty and incremental yes/no input; descriptor-relative traversal and filesystem-type query boundaries are documented in rm.md.
-candidate,rmdir,filesystem_and_paths,Default empty-directory removal; -v; ordered operands.,open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
+benchmark,rmdir,filesystem_and_paths,"Empty-directory removal; -p/--parents/--path, -v and --ignore-fail-on-non-empty; ordered operands.",released,Filesystem benchmark: bench/utils/rmdir/rmdir.md,
 candidate,runcon,identity_and_permissions,Identity ownership permission and security-context behavior,model_preparation,Reviewed blocker: see remaining_preparation,"No security context transition, policy lookup or execution contract."
 benchmark,seq,numeric_and_sequences,GNU-compatible supported subset,released,Existing benchmark,
 candidate,sha1sum,encoding_and_checksums,"Digest generation; -b, -t, -z; ordered file/stdin operands.",open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,

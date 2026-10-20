@@ -222,6 +222,7 @@ pub(crate) static UTILITY_CAPABILITIES: &[UtilityCapability] = &[
         ]),
         ..capability!("rm", rm)
     },
+    capability!("rmdir", rmdir),
     UtilityCapability {
         generated_options: Some(&[
             "-s",
@@ -417,8 +418,8 @@ mod tests {
             patterned,
             BTreeSet::from([
                 "cat", "chmod", "comm", "csplit", "cut", "du", "expand", "head", "link", "ln",
-                "ls", "mkdir", "mv", "nl", "paste", "readlink", "rm", "stat", "tail", "touch",
-                "truncate", "uniq", "unlink", "wc",
+                "ls", "mkdir", "mv", "nl", "paste", "readlink", "rm", "rmdir", "stat", "tail",
+                "touch", "truncate", "uniq", "unlink", "wc",
             ])
         );
     }
