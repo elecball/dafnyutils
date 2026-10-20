@@ -1,6 +1,6 @@
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "DirnameSchema.dfy"
 include "DirnameCore.dfy"
 include "DirnameProof.dfy"

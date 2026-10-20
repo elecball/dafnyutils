@@ -1,14 +1,15 @@
+include "RmWorldLookupProof.dfy"
 include "RmSpec.dfy"
-include "../../core/PathCore.dfy"
+include "RmPathCore.dfy"
 
 module RmProof {
   import opened BenchWorld
   import Spec = RmSpec
   import C = IOContract
-  import LookupProof = WorldLookupProof
+  import LookupProof = RmWorldLookupProof
   import Schema = RmSchema
-  import Paths = MvPathSpec
-  import PathCore = MvPathCore
+  import Paths = RmPathSpec
+  import PathCore = RmPathCore
 
   lemma TrimmedSummaryGivesStatusPath(path: Path, value: Path)
     requires PathCore.TrimmedSummary(path,value)

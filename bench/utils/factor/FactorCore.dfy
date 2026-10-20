@@ -1,3 +1,4 @@
+include "FactorTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -5,6 +6,7 @@ include "FactorSchema.dfy"
 include "FactorSpec.dfy"
 
 module FactorCore {
+  import Text = FactorTextCore
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -330,10 +332,11 @@ module FactorCore {
   }
 
   function ProcessToken(token: string, exponents: bool, fromArgv: bool): TokenResult
+    requires fromArgv || token is BenchWorld.Bytes
   {
     var trimmed := TrimWhitespace(token);
-    var invalid := if fromArgv then Spec.InvalidArgvTokenMessage(token)
-                   else Spec.InvalidTokenMessage(token);
+    var invalid := if fromArgv then Text.InvalidArgvTokenMessage(token)
+                   else Text.InvalidTokenMessage(token);
     if |trimmed| == 0 then
       TokenErr(invalid)
     else if trimmed[0] == '-' then
@@ -349,7 +352,7 @@ module FactorCore {
       TokenErr(invalid)
   }
 
-  function SplitWordsFrom(text: BenchWorld.Bytes, i: nat): seq<string>
+  function SplitWordsFrom(text: BenchWorld.Bytes, i: nat): seq<BenchWorld.Bytes>
     requires i <= |text|
     decreases |text| - i
   {
@@ -367,7 +370,7 @@ module FactorCore {
         [text[i..j]] + SplitWordsFrom(text, j)
   } by method {
     var cursor := i;
-    var tokens: seq<string> := [];
+    var tokens: seq<BenchWorld.Bytes> := [];
     while cursor < |text|
       invariant i <= cursor <= |text|
       invariant SplitWordsFrom(text, i) ==
@@ -442,12 +445,13 @@ module FactorCore {
     return cursor;
   }
 
-  function SplitWords(text: BenchWorld.Bytes): seq<string>
+  function SplitWords(text: BenchWorld.Bytes): seq<BenchWorld.Bytes>
   {
     SplitWordsFrom(text, 0)
   }
 
   function RunTokens(tokens: seq<string>, exponents: bool, fromArgv: bool): RunResult
+    requires fromArgv || forall i :: 0 <= i < |tokens| ==> tokens[i] is BenchWorld.Bytes
     decreases |tokens|
   {
     if |tokens| == 0 then
@@ -564,7 +568,7 @@ module FactorCore {
     var diagnostics := run.stderr;
     if readErr != 0 {
       var reason := io.GetCLocaleErrnoText(readErr);
-      diagnostics := diagnostics + Spec.ReadErrorText(reason);
+      diagnostics := diagnostics + Text.ReadErrorText(reason);
     }
     plannedStdout := plannedStdout + (run.stdout);
     plannedStderr := plannedStderr + (diagnostics);
@@ -591,7 +595,7 @@ module FactorCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
       else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

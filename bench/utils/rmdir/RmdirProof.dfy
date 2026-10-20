@@ -1,6 +1,6 @@
 include "RmdirSpec.dfy"
-include "../../core/PathCore.dfy"
-include "../../core/PathProof.dfy"
+include "RmdirPathCore.dfy"
+include "RmdirPathProof.dfy"
 
 module RmdirProof {
   import BenchIO
@@ -9,9 +9,9 @@ module RmdirProof {
   import opened BenchWorld
   import S = RmdirSchema
   import Spec = RmdirSpec
-  import Path = MvPathSpec
-  import PathCore = MvPathCore
-  import PathProof = MvPathProof
+  import Path = RmdirPathSpec
+  import PathCore = RmdirPathCore
+  import PathProof = RmdirPathProof
 
   lemma RemovalFacts(before: FileSystem, after: FileSystem, path: string, now: int,
     trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult, ok: bool, err: int)

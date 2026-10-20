@@ -1,8 +1,10 @@
+include "UnlinkTextCore.dfy"
 include "../../core/IO.dfy"
 include "UnlinkSchema.dfy"
 include "UnlinkSpec.dfy"
 
 module UnlinkCore {
+  import Text = UnlinkTextCore
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -12,7 +14,7 @@ module UnlinkCore {
   import Schema = UnlinkSchema
   import Spec = UnlinkSpec
   import C = IOContract
-  import Utf8 = Utf8Semantics
+  import Utf8 = UnlinkUtf8Core
 
   opaque twostate predicate PreparedSummary(raw: Schema.UnlinkCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     reads io.fsRegion, io.nowRegion, io.trustedFilesystemRegion
@@ -95,7 +97,7 @@ module UnlinkCore {
       } else {
         var reason := io.GetCLocaleErrnoText(err);
         var quotedPath := io.QuoteafPath(raw.operands[0]);
-        plannedStderr := plannedStderr + (Spec.CannotUnlinkText(quotedPath, reason));
+        plannedStderr := plannedStderr + (Text.CannotUnlinkText(quotedPath, reason));
         exit := 1;
 
         assert C.GetCLocaleErrnoTextSpec(err, reason);
@@ -125,7 +127,7 @@ module UnlinkCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
       else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

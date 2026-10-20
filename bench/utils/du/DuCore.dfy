@@ -1,3 +1,4 @@
+include "DuTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -14,7 +15,8 @@ module DuCore {
   import IOContract
   import Schema = DuSchema
   import Spec = DuSpec
-  import Utf8 = Utf8Semantics
+  import Utf8 = DuUtf8Core
+  import Text = DuTextCore
 
   function DigitChar(d: nat): char
     requires d < 10
@@ -62,7 +64,7 @@ module DuCore {
   {
     match result
     case Ok(_) => []
-    case Err(err) => Spec.ErrorMessageSpec(path, err)
+    case Err(err) => Text.ErrorMessageSpec(path, err)
   }
 
   ghost function ReadResultCore(
@@ -260,7 +262,7 @@ module DuCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
       else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

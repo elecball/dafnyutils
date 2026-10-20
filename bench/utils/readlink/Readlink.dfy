@@ -1,7 +1,7 @@
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "ReadlinkSchema.dfy"
 include "ReadlinkCore.dfy"
 include "ReadlinkProof.dfy"

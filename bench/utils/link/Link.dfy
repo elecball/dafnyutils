@@ -1,10 +1,20 @@
-include "../../core/BenchmarkItem.dfy"
+include "../../core/StringEscaping.dfy"
+include "CliSupport.dfy"
 include "../../core/Utf8.dfy"
 include "LinkSpec.dfy"
 include "LinkCore.dfy"
 include "LinkProof.dfy"
 
 module Link {
+  // CLI codecs are fixed protocol details, outside the candidate API.
+  export
+    provides BenchIO, BenchWorld, BenchItem, CliTypes, Utf8, S, Core, Spec, Proof, CliExtern, LinkBenchmarkItem._ctor, LinkBenchmarkItem.Name, LinkBenchmarkItem.Schema, LinkBenchmarkItem.ParseConfig, LinkBenchmarkItem.Decode, LinkBenchmarkItem.FormatParseError, LinkBenchmarkItem.PlanParseFailure, LinkBenchmarkItem.RunCore
+    reveals LinkBenchmarkItem
+
+  import ProtocolUtf8Model = Utf8Semantics
+  import ProtocolEscapingModel = StringEscaping
+  import opened ProtocolModel = LinkSpec
+
   import BenchIO
   import BenchWorld
   import BenchItem
@@ -36,7 +46,7 @@ module Link {
     }
 
     method FormatParseError(err: CliTypes.ParseError) returns (msg: BenchWorld.Bytes) {
-      msg := Spec.ParseErrorText(err);
+      msg := ProtocolParseErrorText(err);
     }
 
     method PlanParseFailure(
@@ -59,7 +69,7 @@ module Link {
           case ParseFailure(_) =>
         }
       }
-      var msg := Spec.ParseErrorText(e);
+      var msg := ProtocolParseErrorText(e);
       plan := CliTypes.CliEarlyExit(1, [], msg);
     }
 
@@ -71,4 +81,67 @@ module Link {
       Proof.CoreSummaryImpliesSpec(raw, io, exit);
     }
   }
+  function ProtocolEncodeChar(ch: char): BenchWorld.Bytes
+    ensures ProtocolEncodeChar(ch) == ProtocolUtf8Model.EncodeChar(ch)
+    ensures |ProtocolEncodeChar(ch)| == BenchWorld.Utf8ByteWidth(ch)
+    ensures 1 <= |ProtocolEncodeChar(ch)| <= 4
+  {
+    var code := ch as int;
+    if code <= 0x7f then
+      [code as char]
+    else if code <= 0x7ff then
+      [
+        (0xc0 + code / 0x40) as char,
+        (0x80 + code % 0x40) as char
+      ]
+    else if code <= 0xffff then
+      [
+        (0xe0 + code / 0x1000) as char,
+        (0x80 + (code / 0x40) % 0x40) as char,
+        (0x80 + code % 0x40) as char
+      ]
+    else
+      [
+        (0xf0 + code / 0x40000) as char,
+        (0x80 + (code / 0x1000) % 0x40) as char,
+        (0x80 + (code / 0x40) % 0x40) as char,
+        (0x80 + code % 0x40) as char
+      ]
+  }
+
+  function ProtocolEncode(text: string): BenchWorld.Bytes
+    ensures ProtocolEncode(text) == ProtocolUtf8Model.Encode(text)
+    ensures |ProtocolEncode(text)| >= |text|
+    decreases |text|
+  {
+    if text == [] then [] else ProtocolEncodeChar(text[0]) + ProtocolEncode(text[1..])
+  }
+
+  function ProtocolParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
+    ensures ProtocolParseErrorText(err) == ProtocolModel.ParseErrorText(err)
+  {
+    if err.kind == CliTypes.UnknownOption then
+        if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
+          ParseErrorTextPart1() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2() +
+          ParseErrorTextPart3()
+        else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
+          UnknownShortText(ProtocolEncodeChar(err.rawToken[1])[0])
+        else
+          ParseErrorTextPart4()
+      else if err.kind == CliTypes.UnexpectedValue then
+        ParseErrorTextPart5() + ProtocolEncode(LongOptionName(err.rawToken)) +
+        ParseErrorTextPart6() +
+        ParseErrorTextPart3()
+      else if err.kind == CliTypes.Ambiguous then
+        ParseErrorTextPart5() + ProtocolEncode(err.rawToken) +
+        ParseErrorTextPart7() +
+        ParseErrorTextPart3()
+      else
+        ParseErrorTextPart8() + ProtocolEncode(
+        (if err.kind == CliTypes.MissingValue
+        then ParseErrorTextPart9()
+        else ParseErrorTextPart10())) +
+        ParseErrorTextPart11() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2()
+  }
+
 }

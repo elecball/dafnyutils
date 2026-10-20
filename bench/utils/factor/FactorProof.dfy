@@ -1164,7 +1164,36 @@ module FactorProof {
     }
   }
 
+  lemma TokenRelationForActualToken(
+    token: string, exponents: bool, fromArgv: bool,
+    output: BW.Bytes, errorOutput: BW.Bytes, hadError: bool
+  )
+    requires fromArgv || token is BW.Bytes
+    ensures Spec.TokenRelation(token, exponents, fromArgv, output, errorOutput, hadError) <==>
+      (exists trimmed: string ::
+        Spec.TrimmedTokenRelation(token, trimmed) &&
+        if |trimmed| == 0 || trimmed[0] == '-' then
+          output == [] &&
+          errorOutput == (if fromArgv then Spec.InvalidArgvTokenMessage(token) else Spec.InvalidTokenMessage(token)) &&
+          hadError
+        else
+          var start: nat := if trimmed[0] == '+' then 1 else 0;
+          if !Spec.DigitsFrom(trimmed, start) then
+            output == [] &&
+            errorOutput == (if fromArgv then Spec.InvalidArgvTokenMessage(token) else Spec.InvalidTokenMessage(token)) &&
+            hadError
+          else
+            exists value: int ::
+              Spec.DecimalRelation(trimmed, start, value) &&
+              Spec.ValueOutputRelation(value, exponents, output) &&
+              errorOutput == [] &&
+              !hadError)
+  {
+    reveal Spec.TokenRelation();
+  }
+
   lemma ProcessTokenSatisfiesRelation(token: string, exponents: bool, fromArgv: bool)
+    requires fromArgv || token is BW.Bytes
     ensures Core.ProcessToken(token, exponents, fromArgv).TokenOk? ==>
               Spec.TokenRelation(
                 token, exponents, fromArgv,
@@ -1200,6 +1229,7 @@ module FactorProof {
   lemma {:isolate_assertions} RunTokensHeadDecomposition(
     tokens: seq<string>, exponents: bool, fromArgv: bool
   )
+    requires fromArgv || forall i :: 0 <= i < |tokens| ==> tokens[i] is BW.Bytes
     requires |tokens| > 0
     ensures Core.RunTokens(tokens, exponents, fromArgv) ==
       match Core.ProcessToken(tokens[0], exponents, fromArgv)
@@ -1222,6 +1252,7 @@ module FactorProof {
   lemma {:isolate_assertions} RunTokensSatisfiesRelation(
     tokens: seq<string>, exponents: bool, fromArgv: bool
   )
+    requires fromArgv || forall i :: 0 <= i < |tokens| ==> tokens[i] is BW.Bytes
     ensures Spec.RunRelation(
               tokens,
               exponents,
@@ -1562,6 +1593,35 @@ module FactorProof {
     reveal Spec.InputTokensRelation();
   }
 
+  lemma InputTokenItemIsBytes(
+    text: BW.Bytes, token: string, cursor: nat, start: nat, end: nat, next: nat
+  )
+    requires Spec.InputTokenItemRelation(text, token, cursor, start, end, next)
+    ensures token is BW.Bytes
+  {
+    reveal Spec.InputTokenItemRelation();
+    if text[start] == '\0' {
+      assert token == "";
+    } else {
+      assert token == text[start..end];
+    }
+  }
+
+  lemma InputTokensAreBytes(text: BW.Bytes, tokens: seq<string>)
+    requires Spec.InputTokensRelation(text, tokens)
+    ensures forall i :: 0 <= i < |tokens| ==> tokens[i] is BW.Bytes
+  {
+    reveal Spec.InputTokensRelation(), Spec.InputTokensFromRelation();
+    var cursors: seq<nat>, starts: seq<nat>, ends: seq<nat> :|
+      Spec.InputTokenPartitionFrom(text, 0, tokens, cursors, starts, ends);
+    reveal Spec.InputTokenPartitionFrom();
+    forall i | 0 <= i < |tokens|
+      ensures tokens[i] is BW.Bytes
+    {
+      InputTokenItemIsBytes(text, tokens[i], cursors[i], starts[i], ends[i], cursors[i + 1]);
+    }
+  }
+
   twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
     ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
@@ -1577,6 +1637,7 @@ module FactorProof {
       var fromArgv := |raw.operands| > 0;
       if |raw.operands| == 0 {
         SplitWordsSatisfiesRelation(input);
+        InputTokensAreBytes(input, tokens);
       }
       RunTokensSatisfiesRelation(tokens, raw.seenExponents, fromArgv);
       var run := Core.RunTokens(tokens, raw.seenExponents, fromArgv);

@@ -1,6 +1,8 @@
+include "ChmodModelProof.dfy"
 include "ChmodOperandProof.dfy"
 
 module ChmodPathProof {
+  import ModelProof = ChmodModelProof
   import W = BenchWorld
   import C = IOContract
   import R = Results
@@ -19,7 +21,7 @@ module ChmodPathProof {
     reveal C.ResolveRawSymlinkSegmentsFields();
     if index == |segments| {
       assert C.TerminalNoFollowResultFields(fs, current).Ok?;
-      C.TerminalNoFollowSuccessContainsFields(fs, current);
+      ModelProof.TerminalNoFollowSuccessContainsFields(fs, current);
       if W.FsNodeAt(fs, current).Symlink? {
         var link := W.FsNodeAt(fs, current).target;
         assert directory && link != "" && fuel > 0;
@@ -29,7 +31,7 @@ module ChmodPathProof {
       }
     } else if segments[index] == "." || segments[index] == ".." {
       assert C.TerminalNoFollowResultFields(fs, current).Ok?;
-      C.TerminalNoFollowSuccessContainsFields(fs, current);
+      ModelProof.TerminalNoFollowSuccessContainsFields(fs, current);
       if W.FsNodeAt(fs, current).Directory? {
         RawNonlinkFollow(fs, segments, index+1,
           if segments[index] == ".." then W.ParentPath(current) else current, seen, fuel, directory, target);
@@ -42,7 +44,7 @@ module ChmodPathProof {
     } else {
       var next := W.AppendPath(current, segments[index]);
       assert C.DirectNoFollowResultFields(fs, next).Ok?;
-      C.DirectNoFollowSuccessContainsFields(fs, next);
+      ModelProof.DirectNoFollowSuccessContainsFields(fs, next);
       if W.FsNodeAt(fs, next).Directory? {
         RawNonlinkFollow(fs, segments, index+1, next, seen, fuel, directory, target);
       } else if W.FsNodeAt(fs, next).Symlink? {
@@ -89,8 +91,8 @@ module ChmodPathProof {
     reveal C.ResolveRawSymlinkSegmentsFields();
     if index == |segments| || segments[index] == "." || segments[index] == ".." {
       assert C.TerminalNoFollowResultFields(before, current).Ok?;
-      C.TerminalNoFollowSuccessContainsFields(before, current);
-      C.FileSystemTopologyPathFields(before, after, current);
+      ModelProof.TerminalNoFollowSuccessContainsFields(before, current);
+      ModelProof.FileSystemTopologyPathFields(before, after, current);
       reveal W.NodeShapeUnchangedExceptMode();
       if W.FsNodeAt(before, current).Directory? && index < |segments| {
         RawNonlinkModes(before, after, segments, index+1,
@@ -113,8 +115,8 @@ module ChmodPathProof {
     } else {
       var next := W.AppendPath(current, segments[index]);
       assert C.DirectNoFollowResultFields(before, next).Ok?;
-      C.DirectNoFollowSuccessContainsFields(before, next);
-      C.FileSystemTopologyPathFields(before, after, next);
+      ModelProof.DirectNoFollowSuccessContainsFields(before, next);
+      ModelProof.FileSystemTopologyPathFields(before, after, next);
       reveal W.NodeShapeUnchangedExceptMode();
       if W.FsNodeAt(before, next).Directory? {
         RawNonlinkModes(before, after, segments, index+1, next, seen, fuel, directory, target, observed);

@@ -1,3 +1,5 @@
+include "EchoUtf8Core.dfy"
+include "EchoTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -8,7 +10,8 @@ module EchoCore {
   import StreamContract = IOContract
 
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = EchoUtf8Core
+  import Text = EchoTextCore
   import BenchWorld
   import IOContract
   import EchoSchema
@@ -302,7 +305,7 @@ module EchoCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

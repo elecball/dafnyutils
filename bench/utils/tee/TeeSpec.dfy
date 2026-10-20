@@ -6,6 +6,29 @@ include "../../core/StringEscaping.dfy"
 include "TeeSchema.dfy"
 
 module TeeSpec {
+
+  const ReadErrorMessageSpecText0: BenchWorld.Bytes := "tee: "
+
+  const ReadErrorMessageSpecText1: BenchWorld.Bytes := ": "
+
+  const ReadErrorMessageSpecText2: BenchWorld.Bytes := "\n"
+
+  const WriteErrorMessageTextText0: BenchWorld.Bytes := "tee: "
+
+  const WriteErrorMessageTextText1: BenchWorld.Bytes := ": "
+
+  const WriteErrorMessageTextText2: BenchWorld.Bytes := "\n"
+
+  const StdinReadErrorTextText0: BenchWorld.Bytes := "tee: read error: "
+
+  const StdinReadErrorTextText1: BenchWorld.Bytes := "\n"
+
+  const WriteErrorTextText0: BenchWorld.Bytes := "tee: 'standard output': "
+
+  const WriteErrorTextText1: BenchWorld.Bytes := "tee: write error: "
+
+  const WriteErrorTextText2: BenchWorld.Bytes := "\n"
+
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -89,16 +112,16 @@ module TeeSpec {
     IOContract.CLocaleErrnoTextResult(err)
   }
 
-  function ReadErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function ReadErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "tee: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-      ": " + ReadErrnoTextSpec(err) + "\n"
+    ReadErrorMessageSpecText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
+      ReadErrorMessageSpecText1 + Utf8.Encode(ReadErrnoTextSpec(err)) + ReadErrorMessageSpecText2
   }
 
-  function WriteErrorMessageText(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
+  ghost function WriteErrorMessageText(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
   {
-    "tee: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-      ": " + Utf8.Encode(reason) + "\n"
+    WriteErrorMessageTextText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
+      WriteErrorMessageTextText1 + Utf8.Encode(reason) + WriteErrorMessageTextText2
   }
 
   ghost function WriteErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
@@ -196,9 +219,9 @@ module TeeSpec {
                             preTrustedFilesystem, states[i], states[i + 1])
   }
 
-  function StdinReadErrorText(reason: string): BenchWorld.Bytes
+  ghost function StdinReadErrorText(reason: string): BenchWorld.Bytes
   {
-    "tee: read error: " + Utf8.Encode(reason) + "\n"
+    StdinReadErrorTextText0 + Utf8.Encode(reason) + StdinReadErrorTextText1
   }
 
   ghost function StdinReadError(err: int): BenchWorld.Bytes
@@ -207,10 +230,10 @@ module TeeSpec {
   }
 
 
-  function WriteErrorText(raw: Schema.TeeCmdRaw, reason: string): StreamWorld.Bytes
+  ghost function WriteErrorText(raw: Schema.TeeCmdRaw, reason: string): StreamWorld.Bytes
   {
-    (if CommandSpec(raw).mode == Schema.ModeRun then "tee: 'standard output': "
-     else "tee: write error: ") + Utf8.Encode(reason) + "\n"
+    (if CommandSpec(raw).mode == Schema.ModeRun then WriteErrorTextText0
+     else WriteErrorTextText1) + Utf8.Encode(reason) + WriteErrorTextText2
   }
 
   ghost predicate EmissionOutcomeFields(

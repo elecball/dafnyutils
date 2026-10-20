@@ -1,3 +1,4 @@
+include "CommTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -6,11 +7,13 @@ include "CommRenderCore.dfy"
 include "CommSpec.dfy"
 
 module CommCore {
+  import Text = CommTextCore
+
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = CommUtf8Core
   import BenchWorld
   import IOContract
   import Schema = CommSchema
@@ -168,7 +171,7 @@ module CommCore {
     first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     if first.Err? || second.Err? then
-      Spec.FailedReadMessage(cmd, first, second, FailedReadsPlan(cmd, first, second).leftFault)
+      Text.FailedReadMessage(cmd, first, second, FailedReadsPlan(cmd, first, second).leftFault)
     else if Render.DataSorted(first.v, cmd.zeroTerminated) && Render.DataSorted(second.v, cmd.zeroTerminated)
     then [] else Spec.UnsortedInputMessageSpec()
   }
@@ -229,12 +232,12 @@ module CommCore {
     case ModeMissingOperandAfter(operand) =>
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) &&
-      plannedStderr == old(io.stderr()) + Spec.MissingOperandAfterMessageSpec(operand) &&
+      plannedStderr == old(io.stderr()) + Text.MissingOperandAfterMessageSpec(operand) &&
       exit == 1
     case ModeExtraOperand(operand) =>
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) &&
-      plannedStderr == old(io.stderr()) + Spec.ExtraOperandMessageSpec(operand) &&
+      plannedStderr == old(io.stderr()) + Text.ExtraOperandMessageSpec(operand) &&
       exit == 1
     case ModeMultipleOutputDelimiters =>
       io.stdin() == old(io.stdin()) &&
@@ -251,7 +254,7 @@ module CommCore {
       if FirstReadAborts(cmd, first) then
         io.stdin() == AfterFirstRead(cmd, old(io.stdin()), old(io.trustedStreams())) &&
         plannedStdout == old(io.stdout()) &&
-        plannedStderr == old(io.stderr()) + Spec.InputErrorMessageSpec(cmd.input1, first.e) && exit == 1
+        plannedStderr == old(io.stderr()) + Text.InputErrorMessageSpec(cmd.input1, first.e) && exit == 1
       else
         var second := ReadSecondResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
         io.stdin() == AfterSecondRead(cmd, old(io.stdin()), old(io.trustedStreams())) &&
@@ -315,20 +318,20 @@ module CommCore {
         assert (initialStderr + plannedErr) == preStderr + Spec.MissingOperandMessageSpec();
         return;
       case ModeMissingOperandAfter(operand) =>
-        var msg := Spec.MissingOperandAfterMessageSpec(operand);
+        var msg := Text.MissingOperandAfterMessageSpec(operand);
         plannedErr := plannedErr + msg;
         exit := 1;
         assert io.stdin() == preStdin;
         assert (initialStdout + plannedOut) == preStdout;
-        assert (initialStderr + plannedErr) == preStderr + Spec.MissingOperandAfterMessageSpec(operand);
+        assert (initialStderr + plannedErr) == preStderr + Text.MissingOperandAfterMessageSpec(operand);
         return;
       case ModeExtraOperand(operand) =>
-        var msg := Spec.ExtraOperandMessageSpec(operand);
+        var msg := Text.ExtraOperandMessageSpec(operand);
         plannedErr := plannedErr + msg;
         exit := 1;
         assert io.stdin() == preStdin;
         assert (initialStdout + plannedOut) == preStdout;
-        assert (initialStderr + plannedErr) == preStderr + Spec.ExtraOperandMessageSpec(operand);
+        assert (initialStderr + plannedErr) == preStderr + Text.ExtraOperandMessageSpec(operand);
         return;
       case ModeMultipleOutputDelimiters =>
         var msg := Spec.MultipleOutputDelimitersMessageSpec();
@@ -351,11 +354,11 @@ module CommCore {
         assert first == ReadFirstResult(cmd, preFs, preStreams, preStdin);
         assert io.stdin() == AfterFirstRead(cmd, preStdin, preStreams);
         if FirstReadAborts(cmd, first) {
-          var err := Spec.InputErrorMessageSpec(cmd.input1, first.e);
+          var err := Text.InputErrorMessageSpec(cmd.input1, first.e);
           plannedErr := plannedErr + err;
           exit := 1;
           assert (initialStdout + plannedOut) == preStdout;
-          assert (initialStderr + plannedErr) == preStderr + Spec.InputErrorMessageSpec(cmd.input1, first.e);
+          assert (initialStderr + plannedErr) == preStderr + Text.InputErrorMessageSpec(cmd.input1, first.e);
           return;
         } else {
           ghost var stdinAfterFirst := io.stdin();
@@ -401,10 +404,10 @@ module CommCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);

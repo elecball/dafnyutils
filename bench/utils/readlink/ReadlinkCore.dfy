@@ -1,3 +1,5 @@
+include "ReadlinkTextCore.dfy"
+include "ReadlinkWorldPathCore.dfy"
 include "../../core/Errno.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
@@ -6,13 +8,15 @@ include "ReadlinkSpec.dfy"
 include "ReadlinkContextProof.dfy"
 
 module ReadlinkCore {
+  import Text = ReadlinkTextCore
+  import WorldPath = ReadlinkWorldPathCore
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
   import Errno = Errnos
   import Result = Results
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = ReadlinkUtf8Core
   import IOContract
   import BenchWorld
   import Schema = ReadlinkSchema
@@ -101,7 +105,7 @@ module ReadlinkCore {
   method GetErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError) returns (out: BenchWorld.Bytes)
     ensures out == Spec.ErrorMessageSpec(path, err)
   {
-    out := Spec.ErrorMessageSpec(path, err);
+    out := Text.ErrorMessageSpec(path, err);
   }
 
   method GetOutputDelimiter(cmd: Schema.ReadlinkCmd) returns (out: BenchWorld.Bytes)
@@ -132,7 +136,7 @@ module ReadlinkCore {
     if BenchWorld.IsAbsolutePath(path) {
       out := path;
     } else {
-      out := BenchWorld.AppendPath(cwd, path);
+      out := WorldPath.AppendPath(cwd, path);
     }
   }
 
@@ -433,7 +437,7 @@ module ReadlinkCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
       else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

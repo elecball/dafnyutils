@@ -1,3 +1,5 @@
+include "DirnameUtf8Core.dfy"
+include "DirnameTextCore.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
@@ -8,11 +10,12 @@ include "DirnameSpec.dfy"
 module DirnameCore {
   import StreamContract = IOContract
 
-  import Utf8 = Utf8Semantics
+  import Utf8 = DirnameUtf8Core
   import BenchIO
   import BenchWorld
   import Schema = DirnameSchema
   import Spec = DirnameSpec
+  import Text = DirnameTextCore
 
   datatype DirnameMode = ModeRun | ModeHelp | ModeVersion
 
@@ -308,7 +311,7 @@ module DirnameCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

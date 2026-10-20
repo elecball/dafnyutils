@@ -1,10 +1,10 @@
 include "RmSchema.dfy"
 include "../../core/IO.dfy"
 include "../../core/Utf8.dfy"
-include "../../core/CliModel.dfy"
+include "CliSupport.dfy"
 include "../../core/Errno.dfy"
 include "../../core/StringEscaping.dfy"
-include "../../core/PathSpec.dfy"
+include "RmPathSpec.dfy"
 
 module RmSpec {
   import BenchIO
@@ -17,7 +17,7 @@ module RmSpec {
   import C = IOContract
   import Errno = Errnos
   import Escaping = StringEscaping
-  import Paths = MvPathSpec
+  import Paths = RmPathSpec
 
   function HelpTextSpec(): Bytes {
     "Usage: rm [OPTION]... [FILE]...\n"
@@ -116,37 +116,125 @@ module RmSpec {
     else name
   }
 
-  function ParseDiagnostic(err: CliTypes.ParseError, invalidShort: char): Bytes {
-    if err.kind == CliTypes.UnknownOption && !CliModel.HasPrefix(err.rawToken,"--") && |err.rawToken| > 1 then
-      "rm: invalid option -- '" + [Utf8.EncodeChar(invalidShort)[0]] + "'\n"
-    else Utf8.Encode(
-      if err.kind == CliTypes.UnknownOption then
-        if CliModel.HasPrefix(err.rawToken, "--") then
-          "rm: unrecognized option '" + err.rawToken + "'\n"
-        else "rm: invalid option\n"
-      else if err.kind == CliTypes.UnexpectedValue then
-        "rm: option '" + LongOptionName(err.rawToken) + "' doesn't allow an argument\n"
-      else if err.kind == CliTypes.Ambiguous then
-        "rm: option '" + err.rawToken + "' is ambiguous; possibilities:" +
-        (if CliModel.HasPrefix(err.rawToken,"--=") then
-          " '--force' '--interactive' '--one-file-system' '--no-preserve-root'" +
-          " '--preserve-root' '---presume-input-tty' '--recursive' '--dir' '--verbose'" +
-          " '--help' '--version'\n"
-         else " '--verbose' '--version'\n")
-      else "rm: option '" + err.rawToken + "' requires an argument\n")
+  function ParseDiagnosticPart1(): BenchWorld.Bytes
+  {
+    "--"
   }
 
-  function ParseErrorText(err: CliTypes.ParseError, invalidShort: char): Bytes {
+  function ParseDiagnosticPart2(): BenchWorld.Bytes
+  {
+    "rm: invalid option -- '"
+  }
+
+  function ParseDiagnosticPart3(): BenchWorld.Bytes
+  {
+    "'\n"
+  }
+
+  function ParseDiagnosticPart4(): BenchWorld.Bytes
+  {
+    "rm: unrecognized option '"
+  }
+
+  function ParseDiagnosticPart5(): BenchWorld.Bytes
+  {
+    "rm: invalid option\n"
+  }
+
+  function ParseDiagnosticPart6(): BenchWorld.Bytes
+  {
+    "rm: option '"
+  }
+
+  function ParseDiagnosticPart7(): BenchWorld.Bytes
+  {
+    "' doesn't allow an argument\n"
+  }
+
+  function ParseDiagnosticPart8(): BenchWorld.Bytes
+  {
+    "' is ambiguous; possibilities:"
+  }
+
+  function ParseDiagnosticPart9(): BenchWorld.Bytes
+  {
+    "--="
+  }
+
+  function ParseDiagnosticPart10(): BenchWorld.Bytes
+  {
+    " '--force' '--interactive' '--one-file-system' '--no-preserve-root'"
+  }
+
+  function ParseDiagnosticPart11(): BenchWorld.Bytes
+  {
+    " '--preserve-root' '---presume-input-tty' '--recursive' '--dir' '--verbose'"
+  }
+
+  function ParseDiagnosticPart12(): BenchWorld.Bytes
+  {
+    " '--help' '--version'\n"
+  }
+
+  function ParseDiagnosticPart13(): BenchWorld.Bytes
+  {
+    " '--verbose' '--version'\n"
+  }
+
+  function ParseDiagnosticPart14(): BenchWorld.Bytes
+  {
+    "' requires an argument\n"
+  }
+
+  ghost function ParseDiagnostic(err: CliTypes.ParseError, invalidShort: char): Bytes
+  {
+    if err.kind == CliTypes.UnknownOption && !CliModel.HasPrefix(err.rawToken,ParseDiagnosticPart1()) && |err.rawToken| > 1 then
+      ParseDiagnosticPart2() + [Utf8.EncodeChar(invalidShort)[0]] + ParseDiagnosticPart3()
+    else Utf8.Encode(
+      if err.kind == CliTypes.UnknownOption then
+        if CliModel.HasPrefix(err.rawToken, ParseDiagnosticPart1()) then
+          ParseDiagnosticPart4() + err.rawToken + ParseDiagnosticPart3()
+        else ParseDiagnosticPart5()
+      else if err.kind == CliTypes.UnexpectedValue then
+        ParseDiagnosticPart6() + LongOptionName(err.rawToken) + ParseDiagnosticPart7()
+      else if err.kind == CliTypes.Ambiguous then
+        ParseDiagnosticPart6() + err.rawToken + ParseDiagnosticPart8() +
+        (if CliModel.HasPrefix(err.rawToken,ParseDiagnosticPart9()) then
+          ParseDiagnosticPart10() +
+          ParseDiagnosticPart11() +
+          ParseDiagnosticPart12()
+         else ParseDiagnosticPart13())
+      else ParseDiagnosticPart6() + err.rawToken + ParseDiagnosticPart14())
+  }
+
+  ghost function ParseErrorText(err: CliTypes.ParseError, invalidShort: char): Bytes
+  {
     ParseDiagnostic(err,invalidShort) + UsageText()
   }
 
-  function HyphenSuggestion(path: Path): Bytes {
+  function HyphenSuggestionPart1(): BenchWorld.Bytes
+  {
+    "Try 'rm ./"
+  }
+
+  function HyphenSuggestionPart2(): BenchWorld.Bytes
+  {
+    "' to remove the file "
+  }
+
+  function HyphenSuggestionPart3(): BenchWorld.Bytes
+  {
+    ".\n"
+  }
+
+  ghost function HyphenSuggestion(path: Path): Bytes
+  {
     var encoded := Utf8.Encode(path);
     var trigger := exists i: int ::
       0 <= i < |encoded| && encoded[i] != ':' &&
       Escaping.SpecShellQuoteTriggerByte(encoded[i],i == 0,|encoded| == 1);
     var quoted := if trigger then Escaping.SpecQuoteAfBytes(encoded) else encoded;
-    "Try 'rm ./" + quoted + "' to remove the file " + Escaping.SpecQuoteAfBytes(encoded) + ".\n"
+    HyphenSuggestionPart1() + quoted + HyphenSuggestionPart2() + Escaping.SpecQuoteAfBytes(encoded) + HyphenSuggestionPart3()
   }
 
   function ModeErrorMessage(mode: Schema.RmMode, quoted: Bytes): Bytes {
@@ -161,26 +249,61 @@ module RmSpec {
     case _ => "rm: interactive input requires a terminal and incremental input API\n"
   }
 
-  ghost function ModeErrorText(mode: Schema.RmMode): Bytes {
+  ghost function ModeErrorText(mode: Schema.RmMode): Bytes
+  {
     ModeErrorMessage(mode,match mode
       case ModeInvalidPreserve(value) => C.QuoteafPathResult(value)
       case ModeInvalidInteractive(value) => C.QuoteArgumentResult(Utf8.Encode(value))
       case _ => [])
   }
 
-  function CannotRemoveMessage(quoted: Bytes, reason: string): Bytes {
-    "rm: cannot remove " + quoted + ": " + Utf8.Encode(reason) + "\n"
+  function CannotRemoveMessagePart1(): BenchWorld.Bytes
+  {
+    "rm: cannot remove "
   }
 
-  ghost function CannotRemoveText(path: Path, err: int): Bytes {
+  function CannotRemoveMessagePart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function CannotRemoveMessagePart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CannotRemoveMessage(quoted: Bytes, reason: string): Bytes
+  {
+    CannotRemoveMessagePart1() + quoted + CannotRemoveMessagePart2() + Utf8.Encode(reason) + CannotRemoveMessagePart3()
+  }
+
+  ghost function CannotRemoveText(path: Path, err: int): Bytes
+  {
     CannotRemoveMessage(C.QuoteafPathResult(path),C.CLocaleErrnoTextResult(err))
   }
 
-  function TraversalMessage(path: Path, reason: string): Bytes {
-    "rm: traversal failed: " + Escaping.SpecQuoteFBytes(Utf8.Encode(path)) + ": " + Utf8.Encode(reason) + "\n"
+  function TraversalMessagePart1(): BenchWorld.Bytes
+  {
+    "rm: traversal failed: "
   }
 
-  ghost function TraversalText(path: Path, err: int): Bytes {
+  function TraversalMessagePart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function TraversalMessagePart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function TraversalMessage(path: Path, reason: string): Bytes
+  {
+    TraversalMessagePart1() + Escaping.SpecQuoteFBytes(Utf8.Encode(path)) + TraversalMessagePart2() + Utf8.Encode(reason) + TraversalMessagePart3()
+  }
+
+  ghost function TraversalText(path: Path, err: int): Bytes
+  {
     TraversalMessage(path,C.CLocaleErrnoTextResult(err))
   }
 
@@ -192,11 +315,23 @@ module RmSpec {
     RemovedMessage(C.QuoteafPathResult(path),directory)
   }
 
-  function RootAttributesMessage(reason: string): Bytes {
-    "rm: failed to get attributes of '/': " + Utf8.Encode(reason) + "\n"
+  function RootAttributesMessagePart1(): BenchWorld.Bytes
+  {
+    "rm: failed to get attributes of '/': "
   }
 
-  ghost function RootAttributesText(err: int): Bytes {
+  function RootAttributesMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function RootAttributesMessage(reason: string): Bytes
+  {
+    RootAttributesMessagePart1() + Utf8.Encode(reason) + RootAttributesMessagePart2()
+  }
+
+  ghost function RootAttributesText(err: int): Bytes
+  {
     RootAttributesMessage(C.CLocaleErrnoTextResult(err))
   }
 
@@ -213,7 +348,7 @@ module RmSpec {
     parent + (if |parent| > 0 && parent[|parent|-1] == '/' then "" else "/") + name
   }
 
-  function DotOperand(path: Path): bool {
+  ghost function DotOperand(path: Path): bool {
     var parts := C.RawPathSegmentsFields(path);
     |parts| > 0 && parts[|parts|-1] in {".", ".."}
   }
@@ -227,33 +362,115 @@ module RmSpec {
   datatype Refusal = NoRefusal | DirectoryRefusal | DotRefusal | RootRefusal |
     CycleRefusal | DeviceRefusal | PreserveDeviceRefusal | ParentRefusal
 
-  function RefusalMessage(path: Path, why: Refusal, quoted: Bytes, quotedParent: Bytes): Bytes {
+  function RefusalMessagePart1(): BenchWorld.Bytes
+  {
+    "Is a directory"
+  }
+
+  function RefusalMessagePart2(): BenchWorld.Bytes
+  {
+    "rm: refusing to remove '.' or '..' directory: skipping "
+  }
+
+  function RefusalMessagePart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  function RefusalMessagePart4(): BenchWorld.Bytes
+  {
+    "/"
+  }
+
+  function RefusalMessagePart5(): BenchWorld.Bytes
+  {
+    "rm: it is dangerous to operate recursively on '/'\n"
+  }
+
+  function RefusalMessagePart6(): BenchWorld.Bytes
+  {
+    "rm: it is dangerous to operate recursively on "
+  }
+
+  function RefusalMessagePart7(): BenchWorld.Bytes
+  {
+    " (same as '/')\n"
+  }
+
+  function RefusalMessagePart8(): BenchWorld.Bytes
+  {
+    "rm: use --no-preserve-root to override this failsafe\n"
+  }
+
+  function RefusalMessagePart9(): BenchWorld.Bytes
+  {
+    "rm: WARNING: Circular directory structure.\nThis almost certainly means that you have a corrupted file system.\nNOTIFY YOUR SYSTEM MANAGER.\nThe following directory is part of the cycle:\n  "
+  }
+
+  function RefusalMessagePart10(): BenchWorld.Bytes
+  {
+    "\n\n"
+  }
+
+  function RefusalMessagePart11(): BenchWorld.Bytes
+  {
+    "rm: skipping "
+  }
+
+  function RefusalMessagePart12(): BenchWorld.Bytes
+  {
+    ", since it's on a different device\n"
+  }
+
+  function RefusalMessagePart13(): BenchWorld.Bytes
+  {
+    "rm: and --preserve-root=all is in effect\n"
+  }
+
+  function RefusalMessagePart14(): BenchWorld.Bytes
+  {
+    "rm: failed to stat "
+  }
+
+  function RefusalMessagePart15(): BenchWorld.Bytes
+  {
+    ": skipping "
+  }
+
+  ghost function RefusalMessage(path: Path, why: Refusal, quoted: Bytes, quotedParent: Bytes): Bytes
+  {
     match why
-    case DirectoryRefusal => CannotRemoveMessage(quoted, "Is a directory")
+    case DirectoryRefusal => CannotRemoveMessage(quoted, RefusalMessagePart1())
     case DotRefusal =>
-      "rm: refusing to remove '.' or '..' directory: skipping " + quoted + "\n"
+      RefusalMessagePart2() + quoted + RefusalMessagePart3()
     case RootRefusal =>
-      (if path == "/" then "rm: it is dangerous to operate recursively on '/'\n"
-       else "rm: it is dangerous to operate recursively on " + quoted + " (same as '/')\n") +
-      "rm: use --no-preserve-root to override this failsafe\n"
+      (if path == RefusalMessagePart4() then RefusalMessagePart5()
+       else RefusalMessagePart6() + quoted + RefusalMessagePart7()) +
+      RefusalMessagePart8()
     case CycleRefusal =>
-      "rm: WARNING: Circular directory structure.\nThis almost certainly means that you have a corrupted file system.\nNOTIFY YOUR SYSTEM MANAGER.\nThe following directory is part of the cycle:\n  " + Escaping.SpecQuoteFBytes(Utf8.Encode(path)) + "\n\n"
+      RefusalMessagePart9() + Escaping.SpecQuoteFBytes(Utf8.Encode(path)) + RefusalMessagePart10()
     case DeviceRefusal =>
-      "rm: skipping " + quoted + ", since it's on a different device\n"
+      RefusalMessagePart11() + quoted + RefusalMessagePart12()
     case PreserveDeviceRefusal =>
-      "rm: skipping " + quoted + ", since it's on a different device\n" +
-      "rm: and --preserve-root=all is in effect\n"
+      RefusalMessagePart11() + quoted + RefusalMessagePart12() +
+      RefusalMessagePart13()
     case ParentRefusal =>
-      "rm: failed to stat " + quotedParent + ": skipping " +
-        quoted + "\n"
+      RefusalMessagePart14() + quotedParent + RefusalMessagePart15() +
+        quoted + RefusalMessagePart3()
     case NoRefusal => []
   }
 
-  ghost function RefusalText(path: Path, why: Refusal): Bytes {
-    RefusalMessage(path,why,C.QuoteafPathResult(path),C.QuoteafPathResult(ChildPath(path,"..")))
+  function RefusalTextPart1(): BenchWorld.Bytes
+  {
+    ".."
   }
 
-  function BasicRefusal(raw: Schema.RmCmdRaw, path: Path, top: bool,
+  ghost function RefusalText(path: Path, why: Refusal): Bytes
+  {
+    RefusalMessage(path,why,C.QuoteafPathResult(path),C.QuoteafPathResult(ChildPath(path,RefusalTextPart1())))
+  }
+
+  ghost function BasicRefusal(raw: Schema.RmCmdRaw, path: Path, top: bool,
     rootKey: HostInodeKey, rootDevice: int, seen: set<HostInodeKey>, status: FileTimeStatus): Refusal
   {
     if !raw.recursive && !raw.directory then DirectoryRefusal
@@ -474,8 +691,19 @@ module RmSpec {
       exit == (if HasFailure(failures) then 1 else 0)
   }
 
-  function WriteErrorText(reason: string): Bytes {
-    "rm: write error: " + Utf8.Encode(reason) + "\n"
+  function WriteErrorTextPart1(): BenchWorld.Bytes
+  {
+    "rm: write error: "
+  }
+
+  function WriteErrorTextPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate StreamResults(beforeOut: Bytes, afterOut: Bytes,

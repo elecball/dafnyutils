@@ -1,3 +1,4 @@
+include "NlTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -5,11 +6,13 @@ include "NlSchema.dfy"
 include "NlSpec.dfy"
 
 module NlCore {
+  import Text = NlTextCore
+
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = NlUtf8Core
   import BenchWorld
   import IOContract
   import NlSchema
@@ -36,17 +39,17 @@ module NlCore {
     if cmd.mode == NlSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == Spec.HelpText() &&
-      plannedStderr == NlSchema.OptionErrorsText(cmd.optionErrors) &&
+      plannedStderr == Text.OptionErrorsText(cmd.optionErrors) &&
       exit == 0
     else if cmd.mode == NlSchema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == Spec.VersionText() &&
-      plannedStderr == NlSchema.OptionErrorsText(cmd.optionErrors) &&
+      plannedStderr == Text.OptionErrorsText(cmd.optionErrors) &&
       exit == 0
     else if cmd.mode != NlSchema.ModeRun then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == [] &&
-      plannedStderr == Spec.ModeErrorMessage(cmd) &&
+      plannedStderr == Text.ModeErrorMessage(cmd) &&
       exit == 1
     else
       InputTraceSummary(
@@ -145,7 +148,7 @@ module NlCore {
                     case Ok(data) => NormalizeInputData(data)
                     case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                    errorFragments[i] ==
-                   Spec.ErrorPiece(cmd.inputs[i], readResults[i])) &&
+                   Text.ErrorPiece(cmd.inputs[i], readResults[i])) &&
     Spec.FragmentsConcatenate(
       inputFragments, combined, inputCuts) &&
     Spec.FragmentsConcatenate(
@@ -584,7 +587,7 @@ module NlCore {
 
     if cmd.mode == NlSchema.ModeHelp {
       var help := Spec.HelpText();
-      var diagnostics := NlSchema.OptionErrorsText(cmd.optionErrors);
+      var diagnostics := Text.OptionErrorsText(cmd.optionErrors);
       plannedOut := plannedOut + help;
       plannedErr := plannedErr + diagnostics;
       exit := 0;
@@ -604,7 +607,7 @@ module NlCore {
 
     if cmd.mode == NlSchema.ModeVersion {
       var version := Spec.VersionText();
-      var diagnostics := NlSchema.OptionErrorsText(cmd.optionErrors);
+      var diagnostics := Text.OptionErrorsText(cmd.optionErrors);
       plannedOut := plannedOut + version;
       plannedErr := plannedErr + diagnostics;
       exit := 0;
@@ -623,7 +626,7 @@ module NlCore {
     }
 
     if cmd.mode != NlSchema.ModeRun {
-      var err := Spec.ModeErrorMessage(cmd);
+      var err := Text.ModeErrorMessage(cmd);
       plannedErr := plannedErr + err;
       exit := 1;
       assert io.stdin() == preStdin;
@@ -647,6 +650,10 @@ module NlCore {
 
     assert PrefixStdinCore(cmd, preStdin, 0, preStreams) == preStdin by { reveal PrefixStdinCore(); }
     var i := 0;
+    assert io.stdin() == PrefixStdinCore(cmd, preStdin, i, preStreams) by {
+      hide *;
+      reveal PrefixStdinCore();
+    }
     while i < |cmd.inputs|
       invariant 0 <= i <= |cmd.inputs|
       invariant plannedOut == []
@@ -663,7 +670,7 @@ module NlCore {
                                     case Ok(data) => NormalizeInputData(data)
                                     case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                                    errorFragments[j] ==
-                                   Spec.ErrorPiece(cmd.inputs[j], readResults[j])
+                                   Text.ErrorPiece(cmd.inputs[j], readResults[j])
       invariant Spec.FragmentsConcatenate(
                   inputFragments, combined, inputCuts
                 )
@@ -690,7 +697,7 @@ module NlCore {
         case Stdin =>
           readResult := io.ReadStdin();
           piece := NormalizeInputData(IOContract.ReadResultData(readResult));
-          errorPiece := Spec.ErrorPiece(input, readResult);
+          errorPiece := Text.ErrorPiece(input, readResult);
           pieceHadError := readResult.Err?;
         case File(path) =>
           readResult := io.ReadFile(path);
@@ -702,7 +709,7 @@ module NlCore {
             pieceHadError := false;
           } else {
             piece := [];
-            errorPiece := Spec.ErrorMessage(path, readResult.e);
+            errorPiece := Text.ErrorMessage(path, readResult.e);
             pieceHadError := true;
           }
       }
@@ -717,7 +724,7 @@ module NlCore {
              (match readResult
               case Ok(data) => NormalizeInputData(data)
               case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []);
-      assert errorPiece == Spec.ErrorPiece(input, readResult);
+      assert errorPiece == Text.ErrorPiece(input, readResult);
       assert pieceHadError ==
              Spec.HadErrorPiece(input, readResult);
       AppendByteFragment(inputFragments, combined, inputCuts, piece);
@@ -746,7 +753,7 @@ module NlCore {
                                  case Ok(data) => NormalizeInputData(data)
                                  case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                                 errorFragments[j] ==
-                                Spec.ErrorPiece(cmd.inputs[j], readResults[j]) by {
+                                Text.ErrorPiece(cmd.inputs[j], readResults[j]) by {
         forall j: nat | j < i + 1
           ensures Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, j, preStreams), j, readResults[j],
                     preStreams
@@ -756,7 +763,7 @@ module NlCore {
                    case Ok(data) => NormalizeInputData(data)
                    case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                   errorFragments[j] ==
-                  Spec.ErrorPiece(cmd.inputs[j], readResults[j])
+                  Text.ErrorPiece(cmd.inputs[j], readResults[j])
         {
           if j == i {
             assert readResults[j] == readResult;
@@ -844,6 +851,10 @@ module NlCore {
                            cmd.inputs[j] == NlSchema.Stdin));
       PrefixStdinStep(cmd, preStdin, i, preStreams);
       assert io.stdin() == PrefixStdinCore(cmd, preStdin, i + 1, preStreams) by { hide *; }
+      hide *;
+      assert |readResults| == i + 1;
+      assert |inputFragments| == i + 1;
+      assert |errorFragments| == i + 1;
       i := i + 1;
     }
 
@@ -971,10 +982,10 @@ module NlCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);

@@ -5,6 +5,21 @@ include "PasteSchema.dfy"
 include "../../core/StringEscaping.dfy"
 
 module PasteSpec {
+
+  const ErrorMessageText0: BenchWorld.Bytes := "paste: "
+
+  const ErrorMessageText1: BenchWorld.Bytes := ": "
+
+  const ErrorMessageText2: BenchWorld.Bytes := "\n"
+
+  const DelimiterBackslashErrorText0: BenchWorld.Bytes := "paste: delimiter list ends with an unescaped backslash: "
+
+  const DelimiterBackslashErrorText1: BenchWorld.Bytes := "\n"
+
+  const StreamWriteErrorMessageText0: BenchWorld.Bytes := "paste: write error: "
+
+  const StreamWriteErrorMessageText1: BenchWorld.Bytes := "\n"
+
   import StreamContract = IOContract
   import StreamUtf8 = Utf8Semantics
 
@@ -76,26 +91,26 @@ module PasteSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function NeedsErrorQuoting(path: string): bool
+  ghost function NeedsErrorQuoting(path: string): bool
   {
     var bytes := Utf8.Encode(path);
     |bytes| == 0 || SE.SpecHasShellQuoteTrigger(bytes)
   }
 
-  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "paste: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-    ": " + Utf8.Encode(ErrnoText(err)) + "\n"
+    ErrorMessageText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
+    ErrorMessageText1 + Utf8.Encode(ErrnoText(err)) + ErrorMessageText2
   }
 
-  function DelimiterBackslashError(text: BenchWorld.Bytes): BenchWorld.Bytes
+  ghost function DelimiterBackslashError(text: BenchWorld.Bytes): BenchWorld.Bytes
   {
     var rendered :=
       if exists i: nat :: i < |text| &&
           (text[i] == ':' || text[i] == '"' || !SE.SpecCPrintableByte(text[i]))
       then SE.SpecDoubleQuote(text)
       else text;
-    "paste: delimiter list ends with an unescaped backslash: " + rendered + "\n"
+    DelimiterBackslashErrorText0 + rendered + DelimiterBackslashErrorText1
   }
 
   function RecordDelimiter(zeroTerminated: bool): BenchWorld.RawByte
@@ -724,9 +739,9 @@ module PasteSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("paste: write error: " + message + "\n")
+    StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }
 
   ghost predicate EmitFields(

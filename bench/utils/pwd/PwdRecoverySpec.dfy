@@ -35,32 +35,82 @@ module PwdRecoverySpec {
      failure.CurrentDirectoryStatusFailed? || failure.height >= 1)
   }
 
-  function ParentArgumentText(height: nat): string
+  ghost function ParentArgumentText(height: nat): string
     requires height >= 1
   {
     seq(3 * height - 1, i => if i % 3 == 2 then '/' else '.')
   }
 
-  function RecoveryFailureText(failure: RecoveryFailure,
+  function RecoveryFailureTextPart1(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function RecoveryFailureTextPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  function RecoveryFailureTextPart3(): BenchWorld.Bytes
+  {
+    "pwd: memory exhausted\n"
+  }
+
+  function RecoveryFailureTextPart4(): BenchWorld.Bytes
+  {
+    "pwd: failed to get attributes of "
+  }
+
+  function RecoveryFailureTextPart5(): BenchWorld.Bytes
+  {
+    "pwd: failed to stat "
+  }
+
+  function RecoveryFailureTextPart6(): BenchWorld.Bytes
+  {
+    "pwd: cannot open directory "
+  }
+
+  function RecoveryFailureTextPart7(): BenchWorld.Bytes
+  {
+    "pwd: failed to chdir to "
+  }
+
+  function RecoveryFailureTextPart8(): BenchWorld.Bytes
+  {
+    "pwd: reading directory "
+  }
+
+  function RecoveryFailureTextPart9(): BenchWorld.Bytes
+  {
+    "pwd: couldn't find directory entry in "
+  }
+
+  function RecoveryFailureTextPart10(): BenchWorld.Bytes
+  {
+    " with matching i-node\n"
+  }
+
+  ghost function RecoveryFailureText(failure: RecoveryFailure,
     quotedArgument: BenchWorld.Bytes, reason: string): BenchWorld.Bytes
   {
-    var suffix := ": " + Utf8.Encode(reason) + "\n";
+    var suffix := RecoveryFailureTextPart1() + Utf8.Encode(reason) + RecoveryFailureTextPart2();
     match failure
-    case MemoryExhausted => "pwd: memory exhausted\n"
+    case MemoryExhausted => RecoveryFailureTextPart3()
     case RootAttributesFailed(_) =>
-      "pwd: failed to get attributes of " + quotedArgument + suffix
+      RecoveryFailureTextPart4() + quotedArgument + suffix
     case CurrentDirectoryStatusFailed(_) =>
-      "pwd: failed to stat " + quotedArgument + suffix
+      RecoveryFailureTextPart5() + quotedArgument + suffix
     case ParentOpenFailed(_, _) =>
-      "pwd: cannot open directory " + quotedArgument + suffix
+      RecoveryFailureTextPart6() + quotedArgument + suffix
     case ParentChdirFailed(_, _) =>
-      "pwd: failed to chdir to " + quotedArgument + suffix
+      RecoveryFailureTextPart7() + quotedArgument + suffix
     case ParentStatusFailed(_, _) =>
-      "pwd: failed to stat " + quotedArgument + suffix
+      RecoveryFailureTextPart5() + quotedArgument + suffix
     case ParentReadFailed(_, _) =>
-      "pwd: reading directory " + quotedArgument + suffix
+      RecoveryFailureTextPart8() + quotedArgument + suffix
     case ParentEntryMissing(_) =>
-      "pwd: couldn't find directory entry in " + quotedArgument + " with matching i-node\n"
+      RecoveryFailureTextPart9() + quotedArgument + RecoveryFailureTextPart10()
   }
 
   ghost function RecoveryDiagnosticSpec(failure: RecoveryFailure): BenchWorld.Bytes
@@ -230,9 +280,19 @@ module PwdRecoverySpec {
     else BenchWorld.IsAbsolutePath(outcome.directory)
   }
 
-  function WriteErrorText(reason: string): BenchWorld.Bytes
+  function WriteErrorTextPart1(): BenchWorld.Bytes
   {
-    "pwd: write error: " + Utf8.Encode(reason) + "\n"
+    "pwd: write error: "
+  }
+
+  function WriteErrorTextPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): BenchWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   datatype RuntimeInputs = RuntimeInputs(

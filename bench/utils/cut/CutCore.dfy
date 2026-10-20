@@ -1,3 +1,4 @@
+include "CutTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -5,11 +6,13 @@ include "CutSchema.dfy"
 include "CutSpec.dfy"
 
 module CutCore {
+  import Text = CutTextCore
+
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = CutUtf8Core
   import BenchWorld
   import IOContract
   import CutSchema
@@ -246,21 +249,21 @@ module CutCore {
   function ErrorPiece(input: CutSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
-    case Stdin => if result.Err? then Spec.ErrorMessage("-", result.e) else []
+    case Stdin => if result.Err? then Text.ErrorMessage("-", result.e) else []
     case File(path) =>
       match result
       case Ok(_) => []
-      case Err(err) => Spec.ErrorMessage(path, err)
+      case Err(err) => Text.ErrorMessage(path, err)
   } by method {
     match input
     case Stdin =>
-      return if result.Err? then Spec.ErrorMessage("-", result.e) else [];
+      return if result.Err? then Text.ErrorMessage("-", result.e) else [];
     case File(path) =>
       match result
       case Ok(_) =>
         return [];
       case Err(err) =>
-        return Spec.ErrorMessage(path, err);
+        return Text.ErrorMessage(path, err);
   }
 
   function HadErrorPiece(input: CutSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
@@ -755,7 +758,7 @@ module CutCore {
                     command.selection, record, position
                   )[k] + 1
                 )
-             then Spec.OutputDelimiterBytes(command.outputDelimiter)
+             then Text.OutputDelimiterBytes(command.outputDelimiter)
              else []) +
             [record[
              SelectionScanIndices(
@@ -832,7 +835,7 @@ module CutCore {
     ensures SelectionScanFragments(command, record, 1, false)[k] ==
       (if k > 0 && Spec.DelimiterBeforeSelected(command,
         SelectionScanIndices(command.selection, record, 1)[k] + 1)
-       then Spec.OutputDelimiterBytes(command.outputDelimiter) else []) +
+       then Text.OutputDelimiterBytes(command.outputDelimiter) else []) +
       [record[SelectionScanIndices(command.selection, record, 1)[k]]]
   {
     SelectionScanSelectedIndexSequence(command.selection, record);
@@ -876,7 +879,7 @@ module CutCore {
                                 (if k > 0 && Spec.DelimiterBeforeSelected(
                                       command, indices[k] + 1
                                     )
-                                 then Spec.OutputDelimiterBytes(command.outputDelimiter)
+                                 then Text.OutputDelimiterBytes(command.outputDelimiter)
                                  else []) +
                                 [record[indices[k]]] by {
         forall k: nat | k < |indices|
@@ -884,7 +887,7 @@ module CutCore {
                   (if k > 0 && Spec.DelimiterBeforeSelected(
                         command, indices[k] + 1
                       )
-                   then Spec.OutputDelimiterBytes(command.outputDelimiter)
+                   then Text.OutputDelimiterBytes(command.outputDelimiter)
                    else []) +
                   [record[indices[k]]]
         {
@@ -899,7 +902,7 @@ module CutCore {
                          (if k > 0 && Spec.DelimiterBeforeSelected(
                                command, indices[k] + 1
                              )
-                          then Spec.OutputDelimiterBytes(command.outputDelimiter)
+                          then Text.OutputDelimiterBytes(command.outputDelimiter)
                           else []) +
                          [record[indices[k]]]) &&
           Spec.FragmentsConcatenate(
@@ -911,7 +914,7 @@ module CutCore {
                              (if k > 0 && Spec.DelimiterBeforeSelected(
                                    command, indices[k] + 1
                                  )
-                              then Spec.OutputDelimiterBytes(command.outputDelimiter)
+                              then Text.OutputDelimiterBytes(command.outputDelimiter)
                               else []) +
                              [record[indices[k]]];
         assert Spec.FragmentsConcatenate(fragments, output, cuts);
@@ -1539,10 +1542,10 @@ module CutCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);

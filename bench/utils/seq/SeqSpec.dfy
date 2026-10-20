@@ -90,7 +90,7 @@ module SeqSpec {
     "Try 'seq --help' for more information.\n"
   }
 
-  function Separator(raw: SeqSchema.SeqCmdRaw): BenchWorld.Bytes
+  ghost function Separator(raw: SeqSchema.SeqCmdRaw): BenchWorld.Bytes
   {
     match raw.separator
     case Some(value) => Utf8.Encode(value)
@@ -297,19 +297,49 @@ module SeqSpec {
     "seq: missing operand\n" + TryHelp()
   }
 
-  function ExtraOperandMessage(token: string): BenchWorld.Bytes
+  function ExtraOperandMessagePart1(): BenchWorld.Bytes
   {
-    "seq: extra operand " + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + "\n" + TryHelp()
+    "seq: extra operand "
   }
 
-  function InvalidNumberMessage(token: string): BenchWorld.Bytes
+  function ExtraOperandMessagePart2(): BenchWorld.Bytes
   {
-    "seq: invalid floating point argument: " + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + "\n" + TryHelp()
+    "\n"
   }
 
-  function ZeroIncrementMessage(token: string): BenchWorld.Bytes
+  ghost function ExtraOperandMessage(token: string): BenchWorld.Bytes
   {
-    "seq: invalid Zero increment value: " + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + "\n" + TryHelp()
+    ExtraOperandMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + ExtraOperandMessagePart2() + TryHelp()
+  }
+
+  function InvalidNumberMessagePart1(): BenchWorld.Bytes
+  {
+    "seq: invalid floating point argument: "
+  }
+
+  function InvalidNumberMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function InvalidNumberMessage(token: string): BenchWorld.Bytes
+  {
+    InvalidNumberMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + InvalidNumberMessagePart2() + TryHelp()
+  }
+
+  function ZeroIncrementMessagePart1(): BenchWorld.Bytes
+  {
+    "seq: invalid Zero increment value: "
+  }
+
+  function ZeroIncrementMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ZeroIncrementMessage(token: string): BenchWorld.Bytes
+  {
+    ZeroIncrementMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + ZeroIncrementMessagePart2() + TryHelp()
   }
 
   ghost predicate NumberPlanRelation(args: seq<string>, plan: NumberPlan)
@@ -395,7 +425,7 @@ module SeqSpec {
       '0'
   }
 
-  function DigitsUnsigned(n: int): BenchWorld.Bytes
+  ghost function DigitsUnsigned(n: int): BenchWorld.Bytes
     requires 0 <= n
     decreases n
   {
@@ -405,13 +435,13 @@ module SeqSpec {
       DigitsUnsigned(n / 10) + [DigitChar(n % 10)]
   }
 
-  function Zeros(n: nat): BenchWorld.Bytes
+  ghost function Zeros(n: nat): BenchWorld.Bytes
     decreases n
   {
     if n == 0 then [] else ['0'] + Zeros(n - 1)
   }
 
-  function LeftPadZeros(text: BenchWorld.Bytes, width: nat): BenchWorld.Bytes
+  ghost function LeftPadZeros(text: BenchWorld.Bytes, width: nat): BenchWorld.Bytes
   {
     if width <= |text| then
       text
@@ -426,7 +456,7 @@ module SeqSpec {
   {
   }
 
-  function RenderMagnitude(magnitude: int, scale: nat): BenchWorld.Bytes
+  ghost function RenderMagnitude(magnitude: int, scale: nat): BenchWorld.Bytes
     requires 0 <= magnitude
   {
     if scale == 0 then
@@ -439,7 +469,7 @@ module SeqSpec {
       DigitsUnsigned(integerPart) + ['.'] + LeftPadZeros(DigitsUnsigned(fractionalPart), scale)
   }
 
-  function RenderFixed(value: int, scale: nat, negativeZero: bool): BenchWorld.Bytes
+  ghost function RenderFixed(value: int, scale: nat, negativeZero: bool): BenchWorld.Bytes
   {
     if value < 0 then
       ['-'] + RenderMagnitude(-value, scale)
@@ -449,7 +479,7 @@ module SeqSpec {
       RenderMagnitude(value, scale)
   }
 
-  function PadNumber(text: BenchWorld.Bytes, width: nat): BenchWorld.Bytes
+  ghost function PadNumber(text: BenchWorld.Bytes, width: nat): BenchWorld.Bytes
   {
     if width <= |text| then
       text
@@ -598,9 +628,19 @@ module SeqSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessagePart1(): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("seq: write error: " + message + "\n")
+    "seq: write error: "
+  }
+
+  function StreamWriteErrorMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorMessagePart1() + message + StreamWriteErrorMessagePart2())
   }
 
   ghost predicate EmitFields(

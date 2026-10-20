@@ -48,7 +48,7 @@ module ExpandSpec {
 
 
 
-  function InvalidTabsMessage(value: string): BenchWorld.Bytes
+  function InvalidTabsMessage(value: BenchWorld.Bytes): BenchWorld.Bytes
   {
     "expand: " + value + "\n"
   }
@@ -69,9 +69,24 @@ module ExpandSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessagePart1(): BenchWorld.Bytes
   {
-    "expand: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ": " + ErrnoText(err) + "\n"
+    "expand: "
+  }
+
+  function ErrorMessagePart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function ErrorMessagePart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  {
+    ErrorMessagePart1() + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ErrorMessagePart2() + Utf8.Encode(ErrnoText(err)) + ErrorMessagePart3()
   }
 
   function IsDigit(ch: char): bool
@@ -129,42 +144,62 @@ module ExpandSpec {
      OctalDigit((value / 8) % 8), OctalDigit(value % 8)]
   }
 
-  function InvalidCharacterMessage(suffix: string): string
+  function InvalidCharacterMessagePart1(): BenchWorld.Bytes
   {
-    "tab size contains invalid character(s): " + SE.SpecLocaleQuoteBytes(Utf8.Encode(suffix))
+    "tab size contains invalid character(s): "
   }
 
-  function MarkerNotAtStartMessage(
+  ghost function InvalidCharacterMessage(suffix: string): BenchWorld.Bytes
+  {
+    InvalidCharacterMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(suffix))
+  }
+
+  function MarkerNotAtStartMessagePart1(): BenchWorld.Bytes
+  {
+    " specifier not at start of number: "
+  }
+
+  ghost function MarkerNotAtStartMessage(
     marker: Schema.MarkerKind, suffix: string
-  ): string
+  ): BenchWorld.Bytes
   {
     SE.SpecLocaleQuoteBytes(Utf8.Encode(MarkerText(marker))) +
-    " specifier not at start of number: " + SE.SpecLocaleQuoteBytes(Utf8.Encode(suffix))
+    MarkerNotAtStartMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(suffix))
   }
 
-  function TooLargeMessage(digits: string): string
+  function TooLargeMessagePart1(): BenchWorld.Bytes
   {
-    "tab stop is too large " + SE.SpecLocaleQuoteBytes(Utf8.Encode(digits))
+    "tab stop is too large "
   }
 
-  function CombineDiagnostics(first: string, rest: string): string
+  ghost function TooLargeMessage(digits: string): BenchWorld.Bytes
+  {
+    TooLargeMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(digits))
+  }
+
+  ghost function CombineDiagnostics(first: BenchWorld.Bytes, rest: BenchWorld.Bytes): BenchWorld.Bytes
   {
     if rest == "" then first else first + "\nexpand: " + rest
   }
 
-  function SyntaxDiagnosticsFrom(
+  function SyntaxDiagnosticsFromPart1(): BenchWorld.Bytes
+  {
+    ""
+  }
+
+  ghost function SyntaxDiagnosticsFrom(
     text: string,
     i: nat,
     haveValue: bool,
     numberStart: nat,
     value: nat
-  ): string
+  ): BenchWorld.Bytes
     requires i <= |text|
     requires !haveValue || numberStart <= i
     decreases |text| - i
   {
     if i == |text| then
-      ""
+      SyntaxDiagnosticsFromPart1()
     else if IsSeparator(text[i]) then
       SyntaxDiagnosticsFrom(text, i + 1, false, 0, 0)
     else if IsMarker(text[i]) then
@@ -199,28 +234,33 @@ module ExpandSpec {
       InvalidCharacterMessage(text[i..])
   }
 
-  function SyntaxDiagnostics(text: string): string
+  ghost function SyntaxDiagnostics(text: string): BenchWorld.Bytes
   {
     SyntaxDiagnosticsFrom(text, 0, false, 0, 0)
   }
 
-  function RepeatOnlyLastMessage(marker: Schema.MarkerKind): string
+  function RepeatOnlyLastMessagePart1(): BenchWorld.Bytes
   {
-    SE.SpecLocaleQuoteBytes(Utf8.Encode(MarkerText(marker))) +
     " specifier only allowed with the last value"
   }
 
-  function AscendingTabsMessage(): string
+  ghost function RepeatOnlyLastMessage(marker: Schema.MarkerKind): BenchWorld.Bytes
+  {
+    SE.SpecLocaleQuoteBytes(Utf8.Encode(MarkerText(marker))) +
+    RepeatOnlyLastMessagePart1()
+  }
+
+  function AscendingTabsMessage(): BenchWorld.Bytes
   {
     "tab sizes must be ascending"
   }
 
-  function ZeroTabMessage(): string
+  function ZeroTabMessage(): BenchWorld.Bytes
   {
     "tab size cannot be 0"
   }
 
-  function MixedRepeatMessage(): string
+  function MixedRepeatMessage(): BenchWorld.Bytes
   {
     "'/' specifier is mutually exclusive with '+'"
   }
@@ -502,9 +542,9 @@ module ExpandSpec {
                              ))
   }
 
-  function StopsValidationError(
+  ghost function StopsValidationError(
     stops: seq<nat>, i: nat, previous: nat
-  ): string
+  ): BenchWorld.Bytes
     requires i <= |stops|
     decreases |stops| - i
   {
@@ -937,9 +977,19 @@ module ExpandSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessagePart1(): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("expand: write error: " + message + "\n")
+    "expand: write error: "
+  }
+
+  function StreamWriteErrorMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorMessagePart1() + message + StreamWriteErrorMessagePart2())
   }
 
   ghost predicate EmitFields(

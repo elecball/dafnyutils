@@ -134,9 +134,14 @@ module PrintenvSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorText(message: string): string
   {
-    StreamUtf8.Encode("printenv: write error: " + message + "\n")
+    "printenv: write error: " + message + "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorText(message))
   }
 
   function StreamFailureExit(): int

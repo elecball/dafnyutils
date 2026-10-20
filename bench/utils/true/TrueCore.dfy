@@ -1,3 +1,5 @@
+include "TrueUtf8Core.dfy"
+include "TrueTextCore.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/IO.dfy"
 include "TrueSchema.dfy"
@@ -11,6 +13,7 @@ module TrueCore {
   import BenchIO
   import Schema = TrueSchema
   import Spec = TrueSpec
+  import Text = TrueTextCore
 
   twostate predicate PreparedSummary(raw: Schema.TrueCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
 
@@ -75,7 +78,7 @@ module TrueCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

@@ -28,6 +28,7 @@ def dafny_analysis_support_paths(
         support_source_paths=(
             paths["cli"],
             paths["schema"],
+            paths["cli_support"],
         ),
         repository_root=repository_root,
     )

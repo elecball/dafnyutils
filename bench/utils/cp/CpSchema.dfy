@@ -1,13 +1,18 @@
 include "../../core/CliTypes.dfy"
-include "../../core/CliModel.dfy"
-include "../../core/CliExtern.dfy"
-include "../../core/PathCore.dfy"
+include "CliSupport.dfy"
 
 module CpSchema {
+  // Keep CLI-only normalization unavailable to candidate runtime code.
+  export
+    provides CliTypes, CliModel, CliExtern
+    provides Schema, ParserConfig, ParseArgs, Decode
+    reveals CpMode, CpError, BackupSettings, CreationPolicy, CopyPolicy, CpCmdRaw, ArgumentMatch
+    reveals ChildCommand, MatchingArguments, ExactArgument, MatchArgument
+    reveals PreserveArguments, UpdateArguments, BackupArguments, BackupMeanings, BackupControl
+
   import CliTypes
   import CliModel
   import opened CliExtern
-  import Paths = MvPathCore
 
   datatype CpMode = Run | Help | Version
   datatype CpError = NoError | TargetConflict | MultipleTargets | LinkConflict |
@@ -157,6 +162,62 @@ module CpSchema {
     MatchArgument(value,BackupArguments(),BackupMeanings())
   }
 
+  // CLI normalization is fixed with Decode. Runtime Path helpers are separate
+  // candidate-owned declarations and never call this decoder-only routine.
+  ghost predicate TrimmedForDecode(path: string, trimmed: string)
+  {
+    if |path| == 0 then
+      trimmed == ""
+    else if forall i :: 0 <= i < |path| ==> path[i] == '/' then
+      trimmed == "/"
+    else
+      exists end: int ::
+        0 < end <= |path| &&
+        trimmed == path[..end] &&
+        path[end - 1] != '/' &&
+        forall i :: end <= i < |path| ==> path[i] == '/'
+  }
+
+  method TrimForDecode(path: string) returns (trimmed: string)
+    ensures TrimmedForDecode(path, trimmed)
+  {
+    if |path| == 0 {
+      trimmed := "";
+      return;
+    }
+
+    var allSlash := true;
+    var i := 0;
+    while i < |path|
+      invariant 0 <= i <= |path|
+      invariant allSlash ==> forall j :: 0 <= j < i ==> path[j] == '/'
+      invariant !allSlash ==> exists j :: 0 <= j < i && path[j] != '/'
+      decreases |path| - i
+    {
+      if path[i] != '/' {
+        allSlash := false;
+      }
+      i := i + 1;
+    }
+
+    if allSlash {
+      trimmed := "/";
+      return;
+    }
+
+    var end := |path|;
+    while 0 < end && path[end - 1] == '/'
+      invariant 0 < end <= |path|
+      invariant forall j :: end <= j < |path| ==> path[j] == '/'
+      invariant exists j :: 0 <= j < end && path[j] != '/'
+      decreases end
+    {
+      end := end - 1;
+    }
+
+    trimmed := path[..end];
+  }
+
   method Decode(parsed: CliTypes.ParsedArgs) returns (raw: CpCmdRaw) {
     var mode := Run;
     var target := CliTypes.None;
@@ -245,7 +306,7 @@ module CpSchema {
         decreases |operands| - j
       {
         if target.Some? || j+1 < |operands| {
-          var value := Paths.TrimTrailingSlashes(operands[j]);
+          var value := TrimForDecode(operands[j]);
           normalized := normalized + [value];
         } else { normalized := normalized + [operands[j]]; }
         j := j+1;

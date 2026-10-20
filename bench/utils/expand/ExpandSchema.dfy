@@ -21,13 +21,13 @@ module ExpandSchema {
     activeMarker: MarkerKind
   )
   datatype NatParse = NatOk(value: nat) | NatErr
-  datatype TabAccumParse = TabAccumOk(acc: TabAccum) | TabAccumErr(value: string)
-  datatype TabParse = TabOk(tabs: TabStops) | TabErr(value: string)
+  datatype TabAccumParse = TabAccumOk(acc: TabAccum) | TabAccumErr(value: BenchWorld.Bytes)
+  datatype TabParse = TabOk(tabs: TabStops) | TabErr(value: BenchWorld.Bytes)
   datatype OptionScan =
     | ScanContinue(acc: TabAccum)
     | ScanHelp
     | ScanVersion
-    | ScanInvalidTabs(value: string)
+    | ScanInvalidTabs(value: BenchWorld.Bytes)
 
   datatype ExpandCmdRaw = ExpandCmdRaw(
     tabArgs: seq<TabArg>,
@@ -43,7 +43,7 @@ module ExpandSchema {
     mode: ExpandMode,
     tabs: TabStops,
     initialOnly: bool,
-    invalidTabsValue: string,
+    invalidTabsValue: BenchWorld.Bytes,
     inputs: seq<Input>
   )
 
@@ -206,6 +206,39 @@ module ExpandSchema {
 
   method ExpandFormatParseError(e: CliTypes.ParseError) returns (b: BenchWorld.Bytes)
   {
-    b := Utf8.Encode(ParseErrorText(e));
+    var text := ParseErrorText(e);
+    b := [];
+    var i := |text|;
+    while 0 < i
+      invariant 0 <= i <= |text|
+      invariant b == Utf8.Encode(text[i..])
+      decreases i
+    {
+      i := i - 1;
+      var code := text[i] as int;
+      var piece: BenchWorld.Bytes :=
+        if code <= 0x7f then
+          [code as char]
+        else if code <= 0x7ff then
+          [
+            (0xc0 + code / 0x40) as char,
+            (0x80 + code % 0x40) as char
+          ]
+        else if code <= 0xffff then
+          [
+            (0xe0 + code / 0x1000) as char,
+            (0x80 + (code / 0x40) % 0x40) as char,
+            (0x80 + code % 0x40) as char
+          ]
+        else
+          [
+            (0xf0 + code / 0x40000) as char,
+            (0x80 + (code / 0x1000) % 0x40) as char,
+            (0x80 + (code / 0x40) % 0x40) as char,
+            (0x80 + code % 0x40) as char
+          ];
+      b := piece + b;
+    }
+    assert b == Utf8.Encode(ParseErrorText(e));
   }
 }

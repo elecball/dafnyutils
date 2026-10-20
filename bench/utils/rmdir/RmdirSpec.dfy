@@ -1,8 +1,8 @@
 include "RmdirSchema.dfy"
 include "../../core/IO.dfy"
 include "../../core/Utf8.dfy"
-include "../../core/PathSpec.dfy"
-include "../../core/CliModel.dfy"
+include "RmdirPathSpec.dfy"
+include "CliSupport.dfy"
 
 module RmdirSpec {
   import BenchIO
@@ -10,7 +10,7 @@ module RmdirSpec {
   import C = IOContract
   import Errno = Errnos
   import S = RmdirSchema
-  import Path = MvPathSpec
+  import Path = RmdirPathSpec
   import Utf8 = Utf8Semantics
   import CliTypes
   import CliModel
@@ -52,40 +52,162 @@ module RmdirSpec {
     "rmdir: removing directory, " + quoted + "\n"
   }
 
-  function FailureText(parent: bool, err: int, custom: bool,
-                       quoted: Bytes, reason: string): Bytes {
-    "rmdir: failed to remove " +
-    (if parent && err != Errno.ENOTDIR then "directory " else "") + quoted +
-    ": " + (if custom then "Symbolic link not followed" else Utf8.Encode(reason)) + "\n"
+  function FailureTextPart1(): BenchWorld.Bytes
+  {
+    "rmdir: failed to remove "
+  }
+
+  function FailureTextPart2(): BenchWorld.Bytes
+  {
+    "directory "
+  }
+
+  function FailureTextPart3(): BenchWorld.Bytes
+  {
+    ""
+  }
+
+  function FailureTextPart4(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function FailureTextPart5(): BenchWorld.Bytes
+  {
+    "Symbolic link not followed"
+  }
+
+  function FailureTextPart6(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function FailureText(parent: bool, err: int, custom: bool,
+                       quoted: Bytes, reason: string): Bytes
+  {
+    FailureTextPart1() +
+    (if parent && err != Errno.ENOTDIR then FailureTextPart2() else FailureTextPart3()) + quoted +
+    FailureTextPart4() + (if custom then FailureTextPart5() else Utf8.Encode(reason)) + FailureTextPart6()
   }
 
   function ShortOptionText(ch: Bytes): Bytes {
     "rmdir: invalid option -- '" + ch + "'\nTry 'rmdir --help' for more information.\n"
   }
 
-  function ParseErrorText(e: CliTypes.ParseError): Bytes {
+  function ParseErrorTextPart1(): BenchWorld.Bytes
+  {
+    "--p"
+  }
+
+  function ParseErrorTextPart2(): BenchWorld.Bytes
+  {
+    "--pa"
+  }
+
+  function ParseErrorTextPart3(): BenchWorld.Bytes
+  {
+    "--pat"
+  }
+
+  function ParseErrorTextPart4(): BenchWorld.Bytes
+  {
+    "--path"
+  }
+
+  function ParseErrorTextPart5(): BenchWorld.Bytes
+  {
+    "--parents"
+  }
+
+  function ParseErrorTextPart6(): BenchWorld.Bytes
+  {
+    "--verbose"
+  }
+
+  function ParseErrorTextPart7(): BenchWorld.Bytes
+  {
+    "--version"
+  }
+
+  function ParseErrorTextPart8(): BenchWorld.Bytes
+  {
+    "--help"
+  }
+
+  function ParseErrorTextPart9(): BenchWorld.Bytes
+  {
+    "--ignore-fail-on-non-empty"
+  }
+
+  function ParseErrorTextPart10(): BenchWorld.Bytes
+  {
+    "rmdir: option '"
+  }
+
+  function ParseErrorTextPart11(): BenchWorld.Bytes
+  {
+    "' doesn't allow an argument\n"
+  }
+
+  function ParseErrorTextPart12(): BenchWorld.Bytes
+  {
+    "Try 'rmdir --help' for more information.\n"
+  }
+
+  function ParseErrorTextPart13(): BenchWorld.Bytes
+  {
+    "' is ambiguous; possibilities:"
+  }
+
+  function ParseErrorTextPart14(): BenchWorld.Bytes
+  {
+    "--"
+  }
+
+  function ParseErrorTextPart15(): BenchWorld.Bytes
+  {
+    " '--ignore-fail-on-non-empty' '--path' '--parents' '--verbose' '--help' '--version'\n"
+  }
+
+  function ParseErrorTextPart16(): BenchWorld.Bytes
+  {
+    " '--verbose' '--version'\n"
+  }
+
+  function ParseErrorTextPart17(): BenchWorld.Bytes
+  {
+    "rmdir: unrecognized option '"
+  }
+
+  function ParseErrorTextPart18(): BenchWorld.Bytes
+  {
+    "'\nTry 'rmdir --help' for more information.\n"
+  }
+
+  ghost function ParseErrorText(e: CliTypes.ParseError): Bytes
+  {
     var end := CliModel.FindChar(e.rawToken, '=');
     var name := if end < 0 then e.rawToken else e.rawToken[..end];
-    var full := if name in {"--p", "--pa", "--pat", "--path"} then "--path"
-      else if CliModel.HasPrefix("--parents", name) then "--parents"
-      else if CliModel.HasPrefix("--verbose", name) then "--verbose"
-      else if CliModel.HasPrefix("--version", name) then "--version"
-      else if CliModel.HasPrefix("--help", name) then "--help"
-      else if CliModel.HasPrefix("--ignore-fail-on-non-empty", name) then "--ignore-fail-on-non-empty"
+    var full := if name in {ParseErrorTextPart1(), ParseErrorTextPart2(), ParseErrorTextPart3(), ParseErrorTextPart4()} then ParseErrorTextPart4()
+      else if CliModel.HasPrefix(ParseErrorTextPart5(), name) then ParseErrorTextPart5()
+      else if CliModel.HasPrefix(ParseErrorTextPart6(), name) then ParseErrorTextPart6()
+      else if CliModel.HasPrefix(ParseErrorTextPart7(), name) then ParseErrorTextPart7()
+      else if CliModel.HasPrefix(ParseErrorTextPart8(), name) then ParseErrorTextPart8()
+      else if CliModel.HasPrefix(ParseErrorTextPart9(), name) then ParseErrorTextPart9()
       else name;
     if e.kind == CliTypes.UnexpectedValue then
-      "rmdir: option '" + Utf8.Encode(full) + "' doesn't allow an argument\n" +
-      "Try 'rmdir --help' for more information.\n"
+      ParseErrorTextPart10() + Utf8.Encode(full) + ParseErrorTextPart11() +
+      ParseErrorTextPart12()
     else if e.kind == CliTypes.Ambiguous then
-      "rmdir: option '" + Utf8.Encode(e.rawToken) +
-      "' is ambiguous; possibilities:" +
-      (if name == "--" then
-        " '--ignore-fail-on-non-empty' '--path' '--parents' '--verbose' '--help' '--version'\n"
-       else " '--verbose' '--version'\n") +
-      "Try 'rmdir --help' for more information.\n"
+      ParseErrorTextPart10() + Utf8.Encode(e.rawToken) +
+      ParseErrorTextPart13() +
+      (if name == ParseErrorTextPart14() then
+        ParseErrorTextPart15()
+       else ParseErrorTextPart16()) +
+      ParseErrorTextPart12()
     else
-      "rmdir: unrecognized option '" + Utf8.Encode(e.rawToken) +
-      "'\nTry 'rmdir --help' for more information.\n"
+      ParseErrorTextPart17() + Utf8.Encode(e.rawToken) +
+      ParseErrorTextPart18()
   }
 
   function MayBeNonempty(err: int): bool {
@@ -181,7 +303,8 @@ module RmdirSpec {
     if raw.verbose then AttemptText(C.QuoteafPathResult(r.path)) else []
   }
 
-  ghost function ErrorChunk(r: Removal): Bytes {
+  ghost function ErrorChunk(r: Removal): Bytes
+  {
     if r.err == 0 || r.ignored then [] else
       FailureText(r.parent, r.err, r.custom, C.QuoteafPathResult(r.display),
                   C.CLocaleErrnoTextResult(r.err))
@@ -245,8 +368,19 @@ module RmdirSpec {
                     good, states, outputs, errors, goods, outCuts, errCuts)
   }
 
-  function WriteErrorText(reason: string): Bytes {
-    "rmdir: write error: " + Utf8.Encode(reason) + "\n"
+  function WriteErrorTextPart1(): BenchWorld.Bytes
+  {
+    "rmdir: write error: "
+  }
+
+  function WriteErrorTextPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   function PriorWriteErrorText(): Bytes {

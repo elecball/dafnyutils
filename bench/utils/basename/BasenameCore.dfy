@@ -1,3 +1,5 @@
+include "BasenameUtf8Core.dfy"
+include "BasenameTextCore.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
@@ -8,11 +10,12 @@ include "BasenameSpec.dfy"
 module BasenameCore {
   import StreamContract = IOContract
 
-  import Utf8 = Utf8Semantics
+  import Utf8 = BasenameUtf8Core
   import BenchIO
   import Schema = BasenameSchema
   import BenchWorld
   import Spec = BasenameSpec
+  import Text = BasenameTextCore
 
   ghost predicate BasenameValueSummary(path: string, value: string)
   {
@@ -282,7 +285,7 @@ module BasenameCore {
     }
 
     if !cmd.multiple && |cmd.operands| > 2 {
-      var err := Spec.ExtraOperandMessageSpec(cmd.operands[2]);
+      var err := Text.ExtraOperandMessage(cmd.operands[2]);
       plannedErr := plannedErr + err;
       exit := 1;
       return;
@@ -324,7 +327,7 @@ module BasenameCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

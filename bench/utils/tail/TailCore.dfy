@@ -1,3 +1,4 @@
+include "TailTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -6,6 +7,7 @@ include "TailRecordCore.dfy"
 include "TailSpec.dfy"
 
 module TailCore {
+  import Text = TailTextCore
   import StreamContract = IOContract
 
   import Result = Results
@@ -238,7 +240,7 @@ module TailCore {
   } by method {
     if ShouldPrintHeaders(cmd) {
       return (if printedHeaders == 0 then [] else ['\n']) +
-        Spec.HeaderText(InputName(input));
+        Text.HeaderText(InputName(input));
     } else {
       return [];
     }
@@ -302,13 +304,13 @@ module TailCore {
   } by method {
     match input
     case Stdin(_) =>
-      return if result.Err? then Spec.StdinReadErrorMessage(result.e) else [];
+      return if result.Err? then Text.StdinReadErrorMessage(result.e) else [];
     case File(path) =>
       match result
       case Ok(_) =>
         return [];
       case Err(err) =>
-        return Spec.ErrorMessage(path, err);
+        return Text.ErrorMessage(path, err);
   }
 
   function HadErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
@@ -567,7 +569,7 @@ module TailCore {
     }
 
     if cmd.mode == TailSchema.ModeInvalidCount {
-      var invalid := Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
+      var invalid := Text.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
       plannedErr := plannedErr + invalid;
       exit := 1;
       assert io.stdin() == preStdin;
@@ -684,7 +686,7 @@ module TailCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

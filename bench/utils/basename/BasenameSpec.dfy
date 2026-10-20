@@ -189,10 +189,19 @@ module BasenameSpec {
     "basename: missing operand\nTry 'basename --help' for more information.\n"
   }
 
-  function ExtraOperandMessageSpec(op: string): BenchWorld.Bytes
+  function ExtraOperandPrefix(): BenchWorld.Bytes
   {
-    "basename: extra operand " + SE.SpecLocaleQuoteBytes(Utf8.Encode(op)) +
+    "basename: extra operand "
+  }
+
+  function ExtraOperandSuffix(): BenchWorld.Bytes
+  {
     "\nTry 'basename --help' for more information.\n"
+  }
+
+  ghost function ExtraOperandMessageSpec(op: string): BenchWorld.Bytes
+  {
+    ExtraOperandPrefix() + SE.SpecLocaleQuoteBytes(Utf8.Encode(op)) + ExtraOperandSuffix()
   }
 
   twostate predicate PreparedSpec(raw: Schema.BasenameCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
@@ -228,9 +237,14 @@ module BasenameSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorText(message: string): string
   {
-    StreamUtf8.Encode("basename: write error: " + message + "\n")
+    "basename: write error: " + message + "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorText(message))
   }
 
   ghost predicate EmitFields(

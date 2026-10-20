@@ -1,3 +1,6 @@
+include "ChmodTextCore.dfy"
+include "ChmodRecursiveTextCore.dfy"
+include "ChmodModeCore.dfy"
 include "ChmodDescriptorRuntime.dfy"
 include "ChmodDescriptorPrincipalSpec.dfy"
 include "ChmodDescriptorProof.dfy"
@@ -5,10 +8,13 @@ include "ChmodBatchProof.dfy"
 include "ChmodRecursiveFilesProof.dfy"
 
 module ChmodDescriptorCore {
+  import Text = ChmodTextCore
+  import RecursiveText = ChmodRecursiveTextCore
   import W = BenchWorld
   import BenchIO
   import C = IOContract
   import Schema = ChmodSchema
+  import Mode = ChmodModeCore
   import Base = ChmodCore
   import BaseSpec = ChmodSpec
   import BaseProof = ChmodProof
@@ -45,10 +51,10 @@ module ChmodDescriptorCore {
       output.stderr := BaseSpec.CombineModeReferenceMessageSpec();
       exit := 1;
     } else if |cmd.files| == 0 {
-      output.stderr := BaseSpec.MissingOperandMessageSpec(cmd);
+      output.stderr := Text.MissingOperandMessageSpec(cmd);
       exit := 1;
     } else {
-      output.stderr := BaseSpec.InvalidModeMessageSpec(cmd.modeExpr);
+      output.stderr := Text.InvalidModeMessageSpec(cmd.modeExpr);
       exit := 1;
     }
     assert Spec.PreparedSpec(raw, io, exit, output.stdout, output.stderr) by {
@@ -73,7 +79,7 @@ module ChmodDescriptorCore {
     if cmd.mode == Schema.ModeHelp || cmd.mode == Schema.ModeVersion ||
       (cmd.recursive && cmd.dereferenceMode == 1 && cmd.traversalMode == 0) ||
       (cmd.seenReference && cmd.diagnoseSurprises) || |cmd.files| == 0 ||
-      (!cmd.seenReference && !Schema.IsValidModeExpr(cmd.modeExpr)) {
+      (!cmd.seenReference && !Mode.IsValidModeExpr(cmd.modeExpr)) {
       assert Spec.EarlyCase(cmd) by { reveal Spec.EarlyCase(); }
       exit := PrepareEarly(raw, io, output);
       return;

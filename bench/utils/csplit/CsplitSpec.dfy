@@ -123,55 +123,150 @@ module CsplitSpec {
     else "unknown error"
   }
 
-  function ReadErrorMessage(input: Schema.Input, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ReadErrorMessagePart1(): BenchWorld.Bytes
+  {
+    "csplit: read error: "
+  }
+
+  function ReadErrorMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  function ReadErrorMessagePart3(): BenchWorld.Bytes
+  {
+    "csplit: cannot open "
+  }
+
+  function ReadErrorMessagePart4(): BenchWorld.Bytes
+  {
+    " for reading: "
+  }
+
+  ghost function ReadErrorMessage(input: Schema.Input, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     match input
-    case Stdin => "csplit: read error: " + Utf8.Encode(ReadErrnoText(err)) + "\n"
+    case Stdin => ReadErrorMessagePart1() + Utf8.Encode(ReadErrnoText(err)) + ReadErrorMessagePart2()
     case File(path) =>
-      "csplit: cannot open " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
-      " for reading: " + Utf8.Encode(ReadErrnoText(err)) + "\n"
+      ReadErrorMessagePart3() + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
+      ReadErrorMessagePart4() + Utf8.Encode(ReadErrnoText(err)) + ReadErrorMessagePart2()
   }
 
-  function WriteErrorMessage(path: BenchWorld.Path, err: int): BenchWorld.Bytes
+  function WriteErrorMessagePart1(): BenchWorld.Bytes
   {
-    "csplit: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-    ": " + Utf8.Encode(WriteErrnoText(err)) + "\n"
+    "csplit: "
   }
 
-  function ZeroLineMessage(line: nat): BenchWorld.Bytes
+  function WriteErrorMessagePart2(): BenchWorld.Bytes
   {
-    "csplit: " + Schema.DigitsNat(line) + ": line number must be greater than zero\n"
+    ": "
   }
 
-  function BackwardLineMessage(current: nat, previous: nat): BenchWorld.Bytes
+  function WriteErrorMessagePart3(): BenchWorld.Bytes
   {
-    "csplit: line number '" + Schema.DigitsNat(current) + "' is smaller than preceding line number, " +
-    Schema.DigitsNat(previous) + "\n"
+    "\n"
   }
 
-  function OutOfRangeMessage(line: nat): BenchWorld.Bytes
+  ghost function WriteErrorMessage(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
-    "csplit: '" + Schema.DigitsNat(line) + "': line number out of range\n"
+    WriteErrorMessagePart1() + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
+    WriteErrorMessagePart2() + Utf8.Encode(WriteErrnoText(err)) + WriteErrorMessagePart3()
   }
 
-  function DuplicateWarning(line: nat): BenchWorld.Bytes
+  function ZeroLineMessagePart1(): BenchWorld.Bytes
   {
-    "csplit: warning: line number '" + Schema.DigitsNat(line) + "' is the same as preceding line number\n"
+    "csplit: "
   }
 
-
-
-  function CountLine(n: nat): BenchWorld.Bytes
+  function ZeroLineMessagePart2(): BenchWorld.Bytes
   {
-    Schema.DigitsNat(n) + "\n"
+    ": line number must be greater than zero\n"
   }
 
-  function OutputName(index: nat): BenchWorld.Path
+  ghost function ZeroLineMessage(line: nat): BenchWorld.Bytes
+  {
+    ZeroLineMessagePart1() + Schema.DigitsNat(line) + ZeroLineMessagePart2()
+  }
+
+  function BackwardLineMessagePart1(): BenchWorld.Bytes
+  {
+    "csplit: line number '"
+  }
+
+  function BackwardLineMessagePart2(): BenchWorld.Bytes
+  {
+    "' is smaller than preceding line number, "
+  }
+
+  function BackwardLineMessagePart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function BackwardLineMessage(current: nat, previous: nat): BenchWorld.Bytes
+  {
+    BackwardLineMessagePart1() + Schema.DigitsNat(current) + BackwardLineMessagePart2() +
+    Schema.DigitsNat(previous) + BackwardLineMessagePart3()
+  }
+
+  function OutOfRangeMessagePart1(): BenchWorld.Bytes
+  {
+    "csplit: '"
+  }
+
+  function OutOfRangeMessagePart2(): BenchWorld.Bytes
+  {
+    "': line number out of range\n"
+  }
+
+  ghost function OutOfRangeMessage(line: nat): BenchWorld.Bytes
+  {
+    OutOfRangeMessagePart1() + Schema.DigitsNat(line) + OutOfRangeMessagePart2()
+  }
+
+  function DuplicateWarningPart1(): BenchWorld.Bytes
+  {
+    "csplit: warning: line number '"
+  }
+
+  function DuplicateWarningPart2(): BenchWorld.Bytes
+  {
+    "' is the same as preceding line number\n"
+  }
+
+  ghost function DuplicateWarning(line: nat): BenchWorld.Bytes
+  {
+    DuplicateWarningPart1() + Schema.DigitsNat(line) + DuplicateWarningPart2()
+  }
+
+
+
+  function CountLinePart1(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CountLine(n: nat): BenchWorld.Bytes
+  {
+    Schema.DigitsNat(n) + CountLinePart1()
+  }
+
+  function OutputNamePart1(): BenchWorld.Bytes
+  {
+    "xx0"
+  }
+
+  function OutputNamePart2(): BenchWorld.Bytes
+  {
+    "xx"
+  }
+
+  ghost function OutputName(index: nat): BenchWorld.Path
   {
     if index < 10 then
-      "xx0" + Schema.DigitsNat(index)
+      OutputNamePart1() + Schema.DigitsNat(index)
     else
-      "xx" + Schema.DigitsNat(index)
+      OutputNamePart2() + Schema.DigitsNat(index)
   }
 
   ghost predicate ValidNumberPrefix(lines: seq<nat>, count: nat)
@@ -655,9 +750,19 @@ module CsplitSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessagePart1(): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("csplit: write error: " + message + "\n")
+    "csplit: write error: "
+  }
+
+  function StreamWriteErrorMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorMessagePart1() + message + StreamWriteErrorMessagePart2())
   }
 
   ghost predicate EmitFields(

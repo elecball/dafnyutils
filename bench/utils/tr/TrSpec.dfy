@@ -5,6 +5,49 @@ include "../../core/StringEscaping.dfy"
 include "TrSchema.dfy"
 
 module TrSpec {
+
+  const MissingSet2MessageSpecText0: BenchWorld.Bytes := "tr: missing operand after "
+
+  const MissingSet2MessageSpecText1: BenchWorld.Bytes := "\nTwo strings must be given when both deleting and squeezing repeats.\n"
+
+  const MissingSet2MessageSpecText2: BenchWorld.Bytes := "\nTwo strings must be given when translating.\n"
+
+  const MissingSet2MessageSpecText3: BenchWorld.Bytes := "Try 'tr --help' for more information.\n"
+
+  const ExtraOperandMessageSpecText0: BenchWorld.Bytes := "tr: extra operand "
+
+  const ExtraOperandMessageSpecText1: BenchWorld.Bytes := "\nOnly one string may be given when deleting without squeezing repeats.\n"
+
+  const ExtraOperandMessageSpecText2: BenchWorld.Bytes := "\n"
+
+  const ExtraOperandMessageSpecText3: BenchWorld.Bytes := "Try 'tr --help' for more information.\n"
+
+  const UnsupportedSetMessageSpecText0: BenchWorld.Bytes := "tr: range-endpoints of '"
+
+  const UnsupportedSetMessageSpecText1: BenchWorld.Bytes := "-"
+
+  const UnsupportedSetMessageSpecText2: BenchWorld.Bytes := "' are in reverse collating sequence order\n"
+
+  const UnsupportedSetMessageSpecText3: BenchWorld.Bytes := "tr: unsupported set syntax '"
+
+  const UnsupportedSetMessageSpecText4: BenchWorld.Bytes := "' in this benchmark\n"
+
+  const AmbiguousOctalWarningSpecText0: BenchWorld.Bytes := "tr: warning: the ambiguous octal escape \\"
+
+  const AmbiguousOctalWarningSpecText1: BenchWorld.Bytes := " is being\n\tinterpreted as the 2-byte sequence \\0"
+
+  const AmbiguousOctalWarningSpecText2: BenchWorld.Bytes := ", "
+
+  const AmbiguousOctalWarningSpecText3: BenchWorld.Bytes := "\n"
+
+  const ReadErrorTextText0: BenchWorld.Bytes := "tr: read error: "
+
+  const ReadErrorTextText1: BenchWorld.Bytes := "\n"
+
+  const WriteErrorTextText0: BenchWorld.Bytes := "tr: write error: "
+
+  const WriteErrorTextText1: BenchWorld.Bytes := "\n"
+
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -126,36 +169,36 @@ module TrSpec {
     "tr: missing operand\nTry 'tr --help' for more information.\n"
   }
 
-  function MissingSet2MessageSpec(operand: string, deleteAndSqueeze: bool): BenchWorld.Bytes
+  ghost function MissingSet2MessageSpec(operand: string, deleteAndSqueeze: bool): BenchWorld.Bytes
   {
-    "tr: missing operand after " + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
+    MissingSet2MessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
       (if deleteAndSqueeze then
-         "\nTwo strings must be given when both deleting and squeezing repeats.\n"
+         MissingSet2MessageSpecText1
        else
-         "\nTwo strings must be given when translating.\n") +
-      "Try 'tr --help' for more information.\n"
+         MissingSet2MessageSpecText2) +
+      MissingSet2MessageSpecText3
   }
 
-  function ExtraOperandMessageSpec(operand: string, explainDeleteLimit: bool): BenchWorld.Bytes
+  ghost function ExtraOperandMessageSpec(operand: string, explainDeleteLimit: bool): BenchWorld.Bytes
   {
-    "tr: extra operand " + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
+    ExtraOperandMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
       (if explainDeleteLimit then
-         "\nOnly one string may be given when deleting without squeezing repeats.\n"
+         ExtraOperandMessageSpecText1
        else
-         "\n") +
-      "Try 'tr --help' for more information.\n"
+         ExtraOperandMessageSpecText2) +
+      ExtraOperandMessageSpecText3
   }
 
-  function UnsupportedSetMessageSpec(operand: string): BenchWorld.Bytes
+  ghost function UnsupportedSetMessageSpec(operand: string): BenchWorld.Bytes
   {
     match FirstReverseRangeFrom(operand, 0)
     case FoundReverseRange(first, last) =>
-      "tr: range-endpoints of '" + DisplayRangeByte(first) + "-" +
+      UnsupportedSetMessageSpecText0 + DisplayRangeByte(first) + UnsupportedSetMessageSpecText1 +
       DisplayRangeByte(last) +
-      "' are in reverse collating sequence order\n"
+      UnsupportedSetMessageSpecText2
     case NoReverseRange =>
-      "tr: unsupported set syntax '" + Utf8.Encode(operand) +
-      "' in this benchmark\n"
+      UnsupportedSetMessageSpecText3 + Utf8.Encode(operand) +
+      UnsupportedSetMessageSpecText4
   }
 
   function EmptySet2MessageSpec(): BenchWorld.Bytes
@@ -163,7 +206,7 @@ module TrSpec {
     "tr: when not deleting, string2 must be non-empty in this benchmark\n"
   }
 
-  function FirstReverseRangeFrom(text: string, i: nat): ReverseRange
+  ghost function FirstReverseRangeFrom(text: string, i: nat): ReverseRange
     requires i <= |text|
     decreases |text| - i
   {
@@ -229,7 +272,7 @@ module TrSpec {
     else i + 2
   }
 
-  function AtomBytes(text: string, i: nat): BenchWorld.Bytes
+  ghost function AtomBytes(text: string, i: nat): BenchWorld.Bytes
     requires i < |text|
   {
     if text[i] != '\\' then Utf8.EncodeChar(text[i])
@@ -248,14 +291,14 @@ module TrSpec {
     else EscapeBytes(text[i + 1])
   }
 
-  function AmbiguousOctalWarningSpec(text: string, i: nat): BenchWorld.Bytes
+  ghost function AmbiguousOctalWarningSpec(text: string, i: nat): BenchWorld.Bytes
     requires i + 3 < |text|
   {
-    "tr: warning: the ambiguous octal escape \\" +
+    AmbiguousOctalWarningSpecText0 +
     Utf8.Encode(text[i + 1..i + 4]) +
-    " is being\n\tinterpreted as the 2-byte sequence \\0" +
-    Utf8.Encode(text[i + 1..i + 3]) + ", " +
-    Utf8.EncodeChar(text[i + 3]) + "\n"
+    AmbiguousOctalWarningSpecText1 +
+    Utf8.Encode(text[i + 1..i + 3]) + AmbiguousOctalWarningSpecText2 +
+    Utf8.EncodeChar(text[i + 3]) + AmbiguousOctalWarningSpecText3
   }
 
   function TrailingBackslashWarningSpec(): BenchWorld.Bytes
@@ -263,7 +306,7 @@ module TrSpec {
     "tr: warning: an unescaped backslash at end of string is not portable\n"
   }
 
-  function WarningAtSpec(text: string, i: nat): BenchWorld.Bytes
+  ghost function WarningAtSpec(text: string, i: nat): BenchWorld.Bytes
     requires i < |text|
   {
     if text[i] != '\\' then []
@@ -275,7 +318,7 @@ module TrSpec {
     else []
   }
 
-  function EscapeBytes(ch: char): BenchWorld.Bytes
+  ghost function EscapeBytes(ch: char): BenchWorld.Bytes
   {
     if ch == 'a' || ch == 'b' || ch == 'f' || ch == 'n' ||
        ch == 'r' || ch == 't' || ch == 'v' then
@@ -669,9 +712,9 @@ module TrSpec {
         output == transformed
   }
 
-  function ReadErrorText(reason: string): BenchWorld.Bytes
+  ghost function ReadErrorText(reason: string): BenchWorld.Bytes
   {
-    "tr: read error: " + Utf8.Encode(reason) + "\n"
+    ReadErrorTextText0 + Utf8.Encode(reason) + ReadErrorTextText1
   }
 
   ghost function ReadError(err: int): BenchWorld.Bytes
@@ -680,9 +723,9 @@ module TrSpec {
   }
 
 
-  function WriteErrorText(reason: string): StreamWorld.Bytes
+  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
   {
-    "tr: write error: " + Utf8.Encode(reason) + "\n"
+    WriteErrorTextText0 + Utf8.Encode(reason) + WriteErrorTextText1
   }
 
   function WriteErrorAfterReadFailure(): StreamWorld.Bytes

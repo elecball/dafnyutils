@@ -1,5 +1,5 @@
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "DuSchema.dfy"
 include "DuCore.dfy"
 include "DuProof.dfy"

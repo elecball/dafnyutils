@@ -1,3 +1,5 @@
+include "PrintenvUtf8Core.dfy"
+include "PrintenvTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -12,7 +14,8 @@ module PrintenvCore {
   import BenchWorld
   import IOContract
   import Spec = PrintenvSpec
-  import Utf8 = Utf8Semantics
+  import Text = PrintenvTextCore
+  import Utf8 = PrintenvUtf8Core
 
   function Terminator(nullTerminated: bool): BenchWorld.Bytes
   {
@@ -250,7 +253,7 @@ module PrintenvCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

@@ -1,8 +1,10 @@
+include "RmdirTextCore.dfy"
 include "RmdirSpec.dfy"
 include "RmdirProof.dfy"
-include "../../core/PathCore.dfy"
+include "RmdirPathCore.dfy"
 
 module RmdirCore {
+  import Text = RmdirTextCore
   import BenchIO
   import opened BenchWorld
   import C = IOContract
@@ -10,7 +12,7 @@ module RmdirCore {
   import S = RmdirSchema
   import Spec = RmdirSpec
   import Proof = RmdirProof
-  import PathCore = MvPathCore
+  import PathCore = RmdirPathCore
 
   method Parent(path: string) returns (available: bool, parent: string)
     ensures available <==> Spec.HasParent(path)
@@ -158,7 +160,7 @@ module RmdirCore {
         display, custom := DiagnosticPath(io, path, parent, err);
         var quoted := io.QuoteafPath(display);
         var reason := io.GetCLocaleErrnoText(err);
-        diagnostic := Spec.FailureText(parent, err, custom, quoted, reason);
+        diagnostic := Text.FailureText(parent, err, custom, quoted, reason);
       }
     }
     accepted := removed || ignored;
@@ -269,7 +271,7 @@ module RmdirCore {
         finalDiagnostic := diagnostics + Spec.PriorWriteErrorText();
       } else {
         var reason := io.GetCLocaleErrnoText(outErr);
-        finalDiagnostic := diagnostics + Spec.WriteErrorText(reason);
+        finalDiagnostic := diagnostics + Text.WriteErrorText(reason);
       }
     }
     assert finalDiagnostic == diagnostics + (if outObservation.err == 0 then []

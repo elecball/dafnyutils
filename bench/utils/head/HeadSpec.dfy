@@ -73,25 +73,20 @@ module HeadSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    if err.ReadFailure? && err.readStage == BenchWorld.CloseFailed then
-      Utf8.Encode("head: failed to close " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " + ErrnoText(err) + "\n")
-    else if IOContract.IOErrorIsReadFailure(err) then
-      Utf8.Encode("head: error reading " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " + ErrnoText(err) + "\n")
-    else
-      Utf8.Encode("head: cannot open " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) + " for reading: " + ErrnoText(err) + "\n")
+    Utf8.Encode(ErrorMessageText(SE.SpecQuoteAfBytes(Utf8.Encode(path)), err))
   }
 
-  function InvalidCountMessage(unit: HeadSchema.CountUnit, value: string): BenchWorld.Bytes
+
+  ghost function InvalidCountMessage(unit: HeadSchema.CountUnit, value: string): BenchWorld.Bytes
   {
     var displayValue := if |value| > 0 && value[0] == '-' then value[1..] else value;
-    Utf8.Encode("head: invalid number of " +
-    (if unit == HeadSchema.CountLines then "lines" else "bytes") +
-    ": " + SE.SpecLocaleQuoteBytes(Utf8.Encode(displayValue)) + "\n")
+    Utf8.Encode(InvalidCountText(unit, SE.SpecLocaleQuoteBytes(Utf8.Encode(displayValue))))
   }
 
-  function InputsFromOperands(operands: seq<string>): seq<HeadSchema.Input>
+
+  ghost function InputsFromOperands(operands: seq<string>): seq<HeadSchema.Input>
     decreases |operands|
   {
     if |operands| == 0 then
@@ -114,7 +109,7 @@ module HeadSpec {
     (raw.invalidCountTokenIndex == -1 || raw.versionTokenIndex <= raw.invalidCountTokenIndex)
   }
 
-  function Command(raw: HeadSchema.HeadCmdRaw): HeadSchema.HeadCmd
+  ghost function Command(raw: HeadSchema.HeadCmdRaw): HeadSchema.HeadCmd
   {
     var mode :=
       if HelpBeforeOther(raw) then
@@ -210,19 +205,20 @@ module HeadSpec {
     (cmd.headerMode == HeadSchema.HeadersMultiple && |cmd.inputs| > 1)
   }
 
-  function HeaderForInput(cmd: HeadSchema.HeadCmd, input: HeadSchema.Input, printedHeaders: int): BenchWorld.Bytes
+  ghost function HeaderForInput(cmd: HeadSchema.HeadCmd, input: HeadSchema.Input, printedHeaders: int): BenchWorld.Bytes
   {
     if ShouldPrintHeaders(cmd) then
       (if printedHeaders == 0 then [] else ['\n']) +
-      "==> " + Utf8.Encode(InputName(input)) + " <==\n"
+      HeaderText(InputName(input))
     else
       []
   }
 
-  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "head: error reading 'standard input': " + Utf8.Encode(ErrnoText(error)) + "\n"
+    StdinReadErrorPrefix() + Utf8.Encode(ErrnoText(error)) + DiagnosticSuffix()
   }
+
 
   ghost predicate StdinTraceRelation(
     cmd: HeadSchema.HeadCmd, before: BenchWorld.Bytes, after: BenchWorld.Bytes,
@@ -402,10 +398,11 @@ module HeadSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("head: write error: " + message + "\n")
+    StreamUtf8.Encode(StreamWriteErrorText(message))
   }
+
 
   ghost predicate EmitFields(
     observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
@@ -451,4 +448,31 @@ module HeadSpec {
         old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
+  function ErrorMessageText(quoted: BenchWorld.Bytes, err: BenchWorld.IOError): string
+  {
+    if err.ReadFailure? && err.readStage == BenchWorld.CloseFailed then
+      "head: failed to close " + quoted + ": " + ErrnoText(err) + "\n"
+    else if IOContract.IOErrorIsReadFailure(err) then
+      "head: error reading " + quoted + ": " + ErrnoText(err) + "\n"
+    else
+      "head: cannot open " + quoted + " for reading: " + ErrnoText(err) + "\n"
+  }
+
+  function InvalidCountText(unit: HeadSchema.CountUnit, quoted: BenchWorld.Bytes): string
+  {
+    "head: invalid number of " +
+      (if unit == HeadSchema.CountLines then "lines" else "bytes") + ": " + quoted + "\n"
+  }
+
+  ghost function HeaderText(name: string): BenchWorld.Bytes
+  {
+    HeaderPrefix() + Utf8.Encode(name) + HeaderSuffix()
+  }
+
+  function HeaderPrefix(): BenchWorld.Bytes { "==> " }
+  function HeaderSuffix(): BenchWorld.Bytes { " <==\n" }
+  function DiagnosticSuffix(): BenchWorld.Bytes { "\n" }
+  function StdinReadErrorPrefix(): BenchWorld.Bytes { "head: error reading 'standard input': " }
+  function StreamWriteErrorText(message: string): string { "head: write error: " + message + "\n" }
+
 }

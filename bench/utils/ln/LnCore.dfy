@@ -1,9 +1,13 @@
+include "LnPathCore.dfy"
+include "LnTextCore.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "LnSchema.dfy"
 include "LnSpec.dfy"
 
 module LnCore {
+  import Path = LnPathCore
+  import Text = LnTextCore
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -13,7 +17,7 @@ module LnCore {
   import Schema = LnSchema
   import Spec = LnSpec
 
-  function LinkNameIsDirectoryFs(
+  ghost function LinkNameIsDirectoryFs(
     fs: BenchWorld.FileSystem, path: BenchWorld.Path
   ): bool
   {
@@ -277,28 +281,28 @@ module LnCore {
     ensures message == Spec.FailedAccessMessageSpec(source, err)
   {
     var reason := io.GetCLocaleErrnoText(err);
-    message := Spec.FailedAccessMessageText(source, err, reason);
+    message := Text.FailedAccessMessageText(source, err, reason);
   }
 
   method CreateHardLinkErrorMessageCore(source: BenchWorld.Path, linkName: BenchWorld.Path, err: int, io: BenchIO.IO) returns (message: BenchWorld.Bytes)
     ensures message == Spec.CreateHardLinkErrorMessageSpec(source, linkName, err)
   {
     var reason := io.GetCLocaleErrnoText(err);
-    message := Spec.CreateHardLinkErrorMessageText(source, linkName, err, reason);
+    message := Text.CreateHardLinkErrorMessageText(source, linkName, err, reason);
   }
 
   method CreateSymlinkErrorMessageCore(linkName: BenchWorld.Path, source: BenchWorld.Path, err: int, io: BenchIO.IO) returns (message: BenchWorld.Bytes)
     ensures message == Spec.CreateSymlinkErrorMessageSpec(linkName, source, err)
   {
     var reason := io.GetCLocaleErrnoText(err);
-    message := Spec.CreateSymlinkErrorMessageText(linkName, source, err, reason);
+    message := Text.CreateSymlinkErrorMessageText(linkName, source, err, reason);
   }
 
   method TargetDirectoryErrorMessageCore(target: BenchWorld.Path, err: int, io: BenchIO.IO) returns (message: BenchWorld.Bytes)
     ensures message == Spec.TargetDirectoryErrorMessageSpec(target, err)
   {
     var reason := io.GetCLocaleErrnoText(err);
-    message := Spec.TargetDirectoryErrorMessageText(target, err, reason);
+    message := Text.TargetDirectoryErrorMessageText(target, err, reason);
   }
 
   method {:isolate_assertions} RunBatch(
@@ -340,7 +344,10 @@ module LnCore {
       decreases |sources| - i
     {
       var source := sources[i];
-      var destination := Spec.InDirectory(target, source);
+      var destination := Path.InDirectory(target, source);
+      assert destination == Spec.InDirectory(target, source) by {
+        reveal Path.InDirectory();
+      }
       ghost var beforeStepFs := io.fs();
       ghost var beforeStepContext := Spec.Context(io);
       assert beforeStepContext == Spec.AtCursor(preTrusted, preTrusted.cursor + (if symbolic then 0 else i));
@@ -371,7 +378,7 @@ module LnCore {
         if !sourceOk {
           piece := FailedAccessMessageCore(source, sourceErr, io);
         } else if sourceIsDir {
-          piece := Spec.HardDirectoryMessageSpec(source);
+          piece := Text.HardDirectoryMessageSpec(source);
         } else {
           var createHardLinkResult := io.CreateHardLink(source, destination);
           var ok := createHardLinkResult.Ok?;
@@ -530,7 +537,7 @@ module LnCore {
     var dirIsDir := false;
     var dirErr := 0;
     if |cmd.operands| == 1 {
-      destination := Spec.InDirectory(".", source);
+      destination := Path.InDirectory(".", source);
     } else if source == "" {
       destination := cmd.operands[1];
     } else {
@@ -544,10 +551,10 @@ module LnCore {
         dirOk, status, dirErr, io.statusCursor());
       DirectoryProbeMatchesCore(preFs, preTrusted, cmd.operands[1], dirOk, dirIsDir, dirErr);
       destination := if dirOk && dirIsDir then
-        Spec.InDirectory(cmd.operands[1], source) else cmd.operands[1];
+        Path.InDirectory(cmd.operands[1], source) else cmd.operands[1];
     }
     assert destination == CoreDestination(preFs, preTrusted, cmd.operands) by {
-      reveal CoreDestination();
+      reveal CoreDestination(), Path.InDirectory();
     }
 
     ghost var stepContext := Spec.Context(io);
@@ -616,7 +623,7 @@ module LnCore {
       plannedStderr := plannedStderr + (diagnostic);
       exit := 1;
     } else if sourceIsDir {
-      diagnostic := Spec.HardDirectoryMessageSpec(source);
+      diagnostic := Text.HardDirectoryMessageSpec(source);
       plannedStderr := plannedStderr + (diagnostic);
       exit := 1;
     } else {
@@ -686,7 +693,7 @@ module LnCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
       else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

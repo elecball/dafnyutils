@@ -6,6 +6,39 @@ include "../../core/StringEscaping.dfy"
 include "UniqSchema.dfy"
 
 module UniqSpec {
+
+  const StdinReadErrorMessageText0: BenchWorld.Bytes := "uniq: error reading 'standard input': "
+
+  const StdinReadErrorMessageText1: BenchWorld.Bytes := "\n"
+
+  const ReadErrorMessageSpecText0: BenchWorld.Bytes := "uniq: error reading "
+
+  const ReadErrorMessageSpecText1: BenchWorld.Bytes := ": "
+
+  const ReadErrorMessageSpecText2: BenchWorld.Bytes := "\n"
+
+  const ReadErrorMessageSpecText3: BenchWorld.Bytes := "uniq: "
+
+  const ReadErrorMessageSpecText4: BenchWorld.Bytes := ": "
+
+  const ReadErrorMessageSpecText5: BenchWorld.Bytes := "\n"
+
+  const UnsupportedOutputMessageSpecText0: BenchWorld.Bytes := "uniq: output file "
+
+  const UnsupportedOutputMessageSpecText1: BenchWorld.Bytes := " is not supported by this benchmark\n"
+
+  const UnsupportedSkipCharsMessageSpecText0: BenchWorld.Bytes := "uniq: traditional skip-character operand '"
+
+  const UnsupportedSkipCharsMessageSpecText1: BenchWorld.Bytes := "' is not supported by this benchmark\n"
+
+  const ExtraOperandMessageSpecText0: BenchWorld.Bytes := "uniq: extra operand "
+
+  const ExtraOperandMessageSpecText1: BenchWorld.Bytes := "\nTry 'uniq --help' for more information.\n"
+
+  const StreamWriteErrorMessageText0: BenchWorld.Bytes := "uniq: write error: "
+
+  const StreamWriteErrorMessageText1: BenchWorld.Bytes := "\n"
+
   import StreamContract = IOContract
   import StreamUtf8 = Utf8Semantics
 
@@ -21,12 +54,12 @@ module UniqSpec {
 
 
 
-  function SpecCPrintableByte(byte: char): bool
+  ghost function SpecCPrintableByte(byte: char): bool
   {
     0x20 <= byte as int <= 0x7e
   }
 
-  function SpecOctDigit(value: int): char
+  ghost function SpecOctDigit(value: int): char
   {
     if value == 0 then '0'
     else if value == 1 then '1'
@@ -38,13 +71,13 @@ module UniqSpec {
     else '7'
   }
 
-  function SpecOctalEscape(byte: char): BW.Bytes
+  ghost function SpecOctalEscape(byte: char): BW.Bytes
   {
     var value := byte as int;
     ['\\', SpecOctDigit((value / 64) % 8), SpecOctDigit((value / 8) % 8), SpecOctDigit(value % 8)]
   }
 
-  function SpecNamedEscape(byte: char): BW.Bytes
+  ghost function SpecNamedEscape(byte: char): BW.Bytes
   {
     if byte == 7 as char then "\\a"
     else if byte == 8 as char then "\\b"
@@ -56,18 +89,18 @@ module UniqSpec {
     else []
   }
 
-  function SpecAnsiEscape(byte: char): BW.Bytes
+  ghost function SpecAnsiEscape(byte: char): BW.Bytes
   {
     var named := SpecNamedEscape(byte);
     if named != [] then named else SpecOctalEscape(byte)
   }
 
-  function SpecNeedsAnsiEscape(byte: char): bool
+  ghost function SpecNeedsAnsiEscape(byte: char): bool
   {
     !SpecCPrintableByte(byte)
   }
 
-  function SpecCQuoteByte(byte: char): BW.Bytes
+  ghost function SpecCQuoteByte(byte: char): BW.Bytes
   {
     var named := SpecNamedEscape(byte);
     if named != [] then named
@@ -77,7 +110,7 @@ module UniqSpec {
     else SpecOctalEscape(byte)
   }
 
-  function SpecCQuoteBytes(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecCQuoteBytes(bytes: BW.Bytes): BW.Bytes
     decreases |bytes|
   {
     if |bytes| == 0 then
@@ -86,14 +119,14 @@ module UniqSpec {
       SpecCQuoteByte(bytes[0]) + SpecCQuoteBytes(bytes[1..])
   }
 
-  function SpecDoubleQuote(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecDoubleQuote(bytes: BW.Bytes): BW.Bytes
   {
     "\"" + SpecCQuoteBytes(bytes) + "\""
   }
 
   // `atStart` and `singleton` carry the only positional facts the byte test
   // needs; both are supplied once at the entry point.
-  function SpecShellCompatibleByte(byte: char, atStart: bool, singleton: bool): bool
+  ghost function SpecShellCompatibleByte(byte: char, atStart: bool, singleton: bool): bool
   {
     if byte == '?' || byte == '\\' then
       false
@@ -112,7 +145,7 @@ module UniqSpec {
       SpecCPrintableByte(byte)
   }
 
-  function SpecShellCompatibleTail(bytes: BW.Bytes): bool
+  ghost function SpecShellCompatibleTail(bytes: BW.Bytes): bool
     decreases |bytes|
   {
     |bytes| == 0 ||
@@ -120,19 +153,19 @@ module UniqSpec {
      SpecShellCompatibleTail(bytes[1..]))
   }
 
-  function SpecAllShellCompatible(bytes: BW.Bytes): bool
+  ghost function SpecAllShellCompatible(bytes: BW.Bytes): bool
   {
     |bytes| == 0 ||
     (SpecShellCompatibleByte(bytes[0], true, |bytes| == 1) &&
      SpecShellCompatibleTail(bytes[1..]))
   }
 
-  function SpecContainsApostrophe(bytes: BW.Bytes): bool
+  ghost function SpecContainsApostrophe(bytes: BW.Bytes): bool
   {
     '\'' in bytes
   }
 
-  function SpecShellEscapeTail(bytes: BW.Bytes, ansi: bool): BW.Bytes
+  ghost function SpecShellEscapeTail(bytes: BW.Bytes, ansi: bool): BW.Bytes
     decreases |bytes|
   {
     if |bytes| == 0 then
@@ -149,7 +182,7 @@ module UniqSpec {
         SpecShellEscapeTail(bytes[1..], false)
   }
 
-  function SpecQuoteAfBytes(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecQuoteAfBytes(bytes: BW.Bytes): BW.Bytes
   {
     if SpecContainsApostrophe(bytes) && SpecAllShellCompatible(bytes) then
       SpecDoubleQuote(bytes)
@@ -157,7 +190,7 @@ module UniqSpec {
       "'" + SpecShellEscapeTail(bytes, false)
   }
 
-  function SpecShellQuoteTriggerByte(byte: char, atStart: bool, singleton: bool): bool
+  ghost function SpecShellQuoteTriggerByte(byte: char, atStart: bool, singleton: bool): bool
   {
     !SpecCPrintableByte(byte) ||
     byte == '\\' || byte == '\'' || byte == '?' || byte == ':' ||
@@ -169,7 +202,7 @@ module UniqSpec {
     ((byte == '{' || byte == '}') && singleton)
   }
 
-  function SpecHasShellQuoteTriggerTail(bytes: BW.Bytes): bool
+  ghost function SpecHasShellQuoteTriggerTail(bytes: BW.Bytes): bool
     decreases |bytes|
   {
     |bytes| != 0 &&
@@ -177,14 +210,14 @@ module UniqSpec {
      SpecHasShellQuoteTriggerTail(bytes[1..]))
   }
 
-  function SpecHasShellQuoteTrigger(bytes: BW.Bytes): bool
+  ghost function SpecHasShellQuoteTrigger(bytes: BW.Bytes): bool
   {
     |bytes| != 0 &&
     (SpecShellQuoteTriggerByte(bytes[0], true, |bytes| == 1) ||
      SpecHasShellQuoteTriggerTail(bytes[1..]))
   }
 
-  function SpecQuoteFBytes(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecQuoteFBytes(bytes: BW.Bytes): BW.Bytes
   {
     if |bytes| == 0 || SpecHasShellQuoteTrigger(bytes) then
       SpecQuoteAfBytes(bytes)
@@ -249,7 +282,7 @@ module UniqSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function QuoteIfNeeded(path: string): BenchWorld.Bytes
+  ghost function QuoteIfNeeded(path: string): BenchWorld.Bytes
   {
     SpecQuoteFBytes(Utf8.Encode(path))
   }
@@ -259,39 +292,39 @@ module UniqSpec {
     "'" + path + "'"
   }
 
-  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "uniq: error reading 'standard input': " + Utf8.Encode(ErrnoText(error)) + "\n"
+    StdinReadErrorMessageText0 + Utf8.Encode(ErrnoText(error)) + StdinReadErrorMessageText1
   }
 
-  function ReadErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function ReadErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     if IOContract.IOErrorIsDirectory(err) then
-      "uniq: error reading " + SpecQuoteAfBytes(Utf8.Encode(path)) +
-        ": " + Utf8.Encode(ErrnoText(err)) + "\n"
+      ReadErrorMessageSpecText0 + SpecQuoteAfBytes(Utf8.Encode(path)) +
+        ReadErrorMessageSpecText1 + Utf8.Encode(ErrnoText(err)) + ReadErrorMessageSpecText2
     else
-      "uniq: " + QuoteIfNeeded(path) + ": " + Utf8.Encode(ErrnoText(err)) + "\n"
+      ReadErrorMessageSpecText3 + QuoteIfNeeded(path) + ReadErrorMessageSpecText4 + Utf8.Encode(ErrnoText(err)) + ReadErrorMessageSpecText5
   }
 
   // Formal specification gap: non-"-" OUTPUT operands are intentionally
   // rejected in this benchmark relation until World/IO can model file-content
   // writes and truncation.
-  function UnsupportedOutputMessageSpec(path: BenchWorld.Path): BenchWorld.Bytes
+  ghost function UnsupportedOutputMessageSpec(path: BenchWorld.Path): BenchWorld.Bytes
   {
-    Utf8.Encode("uniq: output file " + QuoteAlways(path) +
-    " is not supported by this benchmark\n")
+    Utf8.Encode(UnsupportedOutputMessageSpecText0 + QuoteAlways(path) +
+    UnsupportedOutputMessageSpecText1)
   }
 
-  function UnsupportedSkipCharsMessageSpec(operand: string): BenchWorld.Bytes
+  ghost function UnsupportedSkipCharsMessageSpec(operand: string): BenchWorld.Bytes
   {
-    Utf8.Encode("uniq: traditional skip-character operand '" + operand +
-    "' is not supported by this benchmark\n")
+    Utf8.Encode(UnsupportedSkipCharsMessageSpecText0 + operand +
+    UnsupportedSkipCharsMessageSpecText1)
   }
 
-  function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
+  ghost function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
   {
-    "uniq: extra operand " + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
-      "\nTry 'uniq --help' for more information.\n"
+    ExtraOperandMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
+      ExtraOperandMessageSpecText1
   }
 
   function InputFromOperands(operands: seq<string>): UniqSchema.Input
@@ -669,9 +702,9 @@ module UniqSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("uniq: write error: " + message + "\n")
+    StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }
 
   ghost predicate EmitFields(

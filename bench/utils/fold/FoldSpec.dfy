@@ -6,6 +6,23 @@ include "FoldSchema.dfy"
 include "../../core/StringEscaping.dfy"
 
 module FoldSpec {
+
+  const InvalidWidthMessageText0: BenchWorld.Bytes := "fold: invalid number of columns: "
+
+  const InvalidWidthMessageText1: BenchWorld.Bytes := ": Numerical result out of range\n"
+
+  const InvalidWidthMessageText2: BenchWorld.Bytes := "\n"
+
+  const ErrorMessageText0: BenchWorld.Bytes := "fold: "
+
+  const ErrorMessageText1: BenchWorld.Bytes := ": "
+
+  const ErrorMessageText2: BenchWorld.Bytes := "\n"
+
+  const StreamWriteErrorMessageText0: BenchWorld.Bytes := "fold: write error: "
+
+  const StreamWriteErrorMessageText1: BenchWorld.Bytes := "\n"
+
   import StreamContract = IOContract
   import StreamUtf8 = Utf8Semantics
 
@@ -57,10 +74,10 @@ module FoldSpec {
     + "Written by David MacKenzie.\n"
   }
 
-  function InvalidWidthMessage(value: string): BenchWorld.Bytes
+  ghost function InvalidWidthMessage(value: string): BenchWorld.Bytes
   {
-    "fold: invalid number of columns: " + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
-    (if AllDigits(value) then ": Numerical result out of range\n" else "\n")
+    InvalidWidthMessageText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
+    (if AllDigits(value) then InvalidWidthMessageText1 else InvalidWidthMessageText2)
   }
 
   function ErrnoText(err: BenchWorld.IOError): string
@@ -79,10 +96,10 @@ module FoldSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "fold: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-    ": " + ErrnoText(err) + "\n"
+    ErrorMessageText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
+    ErrorMessageText1 + Utf8.Encode(ErrnoText(err)) + ErrorMessageText2
   }
 
   function AllDigits(text: string): bool
@@ -565,9 +582,9 @@ module FoldSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("fold: write error: " + message + "\n")
+    StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }
 
   ghost predicate EmitFields(

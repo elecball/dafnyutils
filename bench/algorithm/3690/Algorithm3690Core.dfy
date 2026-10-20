@@ -1,3 +1,4 @@
+include "Algorithm3690TextCore.dfy"
 include "Algorithm3690Schema.dfy"
 include "../../core/IO.dfy"
 include "Algorithm3690Spec.dfy"
@@ -7,6 +8,7 @@ module Algorithm3690Core {
   import BenchWorld
   import Schema = Algorithm3690Schema
   import CliSpec = Algorithm3690Spec
+  import Text = Algorithm3690TextCore
 
   twostate predicate CoreSummary(raw: Schema.Algorithm3690CmdRaw, io: BenchIO.IO, exit: int)
     reads io.stdoutRegion, io.stderrRegion, io.trustedStreamsRegion
@@ -31,7 +33,7 @@ module Algorithm3690Core {
       return;
     }
     var result := Solve(raw.h, raw.m, raw.s, raw.t1, raw.t2);
-    var text := CliSpec.OutputText(result);
+    var text := Text.OutputText(result);
     var written := io.WriteStdout(text);
     exit := if written.Err? then 1 else 0;
   }

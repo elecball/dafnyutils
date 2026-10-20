@@ -1,12 +1,23 @@
+include "../../core/StringEscaping.dfy"
+include "../../core/Utf8.dfy"
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "ExpandSchema.dfy"
 include "ExpandCore.dfy"
 include "ExpandSpec.dfy"
 include "ExpandProof.dfy"
 
 module Expand {
+  // CLI codecs are fixed protocol details, outside the candidate API.
+  export
+    provides BenchIO, BenchWorld, CliTypes, CliExtern, BenchItem, S, Core, Proof, ES, ExpandBenchmarkItem._ctor, ExpandBenchmarkItem.Name, ExpandBenchmarkItem.Schema, ExpandBenchmarkItem.ParseConfig, ExpandBenchmarkItem.Decode, ExpandBenchmarkItem.FormatParseError, ExpandBenchmarkItem.PlanParseFailure, ExpandBenchmarkItem.RunCore
+    reveals FixedIsDigit, FixedMaxColumn, FixedDigitValue, FixedParseNatFrom, FixedParsePositiveNat, FixedIsSeparator, FixedIsMarker, FixedMarkerOf, FixedFindTokenEnd, FixedFindDigitsEnd, FixedCombineDiagnostics, FixedSyntaxDiagnosticsFrom, FixedSyntaxDiagnostics, FixedScanMarkers, FixedCommitTabValue, FixedParseTabPart, FixedParseTabTextFrom, FixedParseTabArgsFrom, FixedHelpBeforeOther, FixedVersionBeforeInvalid, FixedRequestTokenIndex, FixedScanCommandOptions, ExpandBenchmarkItem
+
+  import ProtocolUtf8Model = Utf8Semantics
+  import ProtocolEscapingModel = StringEscaping
+  import opened ProtocolModel = ExpandSpec
+
   import BenchIO
   import BenchWorld
   import CliTypes
@@ -90,7 +101,7 @@ module Expand {
       FixedFindDigitsEnd(text, start + 1)
   }
 
-  function FixedCombineDiagnostics(first: string, rest: string): string
+  function FixedCombineDiagnostics(first: BenchWorld.Bytes, rest: BenchWorld.Bytes): BenchWorld.Bytes
   {
     if rest == "" then first else first + "\nexpand: " + rest
   }
@@ -101,7 +112,7 @@ module Expand {
     haveValue: bool,
     numberStart: nat,
     value: nat
-  ): string
+  ): BenchWorld.Bytes
     requires i <= |text|
     requires !haveValue || numberStart <= i
     decreases |text| - i
@@ -137,9 +148,42 @@ module Expand {
         )
     else
       ES.InvalidCharacterMessage(text[i..])
+  } by method {
+    return
+      if i == |text| then
+      ""
+    else if FixedIsSeparator(text[i]) then
+      FixedSyntaxDiagnosticsFrom(text, i + 1, false, 0, 0)
+    else if FixedIsMarker(text[i]) then
+      var rest := FixedSyntaxDiagnosticsFrom(
+                    text, i + 1, haveValue, numberStart, value
+                  );
+      if haveValue then
+        FixedCombineDiagnostics(
+          ProtocolMarkerNotAtStartMessage(FixedMarkerOf(text[i]), text[i..]),
+          rest
+        )
+      else
+        rest
+    else if FixedIsDigit(text[i]) then
+      var start := if haveValue then numberStart else i;
+      var accumulated := if haveValue then value else 0;
+      var digit := FixedDigitValue(text[i]);
+      if accumulated > (FixedMaxColumn() - digit) / 10 then
+        var end := FixedFindDigitsEnd(text, i);
+        FixedCombineDiagnostics(
+          ProtocolTooLargeMessage(text[start..end]),
+          FixedSyntaxDiagnosticsFrom(text, end, true, start, accumulated)
+        )
+      else
+        FixedSyntaxDiagnosticsFrom(
+          text, i + 1, true, start, accumulated * 10 + digit
+        )
+    else
+      ProtocolInvalidCharacterMessage(text[i..]);
   }
 
-  function FixedSyntaxDiagnostics(text: string): string
+  function FixedSyntaxDiagnostics(text: string): BenchWorld.Bytes
   {
     FixedSyntaxDiagnosticsFrom(text, 0, false, 0, 0)
   }
@@ -180,6 +224,22 @@ module Expand {
       S.TabAccumOk(S.TabAccum(
         acc.stops + [value], acc.extendSize, acc.incrementSize, marker
       ))
+  } by method {
+    return
+      if marker == S.MarkerSlash then
+      if acc.extendSize != 0 then
+        S.TabAccumErr(ProtocolRepeatOnlyLastMessage(S.MarkerSlash))
+      else
+        S.TabAccumOk(S.TabAccum(acc.stops, value, acc.incrementSize, marker))
+    else if marker == S.MarkerPlus then
+      if acc.incrementSize != 0 then
+        S.TabAccumErr(ProtocolRepeatOnlyLastMessage(S.MarkerPlus))
+      else
+        S.TabAccumOk(S.TabAccum(acc.stops, acc.extendSize, value, marker))
+    else
+      S.TabAccumOk(S.TabAccum(
+        acc.stops + [value], acc.extendSize, acc.incrementSize, marker
+      ));
   }
 
   function FixedParseTabPart(part: string, acc: S.TabAccum): S.TabAccumParse
@@ -207,6 +267,31 @@ module Expand {
           match FixedParsePositiveNat(digits)
           case NatErr => S.TabAccumErr(ES.TooLargeMessage(digits))
           case NatOk(value) => FixedCommitTabValue(acc, marker, value)
+  } by method {
+    return
+      if |part| == 0 then
+      S.TabAccumOk(acc)
+    else
+      var scan := FixedScanMarkers(part, 0, S.MarkerNone, false);
+      var marker := if scan.hasMarker then scan.marker else acc.activeMarker;
+      if scan.index == |part| then
+        S.TabAccumOk(S.TabAccum(
+          acc.stops, acc.extendSize, acc.incrementSize, marker
+        ))
+      else
+        var end := FixedFindDigitsEnd(part, scan.index);
+        if end < |part| then
+          if FixedIsMarker(part[end]) then
+            S.TabAccumErr(ProtocolMarkerNotAtStartMessage(
+              FixedMarkerOf(part[end]), part[end..]
+            ))
+          else
+            S.TabAccumErr(ProtocolInvalidCharacterMessage(part[end..]))
+        else
+          var digits := part[scan.index..end];
+          match FixedParsePositiveNat(digits)
+          case NatErr => S.TabAccumErr(ProtocolTooLargeMessage(digits))
+          case NatOk(value) => FixedCommitTabValue(acc, marker, value);
   }
 
   function FixedParseTabTextFrom(
@@ -358,4 +443,134 @@ module Expand {
       Proof.CoreSummaryImpliesSpec(raw, io, exit);
     }
   }
+  function ProtocolEncodeChar(ch: char): BenchWorld.Bytes
+    ensures ProtocolEncodeChar(ch) == ProtocolUtf8Model.EncodeChar(ch)
+    ensures |ProtocolEncodeChar(ch)| == BenchWorld.Utf8ByteWidth(ch)
+    ensures 1 <= |ProtocolEncodeChar(ch)| <= 4
+  {
+    var code := ch as int;
+    if code <= 0x7f then
+      [code as char]
+    else if code <= 0x7ff then
+      [
+        (0xc0 + code / 0x40) as char,
+        (0x80 + code % 0x40) as char
+      ]
+    else if code <= 0xffff then
+      [
+        (0xe0 + code / 0x1000) as char,
+        (0x80 + (code / 0x40) % 0x40) as char,
+        (0x80 + code % 0x40) as char
+      ]
+    else
+      [
+        (0xf0 + code / 0x40000) as char,
+        (0x80 + (code / 0x1000) % 0x40) as char,
+        (0x80 + (code / 0x40) % 0x40) as char,
+        (0x80 + code % 0x40) as char
+      ]
+  }
+
+  function ProtocolEncode(text: string): BenchWorld.Bytes
+    ensures ProtocolEncode(text) == ProtocolUtf8Model.Encode(text)
+    ensures |ProtocolEncode(text)| >= |text|
+    decreases |text|
+  {
+    if text == [] then [] else ProtocolEncodeChar(text[0]) + ProtocolEncode(text[1..])
+  }
+
+  function ProtocolSpecCPrintableByte(byte: char): bool
+    ensures ProtocolSpecCPrintableByte(byte) == ProtocolEscapingModel.SpecCPrintableByte(byte)
+  {
+    0x20 <= byte as int <= 0x7e
+  }
+
+  function ProtocolSpecOctDigit(value: int): char
+    ensures ProtocolSpecOctDigit(value) == ProtocolEscapingModel.SpecOctDigit(value)
+  {
+    if value == 0 then '0'
+    else if value == 1 then '1'
+    else if value == 2 then '2'
+    else if value == 3 then '3'
+    else if value == 4 then '4'
+    else if value == 5 then '5'
+    else if value == 6 then '6'
+    else '7'
+  }
+
+  function ProtocolSpecOctalEscape(byte: char): BenchWorld.Bytes
+    ensures ProtocolSpecOctalEscape(byte) == ProtocolEscapingModel.SpecOctalEscape(byte)
+  {
+    var value := byte as int;
+    ['\\', ProtocolSpecOctDigit((value / 64) % 8), ProtocolSpecOctDigit((value / 8) % 8), ProtocolSpecOctDigit(value % 8)]
+  }
+
+  function ProtocolSpecNamedEscape(byte: char): BenchWorld.Bytes
+    ensures ProtocolSpecNamedEscape(byte) == ProtocolEscapingModel.SpecNamedEscape(byte)
+  {
+    if byte == 7 as char then "\\a"
+    else if byte == 8 as char then "\\b"
+    else if byte == 12 as char then "\\f"
+    else if byte == '\n' then "\\n"
+    else if byte == '\r' then "\\r"
+    else if byte == '\t' then "\\t"
+    else if byte == 11 as char then "\\v"
+    else []
+  }
+
+  function ProtocolSpecLocaleQuoteByte(byte: char): BenchWorld.Bytes
+    ensures ProtocolSpecLocaleQuoteByte(byte) == ProtocolEscapingModel.SpecLocaleQuoteByte(byte)
+  {
+    var named := ProtocolSpecNamedEscape(byte);
+    if named != [] then named
+    else if byte == '\'' then "\\'"
+    else if byte == '\\' then "\\\\"
+    else if ProtocolSpecCPrintableByte(byte) then [byte]
+    else ProtocolSpecOctalEscape(byte)
+  }
+
+  function ProtocolSpecLocaleQuoteBody(bytes: BenchWorld.Bytes): BenchWorld.Bytes
+    ensures ProtocolSpecLocaleQuoteBody(bytes) == ProtocolEscapingModel.SpecLocaleQuoteBody(bytes)
+    decreases |bytes|
+  {
+    if |bytes| == 0 then
+      []
+    else
+      ProtocolSpecLocaleQuoteByte(bytes[0]) + ProtocolSpecLocaleQuoteBody(bytes[1..])
+  }
+
+  function ProtocolSpecLocaleQuoteBytes(bytes: BenchWorld.Bytes): BenchWorld.Bytes
+    ensures ProtocolSpecLocaleQuoteBytes(bytes) == ProtocolEscapingModel.SpecLocaleQuoteBytes(bytes)
+  {
+    "'" + ProtocolSpecLocaleQuoteBody(bytes) + "'"
+  }
+
+  function ProtocolInvalidCharacterMessage(suffix: string): BenchWorld.Bytes
+    ensures ProtocolInvalidCharacterMessage(suffix) == ES.InvalidCharacterMessage(suffix)
+  {
+    InvalidCharacterMessagePart1() + ProtocolSpecLocaleQuoteBytes(ProtocolEncode(suffix))
+  }
+
+  function ProtocolMarkerNotAtStartMessage(
+    marker: Schema.MarkerKind, suffix: string
+  ): BenchWorld.Bytes
+    ensures ProtocolMarkerNotAtStartMessage(marker, suffix) == ES.MarkerNotAtStartMessage(marker, suffix)
+  {
+    ProtocolSpecLocaleQuoteBytes(ProtocolEncode(MarkerText(marker))) +
+    MarkerNotAtStartMessagePart1() + ProtocolSpecLocaleQuoteBytes(ProtocolEncode(suffix))
+  }
+
+  function ProtocolTooLargeMessage(digits: string): BenchWorld.Bytes
+    ensures ProtocolTooLargeMessage(digits) == ES.TooLargeMessage(digits)
+  {
+    TooLargeMessagePart1() + ProtocolSpecLocaleQuoteBytes(ProtocolEncode(digits))
+  }
+
+  function ProtocolRepeatOnlyLastMessage(marker: Schema.MarkerKind): BenchWorld.Bytes
+    ensures ProtocolRepeatOnlyLastMessage(marker) == ES.RepeatOnlyLastMessage(marker)
+  {
+    ProtocolSpecLocaleQuoteBytes(ProtocolEncode(MarkerText(marker))) +
+    RepeatOnlyLastMessagePart1()
+  }
+
 }

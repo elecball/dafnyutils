@@ -1,6 +1,6 @@
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "ChmodSchema.dfy"
 include "ChmodSpec.dfy"
 include "ChmodDescriptorCore.dfy"
@@ -52,7 +52,7 @@ module Chmod {
       plan := ChmodSchema.PlanParseFailure(err, argv);
     }
 
-    predicate ExternalDomain(raw: ChmodSchema.ChmodCmdRaw)
+    ghost predicate ExternalDomain(raw: ChmodSchema.ChmodCmdRaw)
     {
       CS.SpecExternalDomain(raw)
     }

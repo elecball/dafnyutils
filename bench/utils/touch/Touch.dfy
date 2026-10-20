@@ -1,5 +1,5 @@
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "TouchSchema.dfy"
 include "TouchCore.dfy"
 include "TouchProof.dfy"

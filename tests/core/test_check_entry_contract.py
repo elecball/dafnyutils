@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from benchmarks.contracts import dafny_analysis_support_paths
 from benchmarks.generated_profile import generate_task_profile
-from benchmarks.profiles import dafny_analysis_support_files
+from benchmarks.profiles import ResolvedBenchmark
 from benchmarks.repository import BenchmarkRepository
 from entry_contract import (
     DafnyEntry,
@@ -17,6 +18,8 @@ from entry_contract import (
 @pytest.mark.integration
 def test_chmod_entry_contract_records_split_specification_sources() -> None:
     root = Path(__file__).parents[2]
+    definition = BenchmarkRepository.open(root).load_definition("chmod")
+    configuration = ResolvedBenchmark.from_definition(definition)
     manifest = create_manifest(
         root,
         root / "bench" / "utils" / "chmod",
@@ -24,16 +27,16 @@ def test_chmod_entry_contract_records_split_specification_sources() -> None:
             "bench/utils/chmod/Chmod.dfy",
             "Chmod.ChmodBenchmarkItem.RunCore",
         ),
-        (
-            root / "bench/utils/chmod/ChmodCli.dfy",
-            *(root / path for path in dafny_analysis_support_files()),
+        dafny_analysis_support_paths(
+            configuration,
+            "chmod",
+            repository_root=root,
         ),
     )
 
     assert tuple(entry.symbol for entry in manifest.spec_entries) == (
         "ChmodDescriptorPrincipalSpec.Spec",
     )
-    definition = BenchmarkRepository.open(root).load_definition("chmod")
     generated = generate_task_profile(definition, repository_root=root).profile
     assert tuple(
         (definition.source_path, definition.symbol, definition.kind)
@@ -43,9 +46,6 @@ def test_chmod_entry_contract_records_split_specification_sources() -> None:
         for definition in generated.dafny.spec_definitions
     )
     assert {key.split("::", 1)[0] for key in manifest.spec_definition_sha256} == {
-        "bench/core/BenchmarkItem.dfy",
-        "bench/core/CliExtern.dfy",
-        "bench/core/CliModel.dfy",
         "bench/core/CliTypes.dfy",
         "bench/core/Errno.dfy",
         "bench/core/IO.dfy",
@@ -54,7 +54,7 @@ def test_chmod_entry_contract_records_split_specification_sources() -> None:
         "bench/core/SecurityModel.dfy",
         "bench/core/Utf8.dfy",
         "bench/core/World.dfy",
-        "bench/core/WorldLookupProof.dfy",
+        "bench/utils/chmod/CliSupport.dfy",
         "bench/utils/chmod/ChmodDescriptorPrincipalSpec.dfy",
         "bench/utils/chmod/ChmodDescriptorSpec.dfy",
         "bench/utils/chmod/ChmodOperandSpec.dfy",

@@ -1,3 +1,4 @@
+include "Base64TextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -9,7 +10,8 @@ module Base64Core {
   import StreamContract = IOContract
 
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = Base64Utf8Core
+  import Text = Base64TextCore
   import BenchWorld
   import IOContract
   import CliTypes
@@ -1415,7 +1417,7 @@ module Base64Core {
     case Stdin =>
       var read := io.ReadStdin();
       data := IOContract.ReadResultData(read);
-      errOut := if read.Err? then Spec.StdinReadErrorMessage(read.e) else [];
+      errOut := if read.Err? then Text.StdinReadErrorMessage(read.e) else [];
       hadReadError := read.Err?;
       stage := if read.Err? then BenchWorld.ReadFailed else BenchWorld.ReadSucceeded;
     case File(path) =>
@@ -1428,7 +1430,7 @@ module Base64Core {
         hadReadError := false;
       case Err(err) =>
         data := IOContract.ReadFailureData(err);
-        errOut := Spec.ErrorMessage(path, err);
+        errOut := Text.ErrorMessage(path, err);
         hadReadError := true;
   }
 
@@ -1541,7 +1543,7 @@ module Base64Core {
       return;
     }
     if cmd.mode == Schema.ModeInvalidWrap {
-      plannedErr := plannedErr + Spec.InvalidWrapMessage(cmd.invalidWrapValue);
+      plannedErr := plannedErr + Text.InvalidWrapMessage(cmd.invalidWrapValue);
       exit := 1;
       assert io.stdin() == preStdin;
       assert (initialStdout + plannedOut) == preStdout;
@@ -1549,7 +1551,7 @@ module Base64Core {
       return;
     }
     if cmd.mode.ModeExtraOperand? {
-      plannedErr := plannedErr + Spec.ExtraOperandMessage(cmd.mode.operand);
+      plannedErr := plannedErr + Text.ExtraOperandMessage(cmd.mode.operand);
       exit := 1;
       assert io.stdin() == preStdin;
       assert (initialStdout + plannedOut) == preStdout;
@@ -1640,7 +1642,7 @@ module Base64Core {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

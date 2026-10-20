@@ -1,3 +1,4 @@
+include "Algorithm75TextCore.dfy"
 include "Algorithm75Schema.dfy"
 include "../../core/IO.dfy"
 include "Algorithm75Spec.dfy"
@@ -7,6 +8,7 @@ module Algorithm75Core {
   import BenchWorld
   import Schema = Algorithm75Schema
   import CliSpec = Algorithm75Spec
+  import Text = Algorithm75TextCore
 
   twostate predicate CoreSummary(raw: Schema.Algorithm75CmdRaw, io: BenchIO.IO, exit: int)
     reads io.stdoutRegion, io.stderrRegion, io.trustedStreamsRegion
@@ -31,7 +33,7 @@ module Algorithm75Core {
       return;
     }
     var out_status, out_x, out_y := Solve(raw.n, raw.m, raw.grid);
-    var text := CliSpec.OutputText(out_status, out_x, out_y);
+    var text := Text.OutputText(out_status, out_x, out_y);
     var written := io.WriteStdout(text);
     exit := if written.Err? then 1 else 0;
   }

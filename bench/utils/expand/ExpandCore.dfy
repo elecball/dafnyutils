@@ -1,3 +1,4 @@
+include "ExpandTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -5,6 +6,7 @@ include "ExpandSchema.dfy"
 include "ExpandSpec.dfy"
 
 module ExpandCore {
+  import Text = ExpandTextCore
   import StreamContract = IOContract
 
   import Result = Results
@@ -87,7 +89,7 @@ module ExpandCore {
       FindDigitsEnd(text, start + 1)
   }
 
-  function CombineDiagnostics(first: string, rest: string): string
+  function CombineDiagnostics(first: BenchWorld.Bytes, rest: BenchWorld.Bytes): BenchWorld.Bytes
   {
     if rest == "" then first else first + "\nexpand: " + rest
   }
@@ -98,7 +100,7 @@ module ExpandCore {
     haveValue: bool,
     numberStart: nat,
     value: nat
-  ): string
+  ): BenchWorld.Bytes
     requires i <= |text|
     requires !haveValue || numberStart <= i
     decreases |text| - i
@@ -113,7 +115,7 @@ module ExpandCore {
                   );
       if haveValue then
         CombineDiagnostics(
-          Spec.MarkerNotAtStartMessage(
+          Text.MarkerNotAtStartMessage(
             MarkerOf(text[i]), text[i..]
           ),
           rest
@@ -127,7 +129,7 @@ module ExpandCore {
       if accumulated > (MaxColumn() - digit) / 10 then
         var end := FindDigitsEnd(text, i);
         CombineDiagnostics(
-          Spec.TooLargeMessage(text[start..end]),
+          Text.TooLargeMessage(text[start..end]),
           SyntaxDiagnosticsFrom(
             text, end, true, start, accumulated
           )
@@ -138,10 +140,10 @@ module ExpandCore {
           accumulated * 10 + digit
         )
     else
-      Spec.InvalidCharacterMessage(text[i..])
+      Text.InvalidCharacterMessage(text[i..])
   }
 
-  function SyntaxDiagnostics(text: string): string
+  function SyntaxDiagnostics(text: string): BenchWorld.Bytes
   {
     SyntaxDiagnosticsFrom(text, 0, false, 0, 0)
   }
@@ -172,7 +174,7 @@ module ExpandCore {
     if marker == Schema.MarkerSlash then
       if acc.extendSize != 0 then
         Schema.TabAccumErr(
-          Spec.RepeatOnlyLastMessage(Schema.MarkerSlash)
+          Text.RepeatOnlyLastMessage(Schema.MarkerSlash)
         )
       else
         Schema.TabAccumOk(Schema.TabAccum(
@@ -181,7 +183,7 @@ module ExpandCore {
     else if marker == Schema.MarkerPlus then
       if acc.incrementSize != 0 then
         Schema.TabAccumErr(
-          Spec.RepeatOnlyLastMessage(Schema.MarkerPlus)
+          Text.RepeatOnlyLastMessage(Schema.MarkerPlus)
         )
       else
         Schema.TabAccumOk(Schema.TabAccum(
@@ -209,18 +211,18 @@ module ExpandCore {
         var end := FindDigitsEnd(part, scan.index);
         if end < |part| then
           if IsMarker(part[end]) then
-            Schema.TabAccumErr(Spec.MarkerNotAtStartMessage(
+            Schema.TabAccumErr(Text.MarkerNotAtStartMessage(
                                  MarkerOf(part[end]), part[end..]
                                ))
           else
             Schema.TabAccumErr(
-              Spec.InvalidCharacterMessage(part[end..])
+              Text.InvalidCharacterMessage(part[end..])
             )
         else
           var digits := part[scan.index..end];
           match ParsePositiveNat(digits)
           case NatErr =>
-            Schema.TabAccumErr(Spec.TooLargeMessage(digits))
+            Schema.TabAccumErr(Text.TooLargeMessage(digits))
           case NatOk(value) =>
             CommitTabValue(acc, marker, value)
   }
@@ -270,7 +272,7 @@ module ExpandCore {
 
   function StopsValidationError(
     stops: seq<nat>, i: nat, previous: nat
-  ): string
+  ): BenchWorld.Bytes
     requires i <= |stops|
     decreases |stops| - i
   {
@@ -981,7 +983,7 @@ module ExpandCore {
   {
     match input
     case Stdin =>
-      out := if result.Err? then Spec.ErrorMessage("-", result.e) else [];
+      out := if result.Err? then Text.ErrorMessage("-", result.e) else [];
       had := result.Err?;
     case File(path) =>
       match result
@@ -989,7 +991,7 @@ module ExpandCore {
         out := [];
         had := false;
       case Err(err) =>
-        out := Spec.ErrorMessage(path, err);
+        out := Text.ErrorMessage(path, err);
         had := true;
   }
 
@@ -1049,7 +1051,7 @@ module ExpandCore {
       plannedOut := plannedOut + version;
       exit := 0;
     case ModeInvalidTabs =>
-      var msg := Spec.InvalidTabsMessage(cmd.invalidTabsValue);
+      var msg := Text.InvalidTabsMessage(cmd.invalidTabsValue);
       plannedErr := plannedErr + msg;
       exit := 1;
     case ModeRun =>
@@ -1176,7 +1178,7 @@ module ExpandCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

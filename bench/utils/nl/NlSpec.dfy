@@ -6,6 +6,23 @@ include "../../core/StringEscaping.dfy"
 include "NlSchema.dfy"
 
 module NlSpec {
+
+  const UnsupportedRegexBodyStyleMessageText0: BenchWorld.Bytes := "nl: unsupported body numbering style in benchmark: '"
+
+  const UnsupportedRegexBodyStyleMessageText1: BenchWorld.Bytes := "'\n"
+
+  const ErrorMessageText0: BenchWorld.Bytes := "nl: "
+
+  const ErrorMessageText1: BenchWorld.Bytes := ": "
+
+  const ErrorMessageText2: BenchWorld.Bytes := "\n"
+
+  const ErrorPieceText0: BenchWorld.Bytes := "-"
+
+  const StreamWriteErrorMessageText0: BenchWorld.Bytes := "nl: write error: "
+
+  const StreamWriteErrorMessageText1: BenchWorld.Bytes := "\n"
+
   import StreamContract = IOContract
   import StreamUtf8 = Utf8Semantics
 
@@ -21,12 +38,12 @@ module NlSpec {
 
 
 
-  function SpecCPrintableByte(byte: char): bool
+  ghost function SpecCPrintableByte(byte: char): bool
   {
     0x20 <= byte as int <= 0x7e
   }
 
-  function SpecOctDigit(value: int): char
+  ghost function SpecOctDigit(value: int): char
   {
     if value == 0 then '0'
     else if value == 1 then '1'
@@ -38,13 +55,13 @@ module NlSpec {
     else '7'
   }
 
-  function SpecOctalEscape(byte: char): BW.Bytes
+  ghost function SpecOctalEscape(byte: char): BW.Bytes
   {
     var value := byte as int;
     ['\\', SpecOctDigit((value / 64) % 8), SpecOctDigit((value / 8) % 8), SpecOctDigit(value % 8)]
   }
 
-  function SpecNamedEscape(byte: char): BW.Bytes
+  ghost function SpecNamedEscape(byte: char): BW.Bytes
   {
     if byte == 7 as char then "\\a"
     else if byte == 8 as char then "\\b"
@@ -56,18 +73,18 @@ module NlSpec {
     else []
   }
 
-  function SpecAnsiEscape(byte: char): BW.Bytes
+  ghost function SpecAnsiEscape(byte: char): BW.Bytes
   {
     var named := SpecNamedEscape(byte);
     if named != [] then named else SpecOctalEscape(byte)
   }
 
-  function SpecNeedsAnsiEscape(byte: char): bool
+  ghost function SpecNeedsAnsiEscape(byte: char): bool
   {
     !SpecCPrintableByte(byte)
   }
 
-  function SpecCQuoteByte(byte: char): BW.Bytes
+  ghost function SpecCQuoteByte(byte: char): BW.Bytes
   {
     var named := SpecNamedEscape(byte);
     if named != [] then named
@@ -77,7 +94,7 @@ module NlSpec {
     else SpecOctalEscape(byte)
   }
 
-  function SpecCQuoteBytes(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecCQuoteBytes(bytes: BW.Bytes): BW.Bytes
     decreases |bytes|
   {
     if |bytes| == 0 then
@@ -86,14 +103,14 @@ module NlSpec {
       SpecCQuoteByte(bytes[0]) + SpecCQuoteBytes(bytes[1..])
   }
 
-  function SpecDoubleQuote(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecDoubleQuote(bytes: BW.Bytes): BW.Bytes
   {
     "\"" + SpecCQuoteBytes(bytes) + "\""
   }
 
   // `atStart` and `singleton` carry the only positional facts the byte test
   // needs; both are supplied once at the entry point.
-  function SpecShellCompatibleByte(byte: char, atStart: bool, singleton: bool): bool
+  ghost function SpecShellCompatibleByte(byte: char, atStart: bool, singleton: bool): bool
   {
     if byte == '?' || byte == '\\' then
       false
@@ -112,7 +129,7 @@ module NlSpec {
       SpecCPrintableByte(byte)
   }
 
-  function SpecShellCompatibleTail(bytes: BW.Bytes): bool
+  ghost function SpecShellCompatibleTail(bytes: BW.Bytes): bool
     decreases |bytes|
   {
     |bytes| == 0 ||
@@ -120,19 +137,19 @@ module NlSpec {
      SpecShellCompatibleTail(bytes[1..]))
   }
 
-  function SpecAllShellCompatible(bytes: BW.Bytes): bool
+  ghost function SpecAllShellCompatible(bytes: BW.Bytes): bool
   {
     |bytes| == 0 ||
     (SpecShellCompatibleByte(bytes[0], true, |bytes| == 1) &&
      SpecShellCompatibleTail(bytes[1..]))
   }
 
-  function SpecContainsApostrophe(bytes: BW.Bytes): bool
+  ghost function SpecContainsApostrophe(bytes: BW.Bytes): bool
   {
     '\'' in bytes
   }
 
-  function SpecShellEscapeTail(bytes: BW.Bytes, ansi: bool): BW.Bytes
+  ghost function SpecShellEscapeTail(bytes: BW.Bytes, ansi: bool): BW.Bytes
     decreases |bytes|
   {
     if |bytes| == 0 then
@@ -149,7 +166,7 @@ module NlSpec {
         SpecShellEscapeTail(bytes[1..], false)
   }
 
-  function SpecQuoteAfBytes(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecQuoteAfBytes(bytes: BW.Bytes): BW.Bytes
   {
     if SpecContainsApostrophe(bytes) && SpecAllShellCompatible(bytes) then
       SpecDoubleQuote(bytes)
@@ -157,7 +174,7 @@ module NlSpec {
       "'" + SpecShellEscapeTail(bytes, false)
   }
 
-  function SpecShellQuoteTriggerByte(byte: char, atStart: bool, singleton: bool): bool
+  ghost function SpecShellQuoteTriggerByte(byte: char, atStart: bool, singleton: bool): bool
   {
     !SpecCPrintableByte(byte) ||
     byte == '\\' || byte == '\'' || byte == '?' || byte == ':' ||
@@ -169,7 +186,7 @@ module NlSpec {
     ((byte == '{' || byte == '}') && singleton)
   }
 
-  function SpecHasShellQuoteTriggerTail(bytes: BW.Bytes): bool
+  ghost function SpecHasShellQuoteTriggerTail(bytes: BW.Bytes): bool
     decreases |bytes|
   {
     |bytes| != 0 &&
@@ -177,14 +194,14 @@ module NlSpec {
      SpecHasShellQuoteTriggerTail(bytes[1..]))
   }
 
-  function SpecHasShellQuoteTrigger(bytes: BW.Bytes): bool
+  ghost function SpecHasShellQuoteTrigger(bytes: BW.Bytes): bool
   {
     |bytes| != 0 &&
     (SpecShellQuoteTriggerByte(bytes[0], true, |bytes| == 1) ||
      SpecHasShellQuoteTriggerTail(bytes[1..]))
   }
 
-  function SpecQuoteFBytes(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecQuoteFBytes(bytes: BW.Bytes): BW.Bytes
   {
     if |bytes| == 0 || SpecHasShellQuoteTrigger(bytes) then
       SpecQuoteAfBytes(bytes)
@@ -220,7 +237,7 @@ module NlSpec {
   }
 
 
-  function InvalidBodyStyleMessage(value: string): BenchWorld.Bytes
+  ghost function InvalidBodyStyleMessage(value: string): BenchWorld.Bytes
   {
     NlSchema.InvalidBodyStyleLine(value) + NlSchema.TryHelp()
   }
@@ -228,9 +245,9 @@ module NlSpec {
   // Formal specification gap: pBRE body numbering is part of GNU nl, but this
   // relation intentionally excludes regex-based line selection until the
   // benchmark has a regex model.
-  function UnsupportedRegexBodyStyleMessage(value: string): BenchWorld.Bytes
+  ghost function UnsupportedRegexBodyStyleMessage(value: string): BenchWorld.Bytes
   {
-    "nl: unsupported body numbering style in benchmark: '" + Utf8.Encode(value) + "'\n" + NlSchema.TryHelp()
+    UnsupportedRegexBodyStyleMessageText0 + Utf8.Encode(value) + UnsupportedRegexBodyStyleMessageText1 + NlSchema.TryHelp()
   }
 
   function UnsupportedLogicalPageDelimiterMessage(): BenchWorld.Bytes
@@ -238,7 +255,7 @@ module NlSpec {
     "nl: unsupported logical page delimiter in benchmark input\n" + NlSchema.TryHelp()
   }
 
-  function InvalidNumberFormatMessage(value: string): BenchWorld.Bytes
+  ghost function InvalidNumberFormatMessage(value: string): BenchWorld.Bytes
   {
     NlSchema.InvalidNumberFormatLine(value) + NlSchema.TryHelp()
   }
@@ -259,10 +276,10 @@ module NlSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "nl: " + SpecQuoteFBytes(Utf8.Encode(path)) +
-    ": " + ErrnoText(err) + "\n"
+    ErrorMessageText0 + SpecQuoteFBytes(Utf8.Encode(path)) +
+    ErrorMessageText1 + Utf8.Encode(ErrnoText(err)) + ErrorMessageText2
   }
 
   ghost predicate NormalizedInputRelation(
@@ -283,10 +300,10 @@ module NlSpec {
     line == [(92 as char), ':', (92 as char), ':', (92 as char), ':']
   }
 
-  function ErrorPiece(input: NlSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
+  ghost function ErrorPiece(input: NlSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
-    case Stdin => if result.Err? then ErrorMessage("-", result.e) else []
+    case Stdin => if result.Err? then ErrorMessage(ErrorPieceText0, result.e) else []
     case File(path) =>
       match result
       case Ok(_) => []
@@ -567,7 +584,7 @@ module NlSpec {
       InputTraceWitnessRelation(cmd, preFs, preStdin, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, preStreams, postStdin, stdinStates)
   }
 
-  function ModeErrorMessage(cmd: NlSchema.NlCmd): BenchWorld.Bytes
+  ghost function ModeErrorMessage(cmd: NlSchema.NlCmd): BenchWorld.Bytes
   {
     match cmd.mode
     case ModeInvalidBodyStyle(value) => InvalidBodyStyleMessage(value)
@@ -654,9 +671,9 @@ module NlSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("nl: write error: " + message + "\n")
+    StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }
 
   ghost predicate EmitFields(

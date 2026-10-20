@@ -1,4 +1,4 @@
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "{{CLASS_NAME}}Spec.dfy"
 include "{{CLASS_NAME}}Core.dfy"
 include "{{CLASS_NAME}}Proof.dfy"

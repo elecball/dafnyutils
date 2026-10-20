@@ -385,7 +385,7 @@ module ChmodProof {
     BridgeModeChangesFrom(changes, 0, BW.NormalizeMode(oldMode), isDir, umask);
   }
 
-  function SpecChangesOfExpr(expr: string): seq<Schema.ModeChange>
+  ghost function SpecChangesOfExpr(expr: string): seq<Schema.ModeChange>
   {
     if |expr| > 0 && BW.IsOctalDigit(expr[0]) &&
        BW.AllOctalDigits(expr, 0) &&
@@ -675,7 +675,7 @@ module ChmodProof {
     }
   }
 
-  function SpecModePlanOfCore(plan: Core.CoreModePlan): Spec.SpecModePlan
+  ghost function SpecModePlanOfCore(plan: Core.CoreModePlan): Spec.SpecModePlan
   {
     match plan
     case CoreGeneralModePlan(expr, umask) =>

@@ -27,7 +27,9 @@ def local_verification_contract(
     support = {source for library in libraries for source in library.rglob("*.dfy")}
     support.update((project.parent.parent / "core").rglob("*.dfy"))
     symbol = f"{name}.{name}BenchmarkItem.RunCore"
-    support.update((project / f"{name}Cli.dfy", project / f"{name}Schema.dfy"))
+    support.update(
+        (project / f"{name}Cli.dfy", project / f"{name}Schema.dfy", project / "CliSupport.dfy")
+    )
     return project_verification_contract(project, DafnyEntry(f"{name}.dfy", symbol), support)
 
 

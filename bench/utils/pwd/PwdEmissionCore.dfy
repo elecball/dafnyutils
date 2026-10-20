@@ -1,6 +1,8 @@
+include "PwdTextCore.dfy"
 include "PwdEmissionSpec.dfy"
 
 module PwdEmissionCore {
+  import Text = PwdTextCore
   import BenchIO
   import W = BenchWorld
   import C = IOContract
@@ -23,7 +25,7 @@ module PwdEmissionCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics+Recovery.WriteErrorText(reason);
+      finalDiagnostics := diagnostics+Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
       else Recovery.WriteErrorText(C.CLocaleErrnoTextResult(outErr)));

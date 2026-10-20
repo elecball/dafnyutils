@@ -48,7 +48,8 @@ inside that container, with `.venv/bin` on `PATH`.
 | Path | Purpose |
 | --- | --- |
 | `bench/utils/<utility>/` | Utility definition, description, Dafny modules and local Makefile |
-| `bench/core/` | Shared model, contracts, helpers and trusted runtime adapters |
+| `bench/core/` | System model, native contracts, protocol types and trusted runtime adapters |
+| `bench/*/<item>/CliSupport.dfy` | Fixed task-local parser and process runner protocol |
 | `coreutils/` | Pinned upstream GNU source and tests; keep its revision fixed |
 | `tools/benchmark_templates/common/` | Common incomplete Dafny layout used by both scaffold kinds |
 | `tools/coreutils_fuzzer/` | Differential runner, generators and comparison logic |
@@ -381,7 +382,7 @@ The maintainer reviews whether the specification describes GNU behavior, rejects
 
 ## Prepare the change
 
-Explain the problem, the intended behavior and the files affected. Keep specification, implementation, proof and evaluator changes distinct. Reuse shared helpers and keep the approved inputs and library assumptions unchanged.
+Explain the problem, the intended behavior and the files affected. Keep specification, implementation, proof and evaluator changes distinct. Reuse model types and relations, and implement derived algorithms and proofs inside the item. Keep the approved inputs and native library assumptions unchanged.
 
 Put the utility scope you defined in `bench/utils/<utility>/<utility>.md`. Local
 notes may live under `_build/contribution-notes/`; copy relevant evidence into

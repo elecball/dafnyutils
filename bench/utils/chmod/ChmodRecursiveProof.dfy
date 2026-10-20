@@ -425,7 +425,7 @@ module ChmodRecursiveProof {
   {
   }
 
-  lemma {:isolate_assertions} {:vcs_split_on_every_assert} {:timeLimit 60}
+  lemma {:isolate_assertions} {:vcs_split_on_every_assert}
     BridgeVisitOutcome(
     cmd: Schema.ChmodCmd,
     plan: BaseCore.CoreModePlan,
@@ -843,7 +843,7 @@ module ChmodRecursiveProof {
       }
   }
 
-  lemma {:isolate_assertions} {:vcs_split_on_every_assert} {:timeLimit 60}
+  lemma {:isolate_assertions} {:vcs_split_on_every_assert}
     BridgeVisitsOutcome(
     cmd: Schema.ChmodCmd,
     plan: BaseCore.CoreModePlan,
@@ -887,7 +887,7 @@ module ChmodRecursiveProof {
     }
   }
 
-  lemma {:isolate_assertions} {:vcs_split_on_every_assert} {:timeLimit 60}
+  lemma {:isolate_assertions} {:vcs_split_on_every_assert}
     BridgeNonemptyVisitsOutcome(
     cmd: Schema.ChmodCmd,
     plan: BaseCore.CoreModePlan,

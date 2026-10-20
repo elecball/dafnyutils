@@ -1,10 +1,10 @@
 include "CpSpec.dfy"
-include "../../core/PathCore.dfy"
+include "CpPathCore.dfy"
 
 module CpPathProof {
   import Spec = CpSpec
-  import Paths = MvPathSpec
-  import Core = MvPathCore
+  import Paths = CpPathSpec
+  import Core = CpPathCore
   import CliModel
 
   lemma TrimmedSummaryGivesRelation(path: string, trimmed: string)

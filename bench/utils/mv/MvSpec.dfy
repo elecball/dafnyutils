@@ -117,16 +117,41 @@ module MvSpec {
     "mv: missing file operand\nTry 'mv --help' for more information.\n"
   }
 
-  function MissingDestinationMessageSpec(source: string): BenchWorld.Bytes
+  function MissingDestinationMessageSpecPart1(): BenchWorld.Bytes
   {
-    "mv: missing destination file operand after " + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) + "\n"
-    + "Try 'mv --help' for more information.\n"
+    "mv: missing destination file operand after "
   }
 
-  function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
+  function MissingDestinationMessageSpecPart2(): BenchWorld.Bytes
   {
-    "mv: extra operand " + Quote.SpecQuoteAfBytes(Utf8.Encode(operand)) +
+    "\n"
+  }
+
+  function MissingDestinationMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "Try 'mv --help' for more information.\n"
+  }
+
+  ghost function MissingDestinationMessageSpec(source: string): BenchWorld.Bytes
+  {
+    MissingDestinationMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) + MissingDestinationMessageSpecPart2()
+    + MissingDestinationMessageSpecPart3()
+  }
+
+  function ExtraOperandMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "mv: extra operand "
+  }
+
+  function ExtraOperandMessageSpecPart2(): BenchWorld.Bytes
+  {
     "\nTry 'mv --help' for more information.\n"
+  }
+
+  ghost function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
+  {
+    ExtraOperandMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(operand)) +
+    ExtraOperandMessageSpecPart2()
   }
 
   function TargetDirectoryConflictMessageSpec(): BenchWorld.Bytes
@@ -134,66 +159,256 @@ module MvSpec {
     "mv: cannot combine --target-directory (-t) and --no-target-directory (-T)\n"
   }
 
-  function InvalidBackupArgumentMessageSpec(value: string): BenchWorld.Bytes
+  function InvalidBackupArgumentMessageSpecPart1(): BenchWorld.Bytes
   {
-    "mv: invalid argument " + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
+    "mv: invalid argument "
+  }
+
+  function InvalidBackupArgumentMessageSpecPart2(): BenchWorld.Bytes
+  {
     " for 'backup type'\n"
-    + "Valid arguments are:\n"
-    + "  - 'none', 'off'\n"
-    + "  - 'simple', 'never'\n"
-    + "  - 'existing', 'nil'\n"
-    + "  - 'numbered', 't'\n"
-    + "Try 'mv --help' for more information.\n"
   }
 
-  function InvalidUpdateArgumentMessageSpec(value: string): BenchWorld.Bytes
+  function InvalidBackupArgumentMessageSpecPart3(): BenchWorld.Bytes
   {
-    "mv: invalid argument " + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
-    " for '--update'\n"
-    + "Valid arguments are:\n"
-    + "  - 'all'\n"
-    + "  - 'none'\n"
-    + "  - 'none-fail'\n"
-    + "  - 'older'\n"
-    + "Try 'mv --help' for more information.\n"
+    "Valid arguments are:\n"
   }
 
-  function TargetFailureMessageSpec(path: string, explicitTargetDirectory: bool, err: int): BenchWorld.Bytes
+  function InvalidBackupArgumentMessageSpecPart4(): BenchWorld.Bytes
+  {
+    "  - 'none', 'off'\n"
+  }
+
+  function InvalidBackupArgumentMessageSpecPart5(): BenchWorld.Bytes
+  {
+    "  - 'simple', 'never'\n"
+  }
+
+  function InvalidBackupArgumentMessageSpecPart6(): BenchWorld.Bytes
+  {
+    "  - 'existing', 'nil'\n"
+  }
+
+  function InvalidBackupArgumentMessageSpecPart7(): BenchWorld.Bytes
+  {
+    "  - 'numbered', 't'\n"
+  }
+
+  function InvalidBackupArgumentMessageSpecPart8(): BenchWorld.Bytes
+  {
+    "Try 'mv --help' for more information.\n"
+  }
+
+  ghost function InvalidBackupArgumentMessageSpec(value: string): BenchWorld.Bytes
+  {
+    InvalidBackupArgumentMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
+    InvalidBackupArgumentMessageSpecPart2()
+    + InvalidBackupArgumentMessageSpecPart3()
+    + InvalidBackupArgumentMessageSpecPart4()
+    + InvalidBackupArgumentMessageSpecPart5()
+    + InvalidBackupArgumentMessageSpecPart6()
+    + InvalidBackupArgumentMessageSpecPart7()
+    + InvalidBackupArgumentMessageSpecPart8()
+  }
+
+  function InvalidUpdateArgumentMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "mv: invalid argument "
+  }
+
+  function InvalidUpdateArgumentMessageSpecPart2(): BenchWorld.Bytes
+  {
+    " for '--update'\n"
+  }
+
+  function InvalidUpdateArgumentMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "Valid arguments are:\n"
+  }
+
+  function InvalidUpdateArgumentMessageSpecPart4(): BenchWorld.Bytes
+  {
+    "  - 'all'\n"
+  }
+
+  function InvalidUpdateArgumentMessageSpecPart5(): BenchWorld.Bytes
+  {
+    "  - 'none'\n"
+  }
+
+  function InvalidUpdateArgumentMessageSpecPart6(): BenchWorld.Bytes
+  {
+    "  - 'none-fail'\n"
+  }
+
+  function InvalidUpdateArgumentMessageSpecPart7(): BenchWorld.Bytes
+  {
+    "  - 'older'\n"
+  }
+
+  function InvalidUpdateArgumentMessageSpecPart8(): BenchWorld.Bytes
+  {
+    "Try 'mv --help' for more information.\n"
+  }
+
+  ghost function InvalidUpdateArgumentMessageSpec(value: string): BenchWorld.Bytes
+  {
+    InvalidUpdateArgumentMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
+    InvalidUpdateArgumentMessageSpecPart2()
+    + InvalidUpdateArgumentMessageSpecPart3()
+    + InvalidUpdateArgumentMessageSpecPart4()
+    + InvalidUpdateArgumentMessageSpecPart5()
+    + InvalidUpdateArgumentMessageSpecPart6()
+    + InvalidUpdateArgumentMessageSpecPart7()
+    + InvalidUpdateArgumentMessageSpecPart8()
+  }
+
+  function TargetFailureMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "mv: target directory "
+  }
+
+  function TargetFailureMessageSpecPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function TargetFailureMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  function TargetFailureMessageSpecPart4(): BenchWorld.Bytes
+  {
+    "mv: target "
+  }
+
+  ghost function TargetFailureMessageSpec(path: string, explicitTargetDirectory: bool, err: int): BenchWorld.Bytes
   {
     if explicitTargetDirectory then
-      "mv: target directory " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-      ": " + ErrnoTextSpec(err) + "\n"
+      TargetFailureMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+      TargetFailureMessageSpecPart2() + ErrnoTextSpec(err) + TargetFailureMessageSpecPart3()
     else
-      "mv: target " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-      ": " + ErrnoTextSpec(err) + "\n"
+      TargetFailureMessageSpecPart4() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+      TargetFailureMessageSpecPart2() + ErrnoTextSpec(err) + TargetFailureMessageSpecPart3()
   }
 
-  function SourceStatFailureMessageSpec(source: string, err: int): BenchWorld.Bytes
+  function SourceStatFailureMessageSpecPart1(): BenchWorld.Bytes
   {
-    "mv: cannot stat " + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
-    ": " + ErrnoTextSpec(err) + "\n"
+    "mv: cannot stat "
   }
 
-  function ParentStatFailureMessageSpec(path: string, err: int): BenchWorld.Bytes
+  function SourceStatFailureMessageSpecPart2(): BenchWorld.Bytes
   {
-    "mv: " + Utf8.Encode(path) + ": " + ErrnoTextSpec(err) + "\n"
+    ": "
   }
 
-  function RenameFailureMessageSpec(source: string, target: string, err: int): BenchWorld.Bytes
+  function SourceStatFailureMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function SourceStatFailureMessageSpec(source: string, err: int): BenchWorld.Bytes
+  {
+    SourceStatFailureMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
+    SourceStatFailureMessageSpecPart2() + ErrnoTextSpec(err) + SourceStatFailureMessageSpecPart3()
+  }
+
+  function ParentStatFailureMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "mv: "
+  }
+
+  function ParentStatFailureMessageSpecPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function ParentStatFailureMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ParentStatFailureMessageSpec(path: string, err: int): BenchWorld.Bytes
+  {
+    ParentStatFailureMessageSpecPart1() + Utf8.Encode(path) + ParentStatFailureMessageSpecPart2() + ErrnoTextSpec(err) + ParentStatFailureMessageSpecPart3()
+  }
+
+  function RenameFailureMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "mv: cannot overwrite directory "
+  }
+
+  function RenameFailureMessageSpecPart2(): BenchWorld.Bytes
+  {
+    " with non-directory "
+  }
+
+  function RenameFailureMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  function RenameFailureMessageSpecPart4(): BenchWorld.Bytes
+  {
+    "mv: cannot overwrite "
+  }
+
+  function RenameFailureMessageSpecPart5(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function RenameFailureMessageSpecPart6(): BenchWorld.Bytes
+  {
+    "mv: cannot move "
+  }
+
+  function RenameFailureMessageSpecPart7(): BenchWorld.Bytes
+  {
+    " to "
+  }
+
+  ghost function RenameFailureMessageSpec(source: string, target: string, err: int): BenchWorld.Bytes
   {
     if err == Errno.EISDIR then
-      "mv: cannot overwrite directory " + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
-      " with non-directory " + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) + "\n"
+      RenameFailureMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
+      RenameFailureMessageSpecPart2() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) + RenameFailureMessageSpecPart3()
     else if err == Errno.ENOTEMPTY then
-      "mv: cannot overwrite " + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
-      ": " + ErrnoTextSpec(err) + "\n"
+      RenameFailureMessageSpecPart4() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
+      RenameFailureMessageSpecPart5() + ErrnoTextSpec(err) + RenameFailureMessageSpecPart3()
     else
-      "mv: cannot move " + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
-      " to " + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
-      ": " + ErrnoTextSpec(err) + "\n"
+      RenameFailureMessageSpecPart6() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
+      RenameFailureMessageSpecPart7() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
+      RenameFailureMessageSpecPart5() + ErrnoTextSpec(err) + RenameFailureMessageSpecPart3()
   }
 
-  function SourceRenameFailureMessageSpec(
+  function SourceRenameFailureMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "mv: cannot overwrite non-directory "
+  }
+
+  function SourceRenameFailureMessageSpecPart2(): BenchWorld.Bytes
+  {
+    " with directory "
+  }
+
+  function SourceRenameFailureMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  function SourceRenameFailureMessageSpecPart4(): BenchWorld.Bytes
+  {
+    "mv: cannot move "
+  }
+
+  function SourceRenameFailureMessageSpecPart5(): BenchWorld.Bytes
+  {
+    " to a subdirectory of itself, "
+  }
+
+  ghost function SourceRenameFailureMessageSpec(
     source: string,
     target: string,
     err: int,
@@ -201,11 +416,11 @@ module MvSpec {
   ): BenchWorld.Bytes
   {
     if directorySourceWithExistingTarget && err == Errno.ENOTDIR then
-      "mv: cannot overwrite non-directory " + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
-      " with directory " + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) + "\n"
+      SourceRenameFailureMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
+      SourceRenameFailureMessageSpecPart2() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) + SourceRenameFailureMessageSpecPart3()
     else if err == Errno.EINVAL then
-      "mv: cannot move " + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
-      " to a subdirectory of itself, " + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + "\n"
+      SourceRenameFailureMessageSpecPart4() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
+      SourceRenameFailureMessageSpecPart5() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + SourceRenameFailureMessageSpecPart3()
     else
       RenameFailureMessageSpec(source, target, err)
   }
@@ -222,46 +437,131 @@ module MvSpec {
       renameErr
   }
 
-  function SameFileMessageSpec(source: string, target: string): BenchWorld.Bytes
+  function SameFileMessageSpecPart1(): BenchWorld.Bytes
   {
-    "mv: " + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
-    " and " + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
+    "mv: "
+  }
+
+  function SameFileMessageSpecPart2(): BenchWorld.Bytes
+  {
+    " and "
+  }
+
+  function SameFileMessageSpecPart3(): BenchWorld.Bytes
+  {
     " are the same file\n"
   }
 
-  function BackupWouldDestroySourceMessageSpec(
+  ghost function SameFileMessageSpec(source: string, target: string): BenchWorld.Bytes
+  {
+    SameFileMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
+    SameFileMessageSpecPart2() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
+    SameFileMessageSpecPart3()
+  }
+
+  function BackupWouldDestroySourceMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "mv: backing up "
+  }
+
+  function BackupWouldDestroySourceMessageSpecPart2(): BenchWorld.Bytes
+  {
+    " might destroy source;  "
+  }
+
+  function BackupWouldDestroySourceMessageSpecPart3(): BenchWorld.Bytes
+  {
+    " not moved\n"
+  }
+
+  ghost function BackupWouldDestroySourceMessageSpec(
     source: string,
     target: string
   ): BenchWorld.Bytes
   {
-    "mv: backing up " +
+    BackupWouldDestroySourceMessageSpecPart1() +
     Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
-    " might destroy source;  " +
+    BackupWouldDestroySourceMessageSpecPart2() +
     Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
-    " not moved\n"
+    BackupWouldDestroySourceMessageSpecPart3()
   }
 
-  function VerboseRenameMessageSpec(source: string, target: string): BenchWorld.Bytes
+  function VerboseRenameMessageSpecPart1(): BenchWorld.Bytes
   {
-    "renamed " + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
-    " -> " + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + "\n"
+    "renamed "
   }
 
-  function VerboseRenameWithBackupMessageSpec(source: string, target: string, backup: string): BenchWorld.Bytes
+  function VerboseRenameMessageSpecPart2(): BenchWorld.Bytes
   {
-    "renamed " + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
-    " -> " + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
-    " (backup: " + Quote.SpecQuoteAfBytes(Utf8.Encode(backup)) + ")\n"
+    " -> "
   }
 
-  function DebugSkipMessageSpec(target: string): BenchWorld.Bytes
+  function VerboseRenameMessageSpecPart3(): BenchWorld.Bytes
   {
-    "skipped " + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + "\n"
+    "\n"
   }
 
-  function NotReplacingMessageSpec(target: string): BenchWorld.Bytes
+  ghost function VerboseRenameMessageSpec(source: string, target: string): BenchWorld.Bytes
   {
-    "mv: not replacing " + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + "\n"
+    VerboseRenameMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
+    VerboseRenameMessageSpecPart2() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + VerboseRenameMessageSpecPart3()
+  }
+
+  function VerboseRenameWithBackupMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "renamed "
+  }
+
+  function VerboseRenameWithBackupMessageSpecPart2(): BenchWorld.Bytes
+  {
+    " -> "
+  }
+
+  function VerboseRenameWithBackupMessageSpecPart3(): BenchWorld.Bytes
+  {
+    " (backup: "
+  }
+
+  function VerboseRenameWithBackupMessageSpecPart4(): BenchWorld.Bytes
+  {
+    ")\n"
+  }
+
+  ghost function VerboseRenameWithBackupMessageSpec(source: string, target: string, backup: string): BenchWorld.Bytes
+  {
+    VerboseRenameWithBackupMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
+    VerboseRenameWithBackupMessageSpecPart2() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
+    VerboseRenameWithBackupMessageSpecPart3() + Quote.SpecQuoteAfBytes(Utf8.Encode(backup)) + VerboseRenameWithBackupMessageSpecPart4()
+  }
+
+  function DebugSkipMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "skipped "
+  }
+
+  function DebugSkipMessageSpecPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function DebugSkipMessageSpec(target: string): BenchWorld.Bytes
+  {
+    DebugSkipMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + DebugSkipMessageSpecPart2()
+  }
+
+  function NotReplacingMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "mv: not replacing "
+  }
+
+  function NotReplacingMessageSpecPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function NotReplacingMessageSpec(target: string): BenchWorld.Bytes
+  {
+    NotReplacingMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + NotReplacingMessageSpecPart2()
   }
 
 
@@ -288,12 +588,12 @@ module MvSpec {
     verbose || debug
   }
 
-  function SkipStdoutSpec(target: string, debug: bool): BenchWorld.Bytes
+  ghost function SkipStdoutSpec(target: string, debug: bool): BenchWorld.Bytes
   {
     if debug then DebugSkipMessageSpec(target) else []
   }
 
-  function SourceLeafNameSpec(source: string): string
+  ghost function SourceLeafNameSpec(source: string): string
   {
     var leaf := BenchWorld.LeafName(source);
     if leaf == "" then source else leaf
@@ -332,7 +632,7 @@ module MvSpec {
       TrimTrailingSlashesSpec(source)
   }
 
-  function TargetInDirectorySpec(directory: string, source: string): string
+  ghost function TargetInDirectorySpec(directory: string, source: string): string
   {
     BenchWorld.AppendPath(directory, SourceLeafNameSpec(source))
   }
@@ -476,18 +776,18 @@ module MvSpec {
   {
   }
 
-  function DigitCharSpec(d: nat): char
+  ghost function DigitCharSpec(d: nat): char
     requires d < 10
   { Basename.DigitCharSpec(d) }
 
-  function DecimalNatSpec(n: nat): string
+  ghost function DecimalNatSpec(n: nat): string
   { Basename.DecimalNatSpec(n) }
 
-  function NumberedBackupPathSpec(target: string, index: nat): string
+  ghost function NumberedBackupPathSpec(target: string, index: nat): string
     requires index >= 1
   { Basename.NumberedBackupPathSpec(target,index) }
 
-  function SimpleBackupPathSpec(target: string, suffix: string): string
+  ghost function SimpleBackupPathSpec(target: string, suffix: string): string
   { Basename.SimpleBackupPathSpec(target,suffix) }
 
   function SourceNewerSpec(srcSec: int, srcNsec: int, dstSec: int, dstNsec: int): bool
@@ -503,11 +803,16 @@ module MvSpec {
       statErr
   }
 
-  function StepSuccessStdoutSpec(source: string, target: string, backupPath: string, verbose: bool, debug: bool): BenchWorld.Bytes
+  function StepSuccessStdoutSpecPart1(): BenchWorld.Bytes
+  {
+    ""
+  }
+
+  ghost function StepSuccessStdoutSpec(source: string, target: string, backupPath: string, verbose: bool, debug: bool): BenchWorld.Bytes
   {
     if !ShowActionMessageSpec(verbose, debug) then
       []
-    else if backupPath == "" then
+    else if backupPath == StepSuccessStdoutSpecPart1() then
       VerboseRenameMessageSpec(source, target)
     else
       VerboseRenameWithBackupMessageSpec(source, target, backupPath)
@@ -1710,9 +2015,19 @@ module MvSpec {
           |calls| == 1))
   }
 
-  function WriteErrorText(reason: string): BenchWorld.Bytes
+  function WriteErrorTextPart1(): BenchWorld.Bytes
   {
-    "mv: write error: " + Utf8.Encode(reason) + "\n"
+    "mv: write error: "
+  }
+
+  function WriteErrorTextPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): BenchWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate EmissionOutcomeFields(

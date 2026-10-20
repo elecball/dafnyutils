@@ -17,32 +17,17 @@ from .definition import (
 )
 from .repository import BenchmarkRepository
 
-FUNCTIONAL_CORE_SOURCE = "bench/core/Functional.dfy"
-
 IMPLEMENTATION_SUPPORT_FILES = (
     "bench/core/Result.dfy",
     "bench/core/Errno.dfy",
     "bench/core/World.dfy",
-    "bench/core/WorldLookupProof.dfy",
-    "bench/core/LookupFailureProof.dfy",
-    "bench/core/WorldInsertProof.dfy",
-    "bench/core/WorldRemoveProof.dfy",
-    "bench/core/WorldRenameProof.dfy",
-    "bench/core/WorldFileSystemProof.dfy",
     "bench/core/Utf8.dfy",
     "bench/core/StringEscaping.dfy",
     "bench/core/IO.dfy",
     "bench/core/IOContract.dfy",
     "bench/core/SecurityModel.dfy",
-    "bench/core/BenchmarkItem.dfy",
     "bench/core/CliTypes.dfy",
-    "bench/core/CliModel.dfy",
-    "bench/core/CliExtern.dfy",
     "bench/core/IOExtern.cs",
-    "bench/core/PathSpec.dfy",
-    "bench/core/PathCore.dfy",
-    "bench/core/PathProof.dfy",
-    FUNCTIONAL_CORE_SOURCE,
 )
 DAFNY_ANALYSIS_SUPPORT_FILES = tuple(
     path for path in IMPLEMENTATION_SUPPORT_FILES if path.endswith(".dfy")
@@ -191,6 +176,7 @@ def utility_paths(utility_cfg: ResolvedBenchmark, utility_name: str) -> dict[str
         "proof": f"{base}Proof.dfy",
         "wrapper": f"{base}.dfy",
         "cli": f"{base}Cli.dfy",
+        "cli_support": f"{utility_dir}/CliSupport.dfy",
     }
 
 
@@ -201,7 +187,7 @@ def derived_task_profile(
     paths = utility_paths(utility_cfg, utility_name)
     execution_entry = derived_dafny_entries(utility_cfg, utility_name)
     return _task_profile(
-        support_files=(*IMPLEMENTATION_SUPPORT_FILES,),
+        support_files=(*IMPLEMENTATION_SUPPORT_FILES, paths["cli_support"]),
         required_checks=required_checks_for_evaluation_capabilities(utility_cfg.evaluation),
         required_outputs=_cli_required_outputs(
             paths,

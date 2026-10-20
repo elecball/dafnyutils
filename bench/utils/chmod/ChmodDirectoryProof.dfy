@@ -1,3 +1,4 @@
+include "ChmodWorldLookupProof.dfy"
 include "ChmodOpenedProof.dfy"
 include "ChmodVisitFrameProof.dfy"
 include "ChmodRecursiveCore.dfy"
@@ -19,7 +20,7 @@ module ChmodDirectoryProof {
   import Visits = ChmodVisitFrameProof
   import Frame = ChmodTraversalProof
   import FrameSpec = ChmodTraversalSpec
-  import Lookup = WorldLookupProof
+  import Lookup = ChmodWorldLookupProof
 
   ghost function Names(entries: seq<W.DirEntry>): set<string>
   {

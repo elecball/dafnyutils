@@ -1,7 +1,7 @@
 # Common benchmark command-line layout
 
 Every benchmark item is a command-line executable. Its CLI parses arguments or
-standard input inside the executable, then the shared runner calls
+standard input inside the executable, then the common runner protocol calls
 `<Name>.<Name>BenchmarkItem.RunCore(raw, io)`. Coreutils and algorithm items use
 the same candidate workspace, build entry, final specification obligation,
 runtime evaluation stage and verification/scoring pipeline.
@@ -20,6 +20,7 @@ principal contracts, verification and scoring use the common interface.
 | `<Name>Proof.dfy` | Lemmas connecting the summary to Spec |
 | `<Name>.dfy` | BenchmarkItem class; RunCore directly ensures Spec(raw, io, exit) |
 | `<Name>Cli.dfy` | Native process entry and shared runner call |
+| `CliSupport.dfy` | Fixed task-local parser, stream checks and process runner |
 | `dfyconfig.toml` | Builds `<Name>Cli.dfy` with the common native IO adapter |
 | `Tests.py` | Evaluator-owned executable behavior checks and proof probes |
 

@@ -6,9 +6,14 @@ module PwdEmissionSpec {
   import Utf8 = Utf8Semantics
   import Recovery = PwdRecoverySpec
 
-  function CurrentDirectoryTextSpec(directory: string): W.Bytes
+  function CurrentDirectoryTextSpecPart1(): W.Bytes
   {
-    Utf8.Encode(directory)+"\n"
+    "\n"
+  }
+
+  ghost function CurrentDirectoryTextSpec(directory: string): W.Bytes
+  {
+    Utf8.Encode(directory)+CurrentDirectoryTextSpecPart1()
   }
 
   ghost predicate EmissionOutcomeFields(

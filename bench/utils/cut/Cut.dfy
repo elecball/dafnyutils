@@ -1,6 +1,6 @@
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "CutSchema.dfy"
 include "CutCore.dfy"
 include "CutProof.dfy"
@@ -10,6 +10,7 @@ module Cut {
   import BenchIO
   import BenchWorld
   import CliTypes
+  import CliModel
   import BenchItem
   import CutSchema
   import Exec = CutCore
@@ -49,7 +50,7 @@ module Cut {
     method PlanParseFailure(err: CliTypes.ParseError, argv: seq<string>) returns (plan: CliTypes.CliPlan<CutSchema.CutCmdRaw>)
       decreases *
     {
-      match CliTypes.PriorHelpVersionRequest(argv, err.tokenIndex)
+      match CliModel.PriorHelpVersionRequest(argv, err.tokenIndex)
       case RequestHelp =>
         var selection := CutSchema.DefaultSelection();
         plan := CliTypes.CliRun(CutSchema.CutCmdRaw(

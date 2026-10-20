@@ -1,3 +1,4 @@
+include "CsplitTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -5,15 +6,41 @@ include "CsplitSchema.dfy"
 include "CsplitSpec.dfy"
 
 module CsplitCore {
+  import Text = CsplitTextCore
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = CsplitUtf8Core
   import BenchWorld
   import IOContract
   import Schema = CsplitSchema
   import Spec = CsplitSpec
+
+  function ZeroLineMessage(line: nat): BenchWorld.Bytes
+    ensures ZeroLineMessage(line) == Spec.ZeroLineMessage(line)
+  {
+    Spec.ZeroLineMessagePart1() + DigitsNat(line) + Spec.ZeroLineMessagePart2()
+  }
+
+  function BackwardLineMessage(current: nat, previous: nat): BenchWorld.Bytes
+    ensures BackwardLineMessage(current, previous) == Spec.BackwardLineMessage(current, previous)
+  {
+    Spec.BackwardLineMessagePart1() + DigitsNat(current) + Spec.BackwardLineMessagePart2() +
+    DigitsNat(previous) + Spec.BackwardLineMessagePart3()
+  }
+
+  function OutOfRangeMessage(line: nat): BenchWorld.Bytes
+    ensures OutOfRangeMessage(line) == Spec.OutOfRangeMessage(line)
+  {
+    Spec.OutOfRangeMessagePart1() + DigitsNat(line) + Spec.OutOfRangeMessagePart2()
+  }
+
+  function DuplicateWarning(line: nat): BenchWorld.Bytes
+    ensures DuplicateWarning(line) == Spec.DuplicateWarning(line)
+  {
+    Spec.DuplicateWarningPart1() + DigitsNat(line) + Spec.DuplicateWarningPart2()
+  }
   datatype NumberStatus = NumbersOk | NumberZero | NumberBackwards(current: nat, previous: nat)
   datatype NumberValidation = NumberValidation(status: NumberStatus, processed: nat)
   datatype NumberAnalysis = NumberAnalysis(
@@ -110,7 +137,7 @@ module CsplitCore {
       []
     else
       (if hasPrevious && lines[0] == previous
-       then Spec.DuplicateWarning(lines[0])
+       then DuplicateWarning(lines[0])
        else []) +
       DuplicateWarningsFrom(lines[1..], lines[0], true)
   }
@@ -762,7 +789,7 @@ module CsplitCore {
                deleteOk, deleteErr, io.fs()));
       }
       stdout := [];
-      stderr := Spec.WriteErrorMessage(path, err);
+      stderr := Text.WriteErrorMessage(path, err);
       exit := 1;
       lifetimeEvents := FreshWriteEventList(beforeWriteFs, afterWriteFs, path) +
                         LastRemovalEventList(afterWriteFs, io.fs(), path);
@@ -905,7 +932,7 @@ module CsplitCore {
                deleteOk, deleteErr, io.fs()));
       }
       stdout := [];
-      stderr := Spec.WriteErrorMessage(path, err);
+      stderr := Text.WriteErrorMessage(path, err);
       exit := 1;
       lifetimeEvents := FreshWriteEventList(beforeWriteFs, afterWriteFs, path) +
                         LastRemovalEventList(afterWriteFs, io.fs(), path);
@@ -942,7 +969,7 @@ module CsplitCore {
   {
     ghost var observations := Spec.Context(io);
     stdout, stderr, exit, lifetimeEvents :=
-      WritePiecesThenDiagnostic(pieces, index, Spec.OutOfRangeMessage(line), io);
+      WritePiecesThenDiagnostic(pieces, index, OutOfRangeMessage(line), io);
   }
 
   method {:isolate_assertions} Prepare(raw: Schema.CsplitCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
@@ -992,7 +1019,7 @@ module CsplitCore {
         assert readResult == DeferredReadResultFields(raw, preFs, preStreams, preStdin);
         match readResult
         case Err(err) =>
-          var msg := Spec.ReadErrorMessage(raw.input, err);
+          var msg := Text.ReadErrorMessage(raw.input, err);
           plannedErr := msg;
           exit := 1;
           assert DeferredReadResultFields(raw, old(io.fs()), old(io.trustedStreams()), old(io.stdin())) == Result.Err(err);
@@ -1018,7 +1045,7 @@ module CsplitCore {
     match numberAnalysis.status
     case NumberZero =>
       assert AnalyzeNumbers(raw.lineNumbers).status == NumberZero;
-      var msg := Spec.ZeroLineMessage(0);
+      var msg := ZeroLineMessage(0);
       plannedErr := plannedErr + warnings + msg;
       exit := 1;
       assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by {
@@ -1031,7 +1058,7 @@ module CsplitCore {
     case NumberBackwards(current, previous) =>
       assert AnalyzeNumbers(raw.lineNumbers).status ==
              NumberBackwards(current, previous);
-      var msg := Spec.BackwardLineMessage(current, previous);
+      var msg := BackwardLineMessage(current, previous);
       plannedErr := plannedErr + warnings + msg;
       exit := 1;
       assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by {
@@ -1051,7 +1078,7 @@ module CsplitCore {
             var faultOut, faultErr, faultExit;
             ghost var lifetimeEvents;
             faultOut, faultErr, faultExit, lifetimeEvents :=
-              WritePiecesThenDiagnostic(pieces, 0, Spec.ReadErrorMessage(raw.input, read.e), io);
+              WritePiecesThenDiagnostic(pieces, 0, Text.ReadErrorMessage(raw.input, read.e), io);
             plannedOut := faultOut;
             plannedErr := warnings + faultErr;
             exit := faultExit;
@@ -1223,7 +1250,7 @@ module CsplitCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

@@ -387,9 +387,14 @@ module EchoSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorText(message: string): string
   {
-    StreamUtf8.Encode("echo: write error: " + message + "\n")
+    "echo: write error: " + message + "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorText(message))
   }
 
   ghost predicate EmitFields(

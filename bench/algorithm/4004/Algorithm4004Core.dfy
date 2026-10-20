@@ -1,3 +1,4 @@
+include "Algorithm4004TextCore.dfy"
 include "Algorithm4004Spec.dfy"
 include "Algorithm4004Schema.dfy"
 include "../../core/IO.dfy"
@@ -6,6 +7,7 @@ module Algorithm4004Core {
   import BenchWorld
   import Schema = Algorithm4004Schema
   import CliSpec = Algorithm4004Spec
+  import Text = Algorithm4004TextCore
 
   twostate predicate CoreSummary(raw: Schema.Algorithm4004CmdRaw, io: BenchIO.IO, exit: int)
     reads io.stdoutRegion, io.stderrRegion, io.trustedStreamsRegion
@@ -29,7 +31,7 @@ module Algorithm4004Core {
       return;
     }
     var out := Solve(raw.n, raw.a);
-    var text := CliSpec.OutputText(out);
+    var text := Text.OutputText(out);
     var written := io.WriteStdout(text);
     exit := if written.Err? then 1 else 0;
   }

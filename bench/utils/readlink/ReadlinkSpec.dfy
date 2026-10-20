@@ -98,9 +98,24 @@ module ReadlinkSpec {
     "readlink: ignoring --no-newline with multiple arguments\n"
   }
 
-  function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessageSpecPart1(): StreamWorld.Bytes
   {
-    "readlink: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ": " + ErrnoTextSpec(err) + "\n"
+    "readlink: "
+  }
+
+  function ErrorMessageSpecPart2(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function ErrorMessageSpecPart3(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  {
+    ErrorMessageSpecPart1() + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ErrorMessageSpecPart2() + ErrnoTextSpec(err) + ErrorMessageSpecPart3()
   }
 
   function NeedsShellQuoteSpec(path: BenchWorld.Path): bool
@@ -136,7 +151,7 @@ module ReadlinkSpec {
     if cmd.noNewline && |cmd.operands| > 1 then NoNewlineWarningSpec() else ""
   }
 
-  function MakeAbsoluteSpec(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
+  ghost function MakeAbsoluteSpec(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
   {
     if BenchWorld.IsAbsolutePath(path) then
       path
@@ -272,9 +287,19 @@ module ReadlinkSpec {
   }
 
 
-  function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorTextPart1(): StreamWorld.Bytes
   {
-    "readlink: write error: " + Utf8.Encode(reason) + "\n"
+    "readlink: write error: "
+  }
+
+  function WriteErrorTextPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate EmissionOutcomeFields(

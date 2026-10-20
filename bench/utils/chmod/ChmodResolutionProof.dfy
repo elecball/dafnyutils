@@ -1,7 +1,9 @@
+include "ChmodModelProof.dfy"
 include "ChmodTraversalSpec.dfy"
 include "ChmodEntryProof.dfy"
 
 module ChmodResolutionProof {
+  import ModelProof = ChmodModelProof
   import W = BenchWorld
   import C = IOContract
   import R = Results
@@ -27,7 +29,7 @@ module ChmodResolutionProof {
       follow, false, requireDirectory);
     var next := C.ResolveRawSymlinkSegmentsFields(afterFs, segments, index, current, seen, fuel,
       follow, false, requireDirectory);
-    C.ResolveRawSuccessfulTargetsEqualExceptModeFieldsInternal(beforeFs, afterFs, segments, index,
+    ModelProof.ResolveRawSuccessfulTargetsEqualExceptModeFieldsInternal(beforeFs, afterFs, segments, index,
       current, seen, fuel, follow, requireDirectory, prior.v, next.v);
     reveal C.CwdNamedResultFields();
   }
@@ -43,7 +45,7 @@ module ChmodResolutionProof {
     hide *;
     var prior := C.ResolvePathForMetadataFields(beforeFs, path, follow);
     var next := C.ResolvePathForMetadataFields(afterFs, path, follow);
-    C.ResolvePathForMetadataSuccessfulTargetsEqualExceptModeFields(beforeFs, afterFs, path, follow, prior.v, next.v);
+    ModelProof.ResolvePathForMetadataSuccessfulTargetsEqualExceptModeFields(beforeFs, afterFs, path, follow, prior.v, next.v);
     reveal C.CwdNamedResultFields();
   }
 

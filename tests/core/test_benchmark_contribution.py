@@ -227,6 +227,21 @@ def test_verification_session_includes_algorithm_core_and_proof() -> None:
     assert {"Algorithm1.dfy", "Algorithm1Core.dfy", "Algorithm1Proof.dfy"} <= sources
 
 
+# Runtime path helpers enter the proof gate even when the fixed CLI also normalizes paths.
+@pytest.mark.integration
+def test_cp_verification_includes_runtime_path_helpers() -> None:
+    contract = local_verification_contract(ROOT / "bench/utils/cp", (ROOT / "bench/core",))
+
+    assert {
+        ROOT / "bench/utils/cp/CpPathCore.dfy",
+        ROOT / "bench/utils/cp/CpPathBridge.dfy",
+    } <= set(contract.verification_sources)
+    assert {
+        "CpPathCore.TrimTrailingSlashes",
+        "CpPathBridge.BasenameValueSummaryGivesRelation",
+    } <= {target.full_name for target in contract.verification_targets}
+
+
 # A failed mandatory command stops the check and is never reported as success.
 @pytest.mark.integration
 def test_check_fails_on_first_failed_mandatory_command(monkeypatch: pytest.MonkeyPatch) -> None:

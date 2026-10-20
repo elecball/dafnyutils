@@ -69,9 +69,14 @@ module TrueSpec {
     Schema.Command(raw).mode == Schema.ModeHelp || Schema.Command(raw).mode == Schema.ModeVersion
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorText(message: string): string
   {
-    StreamUtf8.Encode("true: write error: " + message + "\n")
+    "true: write error: " + message + "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorText(message))
   }
 
   ghost predicate EmitFields(

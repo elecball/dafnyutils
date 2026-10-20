@@ -1,3 +1,4 @@
+include "HeadTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -6,6 +7,7 @@ include "HeadRecordCore.dfy"
 include "HeadSpec.dfy"
 
 module HeadCore {
+  import Text = HeadTextCore
   import StreamContract = IOContract
 
   import Result = Results
@@ -205,13 +207,13 @@ module HeadCore {
   {
     if ShouldPrintHeaders(cmd) then
       (if printedHeaders == 0 then [] else ['\n']) +
-      "==> " + Utf8.Encode(InputName(input)) + " <==\n"
+      Spec.HeaderText(InputName(input))
     else
       []
   } by method {
     if ShouldPrintHeaders(cmd) {
       return (if printedHeaders == 0 then [] else ['\n']) +
-        "==> " + Utf8.Encode(InputName(input)) + " <==\n";
+        Text.HeaderText(InputName(input));
     } else {
       return [];
     }
@@ -259,13 +261,13 @@ module HeadCore {
   } by method {
     match input
     case Stdin(_) =>
-      return if result.Err? then Spec.StdinReadErrorMessage(result.e) else [];
+      return if result.Err? then Text.StdinReadErrorMessage(result.e) else [];
     case File(path) =>
       match result
       case Ok(_) =>
         return [];
       case Err(err) =>
-        return Spec.ErrorMessage(path, err);
+        return Text.ErrorMessage(path, err);
   }
 
   function HadErrorPiece(input: HeadSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
@@ -498,7 +500,7 @@ module HeadCore {
 
     if cmd.mode == HeadSchema.ModeInvalidCount {
       var invalid :=
-        Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
+        Text.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
       plannedErr := plannedErr + invalid;
       exit := 1;
       assert io.stdin() == preStdin;
@@ -606,7 +608,7 @@ module HeadCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

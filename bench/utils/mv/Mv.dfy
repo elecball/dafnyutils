@@ -1,5 +1,5 @@
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "MvSchema.dfy"
 include "MvCore.dfy"
 include "MvProof.dfy"

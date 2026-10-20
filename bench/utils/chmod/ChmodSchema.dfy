@@ -1,9 +1,18 @@
+include "../../core/StringEscaping.dfy"
 include "../../core/World.dfy"
 include "../../core/Utf8.dfy"
 include "../../core/CliTypes.dfy"
-include "../../core/CliModel.dfy"
+include "CliSupport.dfy"
 
 module ChmodSchema {
+  // CLI codecs are fixed protocol details, outside the candidate API.
+  export
+    provides BenchWorld, Utf8, CliTypes, CliModel, Schema, ParserConfig, TryRecoverParseFailure, Decode, ChmodFormatParseError, PlanParseFailure
+    reveals ChmodMode, ChmodCmdRaw, ChmodCmd, ChmodCliParse, ChmodDecodeState, ParseRecovery, Options, SchemaValue, ParserConfigValue, DefaultRawValue, JoinModeOptionParts, RecoverParseFailureValue, DecodeValue, InitialDecodeState, ApplyOccurrence, DecodeOptions, DecodeCliParseValue, Command, CHMOD_MODE_BITS, S_ISUID, S_ISGID, S_ISVTX, S_IRUSR, S_IWUSR, S_IXUSR, S_IRGRP, S_IWGRP, S_IXGRP, S_IROTH, S_IWOTH, S_IXOTH, S_IRWXU, S_IRWXG, S_IRWXO, S_IRWXUGO, SPECIAL_BITS, READ_MASK, WRITE_MASK, EXEC_MASK, ModeFlag, ModeChange, ParseResult, OctalParse, PermParse, ModeIsOp, ModeIsWhoChar, WhoMask, CopySourceMask, DefaultMentioned, FlagWithX, ParseWhoFrom, ParseWho, ParseOctalRun, ParsePerms, ParseOneChange, ParseOpSeq, ParseSymbolic, IsValidModeExpr, LongTokenName, LongTokenNameEnd, HasPrefix, ExactLongMatches, PrefixLongMatches, ExactOptionMatches, PrefixOptionMatches, LongOptionMatches, CanonicalLongOption, PossibilityText, ShortIn, KnownShort, InvalidShortIndex, UnknownShortTemplate, UnknownShortText, ParseErrorText
+
+  import ProtocolUtf8Model = Utf8Semantics
+  import ProtocolEscapingModel = StringEscaping
+
   import BenchWorld
   import Utf8 = Utf8Semantics
   import CliTypes
@@ -450,7 +459,7 @@ module ChmodSchema {
       ModeXIfAnyX
   }
 
-  function ParseWhoFrom(expr: string, i: nat, acc: bv32): ParseResult<bv32>
+  ghost function ParseWhoFrom(expr: string, i: nat, acc: bv32): ParseResult<bv32>
     decreases |expr| - i
   {
     if i >= |expr| then
@@ -463,12 +472,12 @@ module ChmodSchema {
       Invalid
   }
 
-  function ParseWho(expr: string, i: nat): ParseResult<bv32>
+  ghost function ParseWho(expr: string, i: nat): ParseResult<bv32>
   {
     ParseWhoFrom(expr, i, 0 as bv32)
   }
 
-  function ParseOctalRun(expr: string, i: nat, acc: int): OctalParse
+  ghost function ParseOctalRun(expr: string, i: nat, acc: int): OctalParse
     decreases |expr| - i
   {
     if i >= |expr| || !BenchWorld.IsOctalDigit(expr[i]) then
@@ -477,7 +486,7 @@ module ChmodSchema {
       ParseOctalRun(expr, i + 1, acc * 8 + BenchWorld.CharToDigit(expr[i]))
   }
 
-  function ParsePerms(expr: string, i: nat, value: bv32, flag: ModeFlag): PermParse
+  ghost function ParsePerms(expr: string, i: nat, value: bv32, flag: ModeFlag): PermParse
     decreases |expr| - i
   {
     if i >= |expr| then
@@ -498,7 +507,7 @@ module ChmodSchema {
       PermParse(value, flag, i)
   }
 
-  function ParseOneChange(expr: string, i: nat, affected: bv32): ParseResult<ModeChange>
+  ghost function ParseOneChange(expr: string, i: nat, affected: bv32): ParseResult<ModeChange>
     decreases |expr| - i
   {
     if i >= |expr| || !ModeIsOp(expr[i]) then
@@ -535,7 +544,7 @@ module ChmodSchema {
         Parsed(ModeChange(op, perms.flag, affected, perms.value, mentioned), perms.next)
   }
 
-  function ParseOpSeq(expr: string, i: nat, affected: bv32): ParseResult<seq<ModeChange>>
+  ghost function ParseOpSeq(expr: string, i: nat, affected: bv32): ParseResult<seq<ModeChange>>
     decreases |expr| - i
   {
     if i >= |expr| || !ModeIsOp(expr[i]) then
@@ -554,7 +563,7 @@ module ChmodSchema {
           Parsed([change], next)
   }
 
-  function ParseSymbolic(expr: string, i: nat): ParseResult<seq<ModeChange>>
+  ghost function ParseSymbolic(expr: string, i: nat): ParseResult<seq<ModeChange>>
     decreases |expr| - i
   {
     if i >= |expr| then
@@ -578,7 +587,7 @@ module ChmodSchema {
             Invalid
   }
 
-  function IsValidModeExpr(expr: string): bool
+  ghost function IsValidModeExpr(expr: string): bool
   {
     if |expr| == 0 then
       false
@@ -702,7 +711,7 @@ module ChmodSchema {
     UnknownShortTemplate()[26 := byte]
   }
 
-  function ParseErrorText(e: CliTypes.ParseError): BenchWorld.Bytes
+  ghost function ParseErrorText(e: CliTypes.ParseError): BenchWorld.Bytes
   {
     if e.kind == CliTypes.UnknownOption then
       if |e.rawToken| > 2 && e.rawToken[0] == '-' &&
@@ -739,7 +748,7 @@ module ChmodSchema {
   method ChmodFormatParseError(e: CliTypes.ParseError)
     returns (b: BenchWorld.Bytes)
   {
-    b := ParseErrorText(e);
+    b := ProtocolParseErrorText(e);
   }
 
   method PlanParseFailure(
@@ -756,4 +765,75 @@ module ChmodSchema {
       plan := CliTypes.CliEarlyExit(1, [], msg);
     }
   }
+  function ProtocolEncodeChar(ch: char): BenchWorld.Bytes
+    ensures ProtocolEncodeChar(ch) == ProtocolUtf8Model.EncodeChar(ch)
+    ensures |ProtocolEncodeChar(ch)| == BenchWorld.Utf8ByteWidth(ch)
+    ensures 1 <= |ProtocolEncodeChar(ch)| <= 4
+  {
+    var code := ch as int;
+    if code <= 0x7f then
+      [code as char]
+    else if code <= 0x7ff then
+      [
+        (0xc0 + code / 0x40) as char,
+        (0x80 + code % 0x40) as char
+      ]
+    else if code <= 0xffff then
+      [
+        (0xe0 + code / 0x1000) as char,
+        (0x80 + (code / 0x40) % 0x40) as char,
+        (0x80 + code % 0x40) as char
+      ]
+    else
+      [
+        (0xf0 + code / 0x40000) as char,
+        (0x80 + (code / 0x1000) % 0x40) as char,
+        (0x80 + (code / 0x40) % 0x40) as char,
+        (0x80 + code % 0x40) as char
+      ]
+  }
+
+  function ProtocolEncode(text: string): BenchWorld.Bytes
+    ensures ProtocolEncode(text) == ProtocolUtf8Model.Encode(text)
+    ensures |ProtocolEncode(text)| >= |text|
+    decreases |text|
+  {
+    if text == [] then [] else ProtocolEncodeChar(text[0]) + ProtocolEncode(text[1..])
+  }
+
+  function ProtocolParseErrorText(e: CliTypes.ParseError): BenchWorld.Bytes
+    ensures ProtocolParseErrorText(e) == ParseErrorText(e)
+  {
+    if e.kind == CliTypes.UnknownOption then
+      if |e.rawToken| > 2 && e.rawToken[0] == '-' &&
+         e.rawToken[1] == '-' then
+        "chmod: unrecognized option '" + ProtocolEncode(e.rawToken) + "'\n" +
+        "Try 'chmod --help' for more information.\n"
+      else if |e.rawToken| > 1 && e.rawToken[0] == '-' then
+        var invalid := InvalidShortIndex(e.rawToken, 1);
+        var invalidChar :=
+          if invalid < |e.rawToken| then e.rawToken[invalid]
+          else e.rawToken[1];
+        UnknownShortText(ProtocolEncodeChar(invalidChar)[0])
+      else
+        "chmod: invalid option\nTry 'chmod --help' for more information.\n"
+    else if e.kind == CliTypes.MissingValue && |e.rawToken| > 2 &&
+            e.rawToken[0] == '-' && e.rawToken[1] == '-' then
+      "chmod: option '--" + ProtocolEncode(CanonicalLongOption(e.rawToken)) +
+      "' requires an argument\n" +
+      "Try 'chmod --help' for more information.\n"
+    else if e.kind == CliTypes.UnexpectedValue && |e.rawToken| > 2 &&
+            e.rawToken[0] == '-' && e.rawToken[1] == '-' then
+      "chmod: option '--" + ProtocolEncode(CanonicalLongOption(e.rawToken)) +
+      "' doesn't allow an argument\n" +
+      "Try 'chmod --help' for more information.\n"
+    else if e.kind == CliTypes.Ambiguous then
+      "chmod: option '" + ProtocolEncode(e.rawToken) +
+      "' is ambiguous; possibilities:" +
+      ProtocolEncode(PossibilityText(LongOptionMatches(e.rawToken))) + "\n" +
+      "Try 'chmod --help' for more information.\n"
+    else
+      "chmod: parse error at token '" + ProtocolEncode(e.rawToken) + "'\n"
+  }
+
 }

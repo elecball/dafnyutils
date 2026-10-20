@@ -1,3 +1,4 @@
+include "CatTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -165,6 +166,7 @@ module CatCoreModel {
 // Public core surface: executable loop plus summary predicates. The richer
 // pure model stays in `CatCoreModel`.
 module CatCore {
+  import Text = CatTextCore
   import StreamContract = IOContract
   import Result = Results
   import BenchIO
@@ -1109,7 +1111,7 @@ module CatCore {
     }
 
     if cmd.mode == CatSchema.ModeVersion {
-      var version := Spec.VersionTextSpec();
+      var version := Text.VersionTextSpec();
       plannedOut := plannedOut + version;
       exit := 0;
       assert io.stdin() == preStdin;
@@ -1179,7 +1181,7 @@ module CatCore {
       }
       var data := IOContract.ReadResultData(read);
       var diagnostic := if read.Err? then
-        Spec.ErrorMessageSpec(if input.Stdin? then "-" else input.path, read.e) else [];
+        Text.ErrorMessageSpec(if input.Stdin? then "-" else input.path, read.e) else [];
       ghost var observation := InputObservation(input, read);
       assert InputObservationRelation(cmd, preFs, preStreams, preStdin, i, observation) by {
         reveal InputObservationRelation();
@@ -1262,7 +1264,7 @@ module CatCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

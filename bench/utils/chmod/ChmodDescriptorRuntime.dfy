@@ -1,7 +1,15 @@
+include "ChmodTextCore.dfy"
+include "ChmodRecursiveTextCore.dfy"
+include "ChmodWorldPathCore.dfy"
+include "ChmodModelProof.dfy"
 include "ChmodChangeRuntime.dfy"
 include "ChmodDirectoryRuntime.dfy"
 
 module ChmodDescriptorRuntime {
+  import Text = ChmodTextCore
+  import RecursiveText = ChmodRecursiveTextCore
+  import WorldPath = ChmodWorldPathCore
+  import ModelProof = ChmodModelProof
   import W = BenchWorld
   import BenchIO
   import C = IOContract
@@ -127,7 +135,7 @@ module ChmodDescriptorRuntime {
       reveal Spec.EntryFields();
     }
     ghost var entryNative := io.cwdContext();
-    C.CwdTargetRecordIsObservedFields(io.fs(), entryNative, entry.targets[0]);
+    ModelProof.CwdTargetRecordIsObservedFields(io.fs(), entryNative, entry.targets[0]);
     assert identity.key in entryNative.topology.objects;
     Frame.Projection(native0, entryNative);
     assert identity.key in universe;
@@ -204,9 +212,9 @@ module ChmodDescriptorRuntime {
     if openResult.Err? {
       assert io.cwdContext().capabilities == native0.capabilities by { reveal Operand.AtOffset(); }
       var err := C.ResultErrno(openResult);
-      var outChunk := if cmd.verbose then BaseSpec.AccessFailureMessageSpec(identity.displayPath) else [];
+      var outChunk := if cmd.verbose then Text.AccessFailureMessageSpec(identity.displayPath) else [];
       var errChunk := if cmd.silent then [] else
-        Recursive.ReadDirectoryText(identity.displayPath, Base.NativeErrnoTextCore(err, io));
+        RecursiveText.ReadDirectoryText(identity.displayPath, Base.NativeErrnoTextCore(err, io));
       output.stdout := output.stdout+outChunk;
       output.stderr := output.stderr+errChunk;
       ok := false;
@@ -269,7 +277,10 @@ module ChmodDescriptorRuntime {
         reveal Operand.AnchorFields(), Operand.AnchorSnapshot(),
           C.DirectoryParentAnchorForContextRequestFields(), C.DirectoryCapabilityReadCurrentFields();
       }
-      var childOk, child := Visit(cmd, plan, scope, W.AppendPath(identity.displayPath, name),
+      assert WorldPath.AppendPath(identity.displayPath, name) == W.AppendPath(identity.displayPath, name) by {
+        reveal WorldPath.AppendPath();
+      }
+      var childOk, child := Visit(cmd, plan, scope, WorldPath.AppendPath(identity.displayPath, name),
         Operand.DirectoryOperand(handle, name), false, active+{identity.key}, universe, io, output);
       Identity.TopologyTransitive(fs0, beforeReadFs, io.fs());
       Frame.Transitive(native0, readNative, io.cwdContext());
@@ -293,9 +304,9 @@ module ChmodDescriptorRuntime {
     Frame.Transitive(native0, beforeClose, io.cwdContext());
     assert io.cwdContext().capabilities == native0.capabilities;
     if terminalErr != 0 {
-      if cmd.verbose { output.stdout := output.stdout+BaseSpec.AccessFailureMessageSpec(identity.displayPath); }
+      if cmd.verbose { output.stdout := output.stdout+Text.AccessFailureMessageSpec(identity.displayPath); }
       if !cmd.silent {
-        output.stderr := output.stderr+Recursive.TerminalReadDirectoryText(identity.displayPath, hadEntries,
+        output.stderr := output.stderr+RecursiveText.TerminalReadDirectoryText(identity.displayPath, hadEntries,
           Base.NativeErrnoTextCore(terminalErr, io));
       }
       ok := false;

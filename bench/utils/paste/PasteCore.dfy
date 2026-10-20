@@ -1,3 +1,4 @@
+include "PasteTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -5,11 +6,13 @@ include "PasteSchema.dfy"
 include "PasteSpec.dfy"
 
 module PasteCore {
+  import Text = PasteTextCore
+
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = PasteUtf8Core
   import BenchWorld
   import IOContract
   import PasteSchema
@@ -261,19 +264,19 @@ module PasteCore {
   function ErrorPiece(input: PasteSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
-    case Stdin => if result.Ok? then [] else Spec.ErrorMessage("-", result.e)
+    case Stdin => if result.Ok? then [] else Text.ErrorMessage("-", result.e)
     case File(path) =>
       match result
       case Ok(_) => []
-      case Err(err) => Spec.ErrorMessage(path, err)
+      case Err(err) => Text.ErrorMessage(path, err)
   } by method {
     return
       match input
-      case Stdin => if result.Ok? then [] else Spec.ErrorMessage("-", result.e)
+      case Stdin => if result.Ok? then [] else Text.ErrorMessage("-", result.e)
       case File(path) =>
         match result
         case Ok(_) => []
-        case Err(err) => Spec.ErrorMessage(path, err);
+        case Err(err) => Text.ErrorMessage(path, err);
   }
 
   function HadErrorPiece(input: PasteSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
@@ -425,7 +428,7 @@ module PasteCore {
       Result.Ok([])
     else if text[i] == '\\' then
       if i + 1 >= |text| then
-        Result.Err(Spec.DelimiterBackslashError(text))
+        Result.Err(Text.DelimiterBackslashError(text))
       else
         match CollapseDelimitersFrom(text, i + 2)
         case Err(stderr) => Result.Err(stderr)
@@ -439,7 +442,7 @@ module PasteCore {
       return Result.Ok([]);
     } else if text[i] == '\\' {
       if i + 1 >= |text| {
-        return Result.Err(Spec.DelimiterBackslashError(text));
+        return Result.Err(Text.DelimiterBackslashError(text));
       } else {
         match CollapseDelimitersFrom(text, i + 2)
         case Err(stderr) =>
@@ -667,6 +670,18 @@ module PasteCore {
     CoreSummaryCmd(Command(raw), io, exit, plannedStdout, plannedStderr)
   }
 
+  lemma StdinDataPrefixCoreStep(cmd: PasteSchema.PasteCmd,
+    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes, i: nat)
+    requires i < |cmd.inputs|
+    ensures StdinDataPrefixCore(cmd, preStreams, preStdin, i + 1) ==
+      StdinDataPrefixCore(cmd, preStreams, preStdin, i) +
+      (if cmd.inputs[i].Stdin? then IOContract.ReadResultData(
+        IOContract.ObservedReadStdinResultFields(
+          PrefixStdinCore(cmd, preStreams, preStdin, i), preStreams)) else [])
+  {
+  }
+
   lemma PrefixStdinCoreStep(cmd: PasteSchema.PasteCmd, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult, preStdin: BenchWorld.Bytes, i: nat)
     requires i < |cmd.inputs|
     ensures PrefixStdinCore(cmd, preStreams, preStdin, i + 1) ==
@@ -815,6 +830,14 @@ module PasteCore {
       var stdinData: BenchWorld.Bytes := [];
 
       var i: nat := 0;
+      assert io.stdin() == PrefixStdinCore(cmd, preStreams, preStdin, i) by {
+        hide *;
+        reveal PrefixStdinCore();
+      }
+      assert stdinData == StdinDataPrefixCore(cmd, preStreams, preStdin, i) by {
+        hide *;
+        reveal StdinDataPrefixCore();
+      }
       while i < |cmd.inputs|
         invariant 0 <= i <= |cmd.inputs|
         invariant io.stdin() == PrefixStdinCore(cmd, preStreams, preStdin, i)
@@ -829,17 +852,25 @@ module PasteCore {
       {
         var input := cmd.inputs[i];
         var readResult: BenchWorld.IOResult<BenchWorld.Bytes>;
+        PrefixStdinCoreStep(cmd, preStreams, preStdin, i);
+        StdinDataPrefixCoreStep(cmd, preStreams, preStdin, i);
         match input {
           case Stdin =>
             ghost var beforeStdin := io.stdin();
             readResult := io.ReadStdin();
-            PrefixStdinCoreStep(cmd, preStreams, preStdin, i);
             assert readResult == ReadResultCore(cmd, preFs, preStreams, preStdin, i);
             stdinData := stdinData + IOContract.ReadResultData(readResult);
           case File(path) =>
             readResult := io.ReadFile(path);
             assert readResult == IOContract.ObservedReadFileResultFields(preFs, preStreams, path);
             assert readResult == ReadResultCore(cmd, preFs, preStreams, preStdin, i);
+        }
+        assert io.stdin() == PrefixStdinCore(cmd, preStreams, preStdin, i + 1) by {
+          hide *;
+        }
+        assert stdinData == StdinDataPrefixCore(cmd, preStreams, preStdin, i + 1) by {
+          hide *;
+          reveal ReadResultCore();
         }
 
         PrefixEntriesCoreStep(cmd, preFs, preStreams, preStdin, i);
@@ -932,10 +963,10 @@ module PasteCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var diagnosed := io.WriteStderr(errors);
     assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
       errors, StreamContract.WriteResultCommitted(diagnosed), StreamContract.ResultErrno(diagnosed));

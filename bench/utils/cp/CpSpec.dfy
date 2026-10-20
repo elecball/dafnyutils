@@ -2,8 +2,8 @@ include "../../core/StringEscaping.dfy"
 include "CpSchema.dfy"
 include "../../core/IO.dfy"
 include "../../core/Utf8.dfy"
-include "../../core/CliModel.dfy"
-include "../../core/PathSpec.dfy"
+include "CliSupport.dfy"
+include "CpPathSpec.dfy"
 
 module CpSpec {
   import BW = BenchWorld
@@ -15,7 +15,7 @@ module CpSpec {
   import CliModel
   import Utf8 = Utf8Semantics
   import SE = StringEscaping
-  import Paths = MvPathSpec
+  import Paths = CpPathSpec
 
   function HelpText(): BW.Bytes { "Usage: cp [OPTION]... [-T] SOURCE DEST\n  or:  cp [OPTION]... SOURCE... DIRECTORY\n  or:  cp [OPTION]... -t DIRECTORY SOURCE...\nCopy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.\n\nMandatory arguments to long options are mandatory for short options too.\n  -a, --archive\n         same as -dR --preserve=all\n      --attributes-only\n         don't copy the file data, just the attributes\n      --backup[=CONTROL]\n         make a backup of each existing destination file\n  -b\n         like --backup but does not accept an argument\n      --copy-contents\n         copy contents of special files when recursive\n  -d\n         same as --no-dereference --preserve=links\n      --debug\n         explain how a file is copied.  Implies -v\n  -f, --force\n         if an existing destination file cannot be opened, remove it and try\n         again (this option is ignored when the -n option is also used)\n  -i, --interactive\n         prompt before overwrite (overrides a previous -n option)\n  -H\n         follow command-line symbolic links in SOURCE\n  -L, --dereference\n         always follow symbolic links in SOURCE\n  -P, --no-dereference\n         never follow symbolic links in SOURCE\n      --keep-directory-symlink\n         follow existing symlinks to directories\n  -l, --link\n         hard link files instead of copying\n  -n, --no-clobber\n         (deprecated) silently skip existing files.  See also --update\n  -p\n         same as --preserve=mode,ownership,timestamps\n      --preserve[=ATTR_LIST]\n         preserve the specified attributes\n      --no-preserve=ATTR_LIST\n         don't preserve the specified attributes\n      --parents\n         use full source file name under DIRECTORY\n  -R, -r, --recursive\n         copy directories recursively\n      --reflink[=WHEN]\n         control clone/CoW copies. See below\n      --remove-destination\n         remove each existing destination file before attempting to open it\n         (contrast with --force)\n      --sparse=WHEN\n         control creation of sparse files. See below\n      --strip-trailing-slashes\n         remove any trailing slashes from each SOURCE argument\n  -s, --symbolic-link\n         make symbolic links instead of copying\n  -S, --suffix=SUFFIX\n         override the usual backup suffix\n  -t, --target-directory=DIRECTORY\n         copy all SOURCE arguments into DIRECTORY\n  -T, --no-target-directory\n         treat DEST as a normal file\n      --update[=UPDATE]\n         control which existing files are updated;\n         UPDATE={all,none,none-fail,older(default)}\n  -u\n         equivalent to --update[=older].  See below\n  -v, --verbose\n         explain what is being done\n  -x, --one-file-system\n         stay on this file system\n  -Z\n         set SELinux security context of destination file to default type\n      --context[=CTX]\n         like -Z, or if CTX is specified then set the\n         SELinux or SMACK security context to CTX\n      --help\n         display this help and exit\n      --version\n         output version information and exit\n\nATTR_LIST is a comma-separated list of attributes. Attributes are 'mode' for\npermissions (including any ACL and xattr permissions), 'ownership' for user\nand group, 'timestamps' for file timestamps, 'links' for hard links, 'context'\nfor security context, 'xattr' for extended attributes, and 'all' for all\nattributes.\n\nBy default, sparse SOURCE files are detected by a crude heuristic and the\ncorresponding DEST file is made sparse as well.  That is the behavior\nselected by --sparse=auto.  Specify --sparse=always to create a sparse DEST\nfile whenever the SOURCE file contains a long enough sequence of zero bytes.\nUse --sparse=never to inhibit creation of sparse files.\n\nUPDATE controls which existing files in the destination are replaced.\n'all' is the default operation when an --update option is not specified,\nand results in all existing files in the destination being replaced.\n'none' is like the --no-clobber option, in that no files in the\ndestination are replaced, and skipped files do not induce a failure.\n'none-fail' also ensures no files are replaced in the destination,\nbut any skipped files are diagnosed and induce a failure.\n'older' is the default operation when --update is specified, and results\nin files being replaced if they're older than the corresponding source file.\n\nBy default or with --reflink=auto, cp will try a lightweight copy, where the\ndata blocks are copied only when modified, falling back to a standard copy\nif this is not possible.  With --reflink[=always] cp will fail if CoW is not\nsupported, while --reflink=never ensures a standard copy is performed.\n\nThe backup suffix is '~', unless set with --suffix or SIMPLE_BACKUP_SUFFIX.\nThe version control method may be selected via the --backup option or through\nthe VERSION_CONTROL environment variable.  Here are the values:\n\n  none, off       never make backups (even if --backup is given)\n  numbered, t     make numbered backups\n  existing, nil   numbered if numbered backups exist, simple otherwise\n  simple, never   always make simple backups\n\nAs a special case, cp makes a backup of SOURCE when the force and backup\noptions are given and SOURCE and DEST are the same name for an existing,\nregular file.\n\nReport bugs to: bug-coreutils@gnu.org\nGNU coreutils home page: <https://www.gnu.org/software/coreutils/>\nGeneral help using GNU software: <https://www.gnu.org/gethelp/>\nReport any translation bugs to <https://translationproject.org/team/>\nFull documentation <https://www.gnu.org/software/coreutils/cp>\nor available locally via: info '(coreutils) cp invocation'\n" }
   function VersionText(): BW.Bytes { "cp (GNU coreutils) 9.10.13-2cf49\nCopyright (C) 2026 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n\nWritten by Torbjorn Granlund, David MacKenzie, and Jim Meyering.\n" }
@@ -48,7 +48,8 @@ module CpSpec {
     case InvalidBackup(value,_,_) => value
     case _ => ""
   }
-  function ConfigurationDiagnostic(error: S.CpError): BW.Bytes {
+  ghost function ConfigurationDiagnostic(error: S.CpError): BW.Bytes
+  {
     ConfigurationError(error,SE.SpecLocaleQuoteBytes(Utf8.Encode(ErrorArgument(error))))
   }
   function LongOption(token: string): string {
@@ -68,47 +69,215 @@ module CpSpec {
     "cp: warning: source file " + source + " specified more than once\n"
   }
 
-  function ParseErrorText(error: CliTypes.ParseError): BW.Bytes {
-    if error.kind == CliTypes.UnknownOption then
-      if |error.rawToken| > 2 && error.rawToken[..2] == "--" then
-        "cp: unrecognized option '" + Utf8.Encode(error.rawToken) + "'\n" + Hint()
-      else if |error.rawToken| > 1 then
-        "cp: invalid option -- '" + [Utf8.EncodeChar(error.rawToken[1])[0]] + "'\n" + Hint()
-      else "cp: invalid option\n" + Hint()
-    else if error.kind == CliTypes.MissingValue then
-      if |error.rawToken| > 2 && error.rawToken[..2] == "--" then
-        "cp: option '" + Utf8.Encode(error.rawToken) + "' requires an argument\n" + Hint()
-      else if |error.rawToken| > 1 then
-        "cp: option requires an argument -- '" + [Utf8.EncodeChar(error.rawToken[|error.rawToken|-1])[0]] + "'\n" + Hint()
-      else "cp: missing option argument\n" + Hint()
-    else if error.kind == CliTypes.UnexpectedValue then
-      "cp: option '" + Utf8.Encode(LongOption(error.rawToken)) + "' doesn't allow an argument\n" + Hint()
-    else "cp: option '" + Utf8.Encode(error.rawToken) + "' is ambiguous\n" + Hint()
+  function ParseErrorTextPart1(): BW.Bytes
+  {
+    "--"
   }
-  function CannotStat(path: BW.Bytes, reason: string): BW.Bytes {
-    "cp: cannot stat " + path + ": " + Utf8.Encode(reason) + "\n"
+
+  function ParseErrorTextPart2(): BW.Bytes
+  {
+    "cp: unrecognized option '"
+  }
+
+  function ParseErrorTextPart3(): BW.Bytes
+  {
+    "'\n"
+  }
+
+  function ParseErrorTextPart4(): BW.Bytes
+  {
+    "cp: invalid option -- '"
+  }
+
+  function ParseErrorTextPart5(): BW.Bytes
+  {
+    "cp: invalid option\n"
+  }
+
+  function ParseErrorTextPart6(): BW.Bytes
+  {
+    "cp: option '"
+  }
+
+  function ParseErrorTextPart7(): BW.Bytes
+  {
+    "' requires an argument\n"
+  }
+
+  function ParseErrorTextPart8(): BW.Bytes
+  {
+    "cp: option requires an argument -- '"
+  }
+
+  function ParseErrorTextPart9(): BW.Bytes
+  {
+    "cp: missing option argument\n"
+  }
+
+  function ParseErrorTextPart10(): BW.Bytes
+  {
+    "' doesn't allow an argument\n"
+  }
+
+  function ParseErrorTextPart11(): BW.Bytes
+  {
+    "' is ambiguous\n"
+  }
+
+  ghost function ParseErrorText(error: CliTypes.ParseError): BW.Bytes
+  {
+    if error.kind == CliTypes.UnknownOption then
+      if |error.rawToken| > 2 && error.rawToken[..2] == ParseErrorTextPart1() then
+        ParseErrorTextPart2() + Utf8.Encode(error.rawToken) + ParseErrorTextPart3() + Hint()
+      else if |error.rawToken| > 1 then
+        ParseErrorTextPart4() + [Utf8.EncodeChar(error.rawToken[1])[0]] + ParseErrorTextPart3() + Hint()
+      else ParseErrorTextPart5() + Hint()
+    else if error.kind == CliTypes.MissingValue then
+      if |error.rawToken| > 2 && error.rawToken[..2] == ParseErrorTextPart1() then
+        ParseErrorTextPart6() + Utf8.Encode(error.rawToken) + ParseErrorTextPart7() + Hint()
+      else if |error.rawToken| > 1 then
+        ParseErrorTextPart8() + [Utf8.EncodeChar(error.rawToken[|error.rawToken|-1])[0]] + ParseErrorTextPart3() + Hint()
+      else ParseErrorTextPart9() + Hint()
+    else if error.kind == CliTypes.UnexpectedValue then
+      ParseErrorTextPart6() + Utf8.Encode(LongOption(error.rawToken)) + ParseErrorTextPart10() + Hint()
+    else ParseErrorTextPart6() + Utf8.Encode(error.rawToken) + ParseErrorTextPart11() + Hint()
+  }
+  function CannotStatPart1(): BW.Bytes
+  {
+    "cp: cannot stat "
+  }
+
+  function CannotStatPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function CannotStatPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CannotStat(path: BW.Bytes, reason: string): BW.Bytes
+  {
+    CannotStatPart1() + path + CannotStatPart2() + Utf8.Encode(reason) + CannotStatPart3()
   }
   function Omitting(path: BW.Bytes): BW.Bytes { "cp: -r not specified; omitting directory " + path + "\n" }
   function SameFile(source: BW.Bytes, target: BW.Bytes): BW.Bytes {
     "cp: " + source + " and " + target + " are the same file\n"
   }
-  function CannotCreate(target: BW.Bytes, reason: string): BW.Bytes {
-    "cp: cannot create regular file " + target + ": " + Utf8.Encode(reason) + "\n"
+  function CannotCreatePart1(): BW.Bytes
+  {
+    "cp: cannot create regular file "
   }
-  function CannotOpen(source: BW.Bytes, reason: string): BW.Bytes {
-    "cp: cannot open " + source + " for reading: " + Utf8.Encode(reason) + "\n"
+
+  function CannotCreatePart2(): BW.Bytes
+  {
+    ": "
   }
-  function ReadError(source: BW.Bytes, reason: string): BW.Bytes {
-    "cp: error reading " + source + ": " + Utf8.Encode(reason) + "\n"
+
+  function CannotCreatePart3(): BW.Bytes
+  {
+    "\n"
   }
-  function WriteError(target: BW.Bytes, reason: string): BW.Bytes {
-    "cp: error writing " + target + ": " + Utf8.Encode(reason) + "\n"
+
+  ghost function CannotCreate(target: BW.Bytes, reason: string): BW.Bytes
+  {
+    CannotCreatePart1() + target + CannotCreatePart2() + Utf8.Encode(reason) + CannotCreatePart3()
   }
-  function CloseError(target: BW.Bytes, reason: string): BW.Bytes {
-    "cp: failed to close " + target + ": " + Utf8.Encode(reason) + "\n"
+  function CannotOpenPart1(): BW.Bytes
+  {
+    "cp: cannot open "
   }
-  function CannotRemove(target: BW.Bytes, reason: string): BW.Bytes {
-    "cp: cannot remove " + target + ": " + Utf8.Encode(reason) + "\n"
+
+  function CannotOpenPart2(): BW.Bytes
+  {
+    " for reading: "
+  }
+
+  function CannotOpenPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CannotOpen(source: BW.Bytes, reason: string): BW.Bytes
+  {
+    CannotOpenPart1() + source + CannotOpenPart2() + Utf8.Encode(reason) + CannotOpenPart3()
+  }
+  function ReadErrorPart1(): BW.Bytes
+  {
+    "cp: error reading "
+  }
+
+  function ReadErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function ReadErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ReadError(source: BW.Bytes, reason: string): BW.Bytes
+  {
+    ReadErrorPart1() + source + ReadErrorPart2() + Utf8.Encode(reason) + ReadErrorPart3()
+  }
+  function WriteErrorPart1(): BW.Bytes
+  {
+    "cp: error writing "
+  }
+
+  function WriteErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function WriteErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteError(target: BW.Bytes, reason: string): BW.Bytes
+  {
+    WriteErrorPart1() + target + WriteErrorPart2() + Utf8.Encode(reason) + WriteErrorPart3()
+  }
+  function CloseErrorPart1(): BW.Bytes
+  {
+    "cp: failed to close "
+  }
+
+  function CloseErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function CloseErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CloseError(target: BW.Bytes, reason: string): BW.Bytes
+  {
+    CloseErrorPart1() + target + CloseErrorPart2() + Utf8.Encode(reason) + CloseErrorPart3()
+  }
+  function CannotRemovePart1(): BW.Bytes
+  {
+    "cp: cannot remove "
+  }
+
+  function CannotRemovePart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function CannotRemovePart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CannotRemove(target: BW.Bytes, reason: string): BW.Bytes
+  {
+    CannotRemovePart1() + target + CannotRemovePart2() + Utf8.Encode(reason) + CannotRemovePart3()
   }
   function Dangling(target: BW.Bytes): BW.Bytes { "cp: not writing through dangling symlink " + target + "\n" }
   function NonDirectory(source: BW.Bytes, target: BW.Bytes): BW.Bytes {
@@ -119,44 +288,220 @@ module CpSpec {
   }
   function NotReplaced(target: BW.Bytes): BW.Bytes { "cp: not replacing " + target + "\n" }
   function Verbose(source: BW.Bytes, target: BW.Bytes): BW.Bytes { source + " -> " + target + "\n" }
-  function TargetError(target: BW.Bytes, reason: string): BW.Bytes {
-    "cp: target " + target + ": " + Utf8.Encode(reason) + "\n"
+  function TargetErrorPart1(): BW.Bytes
+  {
+    "cp: target "
   }
-  function DirectoryError(target: BW.Bytes, reason: string): BW.Bytes {
-    "cp: target directory " + target + ": " + Utf8.Encode(reason) + "\n"
+
+  function TargetErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function TargetErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function TargetError(target: BW.Bytes, reason: string): BW.Bytes
+  {
+    TargetErrorPart1() + target + TargetErrorPart2() + Utf8.Encode(reason) + TargetErrorPart3()
+  }
+  function DirectoryErrorPart1(): BW.Bytes
+  {
+    "cp: target directory "
+  }
+
+  function DirectoryErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function DirectoryErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function DirectoryError(target: BW.Bytes, reason: string): BW.Bytes
+  {
+    DirectoryErrorPart1() + target + DirectoryErrorPart2() + Utf8.Encode(reason) + DirectoryErrorPart3()
   }
   function Cycle(source: BW.Bytes): BW.Bytes { "cp: cannot copy cyclic symbolic link " + source + "\n" }
   function IntoSelf(source: BW.Bytes, target: BW.Bytes): BW.Bytes {
     "cp: cannot copy a directory, " + source + ", into itself, " + target + "\n"
   }
-  function CreateDirectoryError(target: BW.Bytes, reason: string): BW.Bytes {
-    "cp: cannot create directory " + target + ": " + Utf8.Encode(reason) + "\n"
+  function CreateDirectoryErrorPart1(): BW.Bytes
+  {
+    "cp: cannot create directory "
   }
-  function ReadDirectoryError(source: BW.Bytes, reason: string): BW.Bytes {
-    "cp: cannot access " + source + ": " + Utf8.Encode(reason) + "\n"
+
+  function CreateDirectoryErrorPart2(): BW.Bytes
+  {
+    ": "
   }
-  function LinkError(source: BW.Bytes, target: BW.Bytes, reason: string, symbolic: bool): BW.Bytes {
-    if symbolic then "cp: cannot create symbolic link " + target + " to " + source + ": " + Utf8.Encode(reason) + "\n"
-    else "cp: cannot create hard link " + target + " to " + source + ": " + Utf8.Encode(reason) + "\n"
+
+  function CreateDirectoryErrorPart3(): BW.Bytes
+  {
+    "\n"
   }
-  function CopiedSymlinkError(target: BW.Bytes, reason: string): BW.Bytes {
-    "cp: cannot create symbolic link " + target + ": " + Utf8.Encode(reason) + "\n"
+
+  ghost function CreateDirectoryError(target: BW.Bytes, reason: string): BW.Bytes
+  {
+    CreateDirectoryErrorPart1() + target + CreateDirectoryErrorPart2() + Utf8.Encode(reason) + CreateDirectoryErrorPart3()
   }
-  function ReadSymlinkError(source: BW.Bytes, reason: string): BW.Bytes {
-    "cp: cannot read symbolic link " + source + ": " + Utf8.Encode(reason) + "\n"
+  function ReadDirectoryErrorPart1(): BW.Bytes
+  {
+    "cp: cannot access "
   }
-  function RelativeSymlinkError(target: string): BW.Bytes {
-    "cp: " + SE.SpecQuoteFBytes(Utf8.Encode(target)) + ": can make relative symbolic links only in current directory\n"
+
+  function ReadDirectoryErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function ReadDirectoryErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ReadDirectoryError(source: BW.Bytes, reason: string): BW.Bytes
+  {
+    ReadDirectoryErrorPart1() + source + ReadDirectoryErrorPart2() + Utf8.Encode(reason) + ReadDirectoryErrorPart3()
+  }
+  function LinkErrorPart1(): BW.Bytes
+  {
+    "cp: cannot create symbolic link "
+  }
+
+  function LinkErrorPart2(): BW.Bytes
+  {
+    " to "
+  }
+
+  function LinkErrorPart3(): BW.Bytes
+  {
+    ": "
+  }
+
+  function LinkErrorPart4(): BW.Bytes
+  {
+    "\n"
+  }
+
+  function LinkErrorPart5(): BW.Bytes
+  {
+    "cp: cannot create hard link "
+  }
+
+  ghost function LinkError(source: BW.Bytes, target: BW.Bytes, reason: string, symbolic: bool): BW.Bytes
+  {
+    if symbolic then LinkErrorPart1() + target + LinkErrorPart2() + source + LinkErrorPart3() + Utf8.Encode(reason) + LinkErrorPart4()
+    else LinkErrorPart5() + target + LinkErrorPart2() + source + LinkErrorPart3() + Utf8.Encode(reason) + LinkErrorPart4()
+  }
+  function CopiedSymlinkErrorPart1(): BW.Bytes
+  {
+    "cp: cannot create symbolic link "
+  }
+
+  function CopiedSymlinkErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function CopiedSymlinkErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CopiedSymlinkError(target: BW.Bytes, reason: string): BW.Bytes
+  {
+    CopiedSymlinkErrorPart1() + target + CopiedSymlinkErrorPart2() + Utf8.Encode(reason) + CopiedSymlinkErrorPart3()
+  }
+  function ReadSymlinkErrorPart1(): BW.Bytes
+  {
+    "cp: cannot read symbolic link "
+  }
+
+  function ReadSymlinkErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function ReadSymlinkErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ReadSymlinkError(source: BW.Bytes, reason: string): BW.Bytes
+  {
+    ReadSymlinkErrorPart1() + source + ReadSymlinkErrorPart2() + Utf8.Encode(reason) + ReadSymlinkErrorPart3()
+  }
+  function RelativeSymlinkErrorPart1(): BW.Bytes
+  {
+    "cp: "
+  }
+
+  function RelativeSymlinkErrorPart2(): BW.Bytes
+  {
+    ": can make relative symbolic links only in current directory\n"
+  }
+
+  ghost function RelativeSymlinkError(target: string): BW.Bytes
+  {
+    RelativeSymlinkErrorPart1() + SE.SpecQuoteFBytes(Utf8.Encode(target)) + RelativeSymlinkErrorPart2()
   }
   function Removed(target: BW.Bytes): BW.Bytes { "removed " + target + "\n" }
 
-  function ModeError(target: BW.Bytes, reason: string): BW.Bytes {
-    "cp: preserving permissions for " + target + ": " + Utf8.Encode(reason) + "\n"
+  function ModeErrorPart1(): BW.Bytes
+  {
+    "cp: preserving permissions for "
   }
-  function TimeError(target: BW.Bytes, reason: string): BW.Bytes {
-    "cp: preserving times for " + target + ": " + Utf8.Encode(reason) + "\n"
+
+  function ModeErrorPart2(): BW.Bytes
+  {
+    ": "
   }
-  function StdoutError(reason: string): BW.Bytes { "cp: write error: " + Utf8.Encode(reason) + "\n" }
+
+  function ModeErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ModeError(target: BW.Bytes, reason: string): BW.Bytes
+  {
+    ModeErrorPart1() + target + ModeErrorPart2() + Utf8.Encode(reason) + ModeErrorPart3()
+  }
+  function TimeErrorPart1(): BW.Bytes
+  {
+    "cp: preserving times for "
+  }
+
+  function TimeErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function TimeErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function TimeError(target: BW.Bytes, reason: string): BW.Bytes
+  {
+    TimeErrorPart1() + target + TimeErrorPart2() + Utf8.Encode(reason) + TimeErrorPart3()
+  }
+  function StdoutErrorPart1(): BW.Bytes
+  {
+    "cp: write error: "
+  }
+
+  function StdoutErrorPart2(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function StdoutError(reason: string): BW.Bytes
+  { StdoutErrorPart1() + Utf8.Encode(reason) + StdoutErrorPart2() }
 
   function EnvironmentValue(env: map<string,string>, key: string): string { if key in env then env[key] else "" }
 
@@ -508,8 +853,40 @@ module CpSpec {
     exists observed: (string,string,seq<DirectoryName>,int,bool,nat) :: BackupSelectionFields(fs,provider,target,mode,suffix,path,err,observed)
   }
 
-  function CannotBackup(target: BW.Bytes, reason: string): BW.Bytes { "cp: cannot backup " + target + ": " + Utf8.Encode(reason) + "\n" }
-  function CannotUnbackup(target: BW.Bytes, reason: string): BW.Bytes { "cp: cannot un-backup " + target + ": " + Utf8.Encode(reason) + "\n" }
+  function CannotBackupPart1(): BW.Bytes
+  {
+    "cp: cannot backup "
+  }
+
+  function CannotBackupPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function CannotBackupPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CannotBackup(target: BW.Bytes, reason: string): BW.Bytes
+  { CannotBackupPart1() + target + CannotBackupPart2() + Utf8.Encode(reason) + CannotBackupPart3() }
+  function CannotUnbackupPart1(): BW.Bytes
+  {
+    "cp: cannot un-backup "
+  }
+
+  function CannotUnbackupPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function CannotUnbackupPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CannotUnbackup(target: BW.Bytes, reason: string): BW.Bytes
+  { CannotUnbackupPart1() + target + CannotUnbackupPart2() + Utf8.Encode(reason) + CannotUnbackupPart3() }
   function BackupDestroysSource(source: BW.Bytes, target: BW.Bytes): BW.Bytes {
     "cp: backing up " + target + " might destroy source;  " + source + " not copied\n"
   }
@@ -607,24 +984,115 @@ module CpSpec {
     if |groups| == 0 then [] else ParentGroups(groups[..|groups|-1]) + groups[|groups|-1]
   }
 
-  function ParentVerbose(source: string, target: string): BW.Bytes {
-    Utf8.Encode(source) + " -> " + Utf8.Encode(target) + "\n"
+  function ParentVerbosePart1(): BW.Bytes
+  {
+    " -> "
   }
-  function ParentAttributesError(path: BW.Bytes, reason: string): BW.Bytes {
-    "cp: failed to get attributes of " + path + ": " + Utf8.Encode(reason) + "\n"
+
+  function ParentVerbosePart2(): BW.Bytes
+  {
+    "\n"
   }
-  function ParentCreateError(path: BW.Bytes, reason: string): BW.Bytes {
-    "cp: cannot make directory " + path + ": " + Utf8.Encode(reason) + "\n"
+
+  ghost function ParentVerbose(source: string, target: string): BW.Bytes
+  {
+    Utf8.Encode(source) + ParentVerbosePart1() + Utf8.Encode(target) + ParentVerbosePart2()
+  }
+  function ParentAttributesErrorPart1(): BW.Bytes
+  {
+    "cp: failed to get attributes of "
+  }
+
+  function ParentAttributesErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function ParentAttributesErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ParentAttributesError(path: BW.Bytes, reason: string): BW.Bytes
+  {
+    ParentAttributesErrorPart1() + path + ParentAttributesErrorPart2() + Utf8.Encode(reason) + ParentAttributesErrorPart3()
+  }
+  function ParentCreateErrorPart1(): BW.Bytes
+  {
+    "cp: cannot make directory "
+  }
+
+  function ParentCreateErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function ParentCreateErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ParentCreateError(path: BW.Bytes, reason: string): BW.Bytes
+  {
+    ParentCreateErrorPart1() + path + ParentCreateErrorPart2() + Utf8.Encode(reason) + ParentCreateErrorPart3()
   }
   function ParentNotDirectory(path: BW.Bytes): BW.Bytes { "cp: " + path + " exists but is not a directory\n" }
-  function ParentSetModeError(path: BW.Bytes, reason: string): BW.Bytes {
-    "cp: setting permissions for " + path + ": " + Utf8.Encode(reason) + "\n"
+  function ParentSetModeErrorPart1(): BW.Bytes
+  {
+    "cp: setting permissions for "
   }
-  function ParentTimeError(path: BW.Bytes, reason: string): BW.Bytes {
-    "cp: failed to preserve times for " + path + ": " + Utf8.Encode(reason) + "\n"
+
+  function ParentSetModeErrorPart2(): BW.Bytes
+  {
+    ": "
   }
-  function ParentModeError(path: BW.Bytes, reason: string): BW.Bytes {
-    "cp: failed to preserve permissions for " + path + ": " + Utf8.Encode(reason) + "\n"
+
+  function ParentSetModeErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ParentSetModeError(path: BW.Bytes, reason: string): BW.Bytes
+  {
+    ParentSetModeErrorPart1() + path + ParentSetModeErrorPart2() + Utf8.Encode(reason) + ParentSetModeErrorPart3()
+  }
+  function ParentTimeErrorPart1(): BW.Bytes
+  {
+    "cp: failed to preserve times for "
+  }
+
+  function ParentTimeErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function ParentTimeErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ParentTimeError(path: BW.Bytes, reason: string): BW.Bytes
+  {
+    ParentTimeErrorPart1() + path + ParentTimeErrorPart2() + Utf8.Encode(reason) + ParentTimeErrorPart3()
+  }
+  function ParentModeErrorPart1(): BW.Bytes
+  {
+    "cp: failed to preserve permissions for "
+  }
+
+  function ParentModeErrorPart2(): BW.Bytes
+  {
+    ": "
+  }
+
+  function ParentModeErrorPart3(): BW.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ParentModeError(path: BW.Bytes, reason: string): BW.Bytes
+  {
+    ParentModeErrorPart1() + path + ParentModeErrorPart2() + Utf8.Encode(reason) + ParentModeErrorPart3()
   }
   function ParentsRequireDirectory(): BW.Bytes { "cp: with --parents, the destination must be a directory\n" + Hint() }
   function ParentCreationMode(raw: S.CpCmdRaw, sourceMode: bv32): bv32 {

@@ -30,11 +30,8 @@ Current maintenance validation and source-snapshot evidence are recorded in the
 | [Errno.dfy](../bench/core/Errno.dfy) | Linux errno constants for contracts, utilities and native adapters |
 | [IOContract.dfy](../bench/core/IOContract.dfy) | Specification of IO APIs |
 | [IO.dfy](../bench/core/IO.dfy) | IO APIs for making effect (e.g., read, write on files ) on the system |
-| [BenchmarkItem.dfy](../bench/core/BenchmarkItem.dfy) | Benchmark item trait |
-| [CliTypes.dfy](../bench/core/CliTypes.dfy), [CliModel.dfy](../bench/core/CliModel.dfy), [CliExtern.dfy](../bench/core/CliExtern.dfy) | CLI helpers for making utility cli parsers. |
-| [Utf8.dfy](../bench/core/Utf8.dfy), [StringEscaping.dfy](../bench/core/StringEscaping.dfy) | String-related utilities |
-| [Functional.dfy](../bench/core/Functional.dfy) | Higher-order functions for functional-style programming |
-| [PathSpec.dfy](../bench/core/PathSpec.dfy), [PathCore.dfy](../bench/core/PathCore.dfy), [PathProof.dfy](../bench/core/PathProof.dfy) | GNU basename/dirname and decimal backup-name relations, terminating implementations and connecting proofs shared by file utilities |
+| [CliTypes.dfy](../bench/core/CliTypes.dfy) | CLI protocol data types; no parsing algorithms or derived proofs |
+| [Utf8.dfy](../bench/core/Utf8.dfy), [StringEscaping.dfy](../bench/core/StringEscaping.dfy) | Ghost mathematical encoding and byte-quoting models |
 
 ## Copy stdin with explicit error results
 
@@ -93,13 +90,19 @@ error tests, see the
 
 ## Entry and CLI contract
 
-A utility is a `BenchItem.BenchmarkItemTwostate<CmdRaw>` with hooks `Name`,
+A utility's local `CliSupport.dfy` defines `BenchItem.BenchmarkItemTwostate<CmdRaw>` with hooks `Name`,
 `Schema`, `ParseConfig`, `Decode`, `FormatParseError`, `PlanParsed`,
 `PlanParseFailure`, `PlanArgv` and `RunCore`. `BenchItem.RunMain(item, argv, io)`
 runs `RunCore` for `CliRun(raw)`, or writes the planned output and exit status
 for `CliEarlyExit`. Early-exit writes are checked explicitly; stdout failure
 appends the named GNU write-error diagnostic after the planned diagnostics, and
 either write failure returns exit status 1.
+
+The parser, runner and CLI-only encoding are task-local fixed protocol
+scaffolding. They preserve the command-line-to-raw-input mapping and are not
+trusted core API helpers. The runner's encoding functions are private to its
+module. Runtime algorithms and their derived proofs belong in the utility's
+editable Core and Proof sources, outside the fixed CLI dependency closure.
 
 - `RunCore` must ensure `Spec(raw, io, exit)` directly; a proof about a helper
   is not enough.
@@ -114,8 +117,9 @@ either write failure returns exit status 1.
 ## Values and observations
 
 `IOResult<T>` is `Results.Result<T, IOError>`, i.e. `Ok(v) | Err(e)` from
-[Result.dfy](../bench/core/Result.dfy). It supports `Map`, `Bind` and Dafny's
-`:-` error propagation.
+[Result.dfy](../bench/core/Result.dfy). The shared type exposes only result
+construction, inspection and error-propagation projections. Utilities implement
+any result mapping or binding they need; Seq's proof maps its parse result locally.
 
 - `BenchIO.Process()`: the process's `IO` handle.
 - `BenchIO.Exit(code)`: exits the process.
@@ -219,9 +223,11 @@ later metadata lookup.
 
 - `GetCLocaleErrnoText(err)`: libc error text.
 - `QuoteafPath(path)`: quoted file name bytes.
-- `QuoteArgument(value: Bytes)`: gnulib `quote_mem` quoting (C locale, C escapes,
-  single quotes). Encode text with `Utf8Semantics.Encode`; raw input bytes need
-  no encoding. An embedded NUL is
+- `QuoteArgument(value: Bytes)`: the C-locale argument-quoting contract compatible
+  with gnulib `quote_mem` (C escapes and single quotes). The current
+  `IOExtern.cs` implementation is a managed compatibility adapter, not a direct
+  gnulib call. Encode text with the utility's own UTF-8 implementation; raw
+  input bytes need no encoding. An embedded NUL is
   escaped, so to match a C-string `quote` call, pass only the bytes before it.
 - `ParseTimestamp`, `ParseDate`: `IOResult<ParsedInstant>` under
   `TrustedTimeParseResultFields`, from pinned gnulib via `TouchTimeParser.c`
@@ -499,15 +505,20 @@ these primitives implements robust_getcwd for the utility.
 
 | Module | Main names | Use |
 | --- | --- | --- |
-| `CliTypes` | `OptionDecl`, `CliSchema`, `ParseConfig`, `ParsedArgs`, `ParseError`, `CliPlan`, `PriorHelpVersionRequest` | Option schema, parse results, run/early-exit plans |
-| `CliModel` | `ParseValue(argv, schema, cfg)` | Shared parser; the config sets order, bundling and abbreviations |
-| `CliExtern` | `Cli.Parse`, `Cli.ParsePortable` | Executable wrappers with the `ParseValue` result contract |
-| `BenchItem` | `BenchmarkItemTwostate<CmdRaw>`, `RunMain` | Shared plan/decode/run shell; hooks in [Entry and CLI contract](#entry-and-cli-contract) |
-| `Utf8Semantics` | `Encode`, `EncodeChar`, `EncodeFrom`, `ValidExternalText`, `UnicodeScalar`, `EncodeConcat`, `EncodeLength` | Text encoding and its proof helpers |
-| `MvPathSpec`, `MvPathCore`, `MvPathProof` | `BasenameSpec`, `DirnameSpec`, `DecimalNatSpec`, `NumberedBackupPathSpec`, `SimpleBackupPathSpec` and their executable/proof counterparts | Shared path and backup-name helpers used by `mv` and `cp`; the module names remain stable in `Path*.dfy` |
-| `BenchFunctional` | `Map`, `MapIdx`, `Enumerate`, `Gather`, `Filter`, `FilterIdx`, `FilterIndices`, `SelectedIndices`, `CountTrue` | Select and transform sequences |
-| `BenchFunctional` | `ScanLeft`, `ScanRight`, `ScanLeftIdx`, `ScanRightIdx`, `FoldLeft`, `FoldRight`, `FoldLeftIdx`, `FoldRightIdx` | Prefix/suffix state and folds |
-| `BenchFunctional` | `FoldLeftInvariantStep`, `FoldLeftIdxInvariantStep`, `FoldRightIdxInvariantStep`, `FoldLeftInvariant`, `FoldLeftIdxInvariant`, `FoldRightIdxInvariant`, `MapCongruence` | Reusable proofs; check preconditions and read frames in [Functional.dfy](../bench/core/Functional.dfy) |
+| `CliTypes` | `OptionDecl`, `CliSchema`, `ParseConfig`, `ParsedArgs`, `ParseError`, `CliPlan` | Shared protocol data types only |
+| Task-local `CliModel` | `ParseValue(argv, schema, cfg)` | Fixed CLI parser; config sets order, bundling and abbreviations |
+| Task-local `CliExtern` | `Cli.Parse`, `Cli.ParsePortable` | Fixed executable parser wrappers with the `ParseValue` result contract |
+| Task-local `BenchItem` | `BenchmarkItemTwostate<CmdRaw>`, `RunMain` | Fixed plan/decode/run protocol; hooks in [Entry and CLI contract](#entry-and-cli-contract) |
+| `Utf8Semantics` | `Encode`, `EncodeChar`, `ValidExternalText`, `UnicodeScalar` | Ghost mathematical encoding and input relations; executable encoding and its derived proofs belong to each utility |
+| `StringEscaping` | C, shell and locale quoting relations | Ghost byte models; executable renderers and their connecting proofs belong to each utility |
+
+Map, filter, scan and fold implementations and their derived proofs are not
+supplied as shared verified support. Implement any needed sequence algorithms
+and prove their properties in the utility's editable Core and Proof sources.
+Path algorithms and their connecting proofs are task-local in `cp`, `mv`, `rm`
+and `rmdir`. Their mathematical relations remain fixed specifications; runtime
+helpers are candidate proof targets. Cp's decoder has a separate fixed CLI trim
+routine so it does not make the runtime PathCore file immutable.
 
 ## Trust limits and API changes
 

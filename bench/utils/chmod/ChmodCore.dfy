@@ -1,3 +1,5 @@
+include "ChmodTextCore.dfy"
+include "ChmodModeCore.dfy"
 include "../../core/Errno.dfy"
 include "../../core/World.dfy"
 include "../../core/Utf8.dfy"
@@ -7,6 +9,7 @@ include "ChmodSchema.dfy"
 include "ChmodSpec.dfy"
 
 module ChmodCore {
+  import Text = ChmodTextCore
   class Output {
     var stdout: BenchWorld.Bytes
     var stderr: BenchWorld.Bytes
@@ -26,6 +29,7 @@ module ChmodCore {
   import BenchWorld
   import Utf8 = Utf8Semantics
   import Schema = ChmodSchema
+  import Mode = ChmodModeCore
   import Spec = ChmodSpec
 
   function HelpTextCore(): BenchWorld.Bytes
@@ -45,22 +49,22 @@ module ChmodCore {
 
   function MissingOperandMessageCore(cmd: Schema.ChmodCmd): BenchWorld.Bytes
   {
-    Spec.MissingOperandMessageSpec(cmd)
+    Text.MissingOperandMessageSpec(cmd)
   }
 
   function InvalidModeMessageCore(modeExpr: string): BenchWorld.Bytes
   {
-    Spec.InvalidModeMessageSpec(modeExpr)
+    Text.InvalidModeMessageSpec(modeExpr)
   }
 
   function ReferenceErrorMessageCore(path: string, err: string): BenchWorld.Bytes
   {
-    Spec.ReferenceErrorMessageSpec(path, err)
+    Text.ReferenceErrorMessageSpec(path, err)
   }
 
   function GettingNewAttributesMessageCore(path: string, err: string): BenchWorld.Bytes
   {
-    Spec.GettingNewAttributesMessageSpec(path, err)
+    Text.GettingNewAttributesMessageSpec(path, err)
   }
 
   function CombineModeReferenceMessageCore(): BenchWorld.Bytes
@@ -80,32 +84,32 @@ module ChmodCore {
 
   function ChangeErrorMessageCore(path: string, err: string): BenchWorld.Bytes
   {
-    Spec.ChangeErrorMessageSpec(path, err)
+    Text.ChangeErrorMessageSpec(path, err)
   }
 
   function AccessErrorMessageCore(path: string, err: string): BenchWorld.Bytes
   {
-    Spec.AccessErrorMessageSpec(path, err)
+    Text.AccessErrorMessageSpec(path, err)
   }
 
   function DanglingSymlinkMessageCore(path: string): BenchWorld.Bytes
   {
-    Spec.DanglingSymlinkMessageSpec(path)
+    Text.DanglingSymlinkMessageSpec(path)
   }
 
   function CannotDereferenceMessageCore(path: string, err: int): BenchWorld.Bytes
   {
-    Spec.CannotDereferenceMessageSpec(path, err)
+    Text.CannotDereferenceMessageSpec(path, err)
   }
 
   function NeitherChangedMessageCore(path: string): BenchWorld.Bytes
   {
-    Spec.NeitherChangedMessageSpec(path)
+    Text.NeitherChangedMessageSpec(path)
   }
 
   function ChangedMessageCore(path: string, before: bv32, after: bv32): BenchWorld.Bytes
   {
-    Spec.ChangedMessageSpec(path, before, after)
+    Text.ChangedMessageSpec(path, before, after)
   }
 
   function FailedChangeMessageCore(
@@ -114,25 +118,25 @@ module ChmodCore {
     desired: bv32
   ): BenchWorld.Bytes
   {
-    Spec.FailedChangeMessageSpec(path, before, desired)
+    Text.FailedChangeMessageSpec(path, before, desired)
   }
 
   function RetainedMessageCore(path: string, mode: bv32): BenchWorld.Bytes
   {
-    Spec.RetainedMessageSpec(path, mode)
+    Text.RetainedMessageSpec(path, mode)
   }
 
   function AccessFailureMessageCore(path: string): BenchWorld.Bytes
   {
-    Spec.AccessFailureMessageSpec(path)
+    Text.AccessFailureMessageSpec(path)
   }
 
   function SurpriseModeMessageCore(path: string, actual: bv32, naive: bv32): BenchWorld.Bytes
   {
-    Spec.SurpriseModeMessageSpec(path, actual, naive)
+    Text.SurpriseModeMessageSpec(path, actual, naive)
   }
 
-  function MakeAbsoluteCore(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
+  ghost function MakeAbsoluteCore(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
   {
     if path == "" then ""
     else if BenchWorld.IsAbsolutePath(path) then path
@@ -169,7 +173,7 @@ module ChmodCore {
     isSymlink && err == Errno.ENOENT
   }
 
-  function CorePathIsDanglingSymlinkFailure(
+  ghost function CorePathIsDanglingSymlinkFailure(
     fs: BenchWorld.FileSystem,
     actual: BenchWorld.Path,
     follow: bool,
@@ -192,13 +196,13 @@ module ChmodCore {
   function SupportedOctalModeCore(expr: string): bool
   {
     |expr| > 0 && BenchWorld.IsOctalDigit(expr[0]) &&
-    BenchWorld.AllOctalDigits(expr, 0) && BenchWorld.OctalValue(expr, 0, 0) <= 4095
+    Mode.AllOctalDigits(expr, 0) && Mode.OctalValue(expr, 0, 0) <= 4095
   }
 
   function OctalModeCore(expr: string): bv32
     requires SupportedOctalModeCore(expr)
   {
-    BenchWorld.NormalizeMode(BenchWorld.ToBv32(BenchWorld.OctalValue(expr, 0, 0)))
+    BenchWorld.NormalizeMode(BenchWorld.ToBv32(Mode.OctalValue(expr, 0, 0)))
   }
 
   const CORE_READ_MASK: bv32 := Schema.READ_MASK
@@ -319,8 +323,8 @@ module ChmodCore {
     if |expr| == 0 then
       base
     else if BenchWorld.IsOctalDigit(expr[0]) then
-      if BenchWorld.AllOctalDigits(expr, 0) then
-        var raw := BenchWorld.OctalValue(expr, 0, 0);
+      if Mode.AllOctalDigits(expr, 0) then
+        var raw := Mode.OctalValue(expr, 0, 0);
         if raw > 4095 then
           base
         else
@@ -339,7 +343,7 @@ module ChmodCore {
       else
         base
     else
-      match Schema.ParseSymbolic(expr, 0)
+      match Mode.ParseSymbolic(expr, 0)
       case Invalid => base
       case Parsed(changes, endIdx) =>
         if endIdx == |expr| then CoreModeAdjust(base, isDir, umask, changes) else base
@@ -430,7 +434,7 @@ module ChmodCore {
     (after & Schema.SPECIAL_BITS) != 0 as bv32
   }
 
-  function CoreSuccessfulChangeResult(
+  ghost function CoreSuccessfulChangeResult(
     cmd: Schema.ChmodCmd,
     plan: CoreModePlan,
     path: string,
@@ -532,7 +536,7 @@ module ChmodCore {
     ok := !surprise;
   }
 
-  function CoreModeSetFs(
+  ghost function CoreModeSetFs(
     fs: BenchWorld.FileSystem,
     follow: bool,
     target: BenchWorld.Path,
@@ -555,7 +559,7 @@ module ChmodCore {
       )
   }
 
-  function CoreModeSetSuppressed(
+  ghost function CoreModeSetSuppressed(
     fs: BenchWorld.FileSystem,
     target: BenchWorld.Path,
     follow: bool
@@ -568,7 +572,7 @@ module ChmodCore {
     case _ => false
   }
 
-  function CoreNoDereferenceSymlink(
+  ghost function CoreNoDereferenceSymlink(
     fs: BenchWorld.FileSystem,
     path: BenchWorld.Path,
     follow: bool
@@ -584,7 +588,7 @@ module ChmodCore {
       case _ => false
   }
 
-  function CorePathAccessFailureResult(
+  ghost function CorePathAccessFailureResult(
     cmd: Schema.ChmodCmd,
     fs: BenchWorld.FileSystem,
     path: string,
@@ -608,7 +612,7 @@ module ChmodCore {
     )
   }
 
-  function CorePathStep(
+  ghost function CorePathStep(
     cmd: Schema.ChmodCmd,
     plan: CoreModePlan,
     cwd: BenchWorld.Path,
@@ -713,7 +717,7 @@ module ChmodCore {
             )
   }
 
-  function CoreRunFilesFrom(
+  ghost function CoreRunFilesFrom(
     files: seq<string>,
     i: nat,
     cmd: Schema.ChmodCmd,
@@ -740,7 +744,7 @@ module ChmodCore {
       )
   }
 
-  function CoreRunFiles(
+  ghost function CoreRunFiles(
     cmd: Schema.ChmodCmd,
     plan: CoreModePlan,
     cwd: BenchWorld.Path,
@@ -859,7 +863,7 @@ module ChmodCore {
       )
   }
 
-  predicate CoreExternalDomain(raw: Schema.ChmodCmdRaw)
+  ghost predicate CoreExternalDomain(raw: Schema.ChmodCmdRaw)
   {
     var cmd := Schema.Command(raw);
     Utf8.ValidExternalText(cmd.modeExpr) &&
@@ -937,7 +941,7 @@ module ChmodCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
       else Spec.WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));

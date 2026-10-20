@@ -100,28 +100,68 @@ module ExprSpec {
     "expr: syntax error: unexpected ')'\n"
   }
 
-  function UnexpectedArgumentMessage(token: string): BenchWorld.Bytes
+  function UnexpectedArgumentMessagePart1(): BenchWorld.Bytes
   {
-    "expr: syntax error: unexpected argument " +
-    SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + "\n"
+    "expr: syntax error: unexpected argument "
   }
 
-  function MissingAfterMessage(op: string): BenchWorld.Bytes
+  function UnexpectedArgumentMessagePart2(): BenchWorld.Bytes
   {
-    "expr: syntax error: missing argument after " +
-    SE.SpecLocaleQuoteBytes(Utf8.Encode(op)) + "\n"
+    "\n"
   }
 
-  function MissingCloseAfterMessage(token: string): BenchWorld.Bytes
+  ghost function UnexpectedArgumentMessage(token: string): BenchWorld.Bytes
   {
-    "expr: syntax error: expecting ')' after " +
-    SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + "\n"
+    UnexpectedArgumentMessagePart1() +
+    SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + UnexpectedArgumentMessagePart2()
   }
 
-  function MissingCloseInsteadMessage(token: string): BenchWorld.Bytes
+  function MissingAfterMessagePart1(): BenchWorld.Bytes
   {
-    "expr: syntax error: expecting ')' instead of " +
-    SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + "\n"
+    "expr: syntax error: missing argument after "
+  }
+
+  function MissingAfterMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function MissingAfterMessage(op: string): BenchWorld.Bytes
+  {
+    MissingAfterMessagePart1() +
+    SE.SpecLocaleQuoteBytes(Utf8.Encode(op)) + MissingAfterMessagePart2()
+  }
+
+  function MissingCloseAfterMessagePart1(): BenchWorld.Bytes
+  {
+    "expr: syntax error: expecting ')' after "
+  }
+
+  function MissingCloseAfterMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function MissingCloseAfterMessage(token: string): BenchWorld.Bytes
+  {
+    MissingCloseAfterMessagePart1() +
+    SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + MissingCloseAfterMessagePart2()
+  }
+
+  function MissingCloseInsteadMessagePart1(): BenchWorld.Bytes
+  {
+    "expr: syntax error: expecting ')' instead of "
+  }
+
+  function MissingCloseInsteadMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function MissingCloseInsteadMessage(token: string): BenchWorld.Bytes
+  {
+    MissingCloseInsteadMessagePart1() +
+    SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + MissingCloseInsteadMessagePart2()
   }
 
   function NonIntegerMessage(): BenchWorld.Bytes
@@ -630,9 +670,19 @@ module ExprSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessagePart1(): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("expr: write error: " + message + "\n")
+    "expr: write error: "
+  }
+
+  function StreamWriteErrorMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorMessagePart1() + message + StreamWriteErrorMessagePart2())
   }
 
   function StreamFailureExit(): int

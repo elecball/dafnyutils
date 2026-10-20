@@ -59,9 +59,17 @@ module Base64Spec {
     + "Written by Simon Josefsson.\n"
   }
 
-  function InvalidWrapMessage(value: string): BenchWorld.Bytes
+  function InvalidWrapPrefix(): BenchWorld.Bytes { "base64: invalid wrap size: " }
+  function ExtraOperandPrefix(): BenchWorld.Bytes { "base64: extra operand " }
+  function ExtraOperandSuffix(): BenchWorld.Bytes { "\nTry 'base64 --help' for more information.\n" }
+  function ReadErrorPrefix(): BenchWorld.Bytes { "base64: read error: " }
+  function InputPathPrefix(): BenchWorld.Bytes { "base64: " }
+  function ErrorSeparator(): BenchWorld.Bytes { ": " }
+  function MessageNewline(): BenchWorld.Bytes { "\n" }
+
+  ghost function InvalidWrapMessage(value: string): BenchWorld.Bytes
   {
-    "base64: invalid wrap size: " + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) + "\n"
+    InvalidWrapPrefix() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) + MessageNewline()
   }
 
   function InvalidInputMessage(): BenchWorld.Bytes
@@ -69,10 +77,9 @@ module Base64Spec {
     "base64: invalid input\n"
   }
 
-  function ExtraOperandMessage(operand: string): BenchWorld.Bytes
+  ghost function ExtraOperandMessage(operand: string): BenchWorld.Bytes
   {
-    "base64: extra operand " + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
-    "\nTry 'base64 --help' for more information.\n"
+    ExtraOperandPrefix() + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) + ExtraOperandSuffix()
   }
 
   function ErrnoText(err: BenchWorld.IOError): string
@@ -91,19 +98,19 @@ module Base64Spec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "base64: read error: " + Utf8.Encode(ErrnoText(error)) + "\n"
+    ReadErrorPrefix() + Utf8.Encode(ErrnoText(error)) + MessageNewline()
   }
 
-  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     if IOContract.IOErrorIsReadFailure(err) &&
        !(err.ReadFailure? && err.readStage == BenchWorld.CloseFailed) then
-      "base64: read error: " + Utf8.Encode(ErrnoText(err)) + "\n"
+      ReadErrorPrefix() + Utf8.Encode(ErrnoText(err)) + MessageNewline()
     else
-      "base64: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-      ": " + Utf8.Encode(ErrnoText(err)) + "\n"
+      InputPathPrefix() + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
+      ErrorSeparator() + Utf8.Encode(ErrnoText(err)) + MessageNewline()
   }
 
   function Alphabet(index: nat): char
@@ -715,9 +722,14 @@ module Base64Spec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorText(message: string): string
   {
-    StreamUtf8.Encode("base64: write error: " + message + "\n")
+    "base64: write error: " + message + "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorText(message))
   }
 
   ghost predicate EmitFields(

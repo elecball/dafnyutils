@@ -1,7 +1,7 @@
 include "LinkSchema.dfy"
 include "../../core/IO.dfy"
 include "../../core/Utf8.dfy"
-include "../../core/CliModel.dfy"
+include "CliSupport.dfy"
 
 module LinkSpec {
   import StreamWorld = BenchWorld
@@ -72,30 +72,85 @@ module LinkSpec {
     UnknownShortTemplate()[25 := byte]
   }
 
-  function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
+  function ParseErrorTextPart1(): StreamWorld.Bytes
+  {
+    "link: unrecognized option '"
+  }
+
+  function ParseErrorTextPart2(): StreamWorld.Bytes
+  {
+    "'\n"
+  }
+
+  function ParseErrorTextPart3(): StreamWorld.Bytes
+  {
+    "Try 'link --help' for more information.\n"
+  }
+
+  function ParseErrorTextPart4(): StreamWorld.Bytes
+  {
+    "link: invalid option\nTry 'link --help' for more information.\n"
+  }
+
+  function ParseErrorTextPart5(): StreamWorld.Bytes
+  {
+    "link: option '"
+  }
+
+  function ParseErrorTextPart6(): StreamWorld.Bytes
+  {
+    "' doesn't allow an argument\n"
+  }
+
+  function ParseErrorTextPart7(): StreamWorld.Bytes
+  {
+    "' is ambiguous; possibilities: '--help' '--version'\n"
+  }
+
+  function ParseErrorTextPart8(): StreamWorld.Bytes
+  {
+    "link: "
+  }
+
+  function ParseErrorTextPart9(): StreamWorld.Bytes
+  {
+    "missing option value"
+  }
+
+  function ParseErrorTextPart10(): StreamWorld.Bytes
+  {
+    "parse error"
+  }
+
+  function ParseErrorTextPart11(): StreamWorld.Bytes
+  {
+    " at token '"
+  }
+
+  ghost function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
   {
     if err.kind == CliTypes.UnknownOption then
         if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-          "link: unrecognized option '" + Utf8.Encode(err.rawToken) + "'\n" +
-          "Try 'link --help' for more information.\n"
+          ParseErrorTextPart1() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2() +
+          ParseErrorTextPart3()
         else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
           UnknownShortText(Utf8.EncodeChar(err.rawToken[1])[0])
         else
-          "link: invalid option\nTry 'link --help' for more information.\n"
+          ParseErrorTextPart4()
       else if err.kind == CliTypes.UnexpectedValue then
-        "link: option '" + Utf8.Encode(LongOptionName(err.rawToken)) +
-        "' doesn't allow an argument\n" +
-        "Try 'link --help' for more information.\n"
+        ParseErrorTextPart5() + Utf8.Encode(LongOptionName(err.rawToken)) +
+        ParseErrorTextPart6() +
+        ParseErrorTextPart3()
       else if err.kind == CliTypes.Ambiguous then
-        "link: option '" + Utf8.Encode(err.rawToken) +
-        "' is ambiguous; possibilities: '--help' '--version'\n" +
-        "Try 'link --help' for more information.\n"
+        ParseErrorTextPart5() + Utf8.Encode(err.rawToken) +
+        ParseErrorTextPart7() +
+        ParseErrorTextPart3()
       else
-        "link: " + Utf8.Encode(
+        ParseErrorTextPart8() + Utf8.Encode(
         (if err.kind == CliTypes.MissingValue
-        then "missing option value"
-        else "parse error")) +
-        " at token '" + Utf8.Encode(err.rawToken) + "'\n"
+        then ParseErrorTextPart9()
+        else ParseErrorTextPart10())) +
+        ParseErrorTextPart11() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2()
   }
 
   twostate predicate LinkResult(
@@ -139,20 +194,50 @@ module LinkSpec {
     + "Try 'link --help' for more information.\n"
   }
 
-  function CannotCreateLinkText(
+  function CannotCreateLinkTextPart1(): StreamWorld.Bytes
+  {
+    "link: cannot create link "
+  }
+
+  function CannotCreateLinkTextPart2(): StreamWorld.Bytes
+  {
+    " to "
+  }
+
+  function CannotCreateLinkTextPart3(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function CannotCreateLinkTextPart4(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CannotCreateLinkText(
     quotedTarget: BenchWorld.Bytes,
     quotedSource: BenchWorld.Bytes,
     reason: string
   ): BenchWorld.Bytes
   {
-    "link: cannot create link " + quotedTarget + " to " + quotedSource + ": "
-    + Utf8.Encode(reason) + "\n"
+    CannotCreateLinkTextPart1() + quotedTarget + CannotCreateLinkTextPart2() + quotedSource + CannotCreateLinkTextPart3()
+    + Utf8.Encode(reason) + CannotCreateLinkTextPart4()
   }
 
 
-  function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorTextPart1(): StreamWorld.Bytes
   {
-    "link: write error: " + Utf8.Encode(reason) + "\n"
+    "link: write error: "
+  }
+
+  function WriteErrorTextPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate EmissionOutcomeFields(

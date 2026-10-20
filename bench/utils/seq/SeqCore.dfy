@@ -1,3 +1,4 @@
+include "SeqTextCore.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
@@ -9,7 +10,8 @@ module SeqCore {
 
   import Result = Results
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = SeqUtf8Core
+  import Text = SeqTextCore
   import BenchWorld
   import SeqSchema
   import Spec = SeqSpec
@@ -272,7 +274,7 @@ module SeqCore {
     if |args| == 0 then
       NumbersErr(Spec.MissingOperandMessage())
     else if |args| > 3 then
-      NumbersErr(Spec.ExtraOperandMessage(args[3]))
+      NumbersErr(Text.ExtraOperandMessage(args[3]))
     else
       var firstText := if |args| == 1 then "1" else args[0];
       var stepText := if |args| == 3 then args[1] else "1";
@@ -280,20 +282,20 @@ module SeqCore {
       var firstParse := ParseDecimal(firstText);
       match firstParse
       case Err(token) =>
-        NumbersErr(Spec.InvalidNumberMessage(token))
+        NumbersErr(Text.InvalidNumberMessage(token))
       case Ok(first) =>
         var stepParse := ParseDecimal(stepText);
         match stepParse
         case Err(token) =>
-          NumbersErr(Spec.InvalidNumberMessage(token))
+          NumbersErr(Text.InvalidNumberMessage(token))
         case Ok(step) =>
           if step.value == 0 then
-            NumbersErr(Spec.ZeroIncrementMessage(step.raw))
+            NumbersErr(Text.ZeroIncrementMessage(step.raw))
           else
             var lastParse := ParseDecimal(lastText);
             match lastParse
             case Err(token) =>
-              NumbersErr(Spec.InvalidNumberMessage(token))
+              NumbersErr(Text.InvalidNumberMessage(token))
             case Ok(last) =>
               NumbersOk(first, step, last)
   } by method
@@ -719,19 +721,19 @@ module SeqCore {
   method ExtraOperandMessageRuntime(token: string) returns (message: BenchWorld.Bytes)
     ensures message == Spec.ExtraOperandMessage(token)
   {
-    message := Spec.ExtraOperandMessage(token);
+    message := Text.ExtraOperandMessage(token);
   }
 
   method InvalidNumberMessageRuntime(token: string) returns (message: BenchWorld.Bytes)
     ensures message == Spec.InvalidNumberMessage(token)
   {
-    message := Spec.InvalidNumberMessage(token);
+    message := Text.InvalidNumberMessage(token);
   }
 
   method ZeroIncrementMessageRuntime(token: string) returns (message: BenchWorld.Bytes)
     ensures message == Spec.ZeroIncrementMessage(token)
   {
-    message := Spec.ZeroIncrementMessage(token);
+    message := Text.ZeroIncrementMessage(token);
   }
 
   method Prepare(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
@@ -774,7 +776,7 @@ module SeqCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

@@ -1,6 +1,6 @@
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "CsplitSchema.dfy"
 include "CsplitCore.dfy"
 include "CsplitSpec.dfy"

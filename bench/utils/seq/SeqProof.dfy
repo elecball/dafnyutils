@@ -20,7 +20,9 @@ module SeqProof {
 
   function ToSpecParse(parsed: Core.DecimalParse): Spec.DecimalParse
   {
-    parsed.Map(ToSpecDecimal)
+    match parsed
+    case Ok(value) => Result.Ok(ToSpecDecimal(value))
+    case Err(error) => Result.Err(error)
   }
 
   function ToSpecPlan(plan: Core.NumberPlan): Spec.NumberPlan

@@ -1,3 +1,6 @@
+include "MvTextCore.dfy"
+include "MvWorldPathCore.dfy"
+include "MvMetadataProof.dfy"
 include "../../core/Errno.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
@@ -6,11 +9,14 @@ include "MvSchema.dfy"
 include "MvSpec.dfy"
 
 module MvCore {
+  import Text = MvTextCore
+  import WorldPath = MvWorldPathCore
+  import MetadataProof = MvMetadataProof
   datatype PlannedOutput = PlannedOutput(stdout: BenchWorld.Bytes, stderr: BenchWorld.Bytes, normalExit: int)
 
   import Errno = Errnos
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = MvUtf8Core
   import IOContract
   import BenchWorld
   import BasenameCore = MvPathCore
@@ -46,7 +52,7 @@ module MvCore {
     var leaf := BenchWorld.LeafName(source);
     if leaf == "" then source else leaf
   } by method {
-    var leaf := BenchWorld.LeafName(source);
+    var leaf := WorldPath.LeafName(source);
     return if leaf == "" then source else leaf;
   }
 
@@ -165,7 +171,7 @@ module MvCore {
   {
     BenchWorld.AppendPath(directory, SourceLeafName(source))
   } by method {
-    return BenchWorld.AppendPath(directory, SourceLeafName(source));
+    return WorldPath.AppendPath(directory, SourceLeafName(source));
   }
 
   function DigitChar(d: nat): char
@@ -2306,13 +2312,13 @@ module MvCore {
   method GetMissingDestinationMessage(source: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.MissingDestinationMessageSpec(source)
   {
-    out := Spec.MissingDestinationMessageSpec(source);
+    out := Text.MissingDestinationMessageSpec(source);
   }
 
   method GetExtraOperandMessage(operand: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.ExtraOperandMessageSpec(operand)
   {
-    out := Spec.ExtraOperandMessageSpec(operand);
+    out := Text.ExtraOperandMessageSpec(operand);
   }
 
   method GetTargetDirectoryConflictMessage() returns (out: BenchWorld.Bytes)
@@ -2324,31 +2330,31 @@ module MvCore {
   method GetInvalidBackupArgumentMessage(value: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.InvalidBackupArgumentMessageSpec(value)
   {
-    out := Spec.InvalidBackupArgumentMessageSpec(value);
+    out := Text.InvalidBackupArgumentMessageSpec(value);
   }
 
   method GetInvalidUpdateArgumentMessage(value: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.InvalidUpdateArgumentMessageSpec(value)
   {
-    out := Spec.InvalidUpdateArgumentMessageSpec(value);
+    out := Text.InvalidUpdateArgumentMessageSpec(value);
   }
 
   method GetTargetFailureMessage(path: string, explicitTargetDirectory: bool, err: int) returns (out: BenchWorld.Bytes)
     ensures out == Spec.TargetFailureMessageSpec(path, explicitTargetDirectory, err)
   {
-    out := Spec.TargetFailureMessageSpec(path, explicitTargetDirectory, err);
+    out := Text.TargetFailureMessageSpec(path, explicitTargetDirectory, err);
   }
 
   method GetSourceStatFailureMessage(source: string, err: int) returns (out: BenchWorld.Bytes)
     ensures out == Spec.SourceStatFailureMessageSpec(source, err)
   {
-    out := Spec.SourceStatFailureMessageSpec(source, err);
+    out := Text.SourceStatFailureMessageSpec(source, err);
   }
 
   method GetRenameFailureMessage(source: string, target: string, err: int) returns (out: BenchWorld.Bytes)
     ensures out == Spec.RenameFailureMessageSpec(source, target, err)
   {
-    out := Spec.RenameFailureMessageSpec(source, target, err);
+    out := Text.RenameFailureMessageSpec(source, target, err);
   }
 
   method GetSourceRenameFailureMessage(
@@ -2366,7 +2372,7 @@ module MvCore {
               sourceIsDir && targetFound
             )
   {
-    out := Spec.SourceRenameFailureMessageSpec(
+    out := Text.SourceRenameFailureMessageSpec(
       source,
       target,
       SourceRenameDiagnosticErr(target, sourceIsDir, err),
@@ -2380,7 +2386,7 @@ module MvCore {
   ) returns (out: BenchWorld.Bytes)
     ensures out == Spec.SameFileMessageSpec(source, target)
   {
-    out := Spec.SameFileMessageSpec(source, target);
+    out := Text.SameFileMessageSpec(source, target);
   }
 
   method GetBackupWouldDestroySourceMessage(
@@ -2389,31 +2395,31 @@ module MvCore {
   ) returns (out: BenchWorld.Bytes)
     ensures out == Spec.BackupWouldDestroySourceMessageSpec(source, target)
   {
-    out := Spec.BackupWouldDestroySourceMessageSpec(source, target);
+    out := Text.BackupWouldDestroySourceMessageSpec(source, target);
   }
 
   method GetVerboseRenameMessage(source: string, target: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.VerboseRenameMessageSpec(source, target)
   {
-    out := Spec.VerboseRenameMessageSpec(source, target);
+    out := Text.VerboseRenameMessageSpec(source, target);
   }
 
   method GetVerboseRenameWithBackupMessage(source: string, target: string, backup: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.VerboseRenameWithBackupMessageSpec(source, target, backup)
   {
-    out := Spec.VerboseRenameWithBackupMessageSpec(source, target, backup);
+    out := Text.VerboseRenameWithBackupMessageSpec(source, target, backup);
   }
 
   method GetDebugSkipMessage(target: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.DebugSkipMessageSpec(target)
   {
-    out := Spec.DebugSkipMessageSpec(target);
+    out := Text.DebugSkipMessageSpec(target);
   }
 
   method GetNotReplacingMessage(target: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.NotReplacingMessageSpec(target)
   {
-    out := Spec.NotReplacingMessageSpec(target);
+    out := Text.NotReplacingMessageSpec(target);
   }
 
   method FindUnusedNumberedBackupPath(
@@ -2565,7 +2571,7 @@ module MvCore {
       var rawMetadataOk5 := getFileStatusResult2.Ok?;
       var rawMetadataStatus5 := IOContract.ResultValue(getFileStatusResult2, BenchWorld.DEFAULT_FILE_STATUS);
       var rawMetadataErr5 := IOContract.ResultErrno(getFileStatusResult2);
-      IOContract.FileStatusStructureImpliesMetadata(io.fs(), numberedSeed, false, rawMetadataOk5, rawMetadataStatus5, rawMetadataErr5);
+      MetadataProof.FileStatusStructureImpliesMetadata(io.fs(), numberedSeed, false, rawMetadataOk5, rawMetadataStatus5, rawMetadataErr5);
       var found := rawMetadataOk5;
       var err := rawMetadataErr5;
       ghost var seedCall := Spec.StatusCallEvidence(old(io.fs()), numberedSeed, false,
@@ -2671,7 +2677,7 @@ module MvCore {
       reveal IOContract.GetFileStatusSpec();
     }
     hide IOContract.GetFileStatusSpec(), IOContract.ObservedNativeFileStatusContractFields();
-    IOContract.FileStatusStructureImpliesMetadata(io.fs(), path, followSymlink, ok, status, err);
+    MetadataProof.FileStatusStructureImpliesMetadata(io.fs(), path, followSymlink, ok, status, err);
     var atimeSec := status.times.atimeSec;
     var atimeNsec := status.times.atimeNsec;
     var mtimeSec := status.times.mtimeSec;
@@ -3527,7 +3533,7 @@ module MvCore {
     var rawMetadataErr3 := IOContract.ResultErrno(getFileStatusResult5);
     call := Spec.StatusCallEvidence(old(io.fs()), directory, true,
       rawMetadataOk3, rawMetadataStatus3, rawMetadataErr3);
-    IOContract.FileStatusStructureImpliesMetadata(io.fs(), directory, true, rawMetadataOk3, rawMetadataStatus3, rawMetadataErr3);
+    MetadataProof.FileStatusStructureImpliesMetadata(io.fs(), directory, true, rawMetadataOk3, rawMetadataStatus3, rawMetadataErr3);
     var statOk := rawMetadataOk3;
     var isDir := rawMetadataStatus3.kind == BenchWorld.DirectoryKind;
     var statErr := rawMetadataErr3;
@@ -4197,7 +4203,7 @@ module MvCore {
          targetMetadata.times.mtimeSec, targetMetadata.times.mtimeNsec)) {
       if sameFileDecision.FailedParentStat? {
         hadError := true;
-        errOut := Spec.ParentStatFailureMessageSpec(sameFileDecision.path, sameFileDecision.err);
+        errOut := Text.ParentStatFailureMessageSpec(sameFileDecision.path, sameFileDecision.err);
       } else if sameFileDecision == Spec.RejectSameFile {
         hadError := true;
         errOut := GetSameFileMessage(source, target);
@@ -4580,7 +4586,7 @@ module MvCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
       else Spec.WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));

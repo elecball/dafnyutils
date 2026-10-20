@@ -1,9 +1,13 @@
+include "ChmodTextCore.dfy"
+include "ChmodRecursiveTextCore.dfy"
 include "ChmodDescriptorSpec.dfy"
 include "ChmodOperandCore.dfy"
 include "ChmodCore.dfy"
 include "ChmodEntryProof.dfy"
 
 module ChmodEntryRuntime {
+  import Text = ChmodTextCore
+  import RecursiveText = ChmodRecursiveTextCore
   import W = BenchWorld
   import Errno = Errnos
   import BenchIO
@@ -83,8 +87,8 @@ module ChmodEntryRuntime {
       var err:=C.ResultErrno(raw);
       native:=Spec.RuntimeIdentity(display,operand,top,false,false,false,W.HostInodeKey(0,0));
       decision:=Spec.EntryFailed(err,Recursive.RecursiveAccess);
-      output:=Recursive.RecursiveAccessStdoutSpec(cmd,display);
-      diagnostics:=Recursive.NativeAccessText(cmd,display,Recursive.RecursiveAccess,Base.NativeErrnoTextCore(err,io));
+      output:=RecursiveText.RecursiveAccessStdoutSpec(cmd,display);
+      diagnostics:=RecursiveText.NativeAccessText(cmd,display,Recursive.RecursiveAccess,Base.NativeErrnoTextCore(err,io));
       entry:=Spec.Entry(native,fs0,native0,cursor0,attempts,[],decision,
         Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,false));
       assert Spec.EntryFields(cmd,scope,display,operand,top,fs0,native0,cursor0,entry) by { reveal Spec.EntryFields(); }
@@ -115,8 +119,8 @@ module ChmodEntryRuntime {
       } else {
         native:=Spec.RuntimeIdentity(display,operand,top,isLink,false,Spec.MetadataFollow(cmd,top),raw.v.hostKey);
         var kind:=Recursive.ResolutionFailureKindSpec(cmd,top,isLink,err);
-        decision:=Spec.EntryFailed(err,kind); output:=Recursive.RecursiveAccessStdoutSpec(cmd,display);
-        diagnostics:=Recursive.NativeAccessText(cmd,display,kind,Base.NativeErrnoTextCore(err,io));
+        decision:=Spec.EntryFailed(err,kind); output:=RecursiveText.RecursiveAccessStdoutSpec(cmd,display);
+        diagnostics:=RecursiveText.NativeAccessText(cmd,display,kind,Base.NativeErrnoTextCore(err,io));
         entry:=Spec.Entry(native,fs0,native0,cursor0,attempts,[],decision,
           Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,false));
       }
@@ -131,7 +135,7 @@ module ChmodEntryRuntime {
     native:=Spec.RuntimeIdentity(display,operand,top,isLink,isDirectory,Spec.MetadataFollow(cmd,top),directory.v.hostKey);
     if cmd.recursive && cmd.preserveRoot && isDirectory && scope.root.RootChecked? && native.key==scope.root.key {
       var alias:=display!="/";
-      decision:=Spec.EntryPreserved(alias); output:=[]; diagnostics:=Recursive.RootPreserveMessageSpec(display,alias);
+      decision:=Spec.EntryPreserved(alias); output:=[]; diagnostics:=RecursiveText.RootPreserveMessageSpec(display,alias);
     } else { decision:=Spec.EntryReady; output:=[]; diagnostics:=[]; }
     entry:=Spec.Entry(native,fs0,native0,cursor0,attempts,[resolved],decision,
       Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,decision.EntryReady?));

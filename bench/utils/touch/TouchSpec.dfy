@@ -89,22 +89,67 @@ module TouchSpec {
     BenchIO.QuoteafPathResult(path)
   }
 
+  function TouchErrorMessageSpecPart1(): StreamWorld.Bytes
+  {
+    "touch: cannot touch "
+  }
+
+  function TouchErrorMessageSpecPart2(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function TouchErrorMessageSpecPart3(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
   ghost function TouchErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
-    Utf8.Encode("touch: cannot touch ") + QuotedPathSpec(path)
-      + Utf8.Encode(": " + ErrnoTextSpec(err) + "\n")
+    Utf8.Encode(TouchErrorMessageSpecPart1()) + QuotedPathSpec(path)
+      + Utf8.Encode(TouchErrorMessageSpecPart2() + ErrnoTextSpec(err) + TouchErrorMessageSpecPart3())
+  }
+
+  function ReferenceErrorMessageSpecPart1(): StreamWorld.Bytes
+  {
+    "touch: failed to get attributes of "
+  }
+
+  function ReferenceErrorMessageSpecPart2(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function ReferenceErrorMessageSpecPart3(): StreamWorld.Bytes
+  {
+    "\n"
   }
 
   ghost function ReferenceErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
-    Utf8.Encode("touch: failed to get attributes of ") + QuotedPathSpec(path)
-      + Utf8.Encode(": " + ErrnoTextSpec(err) + "\n")
+    Utf8.Encode(ReferenceErrorMessageSpecPart1()) + QuotedPathSpec(path)
+      + Utf8.Encode(ReferenceErrorMessageSpecPart2() + ErrnoTextSpec(err) + ReferenceErrorMessageSpecPart3())
+  }
+
+  function SetTimesErrorMessageSpecPart1(): StreamWorld.Bytes
+  {
+    "touch: setting times of "
+  }
+
+  function SetTimesErrorMessageSpecPart2(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function SetTimesErrorMessageSpecPart3(): StreamWorld.Bytes
+  {
+    "\n"
   }
 
   ghost function SetTimesErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
-    Utf8.Encode("touch: setting times of ") + QuotedPathSpec(path)
-      + Utf8.Encode(": " + ErrnoTextSpec(err) + "\n")
+    Utf8.Encode(SetTimesErrorMessageSpecPart1()) + QuotedPathSpec(path)
+      + Utf8.Encode(SetTimesErrorMessageSpecPart2() + ErrnoTextSpec(err) + SetTimesErrorMessageSpecPart3())
   }
 
   opaque ghost function StdoutErrorMessageSpec(err: int): BenchWorld.Bytes
@@ -113,10 +158,25 @@ module TouchSpec {
       + Utf8.Encode(": " + ErrnoTextSpec(err) + "\n")
   }
 
+  function CloseErrorMessageSpecPart1(): StreamWorld.Bytes
+  {
+    "touch: failed to close "
+  }
+
+  function CloseErrorMessageSpecPart2(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function CloseErrorMessageSpecPart3(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
   ghost function CloseErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
-    Utf8.Encode("touch: failed to close ") + QuotedPathSpec(path)
-      + Utf8.Encode(": " + ErrnoTextSpec(err) + "\n")
+    Utf8.Encode(CloseErrorMessageSpecPart1()) + QuotedPathSpec(path)
+      + Utf8.Encode(CloseErrorMessageSpecPart2() + ErrnoTextSpec(err) + CloseErrorMessageSpecPart3())
   }
 
   function MissingOperandMessageSpec(): BenchWorld.Bytes
@@ -124,19 +184,50 @@ module TouchSpec {
     "touch: missing file operand\nTry 'touch --help' for more information.\n"
   }
 
-  function MissingShortRequiredArgumentMessageSpec(option: char): BenchWorld.Bytes
+  function MissingShortRequiredArgumentMessageSpecPart1(): StreamWorld.Bytes
   {
-    Utf8.Encode("touch: option requires an argument -- '" + [option] + "'\n" +
-    "Try 'touch --help' for more information.\n")
+    "touch: option requires an argument -- '"
   }
 
-  function MissingLongRequiredArgumentMessageSpec(option: string): BenchWorld.Bytes
+  function MissingShortRequiredArgumentMessageSpecPart2(): StreamWorld.Bytes
   {
-    Utf8.Encode("touch: option '--" + option + "' requires an argument\n" +
-    "Try 'touch --help' for more information.\n")
+    "'\n"
   }
 
-  function ParseErrorMessageSpec(e: CliTypes.ParseError): BenchWorld.Bytes
+  function MissingShortRequiredArgumentMessageSpecPart3(): StreamWorld.Bytes
+  {
+    "Try 'touch --help' for more information.\n"
+  }
+
+  ghost function MissingShortRequiredArgumentMessageSpec(option: char): BenchWorld.Bytes
+  {
+    var prefix: string := MissingShortRequiredArgumentMessageSpecPart1();
+    Utf8.Encode(prefix + [option] + MissingShortRequiredArgumentMessageSpecPart2() +
+    MissingShortRequiredArgumentMessageSpecPart3())
+  }
+
+  function MissingLongRequiredArgumentMessageSpecPart1(): StreamWorld.Bytes
+  {
+    "touch: option '--"
+  }
+
+  function MissingLongRequiredArgumentMessageSpecPart2(): StreamWorld.Bytes
+  {
+    "' requires an argument\n"
+  }
+
+  function MissingLongRequiredArgumentMessageSpecPart3(): StreamWorld.Bytes
+  {
+    "Try 'touch --help' for more information.\n"
+  }
+
+  ghost function MissingLongRequiredArgumentMessageSpec(option: string): BenchWorld.Bytes
+  {
+    Utf8.Encode(MissingLongRequiredArgumentMessageSpecPart1() + option + MissingLongRequiredArgumentMessageSpecPart2() +
+    MissingLongRequiredArgumentMessageSpecPart3())
+  }
+
+  ghost function ParseErrorMessageSpec(e: CliTypes.ParseError): BenchWorld.Bytes
   {
     if Schema.IsMissingShortRequiredArgument(e) then
       MissingShortRequiredArgumentMessageSpec(e.rawToken[|e.rawToken| - 1])
@@ -154,29 +245,99 @@ module TouchSpec {
     plan == CliTypes.CliEarlyExit(1, [], ParseErrorMessageSpec(e))
   }
 
-  function InvalidTimeMessageSpec(value: string): BenchWorld.Bytes
+  function InvalidTimeMessageSpecPart1(): StreamWorld.Bytes
   {
-    "touch: invalid argument " + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
-    Utf8.Encode(" for '--time'\n" +
-    "Valid arguments are:\n" +
-    "  - 'atime', 'access', 'use'\n" +
-    "  - 'mtime', 'modify'\n" +
-    "Try 'touch --help' for more information.\n")
+    "touch: invalid argument "
   }
 
-  function AmbiguousTimeMessageSpec(value: string): BenchWorld.Bytes
+  function InvalidTimeMessageSpecPart2(): StreamWorld.Bytes
   {
-    "touch: ambiguous argument " + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
-    Utf8.Encode(" for '--time'\n" +
-    "Valid arguments are:\n" +
-    "  - 'atime', 'access', 'use'\n" +
-    "  - 'mtime', 'modify'\n" +
-    "Try 'touch --help' for more information.\n")
+    " for '--time'\n"
   }
 
-  function InvalidDateMessageSpec(value: string): BenchWorld.Bytes
+  function InvalidTimeMessageSpecPart3(): StreamWorld.Bytes
   {
-    "touch: invalid date format " + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) + "\n"
+    "Valid arguments are:\n"
+  }
+
+  function InvalidTimeMessageSpecPart4(): StreamWorld.Bytes
+  {
+    "  - 'atime', 'access', 'use'\n"
+  }
+
+  function InvalidTimeMessageSpecPart5(): StreamWorld.Bytes
+  {
+    "  - 'mtime', 'modify'\n"
+  }
+
+  function InvalidTimeMessageSpecPart6(): StreamWorld.Bytes
+  {
+    "Try 'touch --help' for more information.\n"
+  }
+
+  ghost function InvalidTimeMessageSpec(value: string): BenchWorld.Bytes
+  {
+    InvalidTimeMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
+    Utf8.Encode(InvalidTimeMessageSpecPart2() +
+    InvalidTimeMessageSpecPart3() +
+    InvalidTimeMessageSpecPart4() +
+    InvalidTimeMessageSpecPart5() +
+    InvalidTimeMessageSpecPart6())
+  }
+
+  function AmbiguousTimeMessageSpecPart1(): StreamWorld.Bytes
+  {
+    "touch: ambiguous argument "
+  }
+
+  function AmbiguousTimeMessageSpecPart2(): StreamWorld.Bytes
+  {
+    " for '--time'\n"
+  }
+
+  function AmbiguousTimeMessageSpecPart3(): StreamWorld.Bytes
+  {
+    "Valid arguments are:\n"
+  }
+
+  function AmbiguousTimeMessageSpecPart4(): StreamWorld.Bytes
+  {
+    "  - 'atime', 'access', 'use'\n"
+  }
+
+  function AmbiguousTimeMessageSpecPart5(): StreamWorld.Bytes
+  {
+    "  - 'mtime', 'modify'\n"
+  }
+
+  function AmbiguousTimeMessageSpecPart6(): StreamWorld.Bytes
+  {
+    "Try 'touch --help' for more information.\n"
+  }
+
+  ghost function AmbiguousTimeMessageSpec(value: string): BenchWorld.Bytes
+  {
+    AmbiguousTimeMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
+    Utf8.Encode(AmbiguousTimeMessageSpecPart2() +
+    AmbiguousTimeMessageSpecPart3() +
+    AmbiguousTimeMessageSpecPart4() +
+    AmbiguousTimeMessageSpecPart5() +
+    AmbiguousTimeMessageSpecPart6())
+  }
+
+  function InvalidDateMessageSpecPart1(): StreamWorld.Bytes
+  {
+    "touch: invalid date format "
+  }
+
+  function InvalidDateMessageSpecPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function InvalidDateMessageSpec(value: string): BenchWorld.Bytes
+  {
+    InvalidDateMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) + InvalidDateMessageSpecPart2()
   }
 
   ghost predicate SetPathTimesSpecFields(
@@ -622,9 +783,19 @@ module TouchSpec {
   }
 
 
-  function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorTextPart1(): StreamWorld.Bytes
   {
-    "touch: write error: " + Utf8.Encode(reason) + "\n"
+    "touch: write error: "
+  }
+
+  function WriteErrorTextPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate EmissionOutcomeFields(

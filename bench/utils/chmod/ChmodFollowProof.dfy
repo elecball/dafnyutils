@@ -1,7 +1,9 @@
+include "ChmodModelProof.dfy"
 include "ChmodResolutionProof.dfy"
 include "ChmodPathProof.dfy"
 
 module ChmodFollowProof {
+  import ModelProof = ChmodModelProof
   import W = BenchWorld
   import C = IOContract
   import R = Results
@@ -24,7 +26,7 @@ module ChmodFollowProof {
     reveal C.CwdNamedResultFields(), C.CwdTargetRecordFields();
     var raw := C.ResolveRawSymlinkSegmentsFields(fs, segments, index, current, seen, fuel, false, false, directory);
     assert raw.Ok?;
-    var canonical := C.CanonicalExistingPathFields(fs, raw.v);
+    var canonical := ModelProof.CanonicalExistingPathFields(fs, raw.v);
     assert target == W.CwdNamedTarget(canonical);
     Targets.NamedTargetRecord(fs, native, target);
     reveal C.CwdTargetNamedPathFields();
@@ -96,7 +98,7 @@ module ChmodFollowProof {
       reveal C.CwdNamedResultFields();
       var raw := C.ResolvePathForMetadataFields(fs, path, false);
       assert raw.Ok?;
-      var canonical := C.CanonicalExistingPathFields(fs, raw.v);
+      var canonical := ModelProof.CanonicalExistingPathFields(fs, raw.v);
       assert target == W.CwdNamedTarget(canonical);
       Targets.NamedTargetRecord(fs, native, target);
       reveal C.CwdTargetNamedPathFields();

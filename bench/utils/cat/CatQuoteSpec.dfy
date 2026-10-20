@@ -3,12 +3,12 @@ include "../../core/World.dfy"
 module CatQuoteSpec {
   import BW = BenchWorld
 
-  function SpecCPrintableByte(byte: BW.RawByte): bool
+  ghost function SpecCPrintableByte(byte: BW.RawByte): bool
   {
     0x20 <= byte as int <= 0x7e
   }
 
-  function SpecOctDigit(value: int): BW.RawByte
+  ghost function SpecOctDigit(value: int): BW.RawByte
   {
     if value == 0 then '0'
     else if value == 1 then '1'
@@ -20,13 +20,13 @@ module CatQuoteSpec {
     else '7'
   }
 
-  function SpecOctalEscape(byte: BW.RawByte): BW.Bytes
+  ghost function SpecOctalEscape(byte: BW.RawByte): BW.Bytes
   {
     var value := byte as int;
     ['\\', SpecOctDigit((value / 64) % 8), SpecOctDigit((value / 8) % 8), SpecOctDigit(value % 8)]
   }
 
-  function SpecNamedEscape(byte: BW.RawByte): BW.Bytes
+  ghost function SpecNamedEscape(byte: BW.RawByte): BW.Bytes
   {
     if byte == 7 as char then "\\a"
     else if byte == 8 as char then "\\b"
@@ -38,18 +38,18 @@ module CatQuoteSpec {
     else []
   }
 
-  function SpecAnsiEscape(byte: BW.RawByte): BW.Bytes
+  ghost function SpecAnsiEscape(byte: BW.RawByte): BW.Bytes
   {
     var named := SpecNamedEscape(byte);
     if named != [] then named else SpecOctalEscape(byte)
   }
 
-  function SpecNeedsAnsiEscape(byte: BW.RawByte): bool
+  ghost function SpecNeedsAnsiEscape(byte: BW.RawByte): bool
   {
     !SpecCPrintableByte(byte)
   }
 
-  function SpecCQuoteByte(byte: BW.RawByte): BW.Bytes
+  ghost function SpecCQuoteByte(byte: BW.RawByte): BW.Bytes
   {
     var named := SpecNamedEscape(byte);
     if named != [] then named
@@ -59,7 +59,7 @@ module CatQuoteSpec {
     else SpecOctalEscape(byte)
   }
 
-  function SpecCQuoteBytes(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecCQuoteBytes(bytes: BW.Bytes): BW.Bytes
     decreases |bytes|
   {
     if |bytes| == 0 then
@@ -68,14 +68,14 @@ module CatQuoteSpec {
       SpecCQuoteByte(bytes[0]) + SpecCQuoteBytes(bytes[1..])
   }
 
-  function SpecDoubleQuote(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecDoubleQuote(bytes: BW.Bytes): BW.Bytes
   {
     "\"" + SpecCQuoteBytes(bytes) + "\""
   }
 
   // `atStart` and `singleton` carry the only positional facts the byte test
   // needs; both are supplied once at the entry point.
-  function SpecShellCompatibleByte(byte: BW.RawByte, atStart: bool, singleton: bool): bool
+  ghost function SpecShellCompatibleByte(byte: BW.RawByte, atStart: bool, singleton: bool): bool
   {
     if byte == '?' || byte == '\\' then
       false
@@ -94,7 +94,7 @@ module CatQuoteSpec {
       SpecCPrintableByte(byte)
   }
 
-  function SpecShellCompatibleTail(bytes: BW.Bytes): bool
+  ghost function SpecShellCompatibleTail(bytes: BW.Bytes): bool
     decreases |bytes|
   {
     |bytes| == 0 ||
@@ -102,19 +102,19 @@ module CatQuoteSpec {
      SpecShellCompatibleTail(bytes[1..]))
   }
 
-  function SpecAllShellCompatible(bytes: BW.Bytes): bool
+  ghost function SpecAllShellCompatible(bytes: BW.Bytes): bool
   {
     |bytes| == 0 ||
     (SpecShellCompatibleByte(bytes[0], true, |bytes| == 1) &&
      SpecShellCompatibleTail(bytes[1..]))
   }
 
-  function SpecContainsApostrophe(bytes: BW.Bytes): bool
+  ghost function SpecContainsApostrophe(bytes: BW.Bytes): bool
   {
     '\'' in bytes
   }
 
-  function SpecShellEscapeTail(bytes: BW.Bytes, ansi: bool): BW.Bytes
+  ghost function SpecShellEscapeTail(bytes: BW.Bytes, ansi: bool): BW.Bytes
     decreases |bytes|
   {
     if |bytes| == 0 then
@@ -131,7 +131,7 @@ module CatQuoteSpec {
         SpecShellEscapeTail(bytes[1..], false)
   }
 
-  function SpecQuoteAfBytes(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecQuoteAfBytes(bytes: BW.Bytes): BW.Bytes
   {
     if SpecContainsApostrophe(bytes) && SpecAllShellCompatible(bytes) then
       SpecDoubleQuote(bytes)
@@ -139,7 +139,7 @@ module CatQuoteSpec {
       "'" + SpecShellEscapeTail(bytes, false)
   }
 
-  function SpecShellQuoteTriggerByte(byte: BW.RawByte, atStart: bool, singleton: bool): bool
+  ghost function SpecShellQuoteTriggerByte(byte: BW.RawByte, atStart: bool, singleton: bool): bool
   {
     !SpecCPrintableByte(byte) ||
     byte == '\\' || byte == '\'' || byte == '?' || byte == ':' ||
@@ -151,7 +151,7 @@ module CatQuoteSpec {
     ((byte == '{' || byte == '}') && singleton)
   }
 
-  function SpecHasShellQuoteTriggerTail(bytes: BW.Bytes): bool
+  ghost function SpecHasShellQuoteTriggerTail(bytes: BW.Bytes): bool
     decreases |bytes|
   {
     |bytes| != 0 &&
@@ -159,14 +159,14 @@ module CatQuoteSpec {
      SpecHasShellQuoteTriggerTail(bytes[1..]))
   }
 
-  function SpecHasShellQuoteTrigger(bytes: BW.Bytes): bool
+  ghost function SpecHasShellQuoteTrigger(bytes: BW.Bytes): bool
   {
     |bytes| != 0 &&
     (SpecShellQuoteTriggerByte(bytes[0], true, |bytes| == 1) ||
      SpecHasShellQuoteTriggerTail(bytes[1..]))
   }
 
-  function SpecQuoteFBytes(bytes: BW.Bytes): BW.Bytes
+  ghost function SpecQuoteFBytes(bytes: BW.Bytes): BW.Bytes
   {
     if |bytes| == 0 || SpecHasShellQuoteTrigger(bytes) then
       SpecQuoteAfBytes(bytes)

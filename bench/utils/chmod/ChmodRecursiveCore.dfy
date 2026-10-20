@@ -1,5 +1,7 @@
+include "ChmodTextCore.dfy"
+include "ChmodRecursiveTextCore.dfy"
 include "../../core/World.dfy"
-include "../../core/WorldFileSystemProof.dfy"
+include "ChmodWorldFileSystemProof.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "ChmodSchema.dfy"
@@ -7,8 +9,10 @@ include "ChmodCore.dfy"
 include "ChmodRecursiveSpec.dfy"
 
 module ChmodRecursiveCore {
+  import Text = ChmodTextCore
+  import RecursiveText = ChmodRecursiveTextCore
   import BenchWorld
-  import WorldProof = WorldFileSystemProof
+  import WorldProof = ChmodWorldFileSystemProof
   import BenchIO
   import ChmodSpec
   import IOContract
@@ -81,27 +85,27 @@ module ChmodRecursiveCore {
 
   function RootPreserveMessageCore(displayPath: string, alias: bool): BenchWorld.Bytes
   {
-    Spec.RootPreserveMessageSpec(displayPath, alias)
+    RecursiveText.RootPreserveMessageSpec(displayPath, alias)
   }
 
   function ReadDirectoryMessageCore(path: string, err: int): BenchWorld.Bytes
   {
-    Spec.ReadDirectoryMessageSpec(path, err)
+    RecursiveText.ReadDirectoryMessageSpec(path, err)
   }
 
   function DanglingSymlinkMessageCore(path: string): BenchWorld.Bytes
   {
-    Spec.DanglingSymlinkMessageSpec(path)
+    RecursiveText.DanglingSymlinkMessageSpec(path)
   }
 
   function CannotDereferenceMessageCore(path: string, err: int): BenchWorld.Bytes
   {
-    Spec.CannotDereferenceMessageSpec(path, err)
+    RecursiveText.CannotDereferenceMessageSpec(path, err)
   }
 
   function NeitherChangedMessageCore(path: string): BenchWorld.Bytes
   {
-    Spec.NeitherChangedMessageSpec(path)
+    RecursiveText.NeitherChangedMessageSpec(path)
   }
 
   function RecursiveDereferenceRequirementMessageCore(): BenchWorld.Bytes
@@ -173,7 +177,7 @@ module ChmodRecursiveCore {
       if cmd.silent then [] else ReadDirectoryMessageCore(path, err)
   }
 
-  function ApplyResolvedCore(
+  ghost function ApplyResolvedCore(
     cmd: Schema.ChmodCmd,
     plan: Base.CoreModePlan,
     identity: RecursiveIdentity,
@@ -224,7 +228,7 @@ module ChmodRecursiveCore {
       )
   }
 
-  function EvalChildrenCore(
+  ghost function EvalChildrenCore(
     cmd: Schema.ChmodCmd,
     plan: Base.CoreModePlan,
     visits: seq<RecursiveVisit>,
@@ -252,7 +256,7 @@ module ChmodRecursiveCore {
       )
   }
 
-  function EvalVisitCore(
+  ghost function EvalVisitCore(
     cmd: Schema.ChmodCmd,
     plan: Base.CoreModePlan,
     visit: RecursiveVisit,
@@ -486,7 +490,7 @@ module ChmodRecursiveCore {
     }
   }
 
-  predicate ActiveAncestryCycle(
+  ghost predicate ActiveAncestryCycle(
     activeResolved: set<seq<string>>,
     resolved: BenchWorld.Path
   )

@@ -19,7 +19,7 @@ module Algorithm4Spec
   function InvalidInputText(): BenchWorld.Bytes { "algorithm4: invalid input\n" }
 
 
-  function IntegerText(value: int): string
+  ghost function IntegerText(value: int): string
     decreases if value < 0 then 1 else 0, if value < 0 then -value else value
   {
     if value < 0 then "-" + IntegerText(-value)
@@ -27,13 +27,7 @@ module Algorithm4Spec
     else IntegerText(value / 10) + IntegerText(value % 10)
   }
 
-  function LinesText(lines: seq<string>): string
-    decreases |lines|
-  {
-    if |lines| == 0 then "" else lines[0] + "\n" + LinesText(lines[1..])
-  }
-
-  function OutputText(y: int): BenchWorld.Bytes
+  ghost function OutputText(y: int): BenchWorld.Bytes
   {
     Utf8.Encode(IntegerText(y) + "\n")
   }

@@ -1,6 +1,6 @@
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "BasenameSchema.dfy"
 include "BasenameCore.dfy"
 include "BasenameProof.dfy"

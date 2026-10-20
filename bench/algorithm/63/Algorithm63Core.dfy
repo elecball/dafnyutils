@@ -1,3 +1,4 @@
+include "Algorithm63TextCore.dfy"
 include "Algorithm63Spec.dfy"
 include "Algorithm63Schema.dfy"
 include "../../core/IO.dfy"
@@ -6,6 +7,7 @@ module Algorithm63Core {
   import BenchWorld
   import Schema = Algorithm63Schema
   import CliSpec = Algorithm63Spec
+  import Text = Algorithm63TextCore
 
   twostate predicate CoreSummary(raw: Schema.Algorithm63CmdRaw, io: BenchIO.IO, exit: int)
     reads io.stdoutRegion, io.stderrRegion, io.trustedStreamsRegion
@@ -29,7 +31,7 @@ module Algorithm63Core {
       return;
     }
     var result := Solve(raw.n, raw.k, raw.a);
-    var text := CliSpec.OutputText(result);
+    var text := Text.OutputText(result);
     var written := io.WriteStdout(text);
     exit := if written.Err? then 1 else 0;
   }

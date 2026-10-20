@@ -73,10 +73,25 @@ module DuSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessageSpecPart1(): StreamWorld.Bytes
   {
-    "du: cannot access " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    ": " + Utf8.Encode(ErrnoText(err)) + "\n"
+    "du: cannot access "
+  }
+
+  function ErrorMessageSpecPart2(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function ErrorMessageSpecPart3(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  {
+    ErrorMessageSpecPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
+    ErrorMessageSpecPart2() + Utf8.Encode(ErrnoText(err)) + ErrorMessageSpecPart3()
   }
 
   function DigitChar(d: nat): char
@@ -94,7 +109,7 @@ module DuSpec {
     else '9'
   }
 
-  function NatText(n: nat): string
+  ghost function NatText(n: nat): string
     decreases n
   {
     if n < 10 then
@@ -103,9 +118,19 @@ module DuSpec {
       NatText(n / 10) + [DigitChar(n % 10)]
   }
 
-  function CountLineSpec(size: nat, path: BenchWorld.Path): BenchWorld.Bytes
+  function CountLineSpecPart1(): StreamWorld.Bytes
   {
-    NatText(size) + "\t" + Utf8.Encode(path) + "\n"
+    "\t"
+  }
+
+  function CountLineSpecPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CountLineSpec(size: nat, path: BenchWorld.Path): BenchWorld.Bytes
+  {
+    NatText(size) + CountLineSpecPart1() + Utf8.Encode(path) + CountLineSpecPart2()
   }
 
   ghost predicate FileObservationRelation(
@@ -119,14 +144,14 @@ module DuSpec {
       observations[i] == IOContract.ObservedReadFileResultFields(preFs, preStreams, cmd.operands[i])
   }
 
-  function OutputPieceSpec(path: BenchWorld.Path, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
+  ghost function OutputPieceSpec(path: BenchWorld.Path, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match result
     case Ok(data) => CountLineSpec(|data|, path)
     case Err(_) => []
   }
 
-  function ErrorPieceSpec(path: BenchWorld.Path, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
+  ghost function ErrorPieceSpec(path: BenchWorld.Path, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match result
     case Ok(_) => []
@@ -189,9 +214,19 @@ module DuSpec {
   }
 
 
-  function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorTextPart1(): StreamWorld.Bytes
   {
-    "du: write error: " + Utf8.Encode(reason) + "\n"
+    "du: write error: "
+  }
+
+  function WriteErrorTextPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate EmissionOutcomeFields(

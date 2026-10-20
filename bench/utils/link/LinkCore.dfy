@@ -1,8 +1,10 @@
+include "LinkTextCore.dfy"
 include "../../core/IO.dfy"
 include "LinkSchema.dfy"
 include "LinkSpec.dfy"
 
 module LinkCore {
+  import Text = LinkTextCore
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -11,7 +13,7 @@ module LinkCore {
   import Schema = LinkSchema
   import Spec = LinkSpec
   import C = IOContract
-  import Utf8 = Utf8Semantics
+  import Utf8 = LinkUtf8Core
 
   opaque twostate predicate PreparedSummary(raw: Schema.LinkCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     reads io.fsRegion, io.nowRegion, io.trustedFilesystemRegion
@@ -115,7 +117,7 @@ module LinkCore {
         var quotedTarget := io.QuoteafPath(target);
         var quotedSource := io.QuoteafPath(source);
         plannedStderr := plannedStderr + (
-          Spec.CannotCreateLinkText(quotedTarget, quotedSource, reason));
+          Text.CannotCreateLinkText(quotedTarget, quotedSource, reason));
         exit := 1;
 
         assert C.GetCLocaleErrnoTextSpec(err, reason);
@@ -145,7 +147,7 @@ module LinkCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
       else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

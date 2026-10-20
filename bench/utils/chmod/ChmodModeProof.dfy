@@ -1,6 +1,8 @@
+include "ChmodModelProof.dfy"
 include "ChmodOperandProof.dfy"
 
 module ChmodModeProof {
+  import ModelProof = ChmodModelProof
   import W = BenchWorld
   import C = IOContract
   import Paths = ChmodOperandProof
@@ -19,7 +21,7 @@ module ChmodModeProof {
     var after := C.ModeChangedFilesystemFields(fs, key, mode, now);
     assert W.ValidInodeFileSystemData(fs);
     reveal W.ValidInodeFileSystemData(), W.InodeUniqueHostKeys();
-    C.ModeChangedRecordFacts(fs.inodes[id], mode, now);
+    ModelProof.ModeChangedRecordFacts(fs.inodes[id], mode, now);
     reveal C.ModeChangedRecordFields(), C.ModeChangedRecordsFields(), W.InodeRecordWithNode();
     var record := W.InodeRecordWithNode(fs.inodes[id], node);
     assert C.ModeChangedRecordsFields(fs.inodes, key, mode, now) == fs.inodes[id := record] by {

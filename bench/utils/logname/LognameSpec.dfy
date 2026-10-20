@@ -45,10 +45,20 @@ module LognameSpec {
     + "Written by David MacKenzie.\n"
   }
 
-  function ExtraOperandMessageSpec(op: string): BenchWorld.Bytes
+  function ExtraOperandPrefix(): BenchWorld.Bytes
   {
-    "logname: extra operand " + SE.SpecLocaleQuoteBytes(Utf8.Encode(op)) + "\n"
+    "logname: extra operand "
+  }
+
+  function ExtraOperandSuffix(): BenchWorld.Bytes
+  {
+    "\n"
     + "Try 'logname --help' for more information.\n"
+  }
+
+  ghost function ExtraOperandMessageSpec(op: string): BenchWorld.Bytes
+  {
+    ExtraOperandPrefix() + SE.SpecLocaleQuoteBytes(Utf8.Encode(op)) + ExtraOperandSuffix()
   }
 
   function NoLoginNameMessageSpec(): BenchWorld.Bytes
@@ -61,9 +71,14 @@ module LognameSpec {
     "loginName" in props
   }
 
-  function LoginNameOutput(name: string): BenchWorld.Bytes
+  function LoginNameTerminator(): BenchWorld.Bytes
   {
-    Utf8.Encode(name) + "\n"
+    "\n"
+  }
+
+  ghost function LoginNameOutput(name: string): BenchWorld.Bytes
+  {
+    Utf8.Encode(name) + LoginNameTerminator()
   }
 
   twostate predicate PreparedSpec(raw: Schema.LognameCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
@@ -97,9 +112,14 @@ module LognameSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorText(message: string): string
   {
-    StreamUtf8.Encode("logname: write error: " + message + "\n")
+    "logname: write error: " + message + "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorText(message))
   }
 
   ghost predicate EmitFields(

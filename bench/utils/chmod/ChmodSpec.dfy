@@ -92,32 +92,92 @@ module ChmodSpec {
     else "unknown error"
   }
 
-  function MissingOperandMessageSpec(cmd: Schema.ChmodCmd): BenchWorld.Bytes
+  function MissingOperandMessageSpecPart1(): BenchWorld.Bytes
   {
-    if cmd.modeExpr != "" && !cmd.diagnoseSurprises then
-      "chmod: missing operand after " +
-      Quote.SpecLocaleQuoteBytes(Utf8.Encode(cmd.modeExpr)) +
-      "\nTry 'chmod --help' for more information.\n"
-    else
-      "chmod: missing operand\nTry 'chmod --help' for more information.\n"
+    ""
   }
 
-  function InvalidModeMessageSpec(modeExpr: string): BenchWorld.Bytes
+  function MissingOperandMessageSpecPart2(): BenchWorld.Bytes
   {
-    "chmod: invalid mode: " + Quote.SpecLocaleQuoteBytes(Utf8.Encode(modeExpr)) +
+    "chmod: missing operand after "
+  }
+
+  function MissingOperandMessageSpecPart3(): BenchWorld.Bytes
+  {
     "\nTry 'chmod --help' for more information.\n"
   }
 
-  function ReferenceErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
+  function MissingOperandMessageSpecPart4(): BenchWorld.Bytes
   {
-    "chmod: failed to get attributes of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    ": " + Utf8.Encode(err) + "\n"
+    "chmod: missing operand\nTry 'chmod --help' for more information.\n"
   }
 
-  function GettingNewAttributesMessageSpec(path: string, err: string): BenchWorld.Bytes
+  ghost function MissingOperandMessageSpec(cmd: Schema.ChmodCmd): BenchWorld.Bytes
   {
-    "chmod: getting new attributes of " +
-    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " + Utf8.Encode(err) + "\n"
+    if cmd.modeExpr != MissingOperandMessageSpecPart1() && !cmd.diagnoseSurprises then
+      MissingOperandMessageSpecPart2() +
+      Quote.SpecLocaleQuoteBytes(Utf8.Encode(cmd.modeExpr)) +
+      MissingOperandMessageSpecPart3()
+    else
+      MissingOperandMessageSpecPart4()
+  }
+
+  function InvalidModeMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "chmod: invalid mode: "
+  }
+
+  function InvalidModeMessageSpecPart2(): BenchWorld.Bytes
+  {
+    "\nTry 'chmod --help' for more information.\n"
+  }
+
+  ghost function InvalidModeMessageSpec(modeExpr: string): BenchWorld.Bytes
+  {
+    InvalidModeMessageSpecPart1() + Quote.SpecLocaleQuoteBytes(Utf8.Encode(modeExpr)) +
+    InvalidModeMessageSpecPart2()
+  }
+
+  function ReferenceErrorMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "chmod: failed to get attributes of "
+  }
+
+  function ReferenceErrorMessageSpecPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function ReferenceErrorMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ReferenceErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
+  {
+    ReferenceErrorMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+    ReferenceErrorMessageSpecPart2() + Utf8.Encode(err) + ReferenceErrorMessageSpecPart3()
+  }
+
+  function GettingNewAttributesMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "chmod: getting new attributes of "
+  }
+
+  function GettingNewAttributesMessageSpecPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function GettingNewAttributesMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function GettingNewAttributesMessageSpec(path: string, err: string): BenchWorld.Bytes
+  {
+    GettingNewAttributesMessageSpecPart1() +
+    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + GettingNewAttributesMessageSpecPart2() + Utf8.Encode(err) + GettingNewAttributesMessageSpecPart3()
   }
 
   function CombineModeReferenceMessageSpec(): BenchWorld.Bytes
@@ -135,39 +195,104 @@ module ChmodSpec {
     "chmod: multi-file batches are outside this benchmark slice\n"
   }
 
-  function ChangeErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
+  function ChangeErrorMessageSpecPart1(): BenchWorld.Bytes
   {
-    "chmod: changing permissions of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    ": " + Utf8.Encode(err) + "\n"
+    "chmod: changing permissions of "
   }
 
-  function AccessErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
+  function ChangeErrorMessageSpecPart2(): BenchWorld.Bytes
   {
-    "chmod: cannot access " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    ": " + Utf8.Encode(err) + "\n"
+    ": "
   }
 
-  function DanglingSymlinkMessageSpec(path: string): BenchWorld.Bytes
+  function ChangeErrorMessageSpecPart3(): BenchWorld.Bytes
   {
-    "chmod: cannot operate on dangling symlink " +
-    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + "\n"
+    "\n"
   }
 
-  function CannotDereferenceText(path: string, reason: string): BenchWorld.Bytes
+  ghost function ChangeErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
   {
-    "chmod: cannot dereference " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    ": " + Utf8.Encode(reason) + "\n"
+    ChangeErrorMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+    ChangeErrorMessageSpecPart2() + Utf8.Encode(err) + ChangeErrorMessageSpecPart3()
   }
 
-  function CannotDereferenceMessageSpec(path: string, err: int): BenchWorld.Bytes
+  function AccessErrorMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "chmod: cannot access "
+  }
+
+  function AccessErrorMessageSpecPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function AccessErrorMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function AccessErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
+  {
+    AccessErrorMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+    AccessErrorMessageSpecPart2() + Utf8.Encode(err) + AccessErrorMessageSpecPart3()
+  }
+
+  function DanglingSymlinkMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "chmod: cannot operate on dangling symlink "
+  }
+
+  function DanglingSymlinkMessageSpecPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function DanglingSymlinkMessageSpec(path: string): BenchWorld.Bytes
+  {
+    DanglingSymlinkMessageSpecPart1() +
+    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + DanglingSymlinkMessageSpecPart2()
+  }
+
+  function CannotDereferenceTextPart1(): BenchWorld.Bytes
+  {
+    "chmod: cannot dereference "
+  }
+
+  function CannotDereferenceTextPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function CannotDereferenceTextPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CannotDereferenceText(path: string, reason: string): BenchWorld.Bytes
+  {
+    CannotDereferenceTextPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+    CannotDereferenceTextPart2() + Utf8.Encode(reason) + CannotDereferenceTextPart3()
+  }
+
+  ghost function CannotDereferenceMessageSpec(path: string, err: int): BenchWorld.Bytes
   {
     CannotDereferenceText(path, ErrnoTextSpec(err))
   }
 
-  function NeitherChangedMessageSpec(path: string): BenchWorld.Bytes
+  function NeitherChangedMessageSpecPart1(): BenchWorld.Bytes
   {
-    "neither symbolic link " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+    "neither symbolic link "
+  }
+
+  function NeitherChangedMessageSpecPart2(): BenchWorld.Bytes
+  {
     " nor referent has been changed\n"
+  }
+
+  ghost function NeitherChangedMessageSpec(path: string): BenchWorld.Bytes
+  {
+    NeitherChangedMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+    NeitherChangedMessageSpecPart2()
   }
 
   lemma AccessErrorMessagePlainSpec(path: string, err: string)
@@ -201,7 +326,7 @@ module ChmodSpec {
     else '7'
   }
 
-  function SpecOctalText(mode: bv32): BenchWorld.Bytes
+  ghost function SpecOctalText(mode: bv32): BenchWorld.Bytes
   {
     [SpecOctDigitChar(((mode >> 9) & (7 as bv32)) as int)] +
     [SpecOctDigitChar(((mode >> 6) & (7 as bv32)) as int)] +
@@ -209,7 +334,7 @@ module ChmodSpec {
     [SpecOctDigitChar((mode & (7 as bv32)) as int)]
   }
 
-  function SpecPermissionText(mode: bv32): BenchWorld.Bytes
+  ghost function SpecPermissionText(mode: bv32): BenchWorld.Bytes
   {
     [if (mode & Schema.S_IRUSR) != 0 as bv32 then 'r' else '-'] +
     [if (mode & Schema.S_IWUSR) != 0 as bv32 then 'w' else '-'] +
@@ -228,48 +353,138 @@ module ChmodSpec {
      else if (mode & Schema.S_IXOTH) != 0 as bv32 then 'x' else '-']
   }
 
-  function SpecModeDisplay(mode: bv32): BenchWorld.Bytes
+  function SpecModeDisplayPart1(): BenchWorld.Bytes
   {
-    SpecOctalText(mode) + " (" + SpecPermissionText(mode) + ")"
+    " ("
   }
 
-  function ChangedMessageSpec(path: string, before: bv32, after: bv32): BenchWorld.Bytes
+  function SpecModeDisplayPart2(): BenchWorld.Bytes
   {
-    "mode of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    " changed from " + SpecModeDisplay(before) +
-    " to " + SpecModeDisplay(after) + "\n"
+    ")"
   }
 
-  function FailedChangeMessageSpec(
+  ghost function SpecModeDisplay(mode: bv32): BenchWorld.Bytes
+  {
+    SpecOctalText(mode) + SpecModeDisplayPart1() + SpecPermissionText(mode) + SpecModeDisplayPart2()
+  }
+
+  function ChangedMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "mode of "
+  }
+
+  function ChangedMessageSpecPart2(): BenchWorld.Bytes
+  {
+    " changed from "
+  }
+
+  function ChangedMessageSpecPart3(): BenchWorld.Bytes
+  {
+    " to "
+  }
+
+  function ChangedMessageSpecPart4(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ChangedMessageSpec(path: string, before: bv32, after: bv32): BenchWorld.Bytes
+  {
+    ChangedMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+    ChangedMessageSpecPart2() + SpecModeDisplay(before) +
+    ChangedMessageSpecPart3() + SpecModeDisplay(after) + ChangedMessageSpecPart4()
+  }
+
+  function FailedChangeMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "failed to change mode of "
+  }
+
+  function FailedChangeMessageSpecPart2(): BenchWorld.Bytes
+  {
+    " from "
+  }
+
+  function FailedChangeMessageSpecPart3(): BenchWorld.Bytes
+  {
+    " to "
+  }
+
+  function FailedChangeMessageSpecPart4(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function FailedChangeMessageSpec(
     path: string,
     before: bv32,
     desired: bv32
   ): BenchWorld.Bytes
   {
-    "failed to change mode of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    " from " + SpecModeDisplay(before) +
-    " to " + SpecModeDisplay(desired) + "\n"
+    FailedChangeMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+    FailedChangeMessageSpecPart2() + SpecModeDisplay(before) +
+    FailedChangeMessageSpecPart3() + SpecModeDisplay(desired) + FailedChangeMessageSpecPart4()
   }
 
-  function RetainedMessageSpec(path: string, mode: bv32): BenchWorld.Bytes
+  function RetainedMessageSpecPart1(): BenchWorld.Bytes
   {
-    "mode of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    " retained as " + SpecModeDisplay(mode) + "\n"
+    "mode of "
   }
 
-  function AccessFailureMessageSpec(path: string): BenchWorld.Bytes
+  function RetainedMessageSpecPart2(): BenchWorld.Bytes
   {
-    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + " could not be accessed\n"
+    " retained as "
   }
 
-  function SurpriseModeMessageSpec(path: string, actual: bv32, naive: bv32): BenchWorld.Bytes
+  function RetainedMessageSpecPart3(): BenchWorld.Bytes
   {
-    "chmod: " + Quote.SpecQuoteFBytes(Utf8.Encode(path)) +
-    ": new permissions are " + SpecPermissionText(actual) +
-    ", not " + SpecPermissionText(naive) + "\n"
+    "\n"
   }
 
-  function MakeAbsolute(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
+  ghost function RetainedMessageSpec(path: string, mode: bv32): BenchWorld.Bytes
+  {
+    RetainedMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+    RetainedMessageSpecPart2() + SpecModeDisplay(mode) + RetainedMessageSpecPart3()
+  }
+
+  function AccessFailureMessageSpecPart1(): BenchWorld.Bytes
+  {
+    " could not be accessed\n"
+  }
+
+  ghost function AccessFailureMessageSpec(path: string): BenchWorld.Bytes
+  {
+    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + AccessFailureMessageSpecPart1()
+  }
+
+  function SurpriseModeMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "chmod: "
+  }
+
+  function SurpriseModeMessageSpecPart2(): BenchWorld.Bytes
+  {
+    ": new permissions are "
+  }
+
+  function SurpriseModeMessageSpecPart3(): BenchWorld.Bytes
+  {
+    ", not "
+  }
+
+  function SurpriseModeMessageSpecPart4(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function SurpriseModeMessageSpec(path: string, actual: bv32, naive: bv32): BenchWorld.Bytes
+  {
+    SurpriseModeMessageSpecPart1() + Quote.SpecQuoteFBytes(Utf8.Encode(path)) +
+    SurpriseModeMessageSpecPart2() + SpecPermissionText(actual) +
+    SurpriseModeMessageSpecPart3() + SpecPermissionText(naive) + SurpriseModeMessageSpecPart4()
+  }
+
+  ghost function MakeAbsolute(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
   {
     if path == "" then ""
     else if BenchWorld.IsAbsolutePath(path) then path
@@ -306,7 +521,7 @@ module ChmodSpec {
     isSymlink && err == Errno.ENOENT
   }
 
-  function SpecPathIsDanglingSymlinkFailure(
+  ghost function SpecPathIsDanglingSymlinkFailure(
     fs: BenchWorld.FileSystem,
     actual: BenchWorld.Path,
     follow: bool,
@@ -326,13 +541,13 @@ module ChmodSpec {
       )
   }
 
-  function SupportedOctalMode(expr: string): bool
+  ghost function SupportedOctalMode(expr: string): bool
   {
     |expr| > 0 && BenchWorld.IsOctalDigit(expr[0]) &&
     BenchWorld.AllOctalDigits(expr, 0) && BenchWorld.OctalValue(expr, 0, 0) <= 4095
   }
 
-  function OctalMode(expr: string): bv32
+  ghost function OctalMode(expr: string): bv32
     requires SupportedOctalMode(expr)
   {
     BenchWorld.NormalizeMode(BenchWorld.ToBv32(BenchWorld.OctalValue(expr, 0, 0)))
@@ -738,7 +953,7 @@ module ChmodSpec {
       after == BenchWorld.NormalizeMode(mode)
   }
 
-  function SpecSuccessStdout(
+  ghost function SpecSuccessStdout(
     cmd: Schema.ChmodCmd,
     path: string,
     before: bv32,
@@ -792,7 +1007,7 @@ module ChmodSpec {
     (after & Schema.SPECIAL_BITS) != 0 as bv32
   }
 
-  function SpecSuccessfulChangeResultForNaive(
+  ghost function SpecSuccessfulChangeResultForNaive(
     cmd: Schema.ChmodCmd,
     path: string,
     actual: BenchWorld.Path,
@@ -882,7 +1097,7 @@ module ChmodSpec {
       )
   }
 
-  function SpecModeSetFs(
+  ghost function SpecModeSetFs(
     fs: BenchWorld.FileSystem,
     follow: bool,
     target: BenchWorld.Path,
@@ -905,7 +1120,7 @@ module ChmodSpec {
       )
   }
 
-  function SpecModeSetSuppressed(
+  ghost function SpecModeSetSuppressed(
     fs: BenchWorld.FileSystem,
     target: BenchWorld.Path,
     follow: bool
@@ -918,7 +1133,7 @@ module ChmodSpec {
     case _ => false
   }
 
-  function SpecNoDereferenceSymlink(
+  ghost function SpecNoDereferenceSymlink(
     fs: BenchWorld.FileSystem,
     path: BenchWorld.Path,
     follow: bool
@@ -934,7 +1149,7 @@ module ChmodSpec {
       case _ => false
   }
 
-  function SpecPathAccessFailureResult(
+  ghost function SpecPathAccessFailureResult(
     cmd: Schema.ChmodCmd,
     fs: BenchWorld.FileSystem,
     path: string,
@@ -1302,7 +1517,7 @@ module ChmodSpec {
   }
 
   // The normalized external world represents argv and paths as NUL-free Unicode scalars.
-  predicate SpecExternalDomain(raw: Schema.ChmodCmdRaw)
+  ghost predicate SpecExternalDomain(raw: Schema.ChmodCmdRaw)
   {
     var cmd := Schema.Command(raw);
     Utf8.ValidExternalText(cmd.modeExpr) &&
@@ -1311,9 +1526,19 @@ module ChmodSpec {
                   Utf8.ValidExternalText(cmd.files[i])
   }
 
-  function WriteErrorText(reason: string): BenchWorld.Bytes
+  function WriteErrorTextPart1(): BenchWorld.Bytes
   {
-    "chmod: write error: " + Utf8.Encode(reason) + "\n"
+    "chmod: write error: "
+  }
+
+  function WriteErrorTextPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): BenchWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate EmissionOutcomeFields(

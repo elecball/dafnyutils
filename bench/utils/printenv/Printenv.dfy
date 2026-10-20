@@ -1,6 +1,6 @@
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "PrintenvSchema.dfy"
 include "PrintenvCore.dfy"
 include "PrintenvProof.dfy"

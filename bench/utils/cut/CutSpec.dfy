@@ -5,6 +5,17 @@ include "../../core/StringEscaping.dfy"
 include "CutSchema.dfy"
 
 module CutSpec {
+
+  const ErrorMessageText0: BenchWorld.Bytes := "cut: "
+
+  const ErrorMessageText1: BenchWorld.Bytes := ": "
+
+  const ErrorMessageText2: BenchWorld.Bytes := "\n"
+
+  const StreamWriteErrorMessageText0: BenchWorld.Bytes := "cut: write error: "
+
+  const StreamWriteErrorMessageText1: BenchWorld.Bytes := "\n"
+
   import StreamContract = IOContract
   import StreamUtf8 = Utf8Semantics
 
@@ -68,9 +79,9 @@ module CutSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "cut: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ": " + ErrnoText(err) + "\n"
+    ErrorMessageText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ErrorMessageText1 + Utf8.Encode(ErrnoText(err)) + ErrorMessageText2
   }
 
   function RangeContains(range: CutSchema.Range, pos: int): bool
@@ -86,7 +97,7 @@ module CutSpec {
     if zeroTerminated then '\0' else '\n'
   }
 
-  function OutputDelimiterBytes(delimiter: CutSchema.OutputDelimiter): BenchWorld.Bytes
+  ghost function OutputDelimiterBytes(delimiter: CutSchema.OutputDelimiter): BenchWorld.Bytes
   {
     match delimiter
     case OutputDefault => []
@@ -382,9 +393,9 @@ module CutSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("cut: write error: " + message + "\n")
+    StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }
 
   ghost predicate EmitFields(

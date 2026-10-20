@@ -1,6 +1,6 @@
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "CommSchema.dfy"
 include "CommCore.dfy"
 include "CommSpec.dfy"

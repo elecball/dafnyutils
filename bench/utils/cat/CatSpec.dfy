@@ -53,16 +53,11 @@ module CatSpec {
     + "or available locally via: info '(coreutils) cat invocation'\n"
   }
 
-  function VersionTextSpec(): BenchWorld.Bytes
+  ghost function VersionTextSpec(): BenchWorld.Bytes
   {
-    Utf8.Encode("cat (GNU coreutils) 9.10.13-2cf49\n"
-    + "Copyright (C) 2026 Free Software Foundation, Inc.\n"
-    + "License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\n"
-    + "This is free software: you are free to change and redistribute it.\n"
-    + "There is NO WARRANTY, to the extent permitted by law.\n"
-    + "\n"
-    + "Written by Torbjorn Granlund and Richard M. Stallman.\n")
+    Utf8.Encode(VersionTextValue())
   }
+
 
   function ErrnoText(err: BenchWorld.IOError): string
   {
@@ -80,12 +75,14 @@ module CatSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "cat: " + Quote.SpecQuoteFBytes(Utf8.Encode(path)) + ": " + Utf8.Encode(ErrnoText(err)) + "\n"
+    ErrorPrefix() + Quote.SpecQuoteFBytes(Utf8.Encode(path)) + ErrorSeparator() +
+      Utf8.Encode(ErrnoText(err)) + DiagnosticSuffix()
   }
 
-  function InputsFromOperands(operands: seq<string>): seq<CatSchema.Input>
+
+  ghost function InputsFromOperands(operands: seq<string>): seq<CatSchema.Input>
   {
     if |operands| == 0 then
       []
@@ -93,7 +90,7 @@ module CatSpec {
       [(if operands[0] == "-" then CatSchema.Stdin else CatSchema.File(operands[0]))] + InputsFromOperands(operands[1..])
   }
 
-  function Command(raw: CatSchema.CatCmdRaw): CatSchema.CatCmd
+  ghost function Command(raw: CatSchema.CatCmdRaw): CatSchema.CatCmd
   {
     var mode :=
       if raw.seenHelp && (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) then
@@ -119,7 +116,7 @@ module CatSpec {
     )
   }
 
-  function DigitChar(d: int): BenchWorld.RawByte
+  ghost function DigitChar(d: int): BenchWorld.RawByte
   {
     if 0 <= d < 10 then
       (d + ('0' as int)) as char
@@ -127,7 +124,7 @@ module CatSpec {
       '0'
   }
 
-  function Digits(n: int): BenchWorld.Bytes
+  ghost function Digits(n: int): BenchWorld.Bytes
     decreases n
   {
     if n < 10 then
@@ -136,7 +133,7 @@ module CatSpec {
       Digits(n / 10) + [DigitChar(n % 10)]
   }
 
-  function PadLeft(text: BenchWorld.Bytes, width: int): BenchWorld.Bytes
+  ghost function PadLeft(text: BenchWorld.Bytes, width: int): BenchWorld.Bytes
     decreases width - |text|
   {
     if |text| >= width then
@@ -145,12 +142,12 @@ module CatSpec {
       PadLeft([' '] + text, width)
   }
 
-  function LineNumberText(n: int): BenchWorld.Bytes
+  ghost function LineNumberText(n: int): BenchWorld.Bytes
   {
     PadLeft(Digits(n), 6) + ['\t']
   }
 
-  function ShowNonPrintingChar(ch: BenchWorld.RawByte, showTabs: bool): BenchWorld.Bytes
+  ghost function ShowNonPrintingChar(ch: BenchWorld.RawByte, showTabs: bool): BenchWorld.Bytes
   {
     var code := ch as int;
     if code >= 32 then
@@ -173,7 +170,7 @@ module CatSpec {
       ['^', ((code + 64) as char)]
   }
 
-  function TransformChar(cmd: CatSchema.CatCmd, ch: BenchWorld.RawByte, nextIsNewline: bool): BenchWorld.Bytes
+  ghost function TransformChar(cmd: CatSchema.CatCmd, ch: BenchWorld.RawByte, nextIsNewline: bool): BenchWorld.Bytes
   {
     if cmd.showNonPrinting then
       ShowNonPrintingChar(ch, cmd.showTabs)
@@ -753,10 +750,11 @@ module CatSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("cat: write error: " + message + "\n")
+    StreamUtf8.Encode(StreamWriteErrorText(message))
   }
+
 
   ghost predicate EmitFields(
     observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
@@ -802,4 +800,20 @@ module CatSpec {
         out, diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
+  function VersionTextValue(): string
+  {
+    "cat (GNU coreutils) 9.10.13-2cf49\n"
+    + "Copyright (C) 2026 Free Software Foundation, Inc.\n"
+    + "License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\n"
+    + "This is free software: you are free to change and redistribute it.\n"
+    + "There is NO WARRANTY, to the extent permitted by law.\n"
+    + "\n"
+    + "Written by Torbjorn Granlund and Richard M. Stallman.\n"
+  }
+
+  function ErrorPrefix(): BenchWorld.Bytes { "cat: " }
+  function ErrorSeparator(): BenchWorld.Bytes { ": " }
+  function DiagnosticSuffix(): BenchWorld.Bytes { "\n" }
+  function StreamWriteErrorText(message: string): string { "cat: write error: " + message + "\n" }
+
 }

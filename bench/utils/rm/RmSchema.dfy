@@ -1,6 +1,5 @@
 include "../../core/CliTypes.dfy"
-include "../../core/CliModel.dfy"
-include "../../core/CliExtern.dfy"
+include "CliSupport.dfy"
 
 module RmSchema {
   import CliTypes

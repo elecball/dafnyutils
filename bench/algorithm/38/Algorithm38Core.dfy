@@ -1,3 +1,4 @@
+include "Algorithm38TextCore.dfy"
 include "Algorithm38Schema.dfy"
 include "../../core/IO.dfy"
 include "Algorithm38Spec.dfy"
@@ -7,6 +8,7 @@ module Algorithm38Core {
   import BenchWorld
   import Schema = Algorithm38Schema
   import CliSpec = Algorithm38Spec
+  import Text = Algorithm38TextCore
 
   twostate predicate CoreSummary(raw: Schema.Algorithm38CmdRaw, io: BenchIO.IO, exit: int)
     reads io.stdoutRegion, io.stderrRegion, io.trustedStreamsRegion
@@ -31,7 +33,7 @@ module Algorithm38Core {
       return;
     }
     var result := Solve(raw.n, raw.L, raw.kefa, raw.sasha);
-    var text := CliSpec.OutputText(result);
+    var text := Text.OutputText(result);
     var written := io.WriteStdout(text);
     exit := if written.Err? then 1 else 0;
   }

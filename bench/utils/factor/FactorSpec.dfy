@@ -255,15 +255,36 @@ module FactorSpec {
           output == valueText + [':', ' '] + factorText + ['\n']
   }
 
-  function InvalidTokenMessage(token: string): BenchWorld.Bytes
+  function InvalidTokenMessagePart1(): StreamWorld.Bytes
   {
-    "factor: " + SE.SpecLocaleQuoteBytes(token) + " is not a valid positive integer\n"
+    "factor: "
   }
 
-  function InvalidArgvTokenMessage(token: string): BenchWorld.Bytes
+  function InvalidTokenMessagePart2(): StreamWorld.Bytes
   {
-    "factor: " + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) +
     " is not a valid positive integer\n"
+  }
+
+  ghost function InvalidTokenMessage(token: string): BenchWorld.Bytes
+    requires token is BenchWorld.Bytes
+  {
+    InvalidTokenMessagePart1() + SE.SpecLocaleQuoteBytes(token) + InvalidTokenMessagePart2()
+  }
+
+  function InvalidArgvTokenMessagePart1(): StreamWorld.Bytes
+  {
+    "factor: "
+  }
+
+  function InvalidArgvTokenMessagePart2(): StreamWorld.Bytes
+  {
+    " is not a valid positive integer\n"
+  }
+
+  ghost function InvalidArgvTokenMessage(token: string): BenchWorld.Bytes
+  {
+    InvalidArgvTokenMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) +
+    InvalidArgvTokenMessagePart2()
   }
 
   function OctalDigit(d: int): char
@@ -327,6 +348,7 @@ module FactorSpec {
     hadError: bool
   )
   {
+    (fromArgv || token is BenchWorld.Bytes) &&
     exists trimmed: string ::
       TrimmedTokenRelation(token, trimmed) &&
       if |trimmed| == 0 || trimmed[0] == '-' then
@@ -469,9 +491,19 @@ module FactorSpec {
         hadError == (headHadError || tailHadError)
   }
 
-  function ReadErrorText(reason: string): BenchWorld.Bytes
+  function ReadErrorTextPart1(): StreamWorld.Bytes
   {
-    "factor: error reading input: " + Utf8.Encode(reason) + "\n"
+    "factor: error reading input: "
+  }
+
+  function ReadErrorTextPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ReadErrorText(reason: string): BenchWorld.Bytes
+  {
+    ReadErrorTextPart1() + Utf8.Encode(reason) + ReadErrorTextPart2()
   }
 
   ghost function ReadError(err: int): BenchWorld.Bytes
@@ -480,9 +512,19 @@ module FactorSpec {
   }
 
 
-  function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorTextPart1(): StreamWorld.Bytes
   {
-    "factor: write error: " + Utf8.Encode(reason) + "\n"
+    "factor: write error: "
+  }
+
+  function WriteErrorTextPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate EmissionOutcomeFields(

@@ -1,3 +1,4 @@
+include "TeeTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -5,6 +6,8 @@ include "TeeSchema.dfy"
 include "TeeSpec.dfy"
 
 module TeeCore {
+  import Text = TeeTextCore
+
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -162,16 +165,16 @@ module TeeCore {
   }
 
   method GetReadErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError) returns (msg: BenchWorld.Bytes)
-    ensures msg == Spec.ReadErrorMessageSpec(path, err)
+    ensures msg == Text.ReadErrorMessageSpec(path, err)
   {
-    msg := Spec.ReadErrorMessageSpec(path, err);
+    msg := Text.ReadErrorMessageSpec(path, err);
   }
 
   method GetWriteErrorMessage(path: BenchWorld.Path, err: int, io: BenchIO.IO) returns (msg: BenchWorld.Bytes)
     ensures msg == Spec.WriteErrorMessageSpec(path, err)
   {
     var reason := GetWriteErrnoText(err, io);
-    msg := Spec.WriteErrorMessageText(path, reason);
+    msg := Text.WriteErrorMessageText(path, reason);
   }
 
   method WriteOne(
@@ -274,7 +277,7 @@ module TeeCore {
       var diagnostics := errOut;
       if read.Err? {
         var reason := io.GetCLocaleErrnoText(IOContract.ResultErrno(read));
-        diagnostics := diagnostics + Spec.StdinReadErrorText(reason);
+        diagnostics := diagnostics + Text.StdinReadErrorText(reason);
       }
       plannedStdout := plannedStdout + (input);
       plannedStderr := plannedStderr + (diagnostics);
@@ -316,10 +319,10 @@ module TeeCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Spec.WriteErrorText(raw, reason);
+      finalDiagnostics := diagnostics + Text.WriteErrorText(raw, reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Spec.WriteErrorText(raw, StreamContract.CLocaleErrnoTextResult(outErr)));
+      else Text.WriteErrorText(raw, StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {

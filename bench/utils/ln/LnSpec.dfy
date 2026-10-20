@@ -142,10 +142,25 @@ module LnSpec {
     "ln: hard links are outside this benchmark; use -s/--symbolic\n"
   }
 
-  function FailedAccessMessageText(source: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  function FailedAccessMessageTextPart1(): StreamWorld.Bytes
   {
-    "ln: failed to access " + SE.SpecQuoteAfBytes(Utf8.Encode(source)) +
-    ": " + Utf8.Encode(reason) + "\n"
+    "ln: failed to access "
+  }
+
+  function FailedAccessMessageTextPart2(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function FailedAccessMessageTextPart3(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function FailedAccessMessageText(source: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  {
+    FailedAccessMessageTextPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(source)) +
+    FailedAccessMessageTextPart2() + Utf8.Encode(reason) + FailedAccessMessageTextPart3()
   }
 
   ghost function FailedAccessMessageSpec(source: BenchWorld.Path, err: int): BenchWorld.Bytes
@@ -153,23 +168,63 @@ module LnSpec {
     FailedAccessMessageText(source, err, IOContract.CLocaleErrnoTextResult(err))
   }
 
-  function HardDirectoryMessageSpec(source: BenchWorld.Path): BenchWorld.Bytes
+  function HardDirectoryMessageSpecPart1(): StreamWorld.Bytes
   {
-    "ln: " + SE.SpecQuoteFBytes(Utf8.Encode(source)) +
+    "ln: "
+  }
+
+  function HardDirectoryMessageSpecPart2(): StreamWorld.Bytes
+  {
     ": hard link not allowed for directory\n"
   }
 
-  function CreateHardLinkErrorMessageText(source: BenchWorld.Path, linkName: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  ghost function HardDirectoryMessageSpec(source: BenchWorld.Path): BenchWorld.Bytes
   {
-    "ln: " +
+    HardDirectoryMessageSpecPart1() + SE.SpecQuoteFBytes(Utf8.Encode(source)) +
+    HardDirectoryMessageSpecPart2()
+  }
+
+  function CreateHardLinkErrorMessageTextPart1(): StreamWorld.Bytes
+  {
+    "ln: "
+  }
+
+  function CreateHardLinkErrorMessageTextPart2(): StreamWorld.Bytes
+  {
+    "failed to create hard link to "
+  }
+
+  function CreateHardLinkErrorMessageTextPart3(): StreamWorld.Bytes
+  {
+    "failed to create hard link "
+  }
+
+  function CreateHardLinkErrorMessageTextPart4(): StreamWorld.Bytes
+  {
+    " => "
+  }
+
+  function CreateHardLinkErrorMessageTextPart5(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function CreateHardLinkErrorMessageTextPart6(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CreateHardLinkErrorMessageText(source: BenchWorld.Path, linkName: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  {
+    CreateHardLinkErrorMessageTextPart1() +
     (if err == Errno.EMLINK then
-       "failed to create hard link to " + SE.SpecQuoteAfBytes(Utf8.Encode(source))
+       CreateHardLinkErrorMessageTextPart2() + SE.SpecQuoteAfBytes(Utf8.Encode(source))
      else if err == Errno.EEXIST || err == Errno.ENOSPC || err == Errno.EDQUOT || err == Errno.EROFS then
-       "failed to create hard link " + SE.SpecQuoteAfBytes(Utf8.Encode(linkName))
+       CreateHardLinkErrorMessageTextPart3() + SE.SpecQuoteAfBytes(Utf8.Encode(linkName))
      else
-       "failed to create hard link " + SE.SpecQuoteAfBytes(Utf8.Encode(linkName)) +
-       " => " + SE.SpecQuoteAfBytes(Utf8.Encode(source))) +
-    ": " + Utf8.Encode(reason) + "\n"
+       CreateHardLinkErrorMessageTextPart3() + SE.SpecQuoteAfBytes(Utf8.Encode(linkName)) +
+       CreateHardLinkErrorMessageTextPart4() + SE.SpecQuoteAfBytes(Utf8.Encode(source))) +
+    CreateHardLinkErrorMessageTextPart5() + Utf8.Encode(reason) + CreateHardLinkErrorMessageTextPart6()
   }
 
   ghost function CreateHardLinkErrorMessageSpec(source: BenchWorld.Path, linkName: BenchWorld.Path, err: int): BenchWorld.Bytes
@@ -177,7 +232,7 @@ module LnSpec {
     CreateHardLinkErrorMessageText(source, linkName, err, IOContract.CLocaleErrnoTextResult(err))
   }
 
-  function TrimTrailingSlashes(path: string): string
+  ghost function TrimTrailingSlashes(path: string): string
     decreases |path|
   {
     if |path| > 0 && path[|path| - 1] == '/' then
@@ -186,7 +241,7 @@ module LnSpec {
       path
   }
 
-  function LastSlash(path: string): int
+  ghost function LastSlash(path: string): int
     ensures -1 <= LastSlash(path) < |path|
     decreases |path|
   {
@@ -195,14 +250,14 @@ module LnSpec {
     else LastSlash(path[..|path| - 1])
   }
 
-  function BaseName(path: string): string
+  ghost function BaseName(path: string): string
   {
     var trimmed := TrimTrailingSlashes(path);
     if |trimmed| == 0 then (if |path| == 0 then "" else "/")
     else trimmed[LastSlash(trimmed) + 1..]
   }
 
-  function InDirectory(directory: string, source: string): string
+  ghost function InDirectory(directory: string, source: string): string
   {
     directory + (if |directory| > 0 && directory[|directory| - 1] == '/' then "" else "/") +
     BaseName(source)
@@ -224,11 +279,36 @@ module LnSpec {
     "ln: target-directory link modes are outside this benchmark; use explicit SOURCE LINK_NAME\n"
   }
 
-  function CreateSymlinkErrorMessageText(linkName: BenchWorld.Path, source: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  function CreateSymlinkErrorMessageTextPart1(): StreamWorld.Bytes
   {
-    "ln: failed to create symbolic link " + SE.SpecQuoteAfBytes(Utf8.Encode(linkName)) +
-    (if source == "" then " -> " + SE.SpecQuoteAfBytes(Utf8.Encode(source)) else "") +
-    ": " + Utf8.Encode(reason) + "\n"
+    "ln: failed to create symbolic link "
+  }
+
+  function CreateSymlinkErrorMessageTextPart2(): StreamWorld.Bytes
+  {
+    ""
+  }
+
+  function CreateSymlinkErrorMessageTextPart3(): StreamWorld.Bytes
+  {
+    " -> "
+  }
+
+  function CreateSymlinkErrorMessageTextPart4(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function CreateSymlinkErrorMessageTextPart5(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CreateSymlinkErrorMessageText(linkName: BenchWorld.Path, source: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  {
+    CreateSymlinkErrorMessageTextPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(linkName)) +
+    (if source == CreateSymlinkErrorMessageTextPart2() then CreateSymlinkErrorMessageTextPart3() + SE.SpecQuoteAfBytes(Utf8.Encode(source)) else CreateSymlinkErrorMessageTextPart2()) +
+    CreateSymlinkErrorMessageTextPart4() + Utf8.Encode(reason) + CreateSymlinkErrorMessageTextPart5()
   }
 
   ghost function CreateSymlinkErrorMessageSpec(linkName: BenchWorld.Path, source: BenchWorld.Path, err: int): BenchWorld.Bytes
@@ -236,10 +316,25 @@ module LnSpec {
     CreateSymlinkErrorMessageText(linkName, source, err, IOContract.CLocaleErrnoTextResult(err))
   }
 
-  function TargetDirectoryErrorMessageText(target: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  function TargetDirectoryErrorMessageTextPart1(): StreamWorld.Bytes
   {
-    "ln: target " + SE.SpecQuoteAfBytes(Utf8.Encode(target)) +
-    ": " + Utf8.Encode(reason) + "\n"
+    "ln: target "
+  }
+
+  function TargetDirectoryErrorMessageTextPart2(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function TargetDirectoryErrorMessageTextPart3(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function TargetDirectoryErrorMessageText(target: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  {
+    TargetDirectoryErrorMessageTextPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(target)) +
+    TargetDirectoryErrorMessageTextPart2() + Utf8.Encode(reason) + TargetDirectoryErrorMessageTextPart3()
   }
 
   ghost function TargetDirectoryErrorMessageSpec(target: BenchWorld.Path, err: int): BenchWorld.Bytes
@@ -324,7 +419,7 @@ module LnSpec {
           results[i + 1] == (results[i] && stepResults[i]))
   }
 
-  function LinkNameIsDirectoryFs(fs: BenchWorld.FileSystem, linkName: BenchWorld.Path): bool
+  ghost function LinkNameIsDirectoryFs(fs: BenchWorld.FileSystem, linkName: BenchWorld.Path): bool
   {
     match IOContract.ResolvePathForMetadataFields(fs, linkName, true)
     case Ok(resolved) =>
@@ -336,9 +431,19 @@ module LnSpec {
   }
 
 
-  function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorTextPart1(): StreamWorld.Bytes
   {
-    "ln: write error: " + Utf8.Encode(reason) + "\n"
+    "ln: write error: "
+  }
+
+  function WriteErrorTextPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate EmissionOutcomeFields(

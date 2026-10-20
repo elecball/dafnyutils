@@ -6,6 +6,33 @@ include "CommSchema.dfy"
 include "CommRenderSpec.dfy"
 
 module CommSpec {
+
+  const FileErrorMessageSpecText0: BenchWorld.Bytes := "comm: "
+
+  const FileErrorMessageSpecText1: BenchWorld.Bytes := ": "
+
+  const FileErrorMessageSpecText2: BenchWorld.Bytes := "\n"
+
+  const InputErrorMessageSpecText0: BenchWorld.Bytes := "comm: -: "
+
+  const InputErrorMessageSpecText1: BenchWorld.Bytes := "\n"
+
+  const MissingOperandAfterMessageSpecText0: BenchWorld.Bytes := "comm: missing operand after "
+
+  const MissingOperandAfterMessageSpecText1: BenchWorld.Bytes := "\n"
+
+  const MissingOperandAfterMessageSpecText2: BenchWorld.Bytes := "Try 'comm --help' for more information.\n"
+
+  const ExtraOperandMessageSpecText0: BenchWorld.Bytes := "comm: extra operand "
+
+  const ExtraOperandMessageSpecText1: BenchWorld.Bytes := "\n"
+
+  const ExtraOperandMessageSpecText2: BenchWorld.Bytes := "Try 'comm --help' for more information.\n"
+
+  const StreamWriteErrorMessageText0: BenchWorld.Bytes := "comm: write error: "
+
+  const StreamWriteErrorMessageText1: BenchWorld.Bytes := "\n"
+
   import StreamContract = IOContract
   import StreamUtf8 = Utf8Semantics
 
@@ -75,15 +102,15 @@ module CommSpec {
       path[0] == ' ' || path[0] == '\t' || ContainsDiagnosticBlank(path[1..])
   }
 
-  function FileErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function FileErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "comm: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ": " + ErrnoText(err) + "\n"
+    FileErrorMessageSpecText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) + FileErrorMessageSpecText1 + Utf8.Encode(ErrnoText(err)) + FileErrorMessageSpecText2
   }
 
-  function InputErrorMessageSpec(input: Schema.CommInput, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function InputErrorMessageSpec(input: Schema.CommInput, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     match input
-    case Stdin => "comm: -: " + Utf8.Encode(ErrnoText(err)) + "\n"
+    case Stdin => InputErrorMessageSpecText0 + Utf8.Encode(ErrnoText(err)) + InputErrorMessageSpecText1
     case File(path) => FileErrorMessageSpec(path, err)
   }
 
@@ -92,16 +119,16 @@ module CommSpec {
     "comm: missing operand\nTry 'comm --help' for more information.\n"
   }
 
-  function MissingOperandAfterMessageSpec(operand: string): BenchWorld.Bytes
+  ghost function MissingOperandAfterMessageSpec(operand: string): BenchWorld.Bytes
   {
-    "comm: missing operand after " + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) + "\n" +
-    "Try 'comm --help' for more information.\n"
+    MissingOperandAfterMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) + MissingOperandAfterMessageSpecText1 +
+    MissingOperandAfterMessageSpecText2
   }
 
-  function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
+  ghost function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
   {
-    "comm: extra operand " + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) + "\n" +
-    "Try 'comm --help' for more information.\n"
+    ExtraOperandMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) + ExtraOperandMessageSpecText1 +
+    ExtraOperandMessageSpecText2
   }
 
   function MultipleOutputDelimitersMessageSpec(): BenchWorld.Bytes
@@ -306,9 +333,9 @@ module CommSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("comm: write error: " + message + "\n")
+    StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }
 
   ghost predicate EmitFields(
@@ -368,7 +395,7 @@ module CommSpec {
     first.Err? && Render.RecordDelimiter(cmd.zeroTerminated) !in IOContract.ReadResultData(first)
   }
 
-  function FailedReadMessage(cmd: Schema.CommCmd, first: BenchWorld.IOResult<BenchWorld.Bytes>,
+  ghost function FailedReadMessage(cmd: Schema.CommCmd, first: BenchWorld.IOResult<BenchWorld.Bytes>,
     second: BenchWorld.IOResult<BenchWorld.Bytes>, leftFault: bool): BenchWorld.Bytes
   {
     var result := if leftFault then first else second;

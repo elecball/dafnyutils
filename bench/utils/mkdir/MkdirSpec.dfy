@@ -1,7 +1,7 @@
 include "MkdirSchema.dfy"
 include "../../core/IO.dfy"
 include "../../core/Utf8.dfy"
-include "../../core/CliModel.dfy"
+include "CliSupport.dfy"
 
 module MkdirSpec {
   import BenchIO
@@ -74,33 +74,98 @@ module MkdirSpec {
     + "Try 'mkdir --help' for more information.\n"
   }
 
-  function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
+  function ParseErrorTextPart1(): BenchWorld.Bytes
+  {
+    "mkdir: unrecognized option '"
+  }
+
+  function ParseErrorTextPart2(): BenchWorld.Bytes
+  {
+    "'\n"
+  }
+
+  function ParseErrorTextPart3(): BenchWorld.Bytes
+  {
+    "Try 'mkdir --help' for more information.\n"
+  }
+
+  function ParseErrorTextPart4(): BenchWorld.Bytes
+  {
+    "mkdir: invalid option\nTry 'mkdir --help' for more information.\n"
+  }
+
+  function ParseErrorTextPart5(): BenchWorld.Bytes
+  {
+    "mkdir: option '"
+  }
+
+  function ParseErrorTextPart6(): BenchWorld.Bytes
+  {
+    "' doesn't allow an argument\n"
+  }
+
+  function ParseErrorTextPart7(): BenchWorld.Bytes
+  {
+    "' is ambiguous; possibilities: "
+  }
+
+  function ParseErrorTextPart8(): BenchWorld.Bytes
+  {
+    "'--context' '--mode' '--parents' '--verbose' '--help' '--version'\n"
+  }
+
+  function ParseErrorTextPart9(): BenchWorld.Bytes
+  {
+    "'--verbose' '--version'\n"
+  }
+
+  function ParseErrorTextPart10(): BenchWorld.Bytes
+  {
+    "mkdir: "
+  }
+
+  function ParseErrorTextPart11(): BenchWorld.Bytes
+  {
+    "missing option value"
+  }
+
+  function ParseErrorTextPart12(): BenchWorld.Bytes
+  {
+    "parse error"
+  }
+
+  function ParseErrorTextPart13(): BenchWorld.Bytes
+  {
+    " at token '"
+  }
+
+  ghost function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
   {
     if err.kind == CliTypes.UnknownOption then
         if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-          "mkdir: unrecognized option '" + Utf8.Encode(err.rawToken) + "'\n" +
-          "Try 'mkdir --help' for more information.\n"
+          ParseErrorTextPart1() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2() +
+          ParseErrorTextPart3()
         else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
           UnknownShortText(Utf8.EncodeChar(err.rawToken[1])[0])
         else
-          "mkdir: invalid option\nTry 'mkdir --help' for more information.\n"
+          ParseErrorTextPart4()
       else if err.kind == CliTypes.UnexpectedValue then
-        "mkdir: option '" + Utf8.Encode(LongOptionName(err.rawToken)) +
-        "' doesn't allow an argument\n" +
-        "Try 'mkdir --help' for more information.\n"
+        ParseErrorTextPart5() + Utf8.Encode(LongOptionName(err.rawToken)) +
+        ParseErrorTextPart6() +
+        ParseErrorTextPart3()
       else if err.kind == CliTypes.Ambiguous then
-        "mkdir: option '" + Utf8.Encode(err.rawToken) +
-        "' is ambiguous; possibilities: " +
+        ParseErrorTextPart5() + Utf8.Encode(err.rawToken) +
+        ParseErrorTextPart7() +
         (if |err.rawToken| > 2 && err.rawToken[2] == '=' then
-          "'--context' '--mode' '--parents' '--verbose' '--help' '--version'\n"
-         else "'--verbose' '--version'\n") +
-        "Try 'mkdir --help' for more information.\n"
+          ParseErrorTextPart8()
+         else ParseErrorTextPart9()) +
+        ParseErrorTextPart3()
       else
-        "mkdir: " + Utf8.Encode(
+        ParseErrorTextPart10() + Utf8.Encode(
         (if err.kind == CliTypes.MissingValue
-        then "missing option value"
-        else "parse error")) +
-        " at token '" + Utf8.Encode(err.rawToken) + "'\n"
+        then ParseErrorTextPart11()
+        else ParseErrorTextPart12())) +
+        ParseErrorTextPart13() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2()
   }
 
   function MissingOperandText(): BenchWorld.Bytes {
@@ -115,11 +180,28 @@ module MkdirSpec {
     AnnouncementText(C.QuoteafPathResult(path))
   }
 
-  function DiagnosticText(quoted: BenchWorld.Bytes, reason: string): BenchWorld.Bytes {
-    "mkdir: cannot create directory " + quoted + ": " + Utf8.Encode(reason) + "\n"
+  function DiagnosticTextPart1(): BenchWorld.Bytes
+  {
+    "mkdir: cannot create directory "
   }
 
-  ghost function Diagnostic(path: string, err: int): BenchWorld.Bytes {
+  function DiagnosticTextPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function DiagnosticTextPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function DiagnosticText(quoted: BenchWorld.Bytes, reason: string): BenchWorld.Bytes
+  {
+    DiagnosticTextPart1() + quoted + DiagnosticTextPart2() + Utf8.Encode(reason) + DiagnosticTextPart3()
+  }
+
+  ghost function Diagnostic(path: string, err: int): BenchWorld.Bytes
+  {
     DiagnosticText(C.QuoteArgumentResult(Utf8.Encode(path)), C.CLocaleErrnoTextResult(err))
   }
 
@@ -127,7 +209,8 @@ module MkdirSpec {
     if verbose && ok then Announcement(path) else []
   }
 
-  ghost function ErrorPiece(path: string, ok: bool, err: int): BenchWorld.Bytes {
+  ghost function ErrorPiece(path: string, ok: bool, err: int): BenchWorld.Bytes
+  {
     if ok then [] else Diagnostic(path, err)
   }
 
@@ -173,8 +256,19 @@ module MkdirSpec {
       exit == (if forall i | 0 <= i < |paths| :: successes[i] then 0 else 1)
   }
 
-  function WriteErrorText(reason: string): BenchWorld.Bytes {
-    "mkdir: write error: " + Utf8.Encode(reason) + "\n"
+  function WriteErrorTextPart1(): BenchWorld.Bytes
+  {
+    "mkdir: write error: "
+  }
+
+  function WriteErrorTextPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): BenchWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate StreamResults(

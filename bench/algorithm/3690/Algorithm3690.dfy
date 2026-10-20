@@ -1,4 +1,4 @@
-include "../../core/BenchmarkItem.dfy"
+include "CliSupport.dfy"
 include "Algorithm3690Schema.dfy"
 include "Algorithm3690Core.dfy"
 include "Algorithm3690Proof.dfy"

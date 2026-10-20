@@ -1,3 +1,4 @@
+include "StatTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -10,7 +11,8 @@ module StatCore {
 
   import BenchWorld
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = StatUtf8Core
+  import Text = StatTextCore
   import IOContract
   import Schema = StatSchema
   import Spec = StatSpec
@@ -69,7 +71,7 @@ module StatCore {
       } else {
         var directive := format[index + 1];
         nextIndex := index + 2;
-        piece := Spec.DirectiveTextSpec(directive, status);
+        piece := Text.DirectiveTextSpec(directive, status);
       }
       assert Spec.FormatStepRelation(format, status, index, nextIndex, piece);
       ConcatPiecesSnoc(pieces, piece);
@@ -153,7 +155,7 @@ module StatCore {
       var piece :=
         if format[lo] != '%' then Utf8.EncodeChar(format[lo])
         else if lo + 1 == hi then "%"
-        else Spec.DirectiveTextSpec(format[lo + 1], status);
+        else Text.DirectiveTextSpec(format[lo + 1], status);
       assert Spec.FormatStepRelation(format, status, lo, hi, piece);
       ConcatPiecesSnoc(pieces, piece);
       ghost var oldPieces := pieces;
@@ -405,7 +407,7 @@ module StatCore {
       } else {
         stepError := true;
         var reason := io.GetCLocaleErrnoText(errno);
-        stepErrOut := Spec.ErrorMessageWithReasonSpec(path, reason);
+        stepErrOut := Text.ErrorMessageWithReasonSpec(path, reason);
         assert FileStepSummaryFields(
           summaryCmd, statusIndex, path, preFs,
           stepError, stepOut, stepErrOut
@@ -475,7 +477,7 @@ module StatCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
       else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

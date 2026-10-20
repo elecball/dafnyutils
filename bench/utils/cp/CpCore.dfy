@@ -1,21 +1,23 @@
+include "CpTextCore.dfy"
 include "CpSpec.dfy"
 include "CpPathProof.dfy"
-include "../../core/PathCore.dfy"
-include "../../core/PathProof.dfy"
+include "CpPathCore.dfy"
+include "CpPathBridge.dfy"
 
 module CpCore {
+  import Text = CpTextCore
   import BenchIO
   import BW = BenchWorld
   import C = IOContract
   import S = CpSchema
   import Spec = CpSpec
   import Proof = CpPathProof
-  import Paths = MvPathCore
-  import PathProof = MvPathProof
-  import PathSpec = MvPathSpec
+  import Paths = CpPathCore
+  import PathProof = CpPathBridge
+  import PathSpec = CpPathSpec
   import Results
   import CliModel
-  import Utf8 = Utf8Semantics
+  import Utf8 = CpUtf8Core
 
   method Metadata(path: string, follow: bool, io: BenchIO.IO) returns (meta: Spec.Metadata)
     ensures Spec.MetadataFields(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,follow,meta)
@@ -402,7 +404,7 @@ module CpCore {
       if !timeOK {
         var q := Quoted(target,io);
         var reason := Reason(timeErr,io);
-        err := Spec.TimeError(q,reason);
+        err := Text.TimeError(q,reason);
         ok := false;
       }
     }
@@ -418,7 +420,7 @@ module CpCore {
       if !modeOK {
         var q := Quoted(target,io);
         var reason := Reason(modeErr,io);
-        err := err + Spec.ModeError(q,reason);
+        err := err + Text.ModeError(q,reason);
         ok := false;
       }
     }
@@ -493,7 +495,7 @@ module CpCore {
       var reason := Reason(readErr,io);
       assert Spec.DataOutcome(raw,source,target,meta,mode,before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                               [],Spec.CannotOpen(qs,reason),false,(data,readErr,readStage,meta,meta,(before,true,0,0,BW.WriteSucceeded,false,[],true,meta,false)));
-      return [],Spec.CannotOpen(qs,reason),false;
+      return [],Text.CannotOpen(qs,reason),false;
     }
     var targetMetadata := Metadata(target,true,io);
     var entryMetadata := Metadata(target,false,io);
@@ -520,14 +522,14 @@ module CpCore {
     err := attributesErr;
     if write.Err? {
       var reason := Reason(C.ResultErrno(write),io);
-      err := err + (if removeFailed then Spec.CannotRemove(qt,reason)
-                    else if C.WriteResultStage(write) == BW.WriteOpenFailed then Spec.CannotCreate(qt,reason)
-                    else if C.WriteResultStage(write) == BW.WriteCloseFailed then Spec.CloseError(qt,reason)
-                    else Spec.WriteError(qt,reason));
+      err := err + (if removeFailed then Text.CannotRemove(qt,reason)
+                    else if C.WriteResultStage(write) == BW.WriteOpenFailed then Text.CannotCreate(qt,reason)
+                    else if C.WriteResultStage(write) == BW.WriteCloseFailed then Text.CloseError(qt,reason)
+                    else Text.WriteError(qt,reason));
     }
     if readErr != 0 && C.WriteResultStage(write) != BW.WriteOpenFailed && C.WriteResultStage(write) != BW.WriteFailed {
       var reason := Reason(readErr,io);
-      err := err + (if readStage == BW.CloseFailed then Spec.CloseError(qs,reason) else Spec.ReadError(qs,reason));
+      err := err + (if readStage == BW.CloseFailed then Text.CloseError(qs,reason) else Text.ReadError(qs,reason));
     }
     ok := write.Ok? && readErr == 0 && attributesOK;
     assert Spec.DataOutcome(raw,source,target,meta,mode,before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok,
@@ -580,7 +582,7 @@ module CpCore {
         var reason := Reason(removeErr,io);
         assert Spec.LeafOutcome(raw,source,target,sm,tm,(mode,linkTarget),before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                                 ([],Spec.CannotRemove(qt,reason),false,receipt),(io.fs(),removeOK,removeErr,true,0,true,io.fs(),[],true,[]));
-        return [],Spec.CannotRemove(qt,reason),false,receipt;
+        return [],Text.CannotRemove(qt,reason),false,receipt;
       }
     }
     ghost var ready := io.fs();
@@ -593,7 +595,7 @@ module CpCore {
     var dataOut: BW.Bytes := [];
     if raw.policy.symbolic || sm.value.isSymlink || raw.policy.hard {
       if raw.policy.symbolic { relativeOK := RelativeLinkAllowed(source,target,io); }
-      if !relativeOK { err,ok := Spec.RelativeSymlinkError(target),false; }
+      if !relativeOK { err,ok := Text.RelativeSymlinkError(target),false; }
       else {
         var result: BW.IOResult<BW.Unit>;
         if raw.policy.hard { result := io.CreateHardLink(linkTarget,target,raw.policy.dereference); }
@@ -612,8 +614,8 @@ module CpCore {
         if !linkOK {
           var reason := Reason(linkErr,io);
           var qLinkSource := Quoted(if raw.policy.hard then linkTarget else source,io);
-          err := if raw.policy.hard || raw.policy.symbolic then Spec.LinkError(qLinkSource,qt,reason,!raw.policy.hard)
-          else Spec.CopiedSymlinkError(qt,reason);
+          err := if raw.policy.hard || raw.policy.symbolic then Text.LinkError(qLinkSource,qt,reason,!raw.policy.hard)
+          else Text.CopiedSymlinkError(qt,reason);
         }
       }
     } else {
@@ -848,14 +850,14 @@ module CpCore {
       if selectionErr != 0 {
         var qt := Quoted(target,io);
         var reason := Reason(selectionErr,io);
-        preparation := Spec.BackupRejected(Spec.CannotBackup(qt,reason));
+        preparation := Spec.BackupRejected(Text.CannotBackup(qt,reason));
       } else {
         var result := io.RenamePath(target,selected);
         renameOK,renameErr := result.Ok?,C.ResultErrno(result);
         if !renameOK && renameErr != 2 {
           var qt := Quoted(target,io);
           var reason := Reason(renameErr,io);
-          preparation := Spec.BackupRejected(Spec.CannotBackup(qt,reason));
+          preparation := Spec.BackupRejected(Text.CannotBackup(qt,reason));
         } else { preparation := Spec.BackupReady(selected,renameOK); }
       }
     }
@@ -881,7 +883,7 @@ module CpCore {
       var qt := Quoted(target,io);
       if !restoredOK {
         var reason := Reason(restoreErr,io);
-        err := Spec.CannotUnbackup(qt,reason);
+        err := Text.CannotUnbackup(qt,reason);
       } else if raw.policy.verbose {
         var qb := Quoted(backup,io);
         out := Spec.VerboseUnbackup(qb,qt);
@@ -1009,9 +1011,9 @@ module CpCore {
     ghost var before := io.fs();
     var qs := Quoted(tree.path,io);
     var qt := Quoted(target,io);
-    if tree.MissingSource? { var reason := Reason(tree.metadata.err,io); return [],Spec.CannotStat(qs,reason),false,known,record; }
-    if tree.ModeFailureSource? { var reason := Reason(tree.modeErr,io); return [],Spec.CannotStat(qs,reason),false,known,record; }
-    if tree.LinkFailureSource? { var reason := Reason(C.IOErrorErrno(tree.linkError),io); return [],Spec.ReadSymlinkError(qs,reason),false,known,record; }
+    if tree.MissingSource? { var reason := Reason(tree.metadata.err,io); return [],Text.CannotStat(qs,reason),false,known,record; }
+    if tree.ModeFailureSource? { var reason := Reason(tree.modeErr,io); return [],Text.CannotStat(qs,reason),false,known,record; }
+    if tree.LinkFailureSource? { var reason := Reason(C.IOErrorErrno(tree.linkError),io); return [],Text.ReadSymlinkError(qs,reason),false,known,record; }
     if tree.OmittedSource? { return [],Spec.Omitting(qs),false,known,record; }
     if tree.CyclicSource? { return [],Spec.Cycle(qs),false,known,record; }
     var follow := if tree.DirectorySource? then raw.policy.keepDirectorySymlink else (!raw.policy.remove && !raw.policy.symbolic && !raw.policy.hard && !tree.metadata.value.isSymlink && Spec.BackupMode(raw) == "off");
@@ -1041,6 +1043,38 @@ module CpCore {
     }
   }
 
+  lemma CompleteDirectoryReady(raw: S.CpCmdRaw, target: string, tm: Spec.Metadata, sourceMode: bv32,
+                               before: BW.FileSystem, after: BW.FileSystem, now: int, mask: bv32,
+                               provider: Spec.FilesystemProvider, ok: bool, err: BW.Bytes,
+                               observed: Spec.DirectoryReadyObservation)
+    requires tm.ok && tm.value.isDir ==> after == before && ok && err == []
+    requires !(tm.ok && tm.value.isDir) ==>
+      C.CreateDirectorySpec(before,now,provider.filesystem,mask,observed.created,target,Spec.DirectoryCreationMode(raw,sourceMode),observed.createOK,observed.createErr)
+    requires !(tm.ok && tm.value.isDir) && !observed.createOK ==>
+      after == observed.created && !ok && err == Spec.CreateDirectoryError(Spec.Q(target),Spec.E(observed.createErr))
+    requires !(tm.ok && tm.value.isDir) && observed.createOK ==>
+      Spec.MetadataFields(observed.created,provider,target,false,observed.metadata)
+    requires !(tm.ok && tm.value.isDir) && observed.createOK && !observed.metadata.ok ==>
+      after == observed.created && !ok && err == Spec.CannotStat(Spec.Q(target),Spec.E(observed.metadata.err))
+    requires !(tm.ok && tm.value.isDir) && observed.createOK && observed.metadata.ok ==>
+      C.GetFileModeSpec(observed.created,provider.failures,target,false,observed.modeOK,observed.mode,observed.modeErr)
+    requires !(tm.ok && tm.value.isDir) && observed.createOK && observed.metadata.ok && !observed.modeOK ==>
+      after == observed.created && !ok && err == Spec.CannotStat(Spec.Q(target),Spec.E(observed.modeErr))
+    requires !(tm.ok && tm.value.isDir) && observed.createOK && observed.metadata.ok && observed.modeOK && (observed.mode & (448 as bv32)) != (448 as bv32) ==>
+      C.SetFileModeSpec(observed.created,now,provider.failures,after,target,false,observed.mode | (448 as bv32),observed.changeOK,observed.changeErr)
+    requires !(tm.ok && tm.value.isDir) && observed.createOK && observed.metadata.ok && observed.modeOK && (observed.mode & (448 as bv32)) == (448 as bv32) ==>
+      after == observed.created && observed.changeOK && observed.changeErr == 0
+    requires !(tm.ok && tm.value.isDir) && observed.createOK && observed.metadata.ok && observed.modeOK ==>
+      ok == observed.changeOK && err == (if ok then [] else Spec.ParentSetModeError(Spec.Q(target),Spec.E(observed.changeErr)))
+    ensures Spec.DirectoryReady(raw,target,tm,sourceMode,before,after,now,mask,provider,ok,err,observed.mode)
+  {
+    hide *;
+    assert Spec.DirectoryReadyFields(raw,target,tm,sourceMode,before,after,now,mask,provider,ok,err,observed) by {
+      reveal Spec.DirectoryReadyFields();
+    }
+    reveal Spec.DirectoryReady();
+  }
+
   method {:isolate_assertions} ReadyDirectory(raw: S.CpCmdRaw, target: string, tm: Spec.Metadata, sourceMode: bv32, io: BenchIO.IO)
     returns (ok: bool, err: BW.Bytes, mode: bv32)
     modifies io.fsRegion
@@ -1061,47 +1095,37 @@ module CpCore {
       var qt := Quoted(target,io);
       if !createOK {
         var reason := Reason(createErr,io);
-        ok,err := false,Spec.CreateDirectoryError(qt,reason);
+        ok,err := false,Text.CreateDirectoryError(qt,reason);
+        assert err == Spec.CreateDirectoryError(Spec.Q(target),Spec.E(createErr));
       } else {
         metadata := Metadata(target,false,io);
         if !metadata.ok {
           var reason := Reason(metadata.err,io);
-          ok,err := false,Spec.CannotStat(qt,reason);
+          ok,err := false,Text.CannotStat(qt,reason);
+          assert err == Spec.CannotStat(Spec.Q(target),Spec.E(metadata.err));
         } else {
           var modeResult := io.GetFileMode(target,false);
           modeOK,modeErr := modeResult.Ok?,C.ResultErrno(modeResult);
           mode := C.ResultValue(modeResult,0 as bv32);
           if !modeOK {
             var reason := Reason(modeErr,io);
-            ok,err := false,Spec.CannotStat(qt,reason);
+            ok,err := false,Text.CannotStat(qt,reason);
+            assert err == Spec.CannotStat(Spec.Q(target),Spec.E(modeErr));
           } else if (mode & (448 as bv32)) != (448 as bv32) {
             var changed := io.SetFileMode(target,false,mode | (448 as bv32));
             changeOK,changeErr := changed.Ok?,C.ResultErrno(changed);
             if !changeOK {
               var reason := Reason(changeErr,io);
-              ok,err := false,Spec.ParentSetModeError(qt,reason);
+              ok,err := false,Text.ParentSetModeError(qt,reason);
+              assert err == Spec.ParentSetModeError(Spec.Q(target),Spec.E(changeErr));
             }
           }
         }
       }
     }
-    assert Spec.DirectoryReadyFields(raw,target,tm,sourceMode,before,io.fs(),io.now(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ok,err,
-                                     Spec.DirectoryReadyObservation(created,createOK,createErr,metadata,modeOK,mode,modeErr,changeOK,changeErr)) by {
-      hide *;
-      reveal Spec.DirectoryReadyFields();
-      if !tm.ok || !tm.value.isDir {
-        assert C.CreateDirectorySpec(before,io.now(),io.trustedFilesystem(),io.umask(),created,target,Spec.DirectoryCreationMode(raw,sourceMode),createOK,createErr);
-        if createOK {
-          assert Spec.MetadataFields(created,Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,false,metadata);
-          if metadata.ok {
-            assert C.GetFileModeSpec(created,io.trustedNativeFailures(),target,false,modeOK,mode,modeErr);
-            if modeOK && (mode & (448 as bv32)) != (448 as bv32) {
-              assert C.SetFileModeSpec(created,io.now(),io.trustedNativeFailures(),io.fs(),target,false,mode | (448 as bv32),changeOK,changeErr);
-            }
-          }
-        }
-      }
-    }
+    CompleteDirectoryReady(raw,target,tm,sourceMode,before,io.fs(),io.now(),io.umask(),
+      Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ok,err,
+      Spec.DirectoryReadyObservation(created,createOK,createErr,metadata,modeOK,mode,modeErr,changeOK,changeErr));
   }
 
   method CopyBackupDirectory(raw: S.CpCmdRaw, tree: Spec.SourceTree, target: string, tm: Spec.Metadata,
@@ -1142,7 +1166,7 @@ module CpCore {
         if !removeOK && removeErr != 2 {
           var qt := Quoted(target,io);
           var reason := Reason(removeErr,io);
-          out,err,ok := [],Spec.CannotRemove(qt,reason),false;
+          out,err,ok := [],Text.CannotRemove(qt,reason),false;
         } else {
           readyMetadata := Metadata(target,raw.policy.keepDirectorySymlink,io);
           copyOut,copyErr,copyOK,links,receipt := CopyDirectory(raw,tree,target,readyMetadata,known,selfCheck,io);
@@ -1408,7 +1432,7 @@ module CpCore {
     err := childErr;
     if scanErr != 0 {
       var reason := Reason(scanErr,io);
-      err := err + Spec.ReadDirectoryError(qs,reason);
+      err := err + Text.ReadDirectoryError(qs,reason);
     }
     err := err + attributeErr;
     ok := childOK && scanErr == 0 && attributeOK && !selectionStopped;
@@ -1674,7 +1698,7 @@ module CpCore {
       if !sm.ok || !sm.value.isDir {
         var q := Quoted(source,io);
         var reason := Reason(if sm.ok then 20 else sm.err,io);
-        err,ok := Spec.ParentAttributesError(q,reason),false;
+        err,ok := Text.ParentAttributesError(q,reason),false;
       } else {
         var modeResult := io.GetFileMode(source,true);
         sourceModeOK,sourceModeErr := modeResult.Ok?,C.ResultErrno(modeResult);
@@ -1682,7 +1706,7 @@ module CpCore {
         if !sourceModeOK {
           var q := Quoted(source,io);
           var reason := Reason(sourceModeErr,io);
-          err,ok := Spec.ParentAttributesError(q,reason),false;
+          err,ok := Text.ParentAttributesError(q,reason),false;
         } else {
           records := [Spec.ParentInfo(source,target,sm,sourceMode,false)];
           if dm.ok {
@@ -1697,14 +1721,14 @@ module CpCore {
             if !createOK {
               var q := Quoted(target,io);
               var reason := Reason(createErr,io);
-              err,ok := Spec.ParentCreateError(q,reason),false;
+              err,ok := Text.ParentCreateError(q,reason),false;
             } else {
-              out := if raw.policy.verbose then Spec.ParentVerbose(source,target) else [];
+              out := if raw.policy.verbose then Text.ParentVerbose(source,target) else [];
               createdMetadata := Metadata(target,false,io);
               if !createdMetadata.ok {
                 var q := Quoted(target,io);
                 var reason := Reason(createdMetadata.err,io);
-                err,ok := Spec.ParentAttributesError(q,reason),false;
+                err,ok := Text.ParentAttributesError(q,reason),false;
               } else {
                 var modeResult := io.GetFileMode(target,false);
                 createdModeOK,createdModeErr := modeResult.Ok?,C.ResultErrno(modeResult);
@@ -1712,7 +1736,7 @@ module CpCore {
                 if !createdModeOK {
                   var q := Quoted(target,io);
                   var reason := Reason(createdModeErr,io);
-                  err,ok := Spec.ParentAttributesError(q,reason),false;
+                  err,ok := Text.ParentAttributesError(q,reason),false;
                 } else {
                   var restore := !raw.policy.preserveMode && (createdMode & (448 as bv32)) != (448 as bv32);
                   records := [Spec.ParentInfo(source,target,sm,if raw.policy.preserveMode then sourceMode else createdMode,restore)];
@@ -1722,7 +1746,7 @@ module CpCore {
                     if !changeOK {
                       var q := Quoted(target,io);
                       var reason := Reason(changeErr,io);
-                      err,ok := Spec.ParentSetModeError(q,reason),false;
+                      err,ok := Text.ParentSetModeError(q,reason),false;
                     }
                   }
                 }
@@ -1855,7 +1879,7 @@ module CpCore {
     if !timeOK {
       var q := Quoted(parent.target,io);
       var reason := Reason(timeErr,io);
-      err := Spec.ParentTimeError(q,reason);
+      err := Text.ParentTimeError(q,reason);
     } else if raw.policy.preserveMode || parent.restore {
       var result := io.SetFileMode(parent.target,true,parent.mode);
       modeOK,modeErr := result.Ok?,C.ResultErrno(result);
@@ -1863,7 +1887,7 @@ module CpCore {
       if !modeOK {
         var q := Quoted(parent.target,io);
         var reason := Reason(modeErr,io);
-        err := if raw.policy.preserveMode then Spec.ModeError(q,reason) else Spec.ParentModeError(q,reason);
+        err := if raw.policy.preserveMode then Text.ModeError(q,reason) else Text.ParentModeError(q,reason);
       }
     }
     assert Spec.ParentRestoreOneFields(raw,parent,before,io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),err,ok,(middle,timeOK,timeErr,modeOK,modeErr)) by {
@@ -2246,7 +2270,7 @@ module CpCore {
     ghost var before := io.fs();
     if raw.mode == S.Help { return Spec.HelpText(),[],true; }
     if raw.mode == S.Version { return Spec.VersionText(),[],true; }
-    if raw.error != S.NoError { return [],Spec.ConfigurationDiagnostic(raw.error),false; }
+    if raw.error != S.NoError { return [],Text.ConfigurationDiagnostic(raw.error),false; }
     if |raw.operands| == 0 { return [],Spec.Missing(),false; }
     if raw.target.None? && |raw.operands| == 1 {
       var q := Quoted(raw.operands[0],io);
@@ -2265,7 +2289,7 @@ module CpCore {
         var reason := Reason(if tm.ok then 20 else tm.err,io);
         assert Spec.CommandOutcome(raw,before,io.fs(),io.cwd(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                                    [],(if raw.target.Some? then Spec.DirectoryError(q,reason) else Spec.TargetError(q,reason)),false,tm);
-        return [],(if raw.target.Some? then Spec.DirectoryError(q,reason) else Spec.TargetError(q,reason)),false;
+        return [],(if raw.target.Some? then Text.DirectoryError(q,reason) else Text.TargetError(q,reason)),false;
       }
       out,err,ok := CopyBatch(raw,sources,target,true,io);
     } else {
@@ -2309,7 +2333,7 @@ module CpCore {
             else C.WriteStdoutSpec(beforeOut,io.trustedStreams(),io.stdout(),out,committed,writeErr));
     if writeErr != 0 {
       var reason := Reason(writeErr,io);
-      err := err + Spec.StdoutError(reason);
+      err := err + Text.StdoutError(reason);
     }
     assert err == originalErr + (if writeErr == 0 then [] else Spec.StdoutError(Spec.E(writeErr)));
     var stderrErr := 0;

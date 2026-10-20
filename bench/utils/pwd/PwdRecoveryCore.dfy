@@ -1,3 +1,5 @@
+include "PwdTextCore.dfy"
+include "PwdWorldPathCore.dfy"
 include "../../core/IO.dfy"
 include "PwdRecoverySpec.dfy"
 include "PwdRecoveryIOProof.dfy"
@@ -8,12 +10,14 @@ include "PwdProof.dfy"
 include "PwdEmissionCore.dfy"
 
 module PwdRecoveryCore {
+  import WorldPath = PwdWorldPathCore
   import BenchIO
   import BenchWorld
   import IOContract
   import C = IOContract
   import Errno = Errnos
-  import Utf8 = Utf8Semantics
+  import Utf8 = PwdUtf8Core
+  import Text = PwdTextCore
   import Spec = PwdRecoverySpec
   import NativeProof = PwdRecoveryIOProof
   import Trace = PwdRecoveryTraceProof
@@ -111,7 +115,7 @@ module PwdRecoveryCore {
     if err != 0 {
       reason := io.GetCLocaleErrnoText(err);
     }
-    diagnostic := Spec.RecoveryFailureText(failure, quoted, reason);
+    diagnostic := Text.RecoveryFailureText(failure, quoted, reason);
   }
 
   function LogicalTextValid(pwd: string): bool
@@ -123,7 +127,7 @@ module PwdRecoveryCore {
     if !BenchWorld.IsAbsolutePath(pwd) {
       return false;
     }
-    var components := BenchWorld.SplitSegments(BenchWorld.StripLeadingSlash(pwd), 0, 0);
+    var components := WorldPath.SplitSegments(WorldPath.StripLeadingSlash(pwd), 0, 0);
     var unsafe := ContainsUnsafeComponent(components, 0);
     return !unsafe;
   }
@@ -855,7 +859,7 @@ module PwdRecoveryCore {
     var diagnostics: BenchWorld.Bytes := [];
     var normalExit := 0;
     if outcome.DirectoryRecovered? {
-      output := Emission.CurrentDirectoryTextSpec(outcome.directory);
+      output := Text.CurrentDirectoryTextSpec(outcome.directory);
     } else {
       diagnostics := FormatRecoveryFailure(outcome.failure,io);
       normalExit := 1;

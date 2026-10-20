@@ -169,6 +169,39 @@ module DuSchema {
 
   method ParseErrorMessage(e: CliTypes.ParseError) returns (message: BenchWorld.Bytes)
   {
-    message := Utf8.Encode(ParseErrorText(e));
+    var text := ParseErrorText(e);
+    message := [];
+    var i := |text|;
+    while 0 < i
+      invariant 0 <= i <= |text|
+      invariant message == Utf8.Encode(text[i..])
+      decreases i
+    {
+      i := i - 1;
+      var code := text[i] as int;
+      var piece: BenchWorld.Bytes :=
+        if code <= 0x7f then
+          [code as char]
+        else if code <= 0x7ff then
+          [
+            (0xc0 + code / 0x40) as char,
+            (0x80 + code % 0x40) as char
+          ]
+        else if code <= 0xffff then
+          [
+            (0xe0 + code / 0x1000) as char,
+            (0x80 + (code / 0x40) % 0x40) as char,
+            (0x80 + code % 0x40) as char
+          ]
+        else
+          [
+            (0xf0 + code / 0x40000) as char,
+            (0x80 + (code / 0x1000) % 0x40) as char,
+            (0x80 + (code / 0x40) % 0x40) as char,
+            (0x80 + code % 0x40) as char
+          ];
+      message := piece + message;
+    }
+    assert message == Utf8.Encode(ParseErrorText(e));
   }
 }

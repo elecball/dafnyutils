@@ -79,33 +79,32 @@ module TailSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  opaque function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  opaque ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    if IOContract.IOErrorIsReadFailure(err) then
-      "tail: error reading " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " + Utf8.Encode(ErrnoText(err)) + "\n"
-    else
-      "tail: cannot open " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) + " for reading: " + Utf8.Encode(ErrnoText(err)) + "\n"
+    ErrorPrefix(err) + SE.SpecQuoteAfBytes(Utf8.Encode(path)) + ErrorInfix(err) +
+      Utf8.Encode(ErrnoText(err)) + DiagnosticSuffix()
   }
 
-  function InvalidCountMessage(unit: TailSchema.CountUnit, value: string): BenchWorld.Bytes
+
+  ghost function InvalidCountMessage(unit: TailSchema.CountUnit, value: string): BenchWorld.Bytes
   {
     var displayValue := if |value| > 0 && value[0] == '-' then value[1..] else value;
-    Utf8.Encode("tail: invalid number of " +
-    (if unit == TailSchema.CountLines then "lines" else "bytes") + ": ") +
-    SE.SpecLocaleQuoteBytes(Utf8.Encode(displayValue)) + "\n"
+    Utf8.Encode(InvalidCountPrefix(unit)) + SE.SpecLocaleQuoteBytes(Utf8.Encode(displayValue)) + DiagnosticSuffix()
   }
+
 
   function StandardInputName(): string
   {
     "standard input"
   }
 
-  function HeaderText(name: string): BenchWorld.Bytes
+  ghost function HeaderText(name: string): BenchWorld.Bytes
   {
-    "==> " + Utf8.Encode(name) + " <==\n"
+    HeaderPrefix() + Utf8.Encode(name) + HeaderSuffix()
   }
 
-  function InputsFromOperands(operands: seq<string>): seq<TailSchema.Input>
+
+  ghost function InputsFromOperands(operands: seq<string>): seq<TailSchema.Input>
     decreases |operands|
   {
     if |operands| == 0 then
@@ -128,7 +127,7 @@ module TailSpec {
     (raw.invalidCountTokenIndex == -1 || raw.versionTokenIndex <= raw.invalidCountTokenIndex)
   }
 
-  function Command(raw: TailSchema.TailCmdRaw): TailSchema.TailCmd
+  ghost function Command(raw: TailSchema.TailCmdRaw): TailSchema.TailCmd
   {
     var mode :=
       if HelpBeforeOther(raw) then
@@ -252,7 +251,7 @@ module TailSpec {
     !cmd.selection.fromStart && cmd.selection.amount == 0
   }
 
-  function HeaderForInput(cmd: TailSchema.TailCmd, input: TailSchema.Input, printedHeaders: int): BenchWorld.Bytes
+  ghost function HeaderForInput(cmd: TailSchema.TailCmd, input: TailSchema.Input, printedHeaders: int): BenchWorld.Bytes
   {
     if ShouldPrintHeaders(cmd) then
       (if printedHeaders == 0 then [] else ['\n']) +
@@ -295,7 +294,7 @@ module TailSpec {
                      else [])
   }
 
-  function ErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
+  ghost function ErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
     case Stdin(_) => if result.Err? then StdinReadErrorMessage(result.e) else []
@@ -315,10 +314,11 @@ module TailSpec {
       case Err(_) => true
   }
 
-  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "tail: error reading 'standard input': " + Utf8.Encode(ErrnoText(error)) + "\n"
+    StdinReadErrorPrefix() + Utf8.Encode(ErrnoText(error)) + DiagnosticSuffix()
   }
+
 
   ghost predicate StdinTraceRelation(
     cmd: TailSchema.TailCmd, before: BenchWorld.Bytes, after: BenchWorld.Bytes,
@@ -515,10 +515,11 @@ module TailSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("tail: write error: " + message + "\n")
+    StreamUtf8.Encode(StreamWriteErrorText(message))
   }
+
 
   ghost predicate EmitFields(
     observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
@@ -564,4 +565,25 @@ module TailSpec {
         old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
+  function ErrorPrefix(err: BenchWorld.IOError): BenchWorld.Bytes
+  {
+    if IOContract.IOErrorIsReadFailure(err) then "tail: error reading " else "tail: cannot open "
+  }
+
+  function ErrorInfix(err: BenchWorld.IOError): BenchWorld.Bytes
+  {
+    if IOContract.IOErrorIsReadFailure(err) then ": " else " for reading: "
+  }
+
+  function InvalidCountPrefix(unit: TailSchema.CountUnit): string
+  {
+    "tail: invalid number of " + (if unit == TailSchema.CountLines then "lines" else "bytes") + ": "
+  }
+
+  function HeaderPrefix(): BenchWorld.Bytes { "==> " }
+  function HeaderSuffix(): BenchWorld.Bytes { " <==\n" }
+  function DiagnosticSuffix(): BenchWorld.Bytes { "\n" }
+  function StdinReadErrorPrefix(): BenchWorld.Bytes { "tail: error reading 'standard input': " }
+  function StreamWriteErrorText(message: string): string { "tail: write error: " + message + "\n" }
+
 }

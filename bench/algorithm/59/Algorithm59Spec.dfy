@@ -19,21 +19,7 @@ module Algorithm59Spec
   function InvalidInputText(): BenchWorld.Bytes { "algorithm59: invalid input\n" }
 
 
-  function IntegerText(value: int): string
-    decreases if value < 0 then 1 else 0, if value < 0 then -value else value
-  {
-    if value < 0 then "-" + IntegerText(-value)
-    else if value < 10 then [(('0' as int) + value) as char]
-    else IntegerText(value / 10) + IntegerText(value % 10)
-  }
-
-  function LinesText(lines: seq<string>): string
-    decreases |lines|
-  {
-    if |lines| == 0 then "" else lines[0] + "\n" + LinesText(lines[1..])
-  }
-
-  function OutputText(output: string): BenchWorld.Bytes
+  ghost function OutputText(output: string): BenchWorld.Bytes
   {
     Utf8.Encode(output + "\n")
   }

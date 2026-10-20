@@ -5,6 +5,21 @@ include "../../core/StringEscaping.dfy"
 include "WcSchema.dfy"
 
 module WcSpec {
+
+  const ErrorMessageText0: BenchWorld.Bytes := "wc: "
+
+  const ErrorMessageText1: BenchWorld.Bytes := ": "
+
+  const ErrorMessageText2: BenchWorld.Bytes := "\n"
+
+  const StdinReadErrorMessageText0: BenchWorld.Bytes := ""
+
+  const StdinReadErrorMessageText1: BenchWorld.Bytes := "standard input"
+
+  const StreamWriteErrorMessageText0: BenchWorld.Bytes := "wc: write error: "
+
+  const StreamWriteErrorMessageText1: BenchWorld.Bytes := "\n"
+
   import StreamContract = IOContract
   import StreamUtf8 = Utf8Semantics
 
@@ -78,9 +93,9 @@ module WcSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    "wc: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ": " + ErrnoText(err) + "\n"
+    ErrorMessageText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ErrorMessageText1 + Utf8.Encode(ErrnoText(err)) + ErrorMessageText2
   }
 
   function InputsFromOperands(operands: seq<string>): seq<WcSchema.Input>
@@ -271,9 +286,9 @@ module WcSpec {
       combined[cuts[i]..cuts[i + 1]] == fragments[i]
   }
 
-  function StdinReadErrorMessage(name: string, error: BenchWorld.IOError): BenchWorld.Bytes
+  ghost function StdinReadErrorMessage(name: string, error: BenchWorld.IOError): BenchWorld.Bytes
   {
-    ErrorMessage(if name == "" then "standard input" else name, error)
+    ErrorMessage(if name == StdinReadErrorMessageText0 then StdinReadErrorMessageText1 else name, error)
   }
 
   ghost predicate StdinTraceRelation(
@@ -702,9 +717,9 @@ module WcSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("wc: write error: " + message + "\n")
+    StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }
 
   ghost predicate EmitFields(

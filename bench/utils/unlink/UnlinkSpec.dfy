@@ -1,7 +1,7 @@
 include "UnlinkSchema.dfy"
 include "../../core/IO.dfy"
 include "../../core/Utf8.dfy"
-include "../../core/CliModel.dfy"
+include "CliSupport.dfy"
 
 module UnlinkSpec {
   import StreamWorld = BenchWorld
@@ -58,30 +58,91 @@ module UnlinkSpec {
     else name
   }
 
-  function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
+  function ParseErrorTextPart1(): StreamWorld.Bytes
   {
-    var text := if err.kind == CliTypes.UnknownOption then
+    "unlink: unrecognized option '"
+  }
+
+  function ParseErrorTextPart2(): StreamWorld.Bytes
+  {
+    "'\n"
+  }
+
+  function ParseErrorTextPart3(): StreamWorld.Bytes
+  {
+    "Try 'unlink --help' for more information.\n"
+  }
+
+  function ParseErrorTextPart4(): StreamWorld.Bytes
+  {
+    "unlink: invalid option -- '"
+  }
+
+  function ParseErrorTextPart5(): StreamWorld.Bytes
+  {
+    "unlink: invalid option\nTry 'unlink --help' for more information.\n"
+  }
+
+  function ParseErrorTextPart6(): StreamWorld.Bytes
+  {
+    "unlink: option '"
+  }
+
+  function ParseErrorTextPart7(): StreamWorld.Bytes
+  {
+    "' doesn't allow an argument\n"
+  }
+
+  function ParseErrorTextPart8(): StreamWorld.Bytes
+  {
+    "' is ambiguous\n"
+  }
+
+  function ParseErrorTextPart9(): StreamWorld.Bytes
+  {
+    "unlink: "
+  }
+
+  function ParseErrorTextPart10(): StreamWorld.Bytes
+  {
+    "missing option value"
+  }
+
+  function ParseErrorTextPart11(): StreamWorld.Bytes
+  {
+    "parse error"
+  }
+
+  function ParseErrorTextPart12(): StreamWorld.Bytes
+  {
+    " at token '"
+  }
+
+  ghost function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
+  {
+    var shortOptionPrefix: string := ParseErrorTextPart4();
+    var text: string := if err.kind == CliTypes.UnknownOption then
         if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-          "unlink: unrecognized option '" + err.rawToken + "'\n" +
-          "Try 'unlink --help' for more information.\n"
+          ParseErrorTextPart1() + err.rawToken + ParseErrorTextPart2() +
+          ParseErrorTextPart3()
         else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
-          "unlink: invalid option -- '" + [err.rawToken[1]] + "'\n" +
-          "Try 'unlink --help' for more information.\n"
+          shortOptionPrefix + [err.rawToken[1]] + ParseErrorTextPart2() +
+          ParseErrorTextPart3()
         else
-          "unlink: invalid option\nTry 'unlink --help' for more information.\n"
+          ParseErrorTextPart5()
       else if err.kind == CliTypes.UnexpectedValue then
-        "unlink: option '" + LongOptionName(err.rawToken) +
-        "' doesn't allow an argument\n" +
-        "Try 'unlink --help' for more information.\n"
+        ParseErrorTextPart6() + LongOptionName(err.rawToken) +
+        ParseErrorTextPart7() +
+        ParseErrorTextPart3()
       else if err.kind == CliTypes.Ambiguous then
-        "unlink: option '" + err.rawToken + "' is ambiguous\n" +
-        "Try 'unlink --help' for more information.\n"
+        ParseErrorTextPart6() + err.rawToken + ParseErrorTextPart8() +
+        ParseErrorTextPart3()
       else
-        "unlink: " +
+        ParseErrorTextPart9() +
         (if err.kind == CliTypes.MissingValue
-        then "missing option value"
-        else "parse error") +
-        " at token '" + err.rawToken + "'\n";
+        then ParseErrorTextPart10()
+        else ParseErrorTextPart11()) +
+        ParseErrorTextPart12() + err.rawToken + ParseErrorTextPart2();
     Utf8.Encode(text)
   }
 
@@ -116,19 +177,44 @@ module UnlinkSpec {
     + "Try 'unlink --help' for more information.\n"
   }
 
-  function CannotUnlinkText(
+  function CannotUnlinkTextPart1(): StreamWorld.Bytes
+  {
+    "unlink: cannot unlink "
+  }
+
+  function CannotUnlinkTextPart2(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function CannotUnlinkTextPart3(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CannotUnlinkText(
     quotedPath: BenchWorld.Bytes,
     reason: string
   ): BenchWorld.Bytes
   {
-    "unlink: cannot unlink " + quotedPath + ": "
-    + Utf8.Encode(reason) + "\n"
+    CannotUnlinkTextPart1() + quotedPath + CannotUnlinkTextPart2()
+    + Utf8.Encode(reason) + CannotUnlinkTextPart3()
   }
 
 
-  function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorTextPart1(): StreamWorld.Bytes
   {
-    "unlink: write error: " + Utf8.Encode(reason) + "\n"
+    "unlink: write error: "
+  }
+
+  function WriteErrorTextPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate EmissionOutcomeFields(

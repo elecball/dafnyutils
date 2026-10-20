@@ -1,9 +1,7 @@
-include "../../core/Utf8.dfy"
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
 
 module EchoSchema {
-  import Utf8 = Utf8Semantics
   import BenchWorld
   import CliTypes
 
@@ -31,6 +29,6 @@ module EchoSchema {
 
   method EchoFormatParseError(e: CliTypes.ParseError) returns (b: BenchWorld.Bytes)
   {
-    b := Utf8.Encode(ParseErrorText(e));
+    b := ParseErrorText(e);
   }
 }

@@ -1,3 +1,4 @@
+include "FoldTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -5,11 +6,13 @@ include "FoldSchema.dfy"
 include "FoldSpec.dfy"
 
 module FoldCore {
+  import Text = FoldTextCore
+
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = Utf8Semantics
+  import Utf8 = FoldUtf8Core
   import BenchWorld
   import IOContract
   import Schema = FoldSchema
@@ -267,7 +270,7 @@ module FoldCore {
     else if cmd.mode == Schema.ModeInvalidWidth then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == [] &&
-      plannedStderr == Spec.InvalidWidthMessage(cmd.invalidWidthValue) &&
+      plannedStderr == Text.InvalidWidthMessage(cmd.invalidWidthValue) &&
       exit == 1
     else
       exists stdoutPart: BenchWorld.Bytes, stderrPart: BenchWorld.Bytes, hadError: bool ::
@@ -393,15 +396,15 @@ module FoldCore {
   }
 
   method GetInvalidWidthMessage(value: string) returns (msg: BenchWorld.Bytes)
-    ensures msg == Spec.InvalidWidthMessage(value)
+    ensures msg == Text.InvalidWidthMessage(value)
   {
-    msg := Spec.InvalidWidthMessage(value);
+    msg := Text.InvalidWidthMessage(value);
   }
 
   method ErrorMessageMethod(path: BenchWorld.Path, err: BenchWorld.IOError) returns (msg: BenchWorld.Bytes)
-    ensures msg == Spec.ErrorMessage(path, err)
+    ensures msg == Text.ErrorMessage(path, err)
   {
-    msg := Spec.ErrorMessage(path, err);
+    msg := Text.ErrorMessage(path, err);
   }
 
   method FittingPrefixMethod(
@@ -834,7 +837,7 @@ module FoldCore {
       var msg := GetInvalidWidthMessage(cmd.invalidWidthValue);
       plannedErr := plannedErr + msg;
       exit := 1;
-      assert msg == Spec.InvalidWidthMessage(cmd.invalidWidthValue);
+      assert msg == Text.InvalidWidthMessage(cmd.invalidWidthValue);
       assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by { hide *; reveal PreparedSummary(); }
       return;
     }
@@ -881,7 +884,7 @@ module FoldCore {
       assert result == Spec.ReadResultAt(cmd, preFs, beforeStdin, i, old(io.trustedStreams()));
       var piece := OutputPieceMethod(cmd, result);
       var diagnostic := if result.Err? then
-        Spec.ErrorMessage(if input.Stdin? then "-" else input.path, result.e) else [];
+        Text.ErrorMessage(if input.Stdin? then "-" else input.path, result.e) else [];
       var failed := hadError || result.Err?;
       JoinFragmentsSnoc(stdoutFragments, piece);
       JoinFragmentsSnoc(stderrFragments, diagnostic);
@@ -952,10 +955,10 @@ module FoldCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);

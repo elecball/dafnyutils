@@ -14,7 +14,7 @@ module CommRenderSpec {
     if zeroTerminated then '\0' else '\n'
   }
 
-  function OutputDelimiterFromValues(values: seq<string>): BenchWorld.Bytes
+  ghost function OutputDelimiterFromValues(values: seq<string>): BenchWorld.Bytes
   {
     if |values| == 0 then ['\t'] else if values[0] == "" then ['\0'] else Utf8.Encode(values[0])
   }

@@ -1,8 +1,11 @@
+include "ChmodModelProof.dfy"
+include "ChmodWorldLookupProof.dfy"
 include "ChmodOperandSpec.dfy"
 module ChmodOperandProof {
+  import ModelProof = ChmodModelProof
   import W = BenchWorld
   import C = IOContract
-  import Lookup = WorldLookupProof
+  import Lookup = ChmodWorldLookupProof
   import R = Results
   import Operand = ChmodOperandSpec
   import Base = ChmodSpec
@@ -140,10 +143,10 @@ module ChmodOperandProof {
         Operand.DirectoryKey(before,path) == Operand.DirectoryKey(after,path)
     {
       PathRecord(before,path);
-      C.FileSystemTopologyPathFields(before,after,path);
+      ModelProof.FileSystemTopologyPathFields(before,after,path);
       PathRecord(after,path);
       reveal Operand.DirectoryKey();
-      C.FileSystemTopologyLookupSegmentsFields(before,after,W.PathSegments(path));
+      ModelProof.FileSystemTopologyLookupSegmentsFields(before,after,W.PathSegments(path));
       assert W.FsIdAt(before,path) == W.FsIdAt(after,path) by {
         reveal W.FsIdAt(), W.InodeFsLookupId(), W.FsLookupSegments();
       }
@@ -174,8 +177,8 @@ module ChmodOperandProof {
       reveal C.DirectoryParentAnchorCurrentFields();
       var target:=handles[parent].path;
       PathRecord(before,target);
-      C.FileSystemTopologyPathFields(before,after,target);
-      C.FileSystemTopologyLookupSegmentsFields(before,after,W.PathSegments(target));
+      ModelProof.FileSystemTopologyPathFields(before,after,target);
+      ModelProof.FileSystemTopologyLookupSegmentsFields(before,after,W.PathSegments(target));
       PathRecord(after,target);
       assert W.FsIdAt(before,target)==W.FsIdAt(after,target) by { reveal W.FsIdAt(),W.InodeFsLookupId(),W.FsLookupSegments(); }
       reveal W.FileSystemTopologyUnchangedExceptMode(),W.NodeShapeUnchangedExceptMode();
@@ -222,8 +225,8 @@ module ChmodOperandProof {
   {
     hide *;
     PathRecord(before,path);
-    C.FileSystemTopologyPathFields(before,after,path);
-    C.FileSystemTopologyLookupSegmentsFields(before,after,W.PathSegments(path));
+    ModelProof.FileSystemTopologyPathFields(before,after,path);
+    ModelProof.FileSystemTopologyLookupSegmentsFields(before,after,W.PathSegments(path));
     PathRecord(after,path);
     assert W.FsIdAt(before,path)==W.FsIdAt(after,path) by { reveal W.FsIdAt(),W.InodeFsLookupId(),W.FsLookupSegments(); }
     reveal Operand.DirectoryKey(),W.FileSystemTopologyUnchangedExceptMode();

@@ -1,6 +1,8 @@
+include "PwdDirectoryModelProof.dfy"
 include "../../core/IO.dfy"
 
 module PwdRecoveryIOProof {
+  import DirectoryModelProof = PwdDirectoryModelProof
   import opened BenchWorld
   import C = IOContract
 
@@ -124,6 +126,6 @@ module PwdRecoveryIOProof {
   {
     hide *;
     reveal C.GetFileStatusSpec(), C.FileStatusStructureContractFields(), C.ResultValue();
-    C.RootDirectorySnapshotFields(fs);
+    DirectoryModelProof.RootDirectorySnapshotFields(fs);
   }
 }

@@ -12,11 +12,7 @@ from benchmarks.contracts import (
     validate_final_specification_obligation,
 )
 from benchmarks.definition import BenchmarkDefinition
-from benchmarks.profiles import (
-    FUNCTIONAL_CORE_SOURCE,
-    ResolvedBenchmark,
-    utility_paths,
-)
+from benchmarks.profiles import ResolvedBenchmark, utility_paths
 from benchmarks.task import PublicRule, TaskProfile
 from entry_contract import EntryContractAnalysis
 from verification import (
@@ -123,15 +119,6 @@ def _profile_payload(
                 "description": f"Required behavior for {task_id}",
             },
             *formal_resources,
-            {
-                "resource_id": "functional-core",
-                "kind": "support",
-                "path": FUNCTIONAL_CORE_SOURCE,
-                "description": (
-                    "Shared verified map, filter, scan, and fold declarations; include this "
-                    "source and import BenchFunctional to use them"
-                ),
-            },
         ],
         "public_rules": [
             {

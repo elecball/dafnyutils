@@ -1,8 +1,12 @@
+include "ChmodTextCore.dfy"
+include "ChmodRecursiveTextCore.dfy"
 include "ChmodEntryRuntime.dfy"
 include "ChmodProof.dfy"
 include "ChmodTraversalProof.dfy"
 
 module ChmodChangeRuntime {
+  import Text = ChmodTextCore
+  import RecursiveText = ChmodRecursiveTextCore
   import W = BenchWorld
   import BenchIO
   import C = IOContract
@@ -145,8 +149,8 @@ module ChmodChangeRuntime {
     if mode.Err? {
       var err := C.ResultErrno(mode);
       var kind := Recursive.ResolutionFailureKindSpec(cmd, native.top, native.isSymlink, err);
-      var outChunk := Recursive.RecursiveAccessStdoutSpec(cmd, native.displayPath);
-      var errChunk := Recursive.NativeAccessText(cmd, native.displayPath, kind, Base.NativeErrnoTextCore(err, io));
+      var outChunk := RecursiveText.RecursiveAccessStdoutSpec(cmd, native.displayPath);
+      var errChunk := RecursiveText.NativeAccessText(cmd, native.displayPath, kind, Base.NativeErrnoTextCore(err, io));
       output.stdout := output.stdout+outChunk; output.stderr := output.stderr+errChunk; ok := false;
       change := Spec.Change(Spec.State(fs0, io.statusCursor(), io.cwdContext(), outChunk, errChunk, ok),
         fs0, io.cwdContext(), 0, 0 as bv32);
@@ -174,10 +178,10 @@ module ChmodChangeRuntime {
       var outChunk: W.Bytes;
       var errChunk: W.Bytes;
       if BaseSpec.ModeNotSupported(setErr) {
-        outChunk := Recursive.RecursiveSkipStdoutSpec(cmd, native.displayPath); errChunk := []; ok := true;
+        outChunk := RecursiveText.RecursiveSkipStdoutSpec(cmd, native.displayPath); errChunk := []; ok := true;
       } else {
-        outChunk := if cmd.verbose then BaseSpec.FailedChangeMessageSpec(native.displayPath, mode.v.mode, desired) else [];
-        errChunk := if cmd.silent then [] else BaseSpec.ChangeErrorMessageSpec(native.displayPath, Base.NativeErrnoTextCore(setErr, io));
+        outChunk := if cmd.verbose then Text.FailedChangeMessageSpec(native.displayPath, mode.v.mode, desired) else [];
+        errChunk := if cmd.silent then [] else Text.ChangeErrorMessageSpec(native.displayPath, Base.NativeErrnoTextCore(setErr, io));
         ok := false;
       }
       output.stdout := output.stdout+outChunk; output.stderr := output.stderr+errChunk;

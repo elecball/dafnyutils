@@ -1,9 +1,12 @@
+include "CommTextCore.dfy"
 include "../../core/World.dfy"
 include "CommSchema.dfy"
 
 module CommRenderCore {
+  import Text = CommTextCore
+
   import BenchWorld
-  import Utf8 = Utf8Semantics
+  import Utf8 = CommUtf8Core
   import Schema = CommSchema
 
   datatype LineOrder = LineLess | LineEqual | LineGreater

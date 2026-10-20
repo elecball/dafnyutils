@@ -1,3 +1,4 @@
+include "WcTextCore.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
@@ -5,6 +6,8 @@ include "WcSchema.dfy"
 include "WcSpec.dfy"
 
 module WcCore {
+  import Text = WcTextCore
+
   import StreamContract = IOContract
 
   import Result = Results
@@ -13,8 +16,8 @@ module WcCore {
   import IOContract
   import Spec = WcSpec
   import WcSchema
-  import Utf8 = Utf8Semantics
-  import SE = StringEscaping
+  import Utf8 = WcUtf8Core
+  import SE = WcEscapingCore
 
   datatype Counts = Counts(lines: int, words: int, chars: int, bytes: int, maxLine: int)
   datatype ScanState = ScanState(counts: Counts, inWord: bool, lineLen: int)
@@ -296,7 +299,7 @@ module WcCore {
          exists counts: Counts, countTrace: CountWitness ::
            CountWitnessRelation(IOContract.ReadResultData(result), counts, countTrace) &&
            entries == [Entry(displayName, counts, true)] &&
-           errorOutput == Spec.StdinReadErrorMessage(displayName, error) && failed &&
+           errorOutput == Text.StdinReadErrorMessage(displayName, error) && failed &&
            countWitnesses == [countTrace])
     case File(path) =>
       (match result
@@ -312,7 +315,7 @@ module WcCore {
          (if IOContract.IOErrorIsDirectory(err)
           then [Entry(path, ZeroCounts(), true)]
           else []) &&
-         errorOutput == Spec.ErrorMessage(path, err) &&
+         errorOutput == Text.ErrorMessage(path, err) &&
          failed &&
          countWitnesses == [])
   }
@@ -824,9 +827,9 @@ module WcCore {
   }
 
   method ErrorMessageMethod(path: BenchWorld.Path, err: BenchWorld.IOError) returns (msg: BenchWorld.Bytes)
-    ensures msg == Spec.ErrorMessage(path, err)
+    ensures msg == Text.ErrorMessage(path, err)
   {
-    msg := Spec.ErrorMessage(path, err);
+    msg := Text.ErrorMessage(path, err);
   }
 
   function InputsFromOperands(operands: seq<string>): seq<WcSchema.Input>
@@ -1149,7 +1152,7 @@ module WcCore {
       if input.Stdin? {
         var counts, countTrace := CountDataMethod(IOContract.ReadResultData(result));
         entries := [Entry(name, counts, true)];
-        errorPiece := Spec.StdinReadErrorMessage(name, err);
+        errorPiece := Text.StdinReadErrorMessage(name, err);
         hadError := true;
         countWitnesses := [countTrace];
         return;
@@ -1426,6 +1429,10 @@ module WcCore {
       exit := 0;
       assert io.stdin() == preStdin;
       assert plannedErr == [];
+      assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by {
+        hide *;
+        reveal PreparedSummary();
+      }
       return;
     }
 
@@ -1435,6 +1442,10 @@ module WcCore {
       exit := 0;
       assert io.stdin() == preStdin;
       assert plannedErr == [];
+      assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by {
+        hide *;
+        reveal PreparedSummary();
+      }
       return;
     }
 
@@ -1664,10 +1675,10 @@ module WcCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);

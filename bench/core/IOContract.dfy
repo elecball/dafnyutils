@@ -1,21 +1,100 @@
 include "Errno.dfy"
 include "World.dfy"
-include "WorldLookupProof.dfy"
-include "WorldRenameProof.dfy"
 
 module IOContract {
+  // Public primitive relations and model types retain their exact definitions.
+  // The provided lemmas below establish only intrinsic representation validity;
+  // utility compatibility proofs are candidate-owned.
+  export
+    provides Result, Errno, BenchWorld
+    reveals AtCwdPathFields, AtDirPathFields, AtDirHandleAppliesFields, DirectoryParentAnchorCurrentFields, DirectoryParentAnchorForRequestFields
+    reveals ResolvePathAtDirForMetadataFields, GetFileStatusAtDirResultFields, GetFileStatusAtDirStructureContractFields, OpenDirAtDirFailureErrFields, SetModeAtDirCanSucceedFields
+    reveals LookupAtDirFailureErrnosFields, SetFileModeAtDirTargetContractFields, OpenDirAtDirTargetContractFields, SetModeCanSucceedFields, MetadataFailureErrnosFields
+    reveals NativeStatusFailureErrnosFields, NativeRequestHasInvalidAbiPath, NativeFailureErrnosFields, NativeRequestCanSucceedFields, ValidNativeFailureObservation
+    reveals NativeFailureWitness, ValidNativeFailureObservations, ObservedNativeStatusResultFields, ObservedNativeStatusAtCwdResultFields, ObservedNativeFileStatusAtCwdContractFields
+    reveals ObservedNativeStatusAtDirResultFields, ObservedNativeFileStatusAtDirContractFields, NativeFailureContractFields, GetCwdResultFields, GetUmaskResultFields
+    reveals GetEnvContractFields, EnvironmentKey, ValidEnvironment, Environment, EnvEntriesRepresentEnv
+    reveals GetEnvironmentContractFields, GetLoginNameContractFields, TrustedTimeParseResultFields, ParseTimestampContractFields, ParseDateContractFields
+    reveals ResolvePathThroughSymlinkComponentsFields, HasTrailingSlash, ResolvePathThroughSymlinkComponentsWithVisitedFields, RawPathSegmentsFields, HasRawTerminalSpecialFields
+    reveals IsNonRootRawEntryPathFields, ResolvePathThroughSymlinkExactWithVisitedFields, DirectNoFollowResultFields, TerminalNoFollowResultFields, ResolveRawSymlinkSegmentsFields
+    reveals ResolvePathThroughSymlinkSegmentsWithVisitedFields, ResolvePathThroughSymlinkSegmentsWithTrailingFields, ResolvePathForMetadataFields, ModeledReadFileResultFields, BytesPrefix
+    reveals FileReadResultFromOutcome, ResultErrno, ResultValue, ReadResultData, ReadResultStage
+    reveals WriteResultCommitted, WriteResultStage, ParsedResultValue, IOErrorIsDirectory, IOErrorIsReadFailure
+    reveals ReadFailureData, StreamReadResultFromOutcome, StreamWriteResultFromOutcome, ObservedReadStdinResultFields, ObservedReadStdinRemainingFields
+    reveals ObservedReadFileResultFields, TrustedReadFileContractFields, ObservedOpenReadFileResultFields, TrustedOpenReadFileContractFields, TrustedReadStdinWithOutcomeContractFields
+    reveals TrustedWriteWithOutcomeFields, TrustedWriteStdoutWithOutcomeContractFields, TrustedWriteStderrWithOutcomeContractFields, ReadLinkResultFields, AfterReadStdinFields
+    reveals ReadStdinAllFields, AfterAppendStdoutFields, AppendStdoutFields, AfterAppendStderrFields, AppendStderrFields
+    reveals IOErrorErrno, MetadataFailureErrFields, OpenDirFailureErrFields, PathExistsContractFields, TrustedFilesystemQueryContractFields
+    reveals TrustedPathExistsContractFields, TrustedCreateFileContractFields, TrustedFilesystemEffectContractFields, TrustedFilesystemSyncContractFields, GetFileModeContractFields
+    reveals GetFileStatusResultFields, FileStatusObservationFields, ObservedFileStatusResultFields, ObservedFileStatusContractFields, ObservedNativeFileStatusContractFields
+    reveals FileStatusStructureContractFields, GetFileStatusContractFields, IsDirectoryContractFields, IsDirectoryStrictContractFields, IsSymlinkContractFields
+    reveals ResolvePathForCreateNoFollowTerminalFields, ResolvePathForCreateFields, CreateFileFailureErrFields, FreshInsertionAtTimestampFields, FreshInsertionFields
+    reveals DirectoryStorageObservationFields, RefreshParentDirectoryStorageFields, CreationOwnershipFields, CreatedPathOwnershipFields, CreatedRegularModeFields
+    reveals CreatedRegularRequestedModeFields, CreatedRegularOwnershipFields, CreateFileContractFields, CreateFileWithCredentialsContractFields, FsWithoutPath
+    reveals DeleteFsWithMetadataFields, WriteFileFailureErrFields, CompletedWriteFileEffectFields, WriteOpenFailureErrnosFields, WriteFileOutcomeFields
+    reveals WriteFileContractFields, WriteFileWithCredentialsContractFields, ExistingAppendEffectFields, CompletedAppendEffectFields, AppendFileContractFields
+    reveals CreateSymlinkFailureErrFields, CreateSymlinkContractFields, CreateSymlinkWithCredentialsContractFields, DeletePathFailureErrFields, DeletePathContractFields
+    reveals DeletePathWithChangeTimeContractFields, SetModeTargetOk, SetFileModeContractFields, SetFileModeWithChangeTimeContractFields, SetTimesTargetOk
+    reveals ValidTimestampNanoseconds, TimestampUpdateMatchesFields, GetFileTimesContractFields, SetFileTimesContractFields, TrustedSetFileTimesContractFields
+    reveals TimestampUpdateValidFields, StdoutTimestampUpdateFields, SetStdoutTimesContractFields, ValidLeafName, EntryForNode
+    reveals InodeTreeChildNodeFields, DirectoryEntriesForTreeFields, DirectoryEntriesForPathFields, DirectoryEntriesIncludingDotsForPathFields, OpenDirOutcomeFields
+    reveals OpenDirContractFields, ResolvePathIdentityContractFields, DirectoryEntryKindForFileKind, DirectoryEntryKindMatchesEntry, DirectoryEntryKindMatchesFilesystemFields
+    reveals DirectoryDotEntryMatchesFilesystemFields, ReadDirContractFields, ReadDirInodeFields, GetOpenDirectoryStatusContractFields, CloseDirContractFields
+    reveals HasPathPrefix, ResolvePathForRenameNoFollowTerminalFields, ResolvePathForRenameDestinationFields, HasNoDescendants, RenameKindCompatible
+    reveals RenameFs, RenameDirectoryParentLinksFields, RefreshRenameParentStorageFields, RenameFsWithMetadataFields, RenameFailureErrnosFields
+    reveals RenamePathContractFields, RenamePathWithChangeTimeContractFields, CLocaleErrnoTextResult, QuoteafPathResult, QuoteArgumentResult
+    reveals ReadFileSpec, OpenReadFileSpec, ObservedReadLinkResultFields, ObservedReadLinkAtCwdResultFields, ReadLinkAtCwdSpec
+    reveals ReadLinkSpec, ReadStdinAllSpec, ReadStdinSpec, AppendStdoutSpec, AppendStderrSpec
+    reveals WriteStdoutSpec, WriteStderrSpec, GetCLocaleErrnoTextSpec, QuoteafPathSpec, QuoteArgumentSpec
+    reveals GetEnvSpec, GetEnvironmentSpec, GetLoginNameSpec, NowSpec, ParseTimestampSpec
+    reveals ParseDateSpec, PathExistsSpec, CreateFileSpec, WriteFileSpec, AppendFileSpec
+    reveals CreateSymlinkSpec, DeletePathSpec, ResolveDirectoryCreationPathFields, DirectoryCreationEffectFields, TraversalRecordEffectFields
+    reveals ParentDirectoryEffectFields, EntryRemovalEffectFields, HardLinkEffectFields, TruncatedContentsFields, TruncationEffectFields
+    reveals NativeLookupFaultErrnos, NativeMutationFaultErrnos, LookupFailureErrnosFields, HardLinkFailureErrnosFields, EntryRemovalFailureErrnosFields
+    reveals FilesystemRequestHasInvalidAbiPath, FilesystemFailureErrnosFields, FailedFilesystemEffectFields, FilesystemRequestCanSucceedFields, FilesystemQueryShapeFields
+    reveals ValidFilesystemObservation, FilesystemFailureWitness, ValidFilesystemObservations, CreateDirectorySpec, RemoveDirectorySpec
+    reveals CreateHardLinkSpec, UnlinkPathSpec, TruncateFileSpec, CreateSpecialNodeSpec, SyncSpec
+    reveals SetFileTimesNowSpec, SetFileAccessTimeNowSpec, SetFileModificationTimeNowSpec, GetFileTimesSpec, SetFileTimesSpec
+    reveals SetStdoutTimesNowSpec, SetStdoutAccessTimeNowSpec, SetStdoutModificationTimeNowSpec, SetStdoutTimesSpec, GetFileModeSpec
+    reveals GetFileStatusAtDirSpec, SetFileModeAtDirSpec, OpenDirAtDirSpec, GetFileStatusAtCwdSpec, SetFileModeAtCwdSpec
+    reveals OpenDirAtCwdSpec, CapabilityStatusObservationPathFields, ObservedOpenDirectoryCapabilityResultFields, GetOpenDirectoryCapabilityStatusSpec, GetFileStatusSpec
+    reveals SetFileModeSpec, GetUmaskSpec, OpenDirSpec, ResolvePathIdentitySpec, ReadDirSpec
+    reveals GetOpenDirectoryStatusSpec, CloseDirSpec, IsDirectorySpec, IsSymlinkSpec, RenamePathSpec
+    reveals FilesystemObjectRecordsFields, LiveObjectRecordsFields, LiveRecordStatusFields, LiveDirectoryTopologyFields, DirectoryCapabilityNamesFields
+    reveals DirectoryCapabilityAnchorCurrentFields, DirectoryCapabilityReadCurrentFields, DirectoryOperationCapabilitiesCurrentFields, LiveDirectoryCapabilitiesFields, DirectoryOperationErrnos
+    reveals DirectoryRequestFields, DirectoryStatusSameStructure, DirectoryResponseFields, DirectoryOperationSpec, DirectoryPathResultFields
+    reveals DirectoryStatusResultFields, DirectoryHandleResultFields, DirectoryDescriptorResultFields, DirectoryReadResultFields, DirectoryUnitResultFields
+    reveals DirectoryModelFields, DirectoryStateFields, DefaultLiveDirectoryTopology, DefaultDirectoryResponse, DefaultDirectoryState
+    reveals ValidDirectoryState, DirectoryResources, DirectoryResourcesFields, DirectoryResourcesFromLegacy, ValidDirectoryResources
+    reveals DirectoryResourcesReplaceLegacy, DirectoryResourcesReplaceLive, DirectoryStateRequestFields, DirectoryNextPositionFields, DirectoryNextCapabilitiesFields
+    reveals DirectoryNextStateFields, DirectoryResourcesNextStateFields, DirectoryStateAtSnapshotFields, SimpleSegments, NamedDirectoryEntriesFields
+    reveals FreshPosition, Extends, AddNamedDirectoryFields, ExtendNamedDirectoryTopologyFields, ExtendTopologyDomainFields
+    reveals ExtendDirectoryModelFields, DirectoryStateAtExpandedSnapshotFields, CanonicalExistingPathFields, ModeChangedRecordFields, ModeChangedRecordsFields
+    reveals ModeChangedStatusFields, ModeChangedEntryFields, ModeChangedDirectoryFields, ModeChangedTopologyFields, ModeChangedFilesystemFields
+    reveals CwdContextReadStepFields, DirectoryParentAnchorForContextRequestFields, UnknownDirectoryParentErrnoFields, ResolvePathAtDirContextForMetadataFields, GetFileStatusAtDirContextResultFields
+    reveals CwdStatusObservationPathFields, AtDirContextStatusObservationPathFields, CwdLookupFailureErrnosFields, AtDirContextLookupFailureErrnosFields, CwdResolvedModeCanSucceedFields
+    reveals CwdResolvedOpenFailureErrFields, GetFileStatusAtCwdStructureContractFields, GetFileStatusAtDirContextStructureContractFields, SetFileModeFromCwdTargetContractFields, CwdOpenedTopologyFields
+    reveals CwdOpenedPositionFields, OpenDirFromCwdTargetContractFields, GetOpenDirectoryCapabilityResultFields, DirectoryRequestForContextFields, ContextOperationSpec
+    reveals DirectoryResourcesContextViewFields, DirectoryResourcesAdvanceFields, DirectoryResourcesOpenedFields, DirectoryResourcesModeFields, CwdContextFields
+    reveals CwdTargetFields, CwdTargetRecordFields, CwdTargetNamedPathFields, CwdNamedResultFields, ResolveLiveDirectorySegmentsFields
+    reveals ResolvePathAtCwdForMetadataFields, GetFileStatusFromCwdContextResultFields, ReadLinkFromCwdContextResultFields
+    provides BuiltSegmentsFields, CanonicalPathFields, CwdModeContextValidityFields, DirectoryStateAdmitsRequest
+    provides DirectoryTransitionOwnershipFields, DirectoryTransitionStateFields, KernelLookupTreeWellFormed, LeafNameFields
+    provides LookupPrefix, LookupSegmentsSimple, ModeChangedFilesystemValid, NamedDirectoryChildFields
+    provides NamedDirectorySnapshotFields, NativeFailureDomainContainsError, RootDirectoryNamedEntryFields, RootDirectorySnapshotFields
+
   import Errno = Errnos
   import Result = Results
   import opened BenchWorld
-  import LookupProof = WorldLookupProof
-  import RenameProof = WorldRenameProof
+  import LookupProof = KernelLookup
+  import RenameProof = KernelRename
 
-  function AtCwdPathFields(cwd: Path, path: Path): Path
+  ghost function AtCwdPathFields(cwd: Path, path: Path): Path
   {
     if path == "" || IsAbsolutePath(path) then path else AppendPath(BuildPath(true, PathSegments(cwd)), path)
   }
 
-  function AtDirPathFields(handles: map<int, DirHandleState>, handle: int, path: Path): Path
+  ghost function AtDirPathFields(handles: map<int, DirHandleState>, handle: int, path: Path): Path
   {
     if path == "" || IsAbsolutePath(path) then path
     else if handle in handles then AppendPath(handles[handle].path, path)
@@ -158,13 +237,13 @@ module IOContract {
     case Ok(target) => FsContainsPath(fs, target) && (follow || !FsNodeAt(fs, target).Symlink?)
   }
 
-  function MetadataFailureErrnosFields(fs: FileSystem, path: Path, follow: bool): set<int>
+  ghost function MetadataFailureErrnosFields(fs: FileSystem, path: Path, follow: bool): set<int>
   {
     if (0 as char) in path then {Errno.EINVAL}
     else LookupFailureErrnosFields(fs, path, follow) + {Errno.EOVERFLOW}
   }
 
-  function NativeStatusFailureErrnosFields(fs: FileSystem, path: Path, follow: bool): set<int>
+  ghost function NativeStatusFailureErrnosFields(fs: FileSystem, path: Path, follow: bool): set<int>
   {
     MetadataFailureErrnosFields(fs, path, follow) +
     (match GetFileStatusResultFields(fs, path, follow)
@@ -431,7 +510,7 @@ module IOContract {
 
 
 
-  function GetUmaskResultFields(props: map<string, string>): bv32 { ParsedUmaskFromProps(props) }
+  ghost function GetUmaskResultFields(props: map<string, string>): bv32 { ParsedUmaskFromProps(props) }
 
   predicate GetEnvContractFields(env: map<string, string>, key: string, r: IOResult<string>)
   {
@@ -524,7 +603,7 @@ module IOContract {
 
   // Resolves a path component-by-component so symlinked directories are
   // traversed before the terminal symlink decision.
-  function ResolvePathThroughSymlinkComponentsFields(
+  ghost function ResolvePathThroughSymlinkComponentsFields(
     fs: FileSystem,
     path: Path,
     followTerminalSymlink: bool
@@ -544,7 +623,7 @@ module IOContract {
     |path| > 0 && path[|path| - 1] == '/'
   }
 
-  function ResolvePathThroughSymlinkComponentsWithVisitedFields(
+  ghost function ResolvePathThroughSymlinkComponentsWithVisitedFields(
     fs: FileSystem,
     path: Path,
     seen: set<Path>,
@@ -569,12 +648,12 @@ module IOContract {
       )
   }
 
-  function RawPathSegmentsFields(path: Path): seq<string>
+  ghost function RawPathSegmentsFields(path: Path): seq<string>
   {
     SplitSegments(StripLeadingSlash(path), 0, 0)
   }
 
-  function HasRawTerminalSpecialFields(path: Path): bool
+  ghost function HasRawTerminalSpecialFields(path: Path): bool
   {
     if HasTrailingSlash(path) then
       var segments := RawPathSegmentsFields(path);
@@ -592,13 +671,13 @@ module IOContract {
        (length == 2 || path[length - 3] == '/'))
   }
 
-  function IsNonRootRawEntryPathFields(path: Path): bool
+  ghost function IsNonRootRawEntryPathFields(path: Path): bool
   {
     |RawPathSegmentsFields(path)| > 0 &&
     !HasRawTerminalSpecialFields(path)
   }
 
-  function ResolvePathThroughSymlinkExactWithVisitedFields(
+  ghost function ResolvePathThroughSymlinkExactWithVisitedFields(
     fs: FileSystem,
     path: Path,
     seen: set<Path>,
@@ -632,7 +711,7 @@ module IOContract {
           Result.Ok(path)
   }
 
-  function DirectNoFollowResultFields(
+  ghost function DirectNoFollowResultFields(
     fs: FileSystem,
     path: Path
   ): IOResult<Path>
@@ -648,7 +727,7 @@ module IOContract {
         case _ => Result.Ok(path)
   }
 
-  function TerminalNoFollowResultFields(
+  ghost function TerminalNoFollowResultFields(
     fs: FileSystem,
     path: Path
   ): IOResult<Path>
@@ -792,7 +871,7 @@ module IOContract {
     }
   }
 
-  function ResolveRawSymlinkSegmentsFields(
+  ghost function ResolveRawSymlinkSegmentsFields(
     fs: FileSystem,
     segs: seq<string>,
     i: nat,
@@ -1141,7 +1220,7 @@ module IOContract {
     }
   }
 
-  function ResolvePathThroughSymlinkSegmentsWithVisitedFields(
+  ghost function ResolvePathThroughSymlinkSegmentsWithVisitedFields(
     fs: FileSystem,
     segs: seq<string>,
     i: nat,
@@ -1164,7 +1243,7 @@ module IOContract {
     )
   }
 
-  function ResolvePathThroughSymlinkSegmentsWithTrailingFields(
+  ghost function ResolvePathThroughSymlinkSegmentsWithTrailingFields(
     fs: FileSystem,
     segs: seq<string>,
     i: nat,
@@ -1253,7 +1332,7 @@ module IOContract {
               )
   }
 
-  function ResolvePathForMetadataFields(fs: FileSystem, path: Path, followSymlink: bool): (result: IOResult<Path>)
+  ghost function ResolvePathForMetadataFields(fs: FileSystem, path: Path, followSymlink: bool): (result: IOResult<Path>)
     ensures result.Ok? ==>
               FsContainsPath(fs, result.v) && !FsNodeAt(fs, result.v).Inaccessible?
   {
@@ -1348,7 +1427,7 @@ module IOContract {
     );
   }
 
-  function ModeledReadFileResultFields(fs: FileSystem, path: Path): IOResult<Bytes>
+  ghost function ModeledReadFileResultFields(fs: FileSystem, path: Path): IOResult<Bytes>
   {
     match ResolvePathThroughSymlinkComponentsFields(fs, path, true)
     case Ok(resolved) =>
@@ -1607,7 +1686,7 @@ module IOContract {
     )
   }
 
-  function ReadLinkResultFields(fs: FileSystem, path: Path): IOResult<Path>
+  ghost function ReadLinkResultFields(fs: FileSystem, path: Path): IOResult<Path>
   {
     match ResolvePathForMetadataFields(fs, path, false)
     case Ok(resolved) =>
@@ -1648,14 +1727,14 @@ module IOContract {
     case TimeParseFailure(_, _, _) => Errno.EINVAL
   }
 
-  function MetadataFailureErrFields(fs: FileSystem, path: Path, followSymlink: bool): int
+  ghost function MetadataFailureErrFields(fs: FileSystem, path: Path, followSymlink: bool): int
   {
     match ResolvePathForMetadataFields(fs, path, followSymlink)
     case Err(e) => IOErrorErrno(e)
     case Ok(resolved) => if FsContainsPath(fs, resolved) then 0 else Errno.ENOENT
   }
 
-  function OpenDirFailureErrFields(fs: FileSystem, path: Path): int
+  ghost function OpenDirFailureErrFields(fs: FileSystem, path: Path): int
   {
     match ResolvePathForMetadataFields(fs, path, true)
     case Err(e) => IOErrorErrno(e)
@@ -1668,7 +1747,7 @@ module IOContract {
         case _ => Errno.ENOTDIR
   }
 
-  predicate PathExistsContractFields(fs: FileSystem, path: Path, followSymlink: bool, found: bool, err: int)
+  ghost predicate PathExistsContractFields(fs: FileSystem, path: Path, followSymlink: bool, found: bool, err: int)
   {
     found == (match ResolvePathForMetadataFields(fs, path, followSymlink)
               case Err(_) => false
@@ -1768,7 +1847,7 @@ module IOContract {
     0 <= err && (ok <==> err == 0)
   }
 
-  predicate GetFileModeContractFields(fs: FileSystem, path: Path, followSymlink: bool, ok: bool, mode: bv32, err: int)
+  ghost predicate GetFileModeContractFields(fs: FileSystem, path: Path, followSymlink: bool, ok: bool, mode: bv32, err: int)
   {
     0 <= err && (ok <==> err == 0) &&
     (!ok ==> err in NativeStatusFailureErrnosFields(fs, path, followSymlink)) &&
@@ -1779,7 +1858,7 @@ module IOContract {
        case Err(_) => false)
   }
 
-  function GetFileStatusResultFields(
+  ghost function GetFileStatusResultFields(
     fs: FileSystem,
     path: Path,
     followSymlink: bool
@@ -1805,7 +1884,7 @@ module IOContract {
     observed == expected
   }
 
-  function ObservedFileStatusResultFields(
+  ghost function ObservedFileStatusResultFields(
     observations: StatusTimeObservations,
     ordinal: nat,
     fs: FileSystem,
@@ -1819,7 +1898,7 @@ module IOContract {
       Result.Ok(status.(times := observations(ordinal, fs, path, followSymlink)))
   }
 
-  predicate ObservedFileStatusContractFields(
+  ghost predicate ObservedFileStatusContractFields(
     observations: StatusTimeObservations,
     ordinal: nat,
     fs: FileSystem,
@@ -1850,7 +1929,7 @@ module IOContract {
 
   // A structural projection never identifies an observed time with a stale
   // filesystem timestamp. Time-consuming clients use the ordered relation above.
-  predicate FileStatusStructureContractFields(
+  ghost predicate FileStatusStructureContractFields(
     fs: FileSystem, path: Path, followSymlink: bool,
     ok: bool, status: FileStatus, err: int
   )
@@ -1880,7 +1959,7 @@ module IOContract {
   {
   }
 
-  predicate GetFileStatusContractFields(
+  ghost predicate GetFileStatusContractFields(
     fs: FileSystem,
     path: Path,
     followSymlink: bool,
@@ -1964,7 +2043,7 @@ module IOContract {
     }
   }
 
-  predicate IsDirectoryContractFields(fs: FileSystem, path: Path, followSymlink: bool, ok: bool, isDir: bool, err: int)
+  ghost predicate IsDirectoryContractFields(fs: FileSystem, path: Path, followSymlink: bool, ok: bool, isDir: bool, err: int)
   {
     0 <= err && (ok <==> err == 0) &&
     (!ok ==> err in NativeStatusFailureErrnosFields(fs, path, followSymlink)) &&
@@ -1975,12 +2054,12 @@ module IOContract {
        case Err(_) => false)
   }
 
-  predicate IsDirectoryStrictContractFields(fs: FileSystem, path: Path, followSymlink: bool, ok: bool, isDir: bool, err: int)
+  ghost predicate IsDirectoryStrictContractFields(fs: FileSystem, path: Path, followSymlink: bool, ok: bool, isDir: bool, err: int)
   {
     IsDirectoryContractFields(fs, path, followSymlink, ok, isDir, err)
   }
 
-  predicate IsSymlinkContractFields(fs: FileSystem, path: Path, ok: bool, isSymlink: bool, err: int)
+  ghost predicate IsSymlinkContractFields(fs: FileSystem, path: Path, ok: bool, isSymlink: bool, err: int)
   {
     0 <= err && (ok <==> err == 0) &&
     (!ok ==> err in NativeStatusFailureErrnosFields(fs, path, false)) &&
@@ -1991,7 +2070,7 @@ module IOContract {
        case Err(_) => false)
   }
 
-  function ResolvePathForCreateNoFollowTerminalFields(fs: FileSystem, path: Path): IOResult<Path>
+  ghost function ResolvePathForCreateNoFollowTerminalFields(fs: FileSystem, path: Path): IOResult<Path>
   {
     if path == "" then
       Result.Err(InvalidPath)
@@ -2031,7 +2110,7 @@ module IOContract {
           case Err(e) => Result.Err(e)
   }
 
-  function ResolvePathForCreateFields(fs: FileSystem, path: Path): IOResult<Path>
+  ghost function ResolvePathForCreateFields(fs: FileSystem, path: Path): IOResult<Path>
   {
     if path == "" then
       Result.Err(InvalidPath)
@@ -2049,7 +2128,7 @@ module IOContract {
       )
   }
 
-  function CreateFileFailureErrFields(fs: FileSystem, path: Path): int
+  ghost function CreateFileFailureErrFields(fs: FileSystem, path: Path): int
   {
     if (0 as char) in path then
       Errno.EINVAL
@@ -2132,7 +2211,7 @@ module IOContract {
     0 < storage.preferredIoBlockBytes
   }
 
-  function RefreshParentDirectoryStorageFields(
+  ghost function RefreshParentDirectoryStorageFields(
     fs: InodeFileSystemData,
     path: Path,
     storage: StorageInfo
@@ -2147,7 +2226,7 @@ module IOContract {
       )
   }
 
-  function CreationOwnershipFields(
+  ghost function CreationOwnershipFields(
     fs: FileSystem,
     path: Path,
     credentials: ProcessCredentials
@@ -2335,12 +2414,12 @@ module IOContract {
   {
   }
 
-  function FsWithoutPath(fs: FileSystem, path: Path): FileSystem
+  ghost function FsWithoutPath(fs: FileSystem, path: Path): FileSystem
   {
     FsRemovePath(fs, path)
   }
 
-  function DeleteFsWithMetadataFields(
+  ghost function DeleteFsWithMetadataFields(
     fs: FileSystem,
     path: Path,
     now: int,
@@ -2361,7 +2440,7 @@ module IOContract {
     )
   }
 
-  function WriteFileFailureErrFields(fs: FileSystem, path: Path): int
+  ghost function WriteFileFailureErrFields(fs: FileSystem, path: Path): int
   {
     if (0 as char) in path then
       Errno.EINVAL
@@ -2426,7 +2505,7 @@ module IOContract {
     case Err(_) => false
   }
 
-  function WriteOpenFailureErrnosFields(fs: FileSystem, path: Path): set<int>
+  ghost function WriteOpenFailureErrnosFields(fs: FileSystem, path: Path): set<int>
   {
     if (0 as char) in path then {Errno.EINVAL} else
     NativeLookupFaultErrnos + NativeMutationFaultErrnos + {Errno.ENFILE, Errno.EMFILE} +
@@ -2552,7 +2631,7 @@ module IOContract {
   {
   }
 
-  function CreateSymlinkFailureErrFields(
+  ghost function CreateSymlinkFailureErrFields(
     fs: FileSystem,
     path: Path,
     target: Path
@@ -2642,7 +2721,7 @@ module IOContract {
   {
   }
 
-  function DeletePathFailureErrFields(fs: FileSystem, path: Path): int
+  ghost function DeletePathFailureErrFields(fs: FileSystem, path: Path): int
   {
     match ResolvePathForMetadataFields(fs, path, false)
     case Err(e) => IOErrorErrno(e)
@@ -2839,7 +2918,7 @@ module IOContract {
       afterSec == sec && afterNsec == nsec
   }
 
-  predicate GetFileTimesContractFields(
+  ghost predicate GetFileTimesContractFields(
     fs: FileSystem,
     path: Path,
     followSymlink: bool,
@@ -2999,7 +3078,7 @@ module IOContract {
         StdoutTimestampUpdateFields(before.times, afterTimes, atime, mtime, now))
   }
 
-  predicate ValidLeafName(name: string)
+  ghost predicate ValidLeafName(name: string)
   {
     name != "" && !IsAbsolutePath(name) && PathSegments(name) == [name]
   }
@@ -3044,7 +3123,7 @@ module IOContract {
     var tree := InodeFsLookupTreeSegments(
                   fs.inodes, fs.namespace, PathSegments(path)
                 ).v;
-    LookupProof.InodeLookupTreeWellFormed(
+    KernelLookupTreeWellFormed(
       fs.inodes, fs.namespace, PathSegments(path), tree
     );
     DirectoryEntriesForTreeFields(fs, tree)
@@ -3108,7 +3187,7 @@ module IOContract {
         case _ => !ok))
   }
 
-  predicate ResolvePathIdentityContractFields(
+  ghost predicate ResolvePathIdentityContractFields(
     fs: FileSystem, cwd: Path, path: Path,
     ok: bool, resolvedPath: Path, err: int
   )
@@ -3267,7 +3346,7 @@ module IOContract {
 
   function HasPathPrefix(root: Path, path: Path): bool { path == root || (root != "" && root != "/" && |root| < |path| && path[..|root|] == root && path[|root|] == '/') }
 
-  function ResolvePathForRenameNoFollowTerminalFields(
+  ghost function ResolvePathForRenameNoFollowTerminalFields(
     fs: FileSystem,
     path: Path
   ): IOResult<Path>
@@ -3291,7 +3370,7 @@ module IOContract {
         case Inaccessible(_) => Result.Err(PermissionDenied)
   }
 
-  function ResolvePathForRenameDestinationFields(fs: FileSystem, path: Path): IOResult<Path>
+  ghost function ResolvePathForRenameDestinationFields(fs: FileSystem, path: Path): IOResult<Path>
   {
     match ResolvePathForRenameNoFollowTerminalFields(fs, path)
     case Err(NoSuchFile) =>
@@ -3329,7 +3408,7 @@ module IOContract {
        case _ => true)
   }
 
-  function RenameFs(
+  ghost function RenameFs(
     fs: FileSystem,
     source: Path,
     target: Path
@@ -3340,7 +3419,7 @@ module IOContract {
     if ValidInodeFileSystemData(candidate) then candidate else fs
   }
 
-  function RenameDirectoryParentLinksFields(
+  ghost function RenameDirectoryParentLinksFields(
     fs: FileSystem,
     renamed: InodeFileSystemData,
     source: Path,
@@ -3377,7 +3456,7 @@ module IOContract {
           )
   }
 
-  function RefreshRenameParentStorageFields(
+  ghost function RefreshRenameParentStorageFields(
     fs: FileSystem,
     renamed: InodeFileSystemData,
     source: Path,
@@ -3406,7 +3485,7 @@ module IOContract {
         )
   }
 
-  function RenameFsWithMetadataFields(
+  ghost function RenameFsWithMetadataFields(
     fs: FileSystem,
     source: Path,
     target: Path,
@@ -3859,7 +3938,7 @@ module IOContract {
 
   // mkdir accepts trailing slashes, but does not follow a terminal symlink.
   // Preserve raw dot components until the existing resolver processes them.
-  function ResolveDirectoryCreationPathFields(fs: FileSystem, path: Path): IOResult<Path>
+  ghost function ResolveDirectoryCreationPathFields(fs: FileSystem, path: Path): IOResult<Path>
   {
     if path == "" || (0 as char) in path then
       Result.Err(InvalidPath)
@@ -4045,7 +4124,7 @@ module IOContract {
   const NativeLookupFaultErrnos: set<int> := {Errno.EIO, Errno.ENOMEM, Errno.EACCES, Errno.ENAMETOOLONG}
   const NativeMutationFaultErrnos: set<int> := {Errno.EPERM, Errno.EIO, Errno.ENOMEM, Errno.EACCES, Errno.ENOSPC, Errno.EROFS, Errno.EDQUOT}
 
-  function LookupFailureErrnosFields(fs: FileSystem, path: Path, follow: bool): set<int>
+  ghost function LookupFailureErrnosFields(fs: FileSystem, path: Path, follow: bool): set<int>
   {
     NativeLookupFaultErrnos +
     (match ResolvePathForMetadataFields(fs, path, follow)
@@ -4053,7 +4132,7 @@ module IOContract {
      case Ok(_) => {})
   }
 
-  function HardLinkFailureErrnosFields(fs: FileSystem, source: Path, target: Path, followSource: bool := false): set<int>
+  ghost function HardLinkFailureErrnosFields(fs: FileSystem, source: Path, target: Path, followSource: bool := false): set<int>
   {
     if (0 as char) in source || (0 as char) in target then {Errno.EINVAL}
     else
@@ -4070,7 +4149,7 @@ module IOContract {
             else NativeMutationFaultErrnos + {Errno.EXDEV, Errno.EMLINK}
   }
 
-  function EntryRemovalFailureErrnosFields(fs: FileSystem, path: Path, directory: bool): set<int>
+  ghost function EntryRemovalFailureErrnosFields(fs: FileSystem, path: Path, directory: bool): set<int>
   {
     if path == "" then NativeLookupFaultErrnos + {Errno.ENOENT}
     else if (0 as char) in path then {Errno.EINVAL}
@@ -4099,7 +4178,7 @@ module IOContract {
     else (0 as char) in request.path
   }
 
-  function FilesystemFailureErrnosFields(request: TrustedFilesystemRequest): set<int>
+  ghost function FilesystemFailureErrnosFields(request: TrustedFilesystemRequest): set<int>
   {
     if FilesystemRequestHasInvalidAbiPath(request) then {Errno.EINVAL} else
     match request
@@ -6924,4 +7003,1596 @@ module IOContract {
       case _ => Result.Err(InvalidPath)
   }
 
+  // This intrinsic bridge is required to type the directory-entry model.
+  // The generic lookup proof and its other consequences remain private.
+  lemma KernelLookupTreeWellFormed(inodes: map<InodeId, InodeRecord>, tree: InodeTree,
+    segments: seq<string>, found: InodeTree)
+    requires InodeTreeWellFormed(tree, inodes)
+    requires InodeFsLookupTreeSegments(inodes, tree, segments) == Result.Ok(found)
+    ensures InodeTreeWellFormed(found, inodes)
+  {
+    LookupProof.InodeLookupTreeWellFormed(inodes, tree, segments, found);
+  }
+
+  module KernelLookup {
+    import Result = Results
+    import opened BenchWorld
+
+    lemma InodeLookupTreePathWitness(
+      inodes: map<InodeId, InodeRecord>,
+      tree: InodeTree,
+      segs: seq<string>,
+      found: InodeTree
+    )
+      requires InodeFsLookupTreeSegments(inodes, tree, segs) == Result.Ok(found)
+      ensures segs in InodeNamespaceIdPaths(tree, found.id)
+      decreases |segs|
+    {
+      if |segs| > 0 {
+        InodeLookupTreePathWitness(
+          inodes, tree.children[segs[0]], segs[1..], found
+        );
+        assert [segs[0]] + segs[1..] == segs;
+        assert segs in InodeNamespaceIdPaths(tree, found.id);
+      }
+    }
+
+    lemma {:isolate_assertions} InodePrefixPathsCardinality(
+      prefix: seq<string>,
+      paths: set<seq<string>>
+    )
+      ensures |InodePrefixPaths(prefix, paths)| == |paths|
+      decreases |paths|
+    {
+      if paths != {} {
+        var path :| path in paths;
+        InodePrefixPathsCardinality(prefix, paths - {path});
+        assert InodePrefixPaths(prefix, paths) ==
+               InodePrefixPaths(prefix, paths - {path}) + {prefix + path};
+        if prefix + path in InodePrefixPaths(prefix, paths - {path}) {
+          var other :| other in paths - {path} &&
+                       prefix + other == prefix + path;
+          assert (prefix + other)[|prefix|..] == other;
+          assert (prefix + path)[|prefix|..] == path;
+          assert false;
+        }
+      }
+    }
+
+    lemma InodePrefixPathsCompose(
+      first: seq<string>,
+      second: seq<string>,
+      paths: set<seq<string>>
+    )
+      ensures InodePrefixPaths(first + second, paths) ==
+              InodePrefixPaths(first, InodePrefixPaths(second, paths))
+    {
+      forall path | path in InodePrefixPaths(first + second, paths)
+        ensures path in InodePrefixPaths(
+                          first, InodePrefixPaths(second, paths)
+                        )
+      {
+        var suffix :| suffix in paths &&
+                      path == (first + second) + suffix;
+        assert second + suffix in InodePrefixPaths(second, paths);
+        assert path == first + (second + suffix);
+      }
+      forall path | path in InodePrefixPaths(
+                              first, InodePrefixPaths(second, paths)
+                            )
+        ensures path in InodePrefixPaths(first + second, paths)
+      {
+        var middle :|
+          middle in InodePrefixPaths(second, paths) &&
+          path == first + middle;
+        var suffix :| suffix in paths &&
+                      middle == second + suffix;
+        assert path == (first + second) + suffix;
+      }
+    }
+
+    lemma InodeTreeIdsInInodes(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      ensures InodeNamespaceIds(tree) <= inodes.Keys
+      decreases tree
+    {
+      forall name | name in tree.children
+        ensures InodeNamespaceIds(tree.children[name]) <= inodes.Keys
+      {
+        InodeTreeIdsInInodes(tree.children[name], inodes);
+      }
+    }
+
+    lemma InodeNamespaceIdPathHasId(
+      tree: InodeTree,
+      id: InodeId,
+      path: seq<string>
+    )
+      requires path in InodeNamespaceIdPaths(tree, id)
+      ensures id in InodeNamespaceIds(tree)
+      decreases tree
+    {
+      if tree.id != id {
+        var name, suffix :|
+          name in tree.children &&
+          suffix in InodeNamespaceIdPaths(tree.children[name], id) &&
+          path == [name] + suffix;
+        InodeNamespaceIdPathHasId(tree.children[name], id, suffix);
+      }
+    }
+
+    lemma InodeNamespaceIdHasPath(tree: InodeTree, id: InodeId)
+      requires id in InodeNamespaceIds(tree)
+      ensures exists path :: path in InodeNamespaceIdPaths(tree, id)
+      decreases tree
+    {
+      if tree.id == id {
+        assert [] in InodeNamespaceIdPaths(tree, id);
+      } else {
+        var name :| name in tree.children &&
+                    id in InodeNamespaceIds(tree.children[name]);
+        InodeNamespaceIdHasPath(tree.children[name], id);
+        var suffix :|
+          suffix in InodeNamespaceIdPaths(tree.children[name], id);
+        assert [name] + suffix in InodeNamespaceIdPaths(tree, id);
+      }
+    }
+
+    lemma FiniteSetSingleton<T>(values: set<T>, value: T)
+      requires value in values
+      requires |values| == 1
+      ensures values == {value}
+    {
+      assert values == {value} + (values - {value});
+      assert |values| == |{value}| + |values - {value}|;
+      assert |values - {value}| == 0;
+      assert values - {value} == {};
+    }
+
+    lemma InodeLookupTreeWellFormed(
+      inodes: map<InodeId, InodeRecord>,
+      tree: InodeTree,
+      segs: seq<string>,
+      subtree: InodeTree
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires InodeFsLookupTreeSegments(inodes, tree, segs) ==
+               Result.Ok(subtree)
+      ensures InodeTreeWellFormed(subtree, inodes)
+      decreases |segs|
+    {
+      if |segs| > 0 {
+        InodeLookupTreeWellFormed(
+          inodes, tree.children[segs[0]], segs[1..], subtree
+        );
+      }
+    }
+
+    lemma {:isolate_assertions} InodeLookupPrefixPathsSubset(
+      inodes: map<InodeId, InodeRecord>,
+      tree: InodeTree,
+      segs: seq<string>,
+      subtree: InodeTree,
+      id: InodeId
+    )
+      requires InodeFsLookupTreeSegments(inodes, tree, segs) ==
+               Result.Ok(subtree)
+      ensures InodePrefixPaths(
+                segs, InodeNamespaceIdPaths(subtree, id)
+              ) <= InodeNamespaceIdPaths(tree, id)
+      decreases |segs|
+    {
+      if |segs| == 0 {
+        assert tree.id in inodes;
+        assert InodeFsLookupTreeSegments(inodes, tree, []) ==
+               Result.Ok(tree);
+        assert tree == subtree;
+        assert InodeNamespaceIdPaths(tree, id) ==
+               InodeNamespaceIdPaths(subtree, id);
+        forall path | path in InodePrefixPaths(
+                                [], InodeNamespaceIdPaths(subtree, id)
+                              )
+          ensures path in InodeNamespaceIdPaths(tree, id)
+        {
+          var suffix :|
+            suffix in InodeNamespaceIdPaths(subtree, id) &&
+            path == [] + suffix;
+          assert path == suffix;
+          assert suffix in InodeNamespaceIdPaths(tree, id);
+          assert path in InodeNamespaceIdPaths(tree, id);
+        }
+        forall path | path in InodeNamespaceIdPaths(tree, id)
+          ensures path in InodePrefixPaths(
+                            [], InodeNamespaceIdPaths(subtree, id)
+                          )
+        {
+          assert path == [] + path;
+        }
+      } else {
+        InodeLookupPrefixPathsSubset(
+          inodes,
+          tree.children[segs[0]],
+          segs[1..],
+          subtree,
+          id
+        );
+        InodePrefixPathsCompose(
+          [segs[0]],
+          segs[1..],
+          InodeNamespaceIdPaths(subtree, id)
+        );
+        forall path | path in InodePrefixPaths(
+                                segs, InodeNamespaceIdPaths(subtree, id)
+                              )
+          ensures path in InodeNamespaceIdPaths(tree, id)
+        {
+          var suffix :|
+            suffix in InodeNamespaceIdPaths(subtree, id) &&
+            path == segs + suffix;
+          assert segs[1..] + suffix in InodePrefixPaths(
+                                         segs[1..], InodeNamespaceIdPaths(subtree, id)
+                                       );
+          assert segs[1..] + suffix in InodeNamespaceIdPaths(
+                                         tree.children[segs[0]], id
+                                       );
+          assert path == [segs[0]] + (segs[1..] + suffix);
+        }
+      }
+    }
+
+    lemma {:isolate_assertions} InodeInsertPrefixPathsDisjoint(
+      inodes: map<InodeId, InodeRecord>,
+      tree: InodeTree,
+      segs: seq<string>,
+      paths: set<seq<string>>,
+      id: InodeId
+    )
+      requires InodeTreeCanInsert(inodes, tree, segs)
+      ensures InodeNamespaceIdPaths(tree, id) *
+              InodePrefixPaths(segs, paths) == {}
+      decreases |segs|
+    {
+      if |segs| == 1 {
+        assert segs[0] !in tree.children;
+        if InodeNamespaceIdPaths(tree, id) *
+          InodePrefixPaths(segs, paths) != {}
+        {
+          var path :| path in InodeNamespaceIdPaths(tree, id) *
+                              InodePrefixPaths(segs, paths);
+          assert path != [];
+          var name, suffix :|
+            name in tree.children &&
+            suffix in InodeNamespaceIdPaths(tree.children[name], id) &&
+            path == [name] + suffix;
+          var insertedSuffix :| insertedSuffix in paths &&
+                                path == segs + insertedSuffix;
+          assert path[0] == name;
+          assert path[0] == segs[0];
+          assert false;
+        }
+      } else {
+        InodeInsertPrefixPathsDisjoint(
+          inodes,
+          tree.children[segs[0]],
+          segs[1..],
+          paths,
+          id
+        );
+        InodePrefixPathsCompose([segs[0]], segs[1..], paths);
+        if InodeNamespaceIdPaths(tree, id) *
+          InodePrefixPaths(segs, paths) != {}
+        {
+          var path :| path in InodeNamespaceIdPaths(tree, id) *
+                              InodePrefixPaths(segs, paths);
+          assert path != [];
+          var name, suffix :|
+            name in tree.children &&
+            suffix in InodeNamespaceIdPaths(tree.children[name], id) &&
+            path == [name] + suffix;
+          var insertedSuffix :| insertedSuffix in paths &&
+                                path == segs + insertedSuffix;
+          assert path[0] == name;
+          assert path[0] == segs[0];
+          assert name == segs[0];
+          assert path[1..] == suffix;
+          assert (segs + insertedSuffix)[1..] ==
+                 segs[1..] + insertedSuffix;
+          assert suffix in InodePrefixPaths(segs[1..], paths);
+          assert false;
+        }
+      }
+    }
+
+    lemma InodeDisjointPrefixPaths(
+      left: seq<string>,
+      right: seq<string>,
+      leftPaths: set<seq<string>>,
+      rightPaths: set<seq<string>>
+    )
+      requires InodeSegmentsDisjoint(left, right)
+      ensures InodePrefixPaths(left, leftPaths) *
+              InodePrefixPaths(right, rightPaths) == {}
+    {
+      if InodePrefixPaths(left, leftPaths) *
+        InodePrefixPaths(right, rightPaths) != {}
+      {
+        var path :| path in InodePrefixPaths(left, leftPaths) *
+                            InodePrefixPaths(right, rightPaths);
+        var leftSuffix :| leftSuffix in leftPaths &&
+                          path == left + leftSuffix;
+        var rightSuffix :| rightSuffix in rightPaths &&
+                           path == right + rightSuffix;
+        if |left| <= |right| {
+          assert path[..|left|] == left;
+          assert path[..|left|] == right[..|left|];
+        } else {
+          assert path[..|right|] == right;
+          assert path[..|right|] == left[..|right|];
+        }
+        assert false;
+      }
+    }
+
+    lemma InodeSegmentsDisjointTails(
+      left: seq<string>,
+      right: seq<string>
+    )
+      requires InodeSegmentsDisjoint(left, right)
+      requires left[0] == right[0]
+      ensures InodeSegmentsDisjoint(left[1..], right[1..])
+    {
+      assert left == [left[0]] + left[1..];
+      assert right == [right[0]] + right[1..];
+      if |left| == 1 {
+        assert right[..|left|] == left;
+      }
+      if |right| == 1 {
+        assert left[..|right|] == right;
+      }
+      if |left[1..]| <= |right[1..]| &&
+         right[1..][..|left[1..]|] == left[1..]
+      {
+        assert right[..|left|] == left;
+      }
+      if |right[1..]| <= |left[1..]| &&
+         left[1..][..|right[1..]|] == right[1..]
+      {
+        assert left[..|right|] == right;
+      }
+    }
+
+    lemma InodeTreeSetSubtreeLookupDisjoint(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      source: seq<string>,
+      target: seq<string>,
+      found: InodeTree,
+      subtree: InodeTree
+    )
+      requires InodeFsLookupTreeSegments(
+                 inodes, tree, source
+               ) == Result.Ok(found)
+      requires InodeTreeCanInsert(inodes, tree, target)
+      requires InodeSegmentsDisjoint(source, target)
+      ensures InodeFsLookupTreeSegments(
+                inodes,
+                InodeTreeSetSubtreeSegments(tree, target, subtree),
+                source
+              ) == Result.Ok(found)
+      decreases |source| + |target|
+    {
+      if source[0] == target[0] {
+        InodeSegmentsDisjointTails(source, target);
+        InodeTreeSetSubtreeLookupDisjoint(
+          tree.children[source[0]],
+          inodes,
+          source[1..],
+          target[1..],
+          found,
+          subtree
+        );
+      }
+    }
+
+    lemma InodeTreeRemoveLookupDisjoint(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      removed: seq<string>,
+      retained: seq<string>,
+      removedTree: InodeTree,
+      retainedTree: InodeTree
+    )
+      requires InodeFsLookupTreeSegments(
+                 inodes, tree, removed
+               ) == Result.Ok(removedTree)
+      requires InodeFsLookupTreeSegments(
+                 inodes, tree, retained
+               ) == Result.Ok(retainedTree)
+      requires InodeSegmentsDisjoint(removed, retained)
+      ensures InodeFsLookupTreeSegments(
+                inodes,
+                InodeTreeRemoveSegments(tree, removed),
+                retained
+              ) == Result.Ok(retainedTree)
+      decreases |removed| + |retained|
+    {
+      if removed[0] == retained[0] {
+        InodeSegmentsDisjointTails(removed, retained);
+        InodeTreeRemoveLookupDisjoint(
+          tree.children[removed[0]],
+          inodes,
+          removed[1..],
+          retained[1..],
+          removedTree,
+          retainedTree
+        );
+      }
+    }
+
+    lemma InodeNamespaceIdRefCount(
+      tree: InodeTree,
+      id: InodeId
+    )
+      ensures (id in InodeNamespaceIds(tree)) ==
+              (InodeNamespaceRefCount(tree, id) > 0)
+    {
+      if id in InodeNamespaceIds(tree) {
+        InodeNamespaceIdHasPath(tree, id);
+        var path :| path in InodeNamespaceIdPaths(tree, id);
+        assert InodeNamespaceRefCount(tree, id) > 0;
+      } else if InodeNamespaceRefCount(tree, id) > 0 {
+        assert InodeNamespaceIdPaths(tree, id) != {};
+        var path :| path in InodeNamespaceIdPaths(tree, id);
+        InodeNamespaceIdPathHasId(tree, id, path);
+      }
+    }
+
+    lemma InodeLookupUnchangedByRecordUpdate(
+      inodes: map<InodeId, InodeRecord>,
+      tree: InodeTree,
+      segs: seq<string>,
+      id: InodeId,
+      record: InodeRecord
+    )
+      requires id in inodes
+      requires InodeSameNodeKind(inodes[id].node, record.node)
+      ensures InodeFsLookupTreeSegments(
+                inodes[id := record], tree, segs
+              ) == InodeFsLookupTreeSegments(inodes, tree, segs)
+      decreases |segs|
+    {
+      if tree.id in inodes && |segs| > 0 {
+        if inodes[tree.id].node.Directory? &&
+           segs[0] in tree.children
+        {
+          InodeLookupUnchangedByRecordUpdate(
+            inodes, tree.children[segs[0]], segs[1..], id, record
+          );
+        }
+      }
+    }
+
+    lemma InodeTreeWellFormedAfterNodeUpdate(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      id: InodeId,
+      record: InodeRecord
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires id in inodes
+      requires InodeSameNodeKind(inodes[id].node, record.node)
+      ensures InodeTreeWellFormed(tree, inodes[id := record])
+      decreases tree
+    {
+      assert FsNodeCanHaveChildren(inodes[id].node) ==
+             FsNodeCanHaveChildren(record.node);
+      forall name | name in tree.children
+        ensures InodeTreeWellFormed(
+                  tree.children[name], inodes[id := record]
+                )
+      {
+        InodeTreeWellFormedAfterNodeUpdate(
+          tree.children[name], inodes, id, record
+        );
+      }
+    }
+  }
+
+  module KernelRemove {
+    import Result = Results
+    import opened BenchWorld
+    import Lookup = KernelLookup
+
+    lemma InodeTreeCanRemoveFindsLeaf(
+      inodes: map<InodeId, InodeRecord>,
+      tree: InodeTree,
+      segs: seq<string>
+    )
+      requires InodeTreeCanRemove(inodes, tree, segs)
+      ensures exists id ::
+                InodeFsLookupTreeSegments(inodes, tree, segs) ==
+                Result.Ok(InodeTreeNode(id, map[]))
+      decreases |segs|
+    {
+      reveal InodeTreeCanRemove();
+      if |segs| == 1 {
+        var child := tree.children[segs[0]];
+        assert child.children == map[];
+        assert InodeFsLookupTreeSegments(inodes, tree, segs).Ok?;
+        assert InodeFsLookupTreeSegments(inodes, tree, segs) ==
+               Result.Ok(child);
+        assert child == InodeTreeNode(child.id, map[]);
+      } else {
+        InodeTreeCanRemoveFindsLeaf(
+          inodes, tree.children[segs[0]], segs[1..]
+        );
+        var id :|
+          InodeFsLookupTreeSegments(
+            inodes, tree.children[segs[0]], segs[1..]
+          ) == Result.Ok(InodeTreeNode(id, map[]));
+        assert InodeFsLookupTreeSegments(inodes, tree, segs) ==
+               Result.Ok(InodeTreeNode(id, map[]));
+      }
+    }
+
+    lemma InodeTreeRemoveLeafWellFormed(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      segs: seq<string>
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires InodeTreeCanRemove(inodes, tree, segs)
+      ensures InodeTreeWellFormed(
+                InodeTreeRemoveSegments(tree, segs), inodes
+              )
+      decreases |segs|
+    {
+      if |segs| > 1 {
+        InodeTreeRemoveLeafWellFormed(
+          tree.children[segs[0]], inodes, segs[1..]
+        );
+      }
+    }
+
+    lemma InodeTreeWellFormedWithoutUnusedRecord(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      id: InodeId
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires id !in InodeNamespaceIds(tree)
+      ensures InodeTreeWellFormed(tree, inodes - {id})
+      decreases tree
+    {
+      forall name | name in tree.children
+        ensures InodeTreeWellFormed(
+                  tree.children[name], inodes - {id}
+                )
+      {
+        assert id !in InodeNamespaceIds(tree.children[name]);
+        InodeTreeWellFormedWithoutUnusedRecord(
+          tree.children[name], inodes, id
+        );
+      }
+    }
+
+    lemma {:isolate_assertions} InodeTreeRemoveLeafProperties(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      segs: seq<string>,
+      removedId: InodeId
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires InodeTreeCanRemove(inodes, tree, segs)
+      requires InodeFsLookupTreeSegments(inodes, tree, segs) ==
+               Result.Ok(InodeTreeNode(removedId, map[]))
+      ensures InodeNamespaceIdPaths(
+                InodeTreeRemoveSegments(tree, segs), removedId
+              ) == InodeNamespaceIdPaths(tree, removedId) - {segs}
+      ensures forall id :: id != removedId ==>
+                             InodeNamespaceIdPaths(
+                               InodeTreeRemoveSegments(tree, segs), id
+                             ) == InodeNamespaceIdPaths(tree, id)
+      decreases |segs|
+    {
+      Lookup.InodeLookupTreePathWitness(
+        inodes, tree, segs, InodeTreeNode(removedId, map[])
+      );
+      assert segs in InodeNamespaceIdPaths(tree, removedId);
+      if |segs| == 1 {
+        assert segs == [segs[0]];
+        assert InodeTreeChildren(
+            InodeTreeRemoveSegments(tree, segs)
+          ) == tree.children - {segs[0]};
+        forall path |
+          path in InodeNamespaceIdPaths(
+                    InodeTreeRemoveSegments(tree, segs), removedId
+                  )
+          ensures path in InodeNamespaceIdPaths(tree, removedId) &&
+                  path != segs
+        {
+          if path != [] {
+            var name, suffix :|
+              name in InodeTreeChildren(
+                        InodeTreeRemoveSegments(tree, segs)
+                      ) &&
+              suffix in InodeNamespaceIdPaths(
+                          InodeTreeChildren(
+                            InodeTreeRemoveSegments(tree, segs)
+                          )[name],
+                          removedId
+                        ) &&
+              path == [name] + suffix;
+            assert name != segs[0];
+          }
+        }
+        forall path |
+          path in InodeNamespaceIdPaths(tree, removedId) &&
+          path != segs
+          ensures path in InodeNamespaceIdPaths(
+                            InodeTreeRemoveSegments(tree, segs), removedId
+                          )
+        {
+          if path != [] {
+            var name, suffix :|
+              name in tree.children &&
+              suffix in InodeNamespaceIdPaths(
+                          tree.children[name], removedId
+                        ) &&
+              path == [name] + suffix;
+            if name == segs[0] {
+              assert tree.children[name] ==
+                     InodeTreeNode(removedId, map[]);
+              assert suffix == [];
+              assert path == segs;
+            }
+          }
+        }
+      } else {
+        InodeTreeRemoveLeafProperties(
+          tree.children[segs[0]],
+          inodes,
+          segs[1..],
+          removedId
+        );
+        assert InodeTreeChildren(
+            InodeTreeRemoveSegments(tree, segs)
+          )[segs[0]] ==
+               InodeTreeRemoveSegments(
+                 tree.children[segs[0]], segs[1..]
+               );
+        assert InodeNamespaceIdPaths(
+            InodeTreeRemoveSegments(
+              tree.children[segs[0]], segs[1..]
+            ),
+            removedId
+          ) == InodeNamespaceIdPaths(
+                      tree.children[segs[0]], removedId
+                    ) - {segs[1..]};
+        forall path |
+          path in InodeNamespaceIdPaths(
+                    InodeTreeRemoveSegments(tree, segs), removedId
+                  )
+          ensures path in InodeNamespaceIdPaths(tree, removedId) &&
+                  path != segs
+        {
+          if path != [] {
+            var name, suffix :|
+              name in InodeTreeChildren(
+                        InodeTreeRemoveSegments(tree, segs)
+                      ) &&
+              suffix in InodeNamespaceIdPaths(
+                          InodeTreeChildren(
+                            InodeTreeRemoveSegments(tree, segs)
+                          )[name],
+                          removedId
+                        ) &&
+              path == [name] + suffix;
+            if name == segs[0] {
+              assert suffix != segs[1..];
+            }
+          }
+        }
+        forall path |
+          path in InodeNamespaceIdPaths(tree, removedId) &&
+          path != segs
+          ensures path in InodeNamespaceIdPaths(
+                            InodeTreeRemoveSegments(tree, segs), removedId
+                          )
+        {
+          if path != [] {
+            var name, suffix :|
+              name in tree.children &&
+              suffix in InodeNamespaceIdPaths(
+                          tree.children[name], removedId
+                        ) &&
+              path == [name] + suffix;
+            if name == segs[0] {
+              assert suffix != segs[1..];
+            }
+          }
+        }
+      }
+    }
+
+    lemma {:isolate_assertions} InodeTreeRemoveLeafIdsSubset(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      segs: seq<string>,
+      removedId: InodeId
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires InodeTreeCanRemove(inodes, tree, segs)
+      requires InodeFsLookupTreeSegments(inodes, tree, segs) ==
+               Result.Ok(InodeTreeNode(removedId, map[]))
+      ensures InodeNamespaceIds(
+                InodeTreeRemoveSegments(tree, segs)
+              ) <= (
+                     if InodeNamespaceRefCount(tree, removedId) == 1 then
+                       InodeNamespaceIds(tree) - {removedId}
+                     else
+                       InodeNamespaceIds(tree)
+                   )
+    {
+      InodeTreeRemoveLeafProperties(
+        tree, inodes, segs, removedId
+      );
+      Lookup.InodeLookupTreePathWitness(
+        inodes, tree, segs, InodeTreeNode(removedId, map[])
+      );
+      var nextTree := InodeTreeRemoveSegments(tree, segs);
+      forall liveId | liveId in InodeNamespaceIds(nextTree)
+        ensures liveId in (
+                            if InodeNamespaceRefCount(tree, removedId) == 1 then
+                              InodeNamespaceIds(tree) - {removedId}
+                            else
+                              InodeNamespaceIds(tree)
+                          )
+      {
+        Lookup.InodeNamespaceIdHasPath(nextTree, liveId);
+        var livePath :|
+          livePath in InodeNamespaceIdPaths(nextTree, liveId);
+        if liveId == removedId {
+          assert livePath in
+                   InodeNamespaceIdPaths(tree, removedId) - {segs};
+          if InodeNamespaceRefCount(tree, removedId) == 1 {
+            Lookup.FiniteSetSingleton(
+              InodeNamespaceIdPaths(tree, removedId), segs
+            );
+            assert false;
+          }
+        } else {
+          assert livePath in InodeNamespaceIdPaths(tree, liveId);
+        }
+        Lookup.InodeNamespaceIdPathHasId(tree, liveId, livePath);
+      }
+    }
+
+    lemma {:isolate_assertions} InodeTreeRemoveLeafIdsSuperset(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      segs: seq<string>,
+      removedId: InodeId
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires InodeTreeCanRemove(inodes, tree, segs)
+      requires InodeFsLookupTreeSegments(inodes, tree, segs) ==
+               Result.Ok(InodeTreeNode(removedId, map[]))
+      ensures (
+                if InodeNamespaceRefCount(tree, removedId) == 1 then
+                  InodeNamespaceIds(tree) - {removedId}
+                else
+                  InodeNamespaceIds(tree)
+              ) <= InodeNamespaceIds(
+                     InodeTreeRemoveSegments(tree, segs)
+                   )
+    {
+      InodeTreeRemoveLeafProperties(
+        tree, inodes, segs, removedId
+      );
+      Lookup.InodeLookupTreePathWitness(
+        inodes, tree, segs, InodeTreeNode(removedId, map[])
+      );
+      var nextTree := InodeTreeRemoveSegments(tree, segs);
+      forall liveId | liveId in (
+                                  if InodeNamespaceRefCount(tree, removedId) == 1 then
+                                    InodeNamespaceIds(tree) - {removedId}
+                                  else
+                                    InodeNamespaceIds(tree)
+                                )
+        ensures liveId in InodeNamespaceIds(nextTree)
+      {
+        if liveId == removedId {
+          assert InodeNamespaceRefCount(tree, removedId) != 1;
+          assert |InodeNamespaceIdPaths(tree, removedId)| > 0;
+          assert |InodeNamespaceIdPaths(tree, removedId)| > 1;
+          assert InodeNamespaceIdPaths(tree, removedId) - {segs} != {};
+          var livePath :|
+            livePath in InodeNamespaceIdPaths(tree, removedId) - {segs};
+          assert livePath in
+                   InodeNamespaceIdPaths(nextTree, removedId);
+          Lookup.InodeNamespaceIdPathHasId(nextTree, removedId, livePath);
+        } else {
+          Lookup.InodeNamespaceIdHasPath(tree, liveId);
+          var livePath :|
+            livePath in InodeNamespaceIdPaths(tree, liveId);
+          assert livePath in InodeNamespaceIdPaths(nextTree, liveId);
+          Lookup.InodeNamespaceIdPathHasId(nextTree, liveId, livePath);
+        }
+      }
+    }
+
+    lemma InodeTreeRemoveLeafIds(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      segs: seq<string>,
+      removedId: InodeId
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires InodeTreeCanRemove(inodes, tree, segs)
+      requires InodeFsLookupTreeSegments(inodes, tree, segs) ==
+               Result.Ok(InodeTreeNode(removedId, map[]))
+      ensures InodeNamespaceIds(
+                InodeTreeRemoveSegments(tree, segs)
+              ) == (
+                     if InodeNamespaceRefCount(tree, removedId) == 1 then
+                       InodeNamespaceIds(tree) - {removedId}
+                     else
+                       InodeNamespaceIds(tree)
+                   )
+    {
+      InodeTreeRemoveLeafIdsSubset(
+        tree, inodes, segs, removedId
+      );
+      InodeTreeRemoveLeafIdsSuperset(
+        tree, inodes, segs, removedId
+      );
+    }
+
+    lemma {:isolate_assertions} InodeFsRemovePathValid(
+      fs: InodeFileSystem,
+      path: Path
+    )
+      ensures ValidInodeFileSystemData(InodeFsRemovePath(fs, path))
+    {
+      var segs := PathSegments(path);
+      if InodeTreeCanRemove(fs.inodes, fs.namespace, segs) {
+        InodeTreeCanRemoveFindsLeaf(
+          fs.inodes, fs.namespace, segs
+        );
+        var id :|
+          InodeFsLookupTreeSegments(
+            fs.inodes, fs.namespace, segs
+          ) == Result.Ok(InodeTreeNode(id, map[]));
+        var result := InodeFsRemovePath(fs, path);
+        var oldRefs :=
+          InodeNamespaceRefCount(fs.namespace, id);
+
+        InodeTreeRemoveLeafWellFormed(
+          fs.namespace, fs.inodes, segs
+        );
+        InodeTreeRemoveLeafProperties(
+          fs.namespace, fs.inodes, segs, id
+        );
+        Lookup.InodeLookupTreePathWitness(
+          fs.inodes,
+          fs.namespace,
+          segs,
+          InodeTreeNode(id, map[])
+        );
+        InodeTreeRemoveLeafIds(
+          fs.namespace, fs.inodes, segs, id
+        );
+
+        assert oldRefs > 0;
+        assert InodeNamespaceRefCount(result.namespace, id) ==
+               oldRefs - 1;
+        assert result.namespace.id == fs.namespace.id;
+
+        if oldRefs == 1 {
+          assert id !in InodeNamespaceIds(result.namespace);
+          InodeTreeWellFormedWithoutUnusedRecord(
+            result.namespace, fs.inodes, id
+          );
+          assert result.inodes == fs.inodes - {id};
+        } else {
+          var nextRecord := InodeRecordAfterUnlink(fs.inodes[id]);
+          assert InodeSameNodeKind(
+              fs.inodes[id].node, nextRecord.node
+            );
+          Lookup.InodeTreeWellFormedAfterNodeUpdate(
+            result.namespace, fs.inodes, id, nextRecord
+          );
+          assert result.inodes == fs.inodes[id := nextRecord];
+        }
+        assert InodeTreeWellFormed(result.namespace, result.inodes);
+
+        assert result.inodes.Keys ==
+               InodeNamespaceIds(result.namespace);
+        assert forall liveId :: (
+                                  liveId in result.inodes &&
+                                  FsNodeCanHaveChildren(result.inodes[liveId].node)) ==>
+                                  InodeNamespaceRefCount(result.namespace, liveId) == 1 by {
+          forall liveId | liveId in result.inodes &&
+                          FsNodeCanHaveChildren(result.inodes[liveId].node)
+            ensures InodeNamespaceRefCount(
+                      result.namespace, liveId
+                    ) == 1
+          {
+            if liveId == id {
+              assert oldRefs != 1;
+              assert FsNodeCanHaveChildren(fs.inodes[id].node);
+              assert oldRefs == 1;
+            } else {
+              assert InodeNamespaceIdPaths(
+                  result.namespace, liveId
+                ) == InodeNamespaceIdPaths(fs.namespace, liveId);
+            }
+          }
+        }
+        assert InodeNamespaceWellFormed(result);
+
+        assert InodeUniqueHostKeys(fs);
+        assert forall liveId :: liveId in result.inodes ==>
+          liveId in fs.inodes &&
+          result.inodes[liveId].hostKey == fs.inodes[liveId].hostKey by {
+          forall liveId | liveId in result.inodes
+            ensures liveId in fs.inodes &&
+                    result.inodes[liveId].hostKey == fs.inodes[liveId].hostKey
+          {
+            if liveId == id && oldRefs != 1 {
+              assert result.inodes[id] ==
+                     InodeRecordAfterUnlink(fs.inodes[id]);
+            } else {
+              assert result.inodes[liveId] == fs.inodes[liveId];
+            }
+          }
+        }
+        assert InodeUniqueHostKeys(result) by {
+          hide *;
+          reveal InodeUniqueHostKeys();
+        }
+        assert InodeValidLinkObservations(fs);
+        assert fs.inodes[id].links.LinkCountKnown?;
+        assert oldRefs <= fs.inodes[id].links.count;
+        assert forall liveId :: liveId in result.inodes ==>
+                                  InodeStorageConsistent(result.inodes[liveId]) &&
+                                  InodeKindConsistent(result.inodes[liveId]) by {
+          forall liveId | liveId in result.inodes
+            ensures InodeStorageConsistent(result.inodes[liveId]) &&
+                    InodeKindConsistent(result.inodes[liveId])
+          {
+            if liveId == id && oldRefs != 1 {
+              assert result.inodes[id] ==
+                     InodeRecordAfterUnlink(fs.inodes[id]);
+            } else {
+              assert result.inodes[liveId] == fs.inodes[liveId];
+            }
+          }
+        }
+        assert forall liveId :: liveId in result.inodes ==>
+                                  var refs :=
+                                    InodeNamespaceRefCount(result.namespace, liveId);
+                                  result.inodes[liveId].links.LinkCountKnown? &&
+                                  0 < result.inodes[liveId].links.count &&
+                                  refs <= result.inodes[liveId].links.count by {
+          forall liveId | liveId in result.inodes
+            ensures
+              var refs :=
+                InodeNamespaceRefCount(result.namespace, liveId);
+              result.inodes[liveId].links.LinkCountKnown? &&
+              0 < result.inodes[liveId].links.count &&
+              refs <= result.inodes[liveId].links.count
+          {
+            assert liveId in fs.inodes;
+            assert fs.inodes[liveId].links.LinkCountKnown?;
+            assert 0 < fs.inodes[liveId].links.count;
+            assert InodeNamespaceRefCount(fs.namespace, liveId) <=
+                   fs.inodes[liveId].links.count;
+            if liveId == id {
+              assert oldRefs > 1;
+              assert result.inodes[id] ==
+                     InodeRecordAfterUnlink(fs.inodes[id]);
+              assert InodeNamespaceRefCount(result.namespace, id) ==
+                     oldRefs - 1;
+              hide *;
+              reveal InodeRecordAfterUnlink();
+            } else {
+              assert result.inodes[liveId] == fs.inodes[liveId];
+              assert InodeNamespaceIdPaths(
+                  result.namespace, liveId
+                ) == InodeNamespaceIdPaths(fs.namespace, liveId);
+              assert InodeNamespaceRefCount(result.namespace, liveId) ==
+                     InodeNamespaceRefCount(fs.namespace, liveId);
+              hide *;
+            }
+          }
+        }
+        assert InodeValidLinkObservations(result);
+
+        if id == fs.namespace.id {
+          assert [] in InodeNamespaceIdPaths(fs.namespace, id);
+          assert segs != [];
+          assert oldRefs > 1;
+          assert fs.inodes[id].node.Directory?;
+          assert oldRefs == 1;
+        }
+        assert result.namespace.id in result.inodes;
+        assert result.inodes[result.namespace.id].node.Directory?;
+        hide *;
+        reveal ValidInodeFileSystemData();
+        assert ValidInodeFileSystemData(result);
+      } else {
+        assert InodeFsRemovePath(fs, path) == fs;
+      }
+      hide *;
+    }
+
+    ghost method InodeFsRemovePathVerified(
+      fs: InodeFileSystem,
+      path: Path
+    ) returns (result: InodeFileSystem)
+      ensures result == InodeFsRemovePath(fs, path)
+    {
+      InodeFsRemovePathValid(fs, path);
+      result := InodeFsRemovePath(fs, path);
+    }
+  }
+
+  module KernelRename {
+    import Result = Results
+    import opened BenchWorld
+    import Lookup = KernelLookup
+    import Remove = KernelRemove
+
+    lemma {:isolate_assertions} InodeTreeDetachSubtreeProperties(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      segs: seq<string>,
+      subtree: InodeTree
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires |segs| > 0
+      requires InodeFsLookupTreeSegments(inodes, tree, segs) ==
+               Result.Ok(subtree)
+      ensures InodeTreeWellFormed(
+                InodeTreeRemoveSegments(tree, segs), inodes
+              )
+      ensures InodeFsLookupTreeSegments(
+                inodes, InodeTreeRemoveSegments(tree, segs), segs
+              ) == Result.Err(NoSuchFile)
+      ensures forall id ::
+                InodeNamespaceIdPaths(
+                  InodeTreeRemoveSegments(tree, segs), id
+                ) == InodeNamespaceIdPaths(tree, id) -
+                InodePrefixPaths(
+                  segs, InodeNamespaceIdPaths(subtree, id)
+                )
+      decreases |segs|
+    {
+      if |segs| == 1 {
+        assert segs == [segs[0]];
+        assert tree.children[segs[0]] == subtree;
+        assert InodeTreeChildren(
+            InodeTreeRemoveSegments(tree, segs)
+          ) == tree.children - {segs[0]};
+        forall id
+          ensures InodeNamespaceIdPaths(
+                    InodeTreeRemoveSegments(tree, segs), id
+                  ) == InodeNamespaceIdPaths(tree, id) -
+                       InodePrefixPaths(
+                         segs, InodeNamespaceIdPaths(subtree, id)
+                       )
+        {
+          forall path |
+            path in InodeNamespaceIdPaths(
+                      InodeTreeRemoveSegments(tree, segs), id
+                    )
+            ensures path in InodeNamespaceIdPaths(tree, id) &&
+                    path !in InodePrefixPaths(
+                      segs, InodeNamespaceIdPaths(subtree, id)
+                    )
+          {
+            if path != [] {
+              var name, suffix :|
+                name in InodeTreeChildren(
+                          InodeTreeRemoveSegments(tree, segs)
+                        ) &&
+                suffix in InodeNamespaceIdPaths(
+                            InodeTreeChildren(
+                              InodeTreeRemoveSegments(tree, segs)
+                            )[name],
+                            id
+                          ) &&
+                path == [name] + suffix;
+              assert name != segs[0];
+              if path in InodePrefixPaths(
+                           segs, InodeNamespaceIdPaths(subtree, id)
+                         ) {
+                var removedSuffix :|
+                  removedSuffix in InodeNamespaceIdPaths(subtree, id) &&
+                  path == segs + removedSuffix;
+                assert path[0] == name;
+                assert path[0] == segs[0];
+                assert name == segs[0];
+              }
+            }
+          }
+          forall path |
+            path in InodeNamespaceIdPaths(tree, id) &&
+            path !in InodePrefixPaths(
+              segs, InodeNamespaceIdPaths(subtree, id)
+            )
+            ensures path in InodeNamespaceIdPaths(
+                              InodeTreeRemoveSegments(tree, segs), id
+                            )
+          {
+            if path != [] {
+              var name, suffix :|
+                name in tree.children &&
+                suffix in InodeNamespaceIdPaths(
+                            tree.children[name], id
+                          ) &&
+                path == [name] + suffix;
+              if name == segs[0] {
+                assert suffix in InodeNamespaceIdPaths(subtree, id);
+                assert path in InodePrefixPaths(
+                                 segs, InodeNamespaceIdPaths(subtree, id)
+                               );
+              }
+            }
+          }
+        }
+      } else {
+        InodeTreeDetachSubtreeProperties(
+          tree.children[segs[0]],
+          inodes,
+          segs[1..],
+          subtree
+        );
+        assert [segs[0]] + segs[1..] == segs;
+        assert InodeTreeChildren(
+            InodeTreeRemoveSegments(tree, segs)
+          )[segs[0]] ==
+               InodeTreeRemoveSegments(
+                 tree.children[segs[0]], segs[1..]
+               );
+        forall id
+          ensures InodeNamespaceIdPaths(
+                    InodeTreeRemoveSegments(tree, segs), id
+                  ) == InodeNamespaceIdPaths(tree, id) -
+                       InodePrefixPaths(
+                         segs, InodeNamespaceIdPaths(subtree, id)
+                       )
+        {
+          Lookup.InodePrefixPathsCompose(
+            [segs[0]],
+            segs[1..],
+            InodeNamespaceIdPaths(subtree, id)
+          );
+          assert InodeNamespaceIdPaths(
+              InodeTreeRemoveSegments(
+                tree.children[segs[0]], segs[1..]
+              ),
+              id
+            ) == InodeNamespaceIdPaths(
+                        tree.children[segs[0]], id
+                      ) - InodePrefixPaths(
+                        segs[1..], InodeNamespaceIdPaths(subtree, id)
+                      );
+          forall path |
+            path in InodeNamespaceIdPaths(
+                      InodeTreeRemoveSegments(tree, segs), id
+                    )
+            ensures path in InodeNamespaceIdPaths(tree, id) &&
+                    path !in InodePrefixPaths(
+                      segs, InodeNamespaceIdPaths(subtree, id)
+                    )
+          {
+            if path != [] {
+              var name, suffix :|
+                name in InodeTreeChildren(
+                          InodeTreeRemoveSegments(tree, segs)
+                        ) &&
+                suffix in InodeNamespaceIdPaths(
+                            InodeTreeChildren(
+                              InodeTreeRemoveSegments(tree, segs)
+                            )[name],
+                            id
+                          ) &&
+                path == [name] + suffix;
+              if name == segs[0] {
+                assert suffix in InodeNamespaceIdPaths(
+                                   tree.children[name], id
+                                 );
+                assert suffix !in InodePrefixPaths(
+                    segs[1..],
+                    InodeNamespaceIdPaths(subtree, id)
+                  );
+                if path in InodePrefixPaths(
+                             segs, InodeNamespaceIdPaths(subtree, id)
+                           ) {
+                  var removedSuffix :|
+                    removedSuffix in InodeNamespaceIdPaths(subtree, id) &&
+                    path == segs + removedSuffix;
+                  assert path[1..] == suffix;
+                  assert (segs + removedSuffix)[1..] ==
+                         segs[1..] + removedSuffix;
+                  assert suffix == segs[1..] + removedSuffix;
+                  assert suffix in InodePrefixPaths(
+                                     segs[1..],
+                                     InodeNamespaceIdPaths(subtree, id)
+                                   );
+                }
+              } else if path in InodePrefixPaths(
+                                  segs, InodeNamespaceIdPaths(subtree, id)
+                                ) {
+                var removedSuffix :|
+                  removedSuffix in InodeNamespaceIdPaths(subtree, id) &&
+                  path == segs + removedSuffix;
+                assert path[0] == name;
+                assert path[0] == segs[0];
+              }
+            }
+          }
+          forall path |
+            path in InodeNamespaceIdPaths(tree, id) &&
+            path !in InodePrefixPaths(
+              segs, InodeNamespaceIdPaths(subtree, id)
+            )
+            ensures path in InodeNamespaceIdPaths(
+                              InodeTreeRemoveSegments(tree, segs), id
+                            )
+          {
+            if path != [] {
+              var name, suffix :|
+                name in tree.children &&
+                suffix in InodeNamespaceIdPaths(
+                            tree.children[name], id
+                          ) &&
+                path == [name] + suffix;
+              if name == segs[0] {
+                if suffix in InodePrefixPaths(
+                               segs[1..],
+                               InodeNamespaceIdPaths(subtree, id)
+                             ) {
+                  var removedSuffix :|
+                    removedSuffix in InodeNamespaceIdPaths(subtree, id) &&
+                    suffix == segs[1..] + removedSuffix;
+                  assert path == segs + removedSuffix;
+                  assert path in InodePrefixPaths(
+                                   segs, InodeNamespaceIdPaths(subtree, id)
+                                 );
+                }
+                assert suffix !in InodePrefixPaths(
+                    segs[1..],
+                    InodeNamespaceIdPaths(subtree, id)
+                  );
+              }
+            }
+          }
+        }
+      }
+    }
+
+    lemma {:isolate_assertions} InodeTreeAttachSubtreeProperties(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      segs: seq<string>,
+      subtree: InodeTree
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires InodeTreeWellFormed(subtree, inodes)
+      requires InodeTreeCanInsert(inodes, tree, segs)
+      ensures InodeTreeWellFormed(
+                InodeTreeSetSubtreeSegments(tree, segs, subtree), inodes
+              )
+      ensures InodeFsLookupTreeSegments(
+                inodes,
+                InodeTreeSetSubtreeSegments(tree, segs, subtree),
+                segs
+              ) == Result.Ok(subtree)
+      ensures forall id ::
+                InodeNamespaceIdPaths(
+                  InodeTreeSetSubtreeSegments(tree, segs, subtree), id
+                ) == InodeNamespaceIdPaths(tree, id) +
+                InodePrefixPaths(
+                  segs, InodeNamespaceIdPaths(subtree, id)
+                )
+      decreases |segs|
+    {
+      if |segs| == 1 {
+        assert segs == [segs[0]];
+      } else {
+        InodeTreeAttachSubtreeProperties(
+          tree.children[segs[0]],
+          inodes,
+          segs[1..],
+          subtree
+        );
+        assert [segs[0]] + segs[1..] == segs;
+        forall id
+          ensures InodeNamespaceIdPaths(
+                    InodeTreeSetSubtreeSegments(tree, segs, subtree), id
+                  ) == InodeNamespaceIdPaths(tree, id) +
+                       InodePrefixPaths(
+                         segs, InodeNamespaceIdPaths(subtree, id)
+                       )
+        {
+          Lookup.InodePrefixPathsCompose(
+            [segs[0]],
+            segs[1..],
+            InodeNamespaceIdPaths(subtree, id)
+          );
+          assert InodeNamespaceIdPaths(
+            InodeTreeSetSubtreeSegments(tree.children[segs[0]], segs[1..], subtree), id
+          ) == InodeNamespaceIdPaths(tree.children[segs[0]], id) +
+               InodePrefixPaths(segs[1..], InodeNamespaceIdPaths(subtree, id));
+        }
+      }
+    }
+
+    lemma {:isolate_assertions} InodeTreeRelocateSubtreeProperties(
+      tree: InodeTree,
+      inodes: map<InodeId, InodeRecord>,
+      source: seq<string>,
+      target: seq<string>,
+      subtree: InodeTree
+    )
+      requires InodeTreeWellFormed(tree, inodes)
+      requires InodeFsLookupTreeSegments(inodes, tree, source) ==
+               Result.Ok(subtree)
+      requires InodeTreeCanInsert(inodes, tree, target)
+      requires InodeSegmentsDisjoint(source, target)
+      requires InodeFsLookupTreeSegments(
+                 inodes,
+                 InodeTreeSetSubtreeSegments(tree, target, subtree),
+                 source
+               ) == Result.Ok(subtree)
+      ensures InodeTreeWellFormed(
+                InodeTreeRemoveSegments(
+                  InodeTreeSetSubtreeSegments(tree, target, subtree),
+                  source
+                ),
+                inodes
+              )
+      ensures forall id ::
+                InodeNamespaceRefCount(
+                  InodeTreeRemoveSegments(
+                    InodeTreeSetSubtreeSegments(tree, target, subtree),
+                    source
+                  ),
+                  id
+                ) == InodeNamespaceRefCount(tree, id)
+      ensures InodeNamespaceIds(
+                InodeTreeRemoveSegments(
+                  InodeTreeSetSubtreeSegments(tree, target, subtree),
+                  source
+                )
+              ) == InodeNamespaceIds(tree)
+    {
+      Lookup.InodeLookupTreeWellFormed(inodes, tree, source, subtree);
+      InodeTreeAttachSubtreeProperties(
+        tree, inodes, target, subtree
+      );
+      var attached :=
+        InodeTreeSetSubtreeSegments(tree, target, subtree);
+      InodeTreeDetachSubtreeProperties(
+        attached, inodes, source, subtree
+      );
+      var result := InodeTreeRemoveSegments(attached, source);
+      forall id
+        ensures InodeNamespaceRefCount(result, id) ==
+                InodeNamespaceRefCount(tree, id)
+      {
+        var before := InodeNamespaceIdPaths(tree, id);
+        var subtreePaths := InodeNamespaceIdPaths(subtree, id);
+        var sourcePaths := InodePrefixPaths(source, subtreePaths);
+        var targetPaths := InodePrefixPaths(target, subtreePaths);
+        var attachedPaths := InodeNamespaceIdPaths(attached, id);
+        var resultPaths := InodeNamespaceIdPaths(result, id);
+
+        Lookup.InodeLookupPrefixPathsSubset(
+          inodes, tree, source, subtree, id
+        );
+        Lookup.InodeInsertPrefixPathsDisjoint(
+          inodes, tree, target, subtreePaths, id
+        );
+        Lookup.InodeDisjointPrefixPaths(
+          source, target, subtreePaths, subtreePaths
+        );
+        Lookup.InodePrefixPathsCardinality(source, subtreePaths);
+        Lookup.InodePrefixPathsCardinality(target, subtreePaths);
+
+        assert sourcePaths <= before;
+        assert before * targetPaths == {};
+        assert sourcePaths * targetPaths == {};
+        assert attachedPaths == before + targetPaths;
+        assert resultPaths == attachedPaths - sourcePaths;
+        assert sourcePaths <= attachedPaths;
+        assert |attachedPaths| == |before| + |targetPaths|;
+        assert |resultPaths| == |attachedPaths| - |sourcePaths|;
+        assert |sourcePaths| == |targetPaths|;
+        assert |resultPaths| == |before|;
+      }
+      assert forall id ::
+          id in InodeNamespaceIds(result) <==>
+                id in InodeNamespaceIds(tree) by {
+        forall id
+          ensures id in InodeNamespaceIds(result) <==>
+                  id in InodeNamespaceIds(tree)
+        {
+          Lookup.InodeNamespaceIdRefCount(result, id);
+          Lookup.InodeNamespaceIdRefCount(tree, id);
+        }
+      }
+    }
+
+    lemma {:isolate_assertions} InodeFsRenameValid(
+      fs: InodeFileSystem,
+      source: Path,
+      target: Path
+    )
+      ensures ValidInodeFileSystemData(
+                InodeFsRename(fs, source, target)
+              )
+    {
+      var result := InodeFsRename(fs, source, target);
+      if result != fs {
+        var sourceSegs := PathSegments(source);
+        var targetSegs := PathSegments(target);
+        assert |sourceSegs| > 0 && |targetSegs| > 0;
+        assert InodeFsContainsPath(fs, source);
+        var sourceTree := InodeFsLookupTreeSegments(
+          fs.inodes, fs.namespace, sourceSegs
+        ).v;
+        var withoutTarget :=
+          if InodeFsContainsPath(fs, target) then
+            InodeFsRemovePath(fs, target)
+          else
+            fs;
+        if InodeFsContainsPath(fs, target) {
+          Remove.InodeFsRemovePathValid(fs, target);
+        }
+        assert ValidInodeFileSystemData(withoutTarget);
+        var safeWithoutTarget: InodeFileSystem := withoutTarget;
+        assert InodeTreeCanInsert(
+            withoutTarget.inodes,
+            withoutTarget.namespace,
+            targetSegs
+          );
+        assert InodeFsLookupTreeSegments(
+            withoutTarget.inodes,
+            withoutTarget.namespace,
+            sourceSegs
+          ) == Result.Ok(sourceTree);
+        var attached := InodeTreeSetSubtreeSegments(
+          withoutTarget.namespace, targetSegs, sourceTree
+        );
+        assert InodeFsLookupTreeSegments(
+            withoutTarget.inodes, attached, sourceSegs
+          ) == Result.Ok(sourceTree);
+        if sourceSegs == targetSegs {
+          assert InodeFsContainsPath(fs, target);
+          assert InodeFsLookupId(fs, source) ==
+                 InodeFsLookupId(fs, target);
+          assert InodeSameObject(fs, source, target);
+        }
+        assert sourceSegs != targetSegs;
+        if |sourceSegs| <= |targetSegs| {
+          if |sourceSegs| == |targetSegs| {
+            assert targetSegs[..|sourceSegs|] == targetSegs;
+          }
+          assert targetSegs[..|sourceSegs|] != sourceSegs;
+        } else {
+          if |targetSegs| == |sourceSegs| {
+            assert sourceSegs[..|targetSegs|] == sourceSegs;
+          }
+          assert sourceSegs[..|targetSegs|] != targetSegs;
+        }
+        assert InodeSegmentsDisjoint(sourceSegs, targetSegs);
+
+        InodeTreeRelocateSubtreeProperties(
+          withoutTarget.namespace,
+          withoutTarget.inodes,
+          sourceSegs,
+          targetSegs,
+          sourceTree
+        );
+        assert result.namespace ==
+               InodeTreeRemoveSegments(attached, sourceSegs);
+        assert result.inodes == withoutTarget.inodes;
+        assert InodeTreeWellFormed(result.namespace, result.inodes);
+        assert InodeNamespaceIds(result.namespace) ==
+               InodeNamespaceIds(withoutTarget.namespace);
+        assert result.inodes.Keys ==
+               InodeNamespaceIds(result.namespace);
+        assert forall id :: (InodeNamespaceRefCount(
+                               result.namespace, id
+                             ) == InodeNamespaceRefCount(
+                                    withoutTarget.namespace, id
+                                  ));
+        assert forall liveId :: (
+                                  liveId in result.inodes &&
+                                  FsNodeCanHaveChildren(result.inodes[liveId].node)) ==>
+                                  InodeNamespaceRefCount(result.namespace, liveId) == 1 by {
+          forall liveId | liveId in result.inodes &&
+                          FsNodeCanHaveChildren(result.inodes[liveId].node)
+            ensures InodeNamespaceRefCount(
+                      result.namespace, liveId
+                    ) == 1
+          {
+            assert InodeNamespaceRefCount(
+                result.namespace, liveId
+              ) == InodeNamespaceRefCount(
+                          withoutTarget.namespace, liveId
+                        );
+          }
+        }
+        assert InodeNamespaceWellFormed(result);
+        assert InodeUniqueHostKeys(result);
+        assert forall liveId :: liveId in result.inodes ==>
+                                  InodeStorageConsistent(result.inodes[liveId]) &&
+                                  InodeKindConsistent(result.inodes[liveId]) by {
+          forall liveId | liveId in result.inodes
+            ensures InodeStorageConsistent(result.inodes[liveId]) &&
+                    InodeKindConsistent(result.inodes[liveId])
+          {
+            assert result.inodes[liveId] ==
+                   withoutTarget.inodes[liveId];
+          }
+        }
+        assert InodeValidLinkObservations(withoutTarget);
+        assert InodeValidLinkObservations(result) by {
+          forall liveId | liveId in result.inodes
+            ensures result.inodes[liveId].links.LinkCountKnown? &&
+                    0 < result.inodes[liveId].links.count &&
+                    InodeNamespaceRefCount(result.namespace, liveId) <=
+                      result.inodes[liveId].links.count
+          {
+            assert result.inodes[liveId] == withoutTarget.inodes[liveId];
+            assert InodeNamespaceRefCount(result.namespace, liveId) ==
+                   InodeNamespaceRefCount(withoutTarget.namespace, liveId);
+            assert withoutTarget.inodes[liveId].links.LinkCountKnown?;
+            assert 0 < withoutTarget.inodes[liveId].links.count;
+            assert InodeNamespaceRefCount(withoutTarget.namespace, liveId) <=
+                   withoutTarget.inodes[liveId].links.count;
+            hide *;
+          }
+        }
+        assert result.namespace.id == withoutTarget.namespace.id;
+        assert result.namespace.id in result.inodes;
+        assert result.inodes[result.namespace.id].node.Directory?;
+        hide *;
+        reveal ValidInodeFileSystemData();
+        assert ValidInodeFileSystemData(result);
+      }
+      hide *;
+    }
+
+    ghost method InodeFsRenameVerified(
+      fs: InodeFileSystem,
+      source: Path,
+      target: Path
+    ) returns (result: InodeFileSystem)
+      ensures result == InodeFsRename(fs, source, target)
+    {
+      InodeFsRenameValid(fs, source, target);
+      result := InodeFsRename(fs, source, target);
+    }
+
+    lemma InodeRenameSameObjectNoop(
+      fs: InodeFileSystem,
+      source: Path,
+      target: Path
+    )
+      requires InodeSameObject(fs, source, target)
+      ensures InodeFsRename(fs, source, target) == fs
+    {
+      assert InodeFsRename(fs, source, target) == fs;
+    }
+  }
 }

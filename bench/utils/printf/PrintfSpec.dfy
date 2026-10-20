@@ -87,13 +87,23 @@ module PrintfSpec {
     "printf: unsupported format in verified subset\n"
   }
 
-  function ExcessArgumentsWarning(arg: string): BenchWorld.Bytes
+  function ExcessArgumentsWarningPart1(): BenchWorld.Bytes
   {
-    "printf: warning: ignoring excess arguments, starting with " +
-    SE.SpecLocaleQuoteBytes(Utf8.Encode(arg)) + "\n"
+    "printf: warning: ignoring excess arguments, starting with "
   }
 
-  function RequestExcessWarning(raw: Schema.PrintfCmdRaw): BenchWorld.Bytes
+  function ExcessArgumentsWarningPart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ExcessArgumentsWarning(arg: string): BenchWorld.Bytes
+  {
+    ExcessArgumentsWarningPart1() +
+    SE.SpecLocaleQuoteBytes(Utf8.Encode(arg)) + ExcessArgumentsWarningPart2()
+  }
+
+  ghost function RequestExcessWarning(raw: Schema.PrintfCmdRaw): BenchWorld.Bytes
   {
     match raw.excessAfterRequest
     case Some(arg) => ExcessArgumentsWarning(arg)
@@ -410,9 +420,19 @@ module PrintfSpec {
     true
   }
 
-  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessagePart1(): BenchWorld.Bytes
   {
-    StreamUtf8.Encode("printf: write error: " + message + "\n")
+    "printf: write error: "
+  }
+
+  function StreamWriteErrorMessagePart2(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode(StreamWriteErrorMessagePart1() + message + StreamWriteErrorMessagePart2())
   }
 
   ghost predicate EmitFields(

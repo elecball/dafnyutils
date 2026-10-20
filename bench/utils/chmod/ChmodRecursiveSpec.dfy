@@ -70,37 +70,87 @@ module ChmodRecursiveSpec {
     else TraversalFollowSpec(cmd, isTopLevel)
   }
 
-  function RootPreserveMessageSpec(displayPath: string, alias: bool): BenchWorld.Bytes
+  function RootPreserveMessageSpecPart1(): BenchWorld.Bytes
+  {
+    "chmod: it is dangerous to operate recursively on "
+  }
+
+  function RootPreserveMessageSpecPart2(): BenchWorld.Bytes
+  {
+    " (same as '/')\n"
+  }
+
+  function RootPreserveMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "chmod: use --no-preserve-root to override this failsafe\n"
+  }
+
+  function RootPreserveMessageSpecPart4(): BenchWorld.Bytes
+  {
+    "chmod: it is dangerous to operate recursively on '/'\n"
+  }
+
+  ghost function RootPreserveMessageSpec(displayPath: string, alias: bool): BenchWorld.Bytes
   {
     if alias then
-      "chmod: it is dangerous to operate recursively on " +
-      Quote.SpecQuoteAfBytes(Utf8.Encode(displayPath)) + " (same as '/')\n" +
-      "chmod: use --no-preserve-root to override this failsafe\n"
+      RootPreserveMessageSpecPart1() +
+      Quote.SpecQuoteAfBytes(Utf8.Encode(displayPath)) + RootPreserveMessageSpecPart2() +
+      RootPreserveMessageSpecPart3()
     else
-      "chmod: it is dangerous to operate recursively on '/'\n" +
-      "chmod: use --no-preserve-root to override this failsafe\n"
+      RootPreserveMessageSpecPart4() +
+      RootPreserveMessageSpecPart3()
   }
 
-  function ReadDirectoryMessageSpec(path: string, err: int): BenchWorld.Bytes
+  function ReadDirectoryMessageSpecPart1(): BenchWorld.Bytes
   {
-    "chmod: cannot read directory " +
-    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " +
-    Base.ErrnoTextSpec(err) + "\n"
+    "chmod: cannot read directory "
   }
 
-  function DanglingSymlinkMessageSpec(path: string): BenchWorld.Bytes
+  function ReadDirectoryMessageSpecPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function ReadDirectoryMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ReadDirectoryMessageSpec(path: string, err: int): BenchWorld.Bytes
+  {
+    ReadDirectoryMessageSpecPart1() +
+    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ReadDirectoryMessageSpecPart2() +
+    Base.ErrnoTextSpec(err) + ReadDirectoryMessageSpecPart3()
+  }
+
+  ghost function DanglingSymlinkMessageSpec(path: string): BenchWorld.Bytes
   {
     Base.DanglingSymlinkMessageSpec(path)
   }
 
-  function CannotDereferenceMessageSpec(path: string, err: int): BenchWorld.Bytes
+  function CannotDereferenceMessageSpecPart1(): BenchWorld.Bytes
   {
-    "chmod: cannot dereference " +
-    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " +
-    Base.ErrnoTextSpec(err) + "\n"
+    "chmod: cannot dereference "
   }
 
-  function NeitherChangedMessageSpec(path: string): BenchWorld.Bytes
+  function CannotDereferenceMessageSpecPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function CannotDereferenceMessageSpecPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function CannotDereferenceMessageSpec(path: string, err: int): BenchWorld.Bytes
+  {
+    CannotDereferenceMessageSpecPart1() +
+    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + CannotDereferenceMessageSpecPart2() +
+    Base.ErrnoTextSpec(err) + CannotDereferenceMessageSpecPart3()
+  }
+
+  ghost function NeitherChangedMessageSpec(path: string): BenchWorld.Bytes
   {
     Base.NeitherChangedMessageSpec(path)
   }
@@ -110,12 +160,12 @@ module ChmodRecursiveSpec {
     "chmod: -R --dereference requires either -H or -L\n"
   }
 
-  function RecursiveAccessStdoutSpec(cmd: Schema.ChmodCmd, path: string): BenchWorld.Bytes
+  ghost function RecursiveAccessStdoutSpec(cmd: Schema.ChmodCmd, path: string): BenchWorld.Bytes
   {
     if cmd.verbose then Base.AccessFailureMessageSpec(path) else []
   }
 
-  function RecursiveAccessStderrSpec(
+  ghost function RecursiveAccessStderrSpec(
     cmd: Schema.ChmodCmd,
     path: string,
     err: int,
@@ -145,12 +195,12 @@ module ChmodRecursiveSpec {
       RecursiveAccess
   }
 
-  function RecursiveSkipStdoutSpec(cmd: Schema.ChmodCmd, path: string): BenchWorld.Bytes
+  ghost function RecursiveSkipStdoutSpec(cmd: Schema.ChmodCmd, path: string): BenchWorld.Bytes
   {
     if cmd.verbose then NeitherChangedMessageSpec(path) else []
   }
 
-  function RecursiveReadStdoutSpec(
+  ghost function RecursiveReadStdoutSpec(
     cmd: Schema.ChmodCmd,
     path: string,
     terminal: RecursiveTerminal
@@ -162,7 +212,7 @@ module ChmodRecursiveSpec {
       if cmd.verbose then Base.AccessFailureMessageSpec(path) else []
   }
 
-  function RecursiveReadStderrSpec(
+  ghost function RecursiveReadStderrSpec(
     cmd: Schema.ChmodCmd,
     path: string,
     terminal: RecursiveTerminal
@@ -740,19 +790,49 @@ module ChmodRecursiveSpec {
     reveal Spec;
   }
 
-  function ReadDirectoryText(path: string, reason: string): BenchWorld.Bytes
+  function ReadDirectoryTextPart1(): BenchWorld.Bytes
   {
-    "chmod: cannot read directory " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " + Utf8.Encode(reason) + "\n"
+    "chmod: cannot read directory "
   }
 
-  function TerminalReadDirectoryText(path: string, hadEntries: bool, reason: string): BenchWorld.Bytes
+  function ReadDirectoryTextPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function ReadDirectoryTextPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ReadDirectoryText(path: string, reason: string): BenchWorld.Bytes
+  {
+    ReadDirectoryTextPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ReadDirectoryTextPart2() + Utf8.Encode(reason) + ReadDirectoryTextPart3()
+  }
+
+  function TerminalReadDirectoryTextPart1(): BenchWorld.Bytes
+  {
+    "chmod: "
+  }
+
+  function TerminalReadDirectoryTextPart2(): BenchWorld.Bytes
+  {
+    ": "
+  }
+
+  function TerminalReadDirectoryTextPart3(): BenchWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function TerminalReadDirectoryText(path: string, hadEntries: bool, reason: string): BenchWorld.Bytes
   {
     if hadEntries then
-      "chmod: " + Quote.SpecQuoteFBytes(Utf8.Encode(path)) + ": " + Utf8.Encode(reason) + "\n"
+      TerminalReadDirectoryTextPart1() + Quote.SpecQuoteFBytes(Utf8.Encode(path)) + TerminalReadDirectoryTextPart2() + Utf8.Encode(reason) + TerminalReadDirectoryTextPart3()
     else ReadDirectoryText(path, reason)
   }
 
-  function NativeAccessText(cmd: Schema.ChmodCmd, path: string, kind: RecursiveFailureKind,
+  ghost function NativeAccessText(cmd: Schema.ChmodCmd, path: string, kind: RecursiveFailureKind,
     reason: string): BenchWorld.Bytes
   {
     if cmd.silent then []

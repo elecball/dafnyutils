@@ -158,10 +158,25 @@ module StatSpec {
     IOContract.CLocaleErrnoTextResult(errno)
   }
 
-  function ErrorMessageWithReasonSpec(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
+  function ErrorMessageWithReasonSpecPart1(): StreamWorld.Bytes
   {
-    "stat: cannot statx " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
-      ": " + Utf8.Encode(reason) + "\n"
+    "stat: cannot statx "
+  }
+
+  function ErrorMessageWithReasonSpecPart2(): StreamWorld.Bytes
+  {
+    ": "
+  }
+
+  function ErrorMessageWithReasonSpecPart3(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function ErrorMessageWithReasonSpec(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
+  {
+    ErrorMessageWithReasonSpecPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
+      ErrorMessageWithReasonSpecPart2() + Utf8.Encode(reason) + ErrorMessageWithReasonSpecPart3()
   }
 
   ghost function ErrorMessageSpec(path: BenchWorld.Path, errno: int): BenchWorld.Bytes
@@ -178,7 +193,7 @@ module StatSpec {
       (('a' as int) + digit - 10) as char
   }
 
-  function BaseNatTextSpec(value: nat, base: nat): string
+  ghost function BaseNatTextSpec(value: nat, base: nat): string
     requires 2 <= base <= 16
     decreases value
   {
@@ -188,15 +203,25 @@ module StatSpec {
       BaseNatTextSpec(value / base, base) + [DigitForBaseSpec(value % base)]
   }
 
-  function IntTextSpec(value: int): string
+  function IntTextSpecPart1(): StreamWorld.Bytes
   {
-    if value < 0 then "-" + BaseNatTextSpec((-value) as nat, 10)
+    "-"
+  }
+
+  ghost function IntTextSpec(value: int): string
+  {
+    if value < 0 then IntTextSpecPart1() + BaseNatTextSpec((-value) as nat, 10)
     else BaseNatTextSpec(value as nat, 10)
   }
 
-  function IntHexTextSpec(value: int): string
+  function IntHexTextSpecPart1(): StreamWorld.Bytes
   {
-    if value < 0 then "-" + BaseNatTextSpec((-value) as nat, 16)
+    "-"
+  }
+
+  ghost function IntHexTextSpec(value: int): string
+  {
+    if value < 0 then IntHexTextSpecPart1() + BaseNatTextSpec((-value) as nat, 16)
     else BaseNatTextSpec(value as nat, 16)
   }
 
@@ -221,12 +246,22 @@ module StatSpec {
     directive == 'u' || directive == 'X' || directive == 'Y' || directive == 'Z'
   }
 
-  function DirectiveTextSpec(
+  function DirectiveTextSpecPart1(): StreamWorld.Bytes
+  {
+    "%"
+  }
+
+  function DirectiveTextSpecPart2(): StreamWorld.Bytes
+  {
+    "?"
+  }
+
+  ghost function DirectiveTextSpec(
     directive: char,
     status: BenchWorld.FileStatus
   ): BenchWorld.Bytes
   {
-    Utf8.Encode(if directive == '%' then "%"
+    Utf8.Encode(if directive == '%' then DirectiveTextSpecPart1()
     else if directive == 'a' then BaseNatTextSpec((status.mode as int) as nat, 8)
     else if directive == 'b' then BaseNatTextSpec(status.storage.allocatedBlocks, 10)
     else if directive == 'B' then BaseNatTextSpec(BenchWorld.STAT_BLOCK_BYTES, 10)
@@ -242,7 +277,7 @@ module StatSpec {
     else if directive == 'X' then IntTextSpec(status.times.atimeSec)
     else if directive == 'Y' then IntTextSpec(status.times.mtimeSec)
     else if directive == 'Z' then IntTextSpec(status.times.ctimeSec)
-    else "?")
+    else DirectiveTextSpecPart2())
   }
 
   ghost predicate FormatStepRelation(
@@ -542,9 +577,19 @@ module StatSpec {
   }
 
 
-  function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorTextPart1(): StreamWorld.Bytes
   {
-    "stat: write error: " + Utf8.Encode(reason) + "\n"
+    "stat: write error: "
+  }
+
+  function WriteErrorTextPart2(): StreamWorld.Bytes
+  {
+    "\n"
+  }
+
+  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
 
   ghost predicate EmissionOutcomeFields(

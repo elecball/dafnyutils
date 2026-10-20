@@ -1,3 +1,4 @@
+include "ExprTextCore.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
@@ -9,7 +10,8 @@ module ExprCore {
 
   import BenchIO
   import BenchWorld
-  import Utf8 = Utf8Semantics
+  import Utf8 = ExprUtf8Core
+  import Text = ExprTextCore
   import ExprSchema
   import Spec = ExprSpec
 
@@ -433,7 +435,7 @@ module ExprCore {
   {
     if i >= |tokens| then
       EvalErr(if i == 0 then Spec.MissingOperandMessage()
-              else Spec.MissingAfterMessage(tokens[i - 1]))
+              else Text.MissingAfterMessage(tokens[i - 1]))
     else if tokens[i] == "(" then
       var inner := ParseOr(tokens, i + 1);
       if !inner.0 then
@@ -441,16 +443,16 @@ module ExprCore {
       else if inner.2 < |tokens| && tokens[inner.2] == ")" then
         EvalOk(inner.1, inner.2 + 1)
       else if inner.2 < |tokens| then
-        EvalErr(Spec.MissingCloseInsteadMessage(tokens[inner.2]))
+        EvalErr(Text.MissingCloseInsteadMessage(tokens[inner.2]))
       else
-        EvalErr(Spec.MissingCloseAfterMessage(tokens[|tokens| - 1]))
+        EvalErr(Text.MissingCloseAfterMessage(tokens[|tokens| - 1]))
     else if tokens[i] == ")" then
       EvalErr(Spec.UnexpectedCloseMessage())
     else if tokens[i] == "+" then
       if i + 1 < |tokens| then
         EvalOk(tokens[i + 1], i + 2)
       else
-        EvalErr(Spec.MissingAfterMessage("+"))
+        EvalErr(Text.MissingAfterMessage("+"))
     else if tokens[i] == "length" then
       var arg := ParsePrimary(tokens, i + 1);
       if !arg.0 then arg else EvalOk(Digits(|arg.1|), arg.2)
@@ -504,7 +506,7 @@ module ExprCore {
         if !parsed.0 then
           ([], parsed.3, 2)
         else if parsed.2 != |exprArgs| then
-          ([], Spec.UnexpectedArgumentMessage(exprArgs[parsed.2]), 2)
+          ([], Text.UnexpectedArgumentMessage(exprArgs[parsed.2]), 2)
         else
           (Utf8.Encode(parsed.1) + ['\n'], [], if ValueIsTrue(parsed.1) then 0 else 1)
   }
@@ -557,7 +559,7 @@ module ExprCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Spec.StreamWriteErrorMessage(message);
+      errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
       Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
