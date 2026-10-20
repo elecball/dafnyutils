@@ -5,6 +5,9 @@ include "LnCore.dfy"
 include "LnSpec.dfy"
 
 module LnProof {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import BenchIO
   import BenchWorld
   import IOContract
@@ -13,22 +16,18 @@ module LnProof {
   import Spec = LnSpec
 
   lemma DestinationEq(
-    fs: BenchWorld.FileSystem, operands: seq<string>
+    fs: BenchWorld.FileSystem, observations: Spec.ObservationContext, operands: seq<string>
   )
     requires 1 <= |operands| <= 2
-    ensures Core.CoreDestination(fs, operands) == Spec.LinkDestination(fs, operands)
+    ensures Core.CoreDestination(fs, observations, operands) == Spec.LinkDestination(fs, observations, operands)
   {
-    if |operands| == 2 && operands[0] != "" {
-      assert Core.LinkNameIsDirectoryFs(fs, operands[1]) ==
-        Spec.LinkNameIsDirectoryFs(fs, operands[1]);
-    }
   }
 
   lemma StepSummaryImpliesSpec(
     beforeFs: BenchWorld.FileSystem,
     afterFs: BenchWorld.FileSystem,
     now: int,
-    trustedFilesystem: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
+    trustedFilesystem: Spec.ObservationContext,
     source: BenchWorld.Path,
     destination: BenchWorld.Path,
     symbolic: bool,
@@ -42,6 +41,7 @@ module LnProof {
       beforeFs, afterFs, now, trustedFilesystem, source,
       destination, symbolic, diagnostic, success)
   {
+    reveal Core.CoreStepSummary();
     reveal Spec.LinkStepRelation();
   }
 
@@ -49,7 +49,7 @@ module LnProof {
     beforeFs: BenchWorld.FileSystem,
     afterFs: BenchWorld.FileSystem,
     now: int,
-    trustedFilesystem: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
+    trustedFilesystem: Spec.ObservationContext,
     sources: seq<BenchWorld.Path>,
     directory: BenchWorld.Path,
     symbolic: bool,
@@ -71,7 +71,7 @@ module LnProof {
     requires results[0] && results[|sources|] == success
     requires forall i: nat :: i < |sources| ==>
       Spec.LinkStepRelation(
-        states[i], states[i + 1], now, trustedFilesystem,
+        states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
         sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
         pieces[i], stepResults[i]) &&
       diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
@@ -80,6 +80,7 @@ module LnProof {
       beforeFs, afterFs, now, trustedFilesystem, sources,
       directory, symbolic, diagnostic, success)
   {
+    hide *;
     reveal Spec.LinkBatchRelation();
     assert Spec.LinkBatchRelation(
       beforeFs, afterFs, now, trustedFilesystem, sources,
@@ -88,7 +89,7 @@ module LnProof {
 
   lemma {:isolate_assertions} BatchStepTraceImpliesSpec(
     now: int,
-    trustedFilesystem: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
+    trustedFilesystem: Spec.ObservationContext,
     sources: seq<BenchWorld.Path>,
     directory: BenchWorld.Path,
     symbolic: bool,
@@ -105,14 +106,14 @@ module LnProof {
     requires |stepResults| == |sources|
     requires forall i: nat :: i < |sources| ==>
       Core.CoreStepSummary(
-        states[i], states[i + 1], now, trustedFilesystem,
+        states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
         sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
         pieces[i], stepResults[i]) &&
       diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
       results[i + 1] == (results[i] && stepResults[i])
     ensures forall i: nat :: i < |sources| ==>
       Spec.LinkStepRelation(
-        states[i], states[i + 1], now, trustedFilesystem,
+        states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
         sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
         pieces[i], stepResults[i]) &&
       diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
@@ -121,14 +122,14 @@ module LnProof {
     hide Core.CoreStepSummary;
     forall i: nat | i < |sources|
       ensures Spec.LinkStepRelation(
-        states[i], states[i + 1], now, trustedFilesystem,
+        states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
         sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
         pieces[i], stepResults[i]) &&
         diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
         results[i + 1] == (results[i] && stepResults[i])
     {
       StepSummaryImpliesSpec(
-        states[i], states[i + 1], now, trustedFilesystem,
+        states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
         sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
         pieces[i], stepResults[i]);
     }
@@ -138,7 +139,7 @@ module LnProof {
     beforeFs: BenchWorld.FileSystem,
     afterFs: BenchWorld.FileSystem,
     now: int,
-    trustedFilesystem: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
+    trustedFilesystem: Spec.ObservationContext,
     sources: seq<BenchWorld.Path>,
     directory: BenchWorld.Path,
     symbolic: bool,
@@ -153,6 +154,7 @@ module LnProof {
       directory, symbolic, diagnostic, success)
   {
     hide Core.CoreStepSummary;
+    reveal Core.CoreBatchSummary();
     var states: seq<BenchWorld.FileSystem>,
         diagnostics: seq<BenchWorld.Bytes>,
         results: seq<bool>,
@@ -171,7 +173,7 @@ module LnProof {
       results[|sources|] == success &&
       (forall i: nat :: i < |sources| ==>
         Core.CoreStepSummary(
-          states[i], states[i + 1], now, trustedFilesystem,
+          states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
           sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
           pieces[i], stepResults[i]) &&
         diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
@@ -186,66 +188,78 @@ module LnProof {
       pieces, stepResults);
   }
 
-  twostate lemma {:isolate_assertions} CoreSummaryImpliesSpec(
+  twostate lemma {:isolate_assertions} PreparedSummaryImpliesPreparedSpec(
     raw: Schema.LnCmdRaw, io: BenchIO.IO, exit: int
-  )
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  , plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    hide Core.CoreStepSummary;
-    hide Core.CoreBatchSummary;
-    reveal Core.CoreSummary();
-    reveal Spec.Spec();
+    hide *;
+    reveal Core.PreparedSummary();
+    reveal Spec.PreparedSpec();
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeRun && 1 <= |cmd.operands| <= 2 {
       var source := cmd.operands[0];
-      DestinationEq(old(io.fs()), cmd.operands);
-      var destination := Core.CoreDestination(old(io.fs()), cmd.operands);
+      DestinationEq(old(io.fs()), old(Spec.Context(io)), cmd.operands);
+      var destination := Core.CoreDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
       var diagnostic: BenchWorld.Bytes, success: bool :|
         Core.CoreStepSummary(
-          old(io.fs()), io.fs(), old(io.now()), old(io.trustedFilesystem()),
+          old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),
           source, destination, cmd.symbolic, diagnostic, success) &&
-        io.stderr() == old(io.stderr()) + diagnostic &&
+        plannedStderr == [] + diagnostic &&
         exit == (if success then 0 else 1);
       StepSummaryImpliesSpec(
-        old(io.fs()), io.fs(), old(io.now()), old(io.trustedFilesystem()),
+        old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),
         source, destination, cmd.symbolic, diagnostic, success);
-      reveal Spec.LinkStepRelation();
+      assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr);
     }
     if cmd.mode == Schema.ModeRun && |cmd.operands| > 2 {
       var target := cmd.operands[|cmd.operands| - 1];
       var targetOk: bool, targetIsDir: bool, targetErr: int :|
-        IOContract.IsDirectoryStrictContractFields(
-          old(io.fs()), target, true, targetOk, targetIsDir, targetErr) &&
+        Spec.DirectoryObservation(
+          old(io.fs()), old(Spec.Context(io)), target, true, targetOk, targetIsDir, targetErr) &&
         (if !(targetOk && targetIsDir) then
            io.fs() == old(io.fs()) &&
-           io.stderr() == old(io.stderr()) +
+           plannedStderr == [] +
              Spec.TargetDirectoryErrorMessageSpec(target, if targetOk then 20 else targetErr) &&
            exit == 1
          else
            exists diagnostic: BenchWorld.Bytes, success: bool
-             {:trigger Core.CoreBatchSummary(old(io.fs()), io.fs(), old(io.now()),
-               old(io.trustedFilesystem()), cmd.operands[..|cmd.operands| - 1],
+             {:trigger Core.CoreBatchSummary(old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + 1), cmd.operands[..|cmd.operands| - 1],
                target, cmd.symbolic, diagnostic, success)} ::
              Core.CoreBatchSummary(
-               old(io.fs()), io.fs(), old(io.now()), old(io.trustedFilesystem()),
+               old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + 1),
                cmd.operands[..|cmd.operands| - 1], target, cmd.symbolic,
                diagnostic, success) &&
-             io.stderr() == old(io.stderr()) + diagnostic &&
+             plannedStderr == [] + diagnostic &&
              exit == (if success then 0 else 1));
       if targetOk && targetIsDir {
         var diagnostic: BenchWorld.Bytes, success: bool :|
           Core.CoreBatchSummary(
-            old(io.fs()), io.fs(), old(io.now()), old(io.trustedFilesystem()),
+            old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + 1),
             cmd.operands[..|cmd.operands| - 1], target, cmd.symbolic,
             diagnostic, success) &&
-          io.stderr() == old(io.stderr()) + diagnostic &&
+          plannedStderr == [] + diagnostic &&
           exit == (if success then 0 else 1);
         BatchSummaryImpliesSpec(
-          old(io.fs()), io.fs(), old(io.now()), old(io.trustedFilesystem()),
+          old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + 1),
           cmd.operands[..|cmd.operands| - 1], target, cmd.symbolic,
           diagnostic, success);
       }
+      assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr);
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.LnCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    reveal Core.CoreSummary();
+    var output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit, output, diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      output, diagnostics);
   }
 }

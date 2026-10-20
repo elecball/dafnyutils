@@ -6,6 +6,9 @@ include "../../core/StringEscaping.dfy"
 include "TeeSchema.dfy"
 
 module TeeSpec {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Errno = Errnos
   import BenchIO
   import BenchWorld
@@ -81,16 +84,9 @@ module TeeSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function WriteErrnoTextSpec(err: int): string
+  ghost function WriteErrnoTextSpec(err: int): string
   {
-    if err == Errno.ENOENT then "No such file or directory"
-    else if err == Errno.EACCES then "Permission denied"
-    else if err == Errno.ENOTDIR then "Not a directory"
-    else if err == Errno.EISDIR then "Is a directory"
-    else if err == Errno.EFBIG then "File too large"
-    else if err == Errno.ENOSPC then "No space left on device"
-    else if err == Errno.ELOOP then "Too many levels of symbolic links"
-    else "unknown error"
+    IOContract.CLocaleErrnoTextResult(err)
   }
 
   function ReadErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
@@ -99,10 +95,15 @@ module TeeSpec {
       ": " + ReadErrnoTextSpec(err) + "\n"
   }
 
-  function WriteErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
+  function WriteErrorMessageText(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
   {
     "tee: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-      ": " + WriteErrnoTextSpec(err) + "\n"
+      ": " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost function WriteErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
+  {
+    WriteErrorMessageText(path, WriteErrnoTextSpec(err))
   }
 
   function CommandSpec(raw: Schema.TeeCmdRaw): Schema.TeeCmd
@@ -138,8 +139,9 @@ module TeeSpec {
         stderr == (if ok then [] else WriteErrorMessageSpec(path, writeErr)) &&
         exit == (if ok then 0 else 1)
     else
-      exists ok: bool, writeErr: int ::
-        IOContract.WriteFileContractFields(preFs, preNow, path, input, ok, writeErr, fs2) &&
+      exists ok: bool, writeErr: int, committed: nat, stage: BenchWorld.FileWriteStage ::
+        IOContract.WriteFileSpec(preFs, preProps, preNow, preCredentials, preTrustedFilesystem,
+                                fs2, path, input, ok, writeErr, committed, stage) &&
         stderr == (if ok then [] else WriteErrorMessageSpec(path, writeErr)) &&
         exit == (if ok then 0 else 1)
   }
@@ -194,30 +196,92 @@ module TeeSpec {
                             preTrustedFilesystem, states[i], states[i + 1])
   }
 
-  twostate predicate Spec(raw: Schema.TeeCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  function StdinReadErrorText(reason: string): BenchWorld.Bytes
+  {
+    "tee: read error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost function StdinReadError(err: int): BenchWorld.Bytes
+  {
+    StdinReadErrorText(IOContract.CLocaleErrnoTextResult(err))
+  }
+
+
+  function WriteErrorText(raw: Schema.TeeCmdRaw, reason: string): StreamWorld.Bytes
+  {
+    (if CommandSpec(raw).mode == Schema.ModeRun then "tee: 'standard output': "
+     else "tee: write error: ") + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost predicate EmissionOutcomeFields(
+    raw: Schema.TeeCmdRaw,
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int,
+    committed: nat, outErr: int, errCommitted: nat, errErr: int
+  )
+  {
+    (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
+     else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
+    var finalDiagnostics := diagnostics +
+      (if outErr == 0 then [] else WriteErrorText(raw, StreamContract.CLocaleErrnoTextResult(outErr)));
+    (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
+     else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
+    exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
+  }
+
+  ghost predicate EmissionFields(
+    raw: Schema.TeeCmdRaw,
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
+      EmissionOutcomeFields(raw, beforeOut, beforeErr, afterOut, afterErr, observations,
+                            output, diagnostics, normalExit, exit,
+                            committed, outErr, errCommitted, errErr)
+  }
+  opaque twostate predicate PreparedSpec(raw: Schema.TeeCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    reads io.fsRegion, io.stdinRegion
   {
     var cmd := CommandSpec(raw);
     if cmd.mode == Schema.ModeHelp then
       io.fs() == old(io.fs()) &&
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + HelpTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
       io.fs() == old(io.fs()) &&
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + VersionTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else
+      var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+      var input := IOContract.ReadResultData(read);
       exists errOut: BenchWorld.Bytes, writeExit: int ::
-        WriteOutputsSpecFields(cmd.append, cmd.outputs, old(io.stdin()), old(io.fs()), old(io.props()),
+        WriteOutputsSpecFields(cmd.append, cmd.outputs, input, old(io.fs()), old(io.props()),
                                old(io.now()), old(io.credentials()), old(io.trustedFilesystem()),
                                io.fs(), errOut, writeExit) &&
-        io.stdin() == IOContract.AfterReadStdinFields(old(io.stdin())) &&
-        io.stdout() == old(io.stdout()) + old(io.stdin()) &&
-        io.stderr() == old(io.stderr()) + errOut &&
-        exit == writeExit
+        io.stdin() == IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) &&
+        plannedStdout == old(io.stdout()) + input &&
+        plannedStderr == old(io.stderr()) + errOut +
+          (if read.Ok? then [] else StdinReadError(IOContract.ResultErrno(read))) &&
+        exit == (if read.Ok? then writeExit else 1)
+  }
+
+  twostate predicate Spec(raw: Schema.TeeCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      EmissionFields(raw, old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                     io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 }

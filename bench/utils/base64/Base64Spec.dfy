@@ -5,6 +5,9 @@ include "../../core/StringEscaping.dfy"
 include "Base64Schema.dfy"
 
 module Base64Spec {
+  import StreamContract = IOContract
+  import StreamUtf8 = Utf8Semantics
+
   import BenchIO
   import Utf8 = Utf8Semantics
   import BenchWorld
@@ -88,9 +91,15 @@ module Base64Spec {
     case TimeParseFailure(message, _, _) => message
   }
 
+  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  {
+    "base64: read error: " + Utf8.Encode(ErrnoText(error)) + "\n"
+  }
+
   function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    if IOContract.IOErrorIsReadFailure(err) then
+    if IOContract.IOErrorIsReadFailure(err) &&
+       !(err.ReadFailure? && err.readStage == BenchWorld.CloseFailed) then
       "base64: read error: " + Utf8.Encode(ErrnoText(err)) + "\n"
     else
       "base64: " + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
@@ -310,7 +319,7 @@ module Base64Spec {
           ] &&
           !ok
         else if !Valid64(c2) then
-          output == [] && !ok
+          output == [ByteChar((DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat)] && !ok
         else if remaining == 3 then
           output == [
             ByteChar((DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat),
@@ -326,7 +335,10 @@ module Base64Spec {
             ] &&
             !ok
           else
-            output == [] && !ok
+            output == [
+              ByteChar((DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat),
+              ByteChar((((DecodeValue(c1) % 16) * 16 + DecodeValue(c2) / 4) as nat))
+            ] && !ok
   }
 
   ghost predicate FragmentsConcatenate(
@@ -374,6 +386,49 @@ module Base64Spec {
       fragments: seq<BenchWorld.Bytes>,
       cuts: seq<nat> ::
       DecodeWitnessRelation(data, output, ok, blocks, fragments, cuts)
+  }
+
+  // basenc.c fills BASE64_LENGTH(3 * 1024) encoded bytes before decoding.
+  const DECODE_INPUT_BUFFER_BYTES: nat := 4096
+
+  ghost predicate CompleteBufferPrefixRelation(
+    source: BenchWorld.Bytes, buffered: BenchWorld.Bytes
+  )
+  {
+    |buffered| <= |source| && buffered == source[..|buffered|] &&
+    |buffered| % DECODE_INPUT_BUFFER_BYTES == 0 &&
+    |source| - |buffered| < DECODE_INPUT_BUFFER_BYTES
+  }
+
+  ghost predicate CompletedInputBuffersRelation(
+    data: BenchWorld.Bytes, ignoreGarbage: bool, buffered: BenchWorld.Bytes
+  )
+  {
+    if ignoreGarbage then
+      exists source: BenchWorld.Bytes, indices: seq<nat> ::
+        KeptInputRelation(data, true, source, indices) &&
+        CompleteBufferPrefixRelation(source, buffered)
+    else CompleteBufferPrefixRelation(data, buffered)
+  }
+
+  ghost predicate InterruptedDecodeRelation(
+    data: BenchWorld.Bytes, ignoreGarbage: bool, output: BenchWorld.Bytes, ok: bool
+  )
+  {
+    exists buffered: BenchWorld.Bytes, kept: BenchWorld.Bytes, indices: seq<nat> ::
+      CompletedInputBuffersRelation(data, ignoreGarbage, buffered) &&
+      KeptInputRelation(buffered, false, kept, indices) &&
+      DecodeRelation(kept[..4 * (|kept| / 4)], output, ok)
+  }
+
+  ghost predicate TransformAfterReadRelation(
+    cmd: Schema.Base64Cmd, data: BenchWorld.Bytes, stage: BenchWorld.FileReadStage,
+    output: BenchWorld.Bytes, ok: bool
+  )
+  {
+    if cmd.decode && stage == BenchWorld.ReadFailed then
+      InterruptedDecodeRelation(data, cmd.ignoreGarbage, output, ok)
+    else TransformRelation(cmd, data, output, ok)
   }
 
   ghost predicate TransformRelation(
@@ -570,16 +625,19 @@ module Base64Spec {
     io: BenchIO.IO,
     data: BenchWorld.Bytes,
     errorOutput: BenchWorld.Bytes,
-    hadReadError: bool
+    hadReadError: bool,
+    stage: BenchWorld.FileReadStage
   )
-    reads io.Footprint()
+    reads io.stdinRegion
   {
     |cmd.inputs| == 1 &&
     match cmd.inputs[0]
     case Stdin =>
-      data == old(io.stdin()) &&
-      errorOutput == [] &&
-      !hadReadError
+      var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+      data == IOContract.ReadResultData(read) &&
+      errorOutput == (if read.Err? then StdinReadErrorMessage(read.e) else []) &&
+      hadReadError == read.Err? &&
+      stage == (if read.Err? then BenchWorld.ReadFailed else BenchWorld.ReadSucceeded)
     case File(path) =>
       match IOContract.ObservedReadFileResultFields(
         old(io.fs()), old(io.trustedStreams()), path
@@ -587,32 +645,32 @@ module Base64Spec {
       case Ok(fileData) =>
         data == fileData &&
         errorOutput == [] &&
-        !hadReadError
+        !hadReadError && stage == BenchWorld.ReadSucceeded
       case Err(err) =>
-        data == [] &&
+        data == IOContract.ReadFailureData(err) &&
         errorOutput == ErrorMessage(path, err) &&
-        hadReadError
+        hadReadError && stage == (if err.ReadFailure? then err.readStage else BenchWorld.ReadSucceeded)
   }
 
-  twostate predicate Spec(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSpec(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     exists cmd: Schema.Base64Cmd ::
       CommandRelation(raw, cmd) &&
       (if cmd.mode == Schema.ModeHelp then
          io.stdin() == old(io.stdin()) &&
-         io.stdout() == old(io.stdout()) + HelpText() &&
-         io.stderr() == old(io.stderr()) &&
+         plannedStdout == old(io.stdout()) + HelpText() &&
+         plannedStderr == old(io.stderr()) &&
          exit == 0
        else if cmd.mode == Schema.ModeVersion then
          io.stdin() == old(io.stdin()) &&
-         io.stdout() == old(io.stdout()) + VersionText() &&
-         io.stderr() == old(io.stderr()) &&
+         plannedStdout == old(io.stdout()) + VersionText() &&
+         plannedStderr == old(io.stderr()) &&
          exit == 0
        else if cmd.mode == Schema.ModeInvalidWrap then
          io.stdin() == old(io.stdin()) &&
-         io.stdout() == old(io.stdout()) &&
-         io.stderr() ==
+         plannedStdout == old(io.stdout()) &&
+         plannedStderr ==
          old(io.stderr()) +
          InvalidWrapMessage(cmd.invalidWrapValue) &&
          exit == 1
@@ -620,8 +678,8 @@ module Base64Spec {
          match cmd.mode
          case ModeExtraOperand(operand) =>
            io.stdin() == old(io.stdin()) &&
-           io.stdout() == old(io.stdout()) &&
-           io.stderr() ==
+           plannedStdout == old(io.stdout()) &&
+           plannedStderr ==
            old(io.stderr()) + ExtraOperandMessage(operand) &&
            exit == 1
          case _ =>
@@ -630,25 +688,80 @@ module Base64Spec {
          exists data: BenchWorld.Bytes,
            errorOutput: BenchWorld.Bytes,
            hadReadError: bool,
+           stage: BenchWorld.FileReadStage,
            output: BenchWorld.Bytes,
            ok: bool ::
            InputTraceRelation(
-             cmd, io, data, errorOutput, hadReadError
+             cmd, io, data, errorOutput, hadReadError, stage
            ) &&
-           TransformRelation(
-             cmd, data, output, ok
+           TransformAfterReadRelation(
+             cmd, data, stage, output, ok
            ) &&
            io.stdin() ==
            (if cmd.inputs[0].Stdin?
-            then []
+            then IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams()))
             else old(io.stdin())) &&
-           io.stdout() == old(io.stdout()) + output &&
-           io.stderr() ==
-           old(io.stderr()) + errorOutput +
-           (if ok then [] else InvalidInputMessage()) &&
+           plannedStdout == old(io.stdout()) + output &&
+           plannedStderr ==
+           old(io.stderr()) + (if cmd.decode && !ok then InvalidInputMessage() else errorOutput) &&
            exit ==
            (if hadReadError || !ok
             then 1
             else 0))
+  }
+
+  function Emits(raw: Schema.Base64CmdRaw): bool
+  {
+    true
+  }
+
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode("base64: write error: " + message + "\n")
+  }
+
+  ghost predicate EmitFields(
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    beforeStdout: BenchWorld.Bytes, beforeStderr: BenchWorld.Bytes,
+    afterStdout: BenchWorld.Bytes, afterStderr: BenchWorld.Bytes,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
+      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+    stdoutResult.StreamWriteResult? &&
+    var errors := diagnostics + (if stdoutResult.err == 0 then [] else
+      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+    var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
+      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+    stderrResult.StreamWriteResult? &&
+    (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
+      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+    (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
+      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+    exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
+  }
+
+  twostate predicate Emission(raw: Schema.Base64CmdRaw, io: BenchIO.IO,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    if Emits(raw) then
+      EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+    else
+      io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
+      exit == normalExit
+  }
+
+  twostate predicate Spec(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

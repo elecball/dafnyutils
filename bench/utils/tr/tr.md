@@ -15,3 +15,10 @@ Deferred GNU behavior: bracket character classes such as `[:lower:]`, equivalenc
 classes, repeat constructs, escapes, complement modes, truncate mode, locale
 behavior, and multibyte characters are intentionally rejected with visible
 benchmark diagnostics until they are modeled explicitly in the formal spec.
+
+Standard input has an explicit error result containing the bytes read before
+failure and the remaining modeled input. The specification applies the byte
+transformation to that prefix and records the read diagnostic and failed exit.
+Standard output and error use unbuffered writes; a failed write preserves its
+committed prefix and changes the exit status. These outcomes are bound to the
+actual stream requests rather than an exception-only policy.

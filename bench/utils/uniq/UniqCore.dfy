@@ -5,6 +5,8 @@ include "UniqSchema.dfy"
 include "UniqSpec.dfy"
 
 module UniqCore {
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -383,11 +385,11 @@ module UniqCore {
   {
     match result
     case Ok(data) => RenderData(cmd, data)
-    case Err(_) => []
+    case Err(error) => if error.StreamFailure? then RenderData(cmd, error.partial) else []
   } by method {
     match result
     case Ok(data) => return RenderData(cmd, data);
-    case Err(_) => return [];
+    case Err(error) => return if error.StreamFailure? then RenderData(cmd, error.partial) else [];
   }
 
   function ErrorForRead(
@@ -396,14 +398,14 @@ module UniqCore {
   ): BenchWorld.Bytes
   {
     match input
-    case Stdin => []
+    case Stdin => if result.Err? then Spec.StdinReadErrorMessage(result.e) else []
     case File(path) =>
       match result
       case Ok(_) => []
       case Err(err) => Spec.ReadErrorMessageSpec(path, err)
   } by method {
     match input
-    case Stdin => return [];
+    case Stdin => return if result.Err? then Spec.StdinReadErrorMessage(result.e) else [];
     case File(path) =>
       match result
       case Ok(_) => return [];
@@ -416,11 +418,11 @@ module UniqCore {
   ): bool
   {
     match input
-    case Stdin => false
+    case Stdin => result.Err?
     case File(_) => result.Err?
   } by method {
     match input
-    case Stdin => return false;
+    case Stdin => return result.Err?;
     case File(_) => return result.Err?;
   }
 
@@ -447,10 +449,10 @@ module UniqCore {
     |readResults| == 1 &&
     match cmd.input
     case Stdin =>
-      readResults[0] == Result.Ok(preStdin) &&
-      OutputRelation(cmd, preStdin, stdoutPart) &&
-      stderrPart == [] &&
-      !hadError
+      readResults[0] == IOContract.ObservedReadStdinResultFields(preStdin, preStreams) &&
+      OutputRelation(cmd, IOContract.ReadResultData(readResults[0]), stdoutPart) &&
+      stderrPart == (if readResults[0].Err? then Spec.StdinReadErrorMessage(readResults[0].e) else []) &&
+      hadError == readResults[0].Err?
     case File(path) =>
       readResults[0] == IOContract.ObservedReadFileResultFields(
         preFs, preStreams, path
@@ -466,7 +468,7 @@ module UniqCore {
         hadError
   }
 
-  twostate predicate CoreSummary(
+  twostate predicate PreparedSummary(
     raw: UniqSchema.UniqCmdRaw,
     io: BenchIO.IO,
     exit: int,
@@ -474,38 +476,38 @@ module UniqCore {
     new stdoutPart: BenchWorld.Bytes,
     new stderrPart: BenchWorld.Bytes,
     hadError: bool
-  )
-    reads io.Footprint()
+  , plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := Command(raw);
     match cmd.mode
     case ModeHelp =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == Spec.HelpTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     case ModeVersion =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == Spec.VersionTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     case ModeUnsupportedOutput(path) =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() ==
-      old(io.stderr()) + Spec.UnsupportedOutputMessageSpec(path) &&
+      plannedStdout == [] &&
+      plannedStderr ==
+      Spec.UnsupportedOutputMessageSpec(path) &&
       exit == 1
     case ModeUnsupportedSkipChars(operand) =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() ==
-      old(io.stderr()) + Spec.UnsupportedSkipCharsMessageSpec(operand) &&
+      plannedStdout == [] &&
+      plannedStderr ==
+      Spec.UnsupportedSkipCharsMessageSpec(operand) &&
       exit == 1
     case ModeExtraOperand(operand) =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() ==
-      old(io.stderr()) + Spec.ExtraOperandMessageSpec(operand) &&
+      plannedStdout == [] &&
+      plannedStderr ==
+      Spec.ExtraOperandMessageSpec(operand) &&
       exit == 1
     case ModeRun =>
       InputTraceRelation(
@@ -520,10 +522,10 @@ module UniqCore {
       ) &&
       io.stdin() ==
       (match cmd.input
-       case Stdin => IOContract.AfterReadStdinFields(old(io.stdin()))
+       case Stdin => IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams()))
        case File(_) => old(io.stdin())) &&
-      io.stdout() == old(io.stdout()) + stdoutPart &&
-      io.stderr() == old(io.stderr()) + stderrPart &&
+      plannedStdout == stdoutPart &&
+      plannedStderr == stderrPart &&
       exit == (if hadError then 1 else 0)
   }
 
@@ -563,10 +565,152 @@ module UniqCore {
     msg := Spec.ExtraOperandMessageSpec(operand);
   }
 
-  method {:isolate_assertions} RunCore(
+  method {:isolate_assertions} Prepare(
     raw: UniqSchema.UniqCmdRaw,
     io: BenchIO.IO
   ) returns (
+      exit: int,
+      ghost witnessResult: BenchWorld.IOResult<BenchWorld.Bytes>,
+                                             ghost stdoutPart: BenchWorld.Bytes,
+                                             ghost stderrPart: BenchWorld.Bytes,
+                                             ghost hadError: bool
+    , plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(
+              raw, io, exit, [witnessResult], stdoutPart, stderrPart, hadError
+            , plannedOut, plannedErr)
+    decreases *
+  {
+    plannedOut := [];
+    plannedErr := [];
+
+    ghost var preStdin := io.stdin();
+    witnessResult := Result.Ok([]);
+    stdoutPart := [];
+    stderrPart := [];
+    hadError := false;
+    var cmd := Command(raw);
+
+    match cmd.mode {
+      case ModeHelp =>
+        var help := GetHelpText();
+        plannedOut := plannedOut + help;
+        exit := 0;
+        assert io.stdin() == preStdin;
+        assert plannedErr == [];
+        assert plannedOut == Spec.HelpTextSpec();
+        return;
+
+      case ModeVersion =>
+        var version := GetVersionText();
+        plannedOut := plannedOut + version;
+        exit := 0;
+        assert io.stdin() == preStdin;
+        assert plannedErr == [];
+        assert plannedOut == Spec.VersionTextSpec();
+        return;
+
+      case ModeUnsupportedOutput(path) =>
+        var msg := UnsupportedOutputMessage(path);
+        plannedErr := plannedErr + msg;
+        exit := 1;
+        assert io.stdin() == preStdin;
+        assert plannedOut == [];
+        assert plannedErr ==
+               Spec.UnsupportedOutputMessageSpec(path);
+        return;
+
+      case ModeUnsupportedSkipChars(operand) =>
+        var msg := UnsupportedSkipCharsMessage(operand);
+        plannedErr := plannedErr + msg;
+        exit := 1;
+        assert io.stdin() == preStdin;
+        assert plannedOut == [];
+        assert plannedErr ==
+               Spec.UnsupportedSkipCharsMessageSpec(operand);
+        return;
+
+      case ModeExtraOperand(operand) =>
+        var msg := ExtraOperandMessage(operand);
+        plannedErr := plannedErr + msg;
+        exit := 1;
+        assert io.stdin() == preStdin;
+        assert plannedOut == [];
+        assert plannedErr ==
+               Spec.ExtraOperandMessageSpec(operand);
+        return;
+
+      case ModeRun =>
+        var result: BenchWorld.IOResult<BenchWorld.Bytes>;
+        match cmd.input {
+          case Stdin =>
+            result := io.ReadStdin();
+          case File(path) =>
+            result := io.ReadFile(path);
+        }
+
+        var out := OutputForRead(cmd, result);
+        var err := ErrorForRead(cmd.input, result);
+        var inputHadError := HadInputError(cmd.input, result);
+        witnessResult := result;
+        stdoutPart := out;
+        stderrPart := err;
+        hadError := inputHadError;
+        plannedOut := out;
+        plannedErr := err;
+        exit := if inputHadError then 1 else 0;
+        reveal InputTraceRelation();
+               reveal OutputRelation();
+                      return;
+    }
+  }
+
+  twostate predicate CoreSummary(
+    raw: UniqSchema.UniqCmdRaw,
+    io: BenchIO.IO,
+    exit: int,
+    new readResults: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
+    new stdoutPart: BenchWorld.Bytes,
+    new stderrPart: BenchWorld.Bytes,
+    hadError: bool
+  )
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit, readResults, stdoutPart, stderrPart, hadError,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: UniqSchema.UniqCmdRaw, io: BenchIO.IO) returns (
       exit: int,
       ghost witnessResult: BenchWorld.IOResult<BenchWorld.Bytes>,
                                              ghost stdoutPart: BenchWorld.Bytes,
@@ -579,87 +723,22 @@ module UniqCore {
             )
     decreases *
   {
-    ghost var preStdin := io.stdin();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
-    witnessResult := Result.Ok([]);
-    stdoutPart := [];
-    stderrPart := [];
-    hadError := false;
-    var cmd := Command(raw);
+    var normalExit: int;
+    var out: BenchWorld.Bytes;
+    var diagnostics: BenchWorld.Bytes;
+    normalExit, witnessResult, stdoutPart, stderrPart, hadError, out, diagnostics := Prepare(raw, io);
 
-    match cmd.mode {
-      case ModeHelp =>
-        var help := GetHelpText();
-        var _ := io.WriteStdout(help, BenchWorld.ThrowOnError);
-        exit := 0;
-        assert io.stdin() == preStdin;
-        assert io.stderr() == preStderr;
-        assert io.stdout() == preStdout + Spec.HelpTextSpec();
-        return;
-
-      case ModeVersion =>
-        var version := GetVersionText();
-        var _ := io.WriteStdout(version, BenchWorld.ThrowOnError);
-        exit := 0;
-        assert io.stdin() == preStdin;
-        assert io.stderr() == preStderr;
-        assert io.stdout() == preStdout + Spec.VersionTextSpec();
-        return;
-
-      case ModeUnsupportedOutput(path) =>
-        var msg := UnsupportedOutputMessage(path);
-        var _ := io.WriteStderr(msg, BenchWorld.ThrowOnError);
-        exit := 1;
-        assert io.stdin() == preStdin;
-        assert io.stdout() == preStdout;
-        assert io.stderr() ==
-               preStderr + Spec.UnsupportedOutputMessageSpec(path);
-        return;
-
-      case ModeUnsupportedSkipChars(operand) =>
-        var msg := UnsupportedSkipCharsMessage(operand);
-        var _ := io.WriteStderr(msg, BenchWorld.ThrowOnError);
-        exit := 1;
-        assert io.stdin() == preStdin;
-        assert io.stdout() == preStdout;
-        assert io.stderr() ==
-               preStderr + Spec.UnsupportedSkipCharsMessageSpec(operand);
-        return;
-
-      case ModeExtraOperand(operand) =>
-        var msg := ExtraOperandMessage(operand);
-        var _ := io.WriteStderr(msg, BenchWorld.ThrowOnError);
-        exit := 1;
-        assert io.stdin() == preStdin;
-        assert io.stdout() == preStdout;
-        assert io.stderr() ==
-               preStderr + Spec.ExtraOperandMessageSpec(operand);
-        return;
-
-      case ModeRun =>
-        var result: BenchWorld.IOResult<BenchWorld.Bytes>;
-        match cmd.input {
-          case Stdin =>
-            var data :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-            result := Result.Ok(data);
-          case File(path) =>
-            result := io.ReadFile(path);
-        }
-
-        var out := OutputForRead(cmd, result);
-        var err := ErrorForRead(cmd.input, result);
-        var inputHadError := HadInputError(cmd.input, result);
-        witnessResult := result;
-        stdoutPart := out;
-        stderrPart := err;
-        hadError := inputHadError;
-        var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
-        var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
-        exit := if inputHadError then 1 else 0;
-        reveal InputTraceRelation();
-               reveal OutputRelation();
-                      return;
+    assert PreparedSummary(
+              raw, io, normalExit, [witnessResult], stdoutPart, stderrPart, hadError
+            , out, diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
     }
+    assert PreparedSummary(
+              raw, io, normalExit, [witnessResult], stdoutPart, stderrPart, hadError
+            , out, diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

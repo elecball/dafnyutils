@@ -3,6 +3,9 @@ include "Base64Core.dfy"
 include "Base64Spec.dfy"
 
 module Base64Proof {
+  import IOContract
+  import BenchWorld
+
   import BenchIO
   import BW = BenchWorld
   import Schema = Base64Schema
@@ -499,6 +502,50 @@ module Base64Proof {
     reveal Spec.FragmentsConcatenate();
   }
 
+  lemma {:induction false} WrappedLineProjection(
+    encoded: BW.Bytes, width: nat, output: BW.Bytes,
+    chunks: seq<BW.Bytes>, cuts: seq<nat>, line: int
+  )
+    requires width > 0
+    requires Core.WrappedWitnessRelation(encoded, width, output, chunks, cuts)
+    requires 0 <= line < |chunks|
+    ensures
+      var start := line * width;
+      var end := if (line + 1) * width < |encoded| then (line + 1) * width else |encoded|;
+      start < |encoded| && start < end <= |encoded| &&
+      chunks[line] == encoded[start..end] + ['\n'] &&
+      (line + 1 < |chunks| ==> (line + 1) * width < |encoded|) &&
+      (line + 1 == |chunks| ==> (line + 1) * width >= |encoded|)
+  {
+    reveal Core.WrappedWitnessRelation();
+    var start := line * width;
+    var end := if (line + 1) * width < |encoded| then (line + 1) * width else |encoded|;
+    assert chunks[line] == chunks[line];
+    assert start < |encoded|;
+    assert start < end <= |encoded|;
+    assert chunks[line] == encoded[start..end] + ['\n'];
+  }
+
+  lemma {:induction false} WrappedFieldsImpliesSpec(
+    encoded: BW.Bytes, width: nat, output: BW.Bytes,
+    chunks: seq<BW.Bytes>, cuts: seq<nat>
+  )
+    requires width > 0
+    requires (|encoded| == 0) == (|chunks| == 0)
+    requires forall line: int {:trigger line * width} :: 0 <= line < |chunks| ==>
+      var start := line * width;
+      var end := if (line + 1) * width < |encoded| then (line + 1) * width else |encoded|;
+      start < |encoded| && start < end <= |encoded| &&
+      chunks[line] == encoded[start..end] + ['\n'] &&
+      (line + 1 < |chunks| ==> (line + 1) * width < |encoded|) &&
+      (line + 1 == |chunks| ==> (line + 1) * width >= |encoded|)
+    requires Spec.FragmentsConcatenate(chunks, output, cuts)
+    ensures Spec.WrappedWitnessRelation(encoded, width, output, chunks, cuts)
+  {
+    reveal Spec.WrappedWitnessRelation();
+    assert Spec.WrappedWitnessRelation(encoded, width, output, chunks, cuts);
+  }
+
   lemma {:isolate_assertions}
     WrappedWitnessRelationImpliesSpec(
     encoded: BW.Bytes,
@@ -515,8 +562,14 @@ module Base64Proof {
               encoded, width, output, chunks, cuts
             )
   {
+    hide *;
+    reveal Core.WrappedWitnessRelation();
     assert (|encoded| == 0) == (|chunks| == 0);
-    forall line: int {:trigger chunks[line]} |
+    assert Spec.FragmentsConcatenate(chunks, output, cuts) by {
+      FragmentsConcatenateImpliesSpec(chunks, output, cuts);
+    }
+    hide Core.WrappedWitnessRelation();
+    forall line: int {:trigger line * width} |
       0 <= line < |chunks|
       ensures
         var start := line * width;
@@ -532,11 +585,9 @@ module Base64Proof {
         (line + 1 == |chunks| ==>
            (line + 1) * width >= |encoded|)
     {
-      assert chunks[line] == chunks[line];
+      WrappedLineProjection(encoded, width, output, chunks, cuts, line);
     }
-    assert Spec.FragmentsConcatenate(chunks, output, cuts) by {
-      FragmentsConcatenateImpliesSpec(chunks, output, cuts);
-    }
+    WrappedFieldsImpliesSpec(encoded, width, output, chunks, cuts);
   }
 
   lemma WrappedRelationImpliesSpec(
@@ -711,58 +762,118 @@ module Base64Proof {
     }
   }
 
+  lemma CompletedInputBuffersRelationImpliesSpec(data: BW.Bytes, ignoreGarbage: bool, buffered: BW.Bytes)
+    requires Core.CompletedInputBuffersRelation(data, ignoreGarbage, buffered)
+    ensures Spec.CompletedInputBuffersRelation(data, ignoreGarbage, buffered)
+  {
+    hide *;
+    reveal Core.CompletedInputBuffersRelation(), Spec.CompletedInputBuffersRelation();
+    if ignoreGarbage {
+      var source: BW.Bytes, indices: seq<nat> :|
+        Core.KeptInputRelation(data, true, source, indices) &&
+        Core.CompleteBufferPrefixRelation(source, buffered);
+      KeptInputRelationImpliesSpec(data, true, source, indices);
+      assert Spec.CompleteBufferPrefixRelation(source, buffered) by {
+        reveal Core.CompleteBufferPrefixRelation(), Spec.CompleteBufferPrefixRelation();
+      }
+    } else {
+      reveal Core.CompleteBufferPrefixRelation(), Spec.CompleteBufferPrefixRelation();
+    }
+  }
+
+  lemma InterruptedDecodeRelationImpliesSpec(data: BW.Bytes, ignoreGarbage: bool, output: BW.Bytes, ok: bool)
+    requires Core.InterruptedDecodeRelation(data, ignoreGarbage, output, ok)
+    ensures Spec.InterruptedDecodeRelation(data, ignoreGarbage, output, ok)
+  {
+    hide *;
+    reveal Core.InterruptedDecodeRelation(), Spec.InterruptedDecodeRelation();
+    var buffered: BW.Bytes, kept: BW.Bytes, indices: seq<nat> :|
+      Core.CompletedInputBuffersRelation(data, ignoreGarbage, buffered) &&
+      Core.KeptInputRelation(buffered, false, kept, indices) &&
+      Core.DecodeRelation(kept[..4 * (|kept| / 4)], output, ok);
+    CompletedInputBuffersRelationImpliesSpec(data, ignoreGarbage, buffered);
+    KeptInputRelationImpliesSpec(buffered, false, kept, indices);
+    DecodeRelationImpliesSpec(kept[..4 * (|kept| / 4)], output, ok);
+  }
+
+  lemma TransformAfterReadRelationImpliesSpec(
+    cmd: Schema.Base64Cmd, data: BW.Bytes, stage: BW.FileReadStage, output: BW.Bytes, ok: bool)
+    requires Core.TransformAfterReadRelation(cmd, data, stage, output, ok)
+    ensures Spec.TransformAfterReadRelation(cmd, data, stage, output, ok)
+  {
+    reveal Core.TransformAfterReadRelation(), Spec.TransformAfterReadRelation();
+    if cmd.decode && stage == BW.ReadFailed {
+      InterruptedDecodeRelationImpliesSpec(data, cmd.ignoreGarbage, output, ok);
+    } else {
+      TransformRelationImpliesSpec(cmd, data, output, ok);
+    }
+  }
+
   twostate lemma InputTraceRelationImpliesSpec(
     cmd: Schema.Base64Cmd,
     io: BenchIO.IO,
     data: BW.Bytes,
     errorOutput: BW.Bytes,
-    hadReadError: bool
+    hadReadError: bool,
+    stage: BW.FileReadStage
   )
     requires Core.InputTraceRelation(
-               cmd, io, data, errorOutput, hadReadError
+               cmd, io, data, errorOutput, hadReadError, stage
              )
     ensures Spec.InputTraceRelation(
-              cmd, io, data, errorOutput, hadReadError
+              cmd, io, data, errorOutput, hadReadError, stage
             )
   {
     reveal Core.InputTraceRelation();
     reveal Spec.InputTraceRelation();
   }
 
-  twostate lemma CoreSummaryImpliesSpec(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int)
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int, new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     CommandSatisfiesRelation(raw);
-    reveal Core.CoreSummary();
-    reveal Spec.Spec();
+    reveal Core.PreparedSummary();
+    reveal Spec.PreparedSpec();
     var cmd := Core.Command(raw);
     if cmd.mode == Schema.ModeRun {
       var data: BW.Bytes,
           errorOutput: BW.Bytes,
           hadReadError: bool,
+          stage: BW.FileReadStage,
           output: BW.Bytes,
           ok: bool :|
         Core.InputTraceRelation(
-          cmd, io, data, errorOutput, hadReadError
+          cmd, io, data, errorOutput, hadReadError, stage
         ) &&
-        Core.TransformRelation(cmd, data, output, ok) &&
+        Core.TransformAfterReadRelation(cmd, data, stage, output, ok) &&
         io.stdin() ==
         (if cmd.inputs[0].Stdin?
-         then []
+         then IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams()))
          else old(io.stdin())) &&
-        io.stdout() == old(io.stdout()) + output &&
-        io.stderr() ==
-        old(io.stderr()) + errorOutput +
-        (if ok then [] else Spec.InvalidInputMessage()) &&
+        plannedStdout == old(io.stdout()) + output &&
+        plannedStderr ==
+        old(io.stderr()) + (if cmd.decode && !ok then Spec.InvalidInputMessage() else errorOutput) &&
         exit ==
         (if hadReadError || !ok then 1 else 0);
       InputTraceRelationImpliesSpec(
-        cmd, io, data, errorOutput, hadReadError
+        cmd, io, data, errorOutput, hadReadError, stage
       );
-      TransformRelationImpliesSpec(
-        cmd, data, output, ok
+      TransformAfterReadRelationImpliesSpec(
+        cmd, data, stage, output, ok
       );
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

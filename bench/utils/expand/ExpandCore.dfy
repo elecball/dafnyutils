@@ -5,6 +5,8 @@ include "ExpandSchema.dfy"
 include "ExpandSpec.dfy"
 
 module ExpandCore {
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -540,7 +542,8 @@ module ExpandCore {
   {
     match input
     case Stdin =>
-      result == Result.Ok(stdinBefore) && stdinAfter == []
+      result == IOContract.ObservedReadStdinResultFields(stdinBefore, preStreams) &&
+      stdinAfter == IOContract.ObservedReadStdinRemainingFields(stdinBefore, preStreams)
     case File(path) =>
       result == IOContract.ObservedReadFileResultFields(preFs, preStreams, path) &&
       stdinAfter == stdinBefore
@@ -564,8 +567,15 @@ module ExpandCore {
           cmd.tabs, cmd.initialOnly, data, column, leading,
           output, nextColumn, nextLeading, pieces, columns, leadings
         )
-    case Err(_) =>
-      output == [] && nextColumn == column && nextLeading == leading
+    case Err(error) =>
+      if error.StreamFailure? then
+      exists pieces: seq<BenchWorld.Bytes>,
+        columns: seq<nat>, leadings: seq<bool> ::
+        DataExpansionWitnessSummary(
+          cmd.tabs, cmd.initialOnly, error.partial, column, leading,
+          output, nextColumn, nextLeading, pieces, columns, leadings
+        )
+      else output == [] && nextColumn == column && nextLeading == leading
   }
 
   ghost predicate ErrorPieceSummary(
@@ -577,7 +587,8 @@ module ExpandCore {
   {
     match input
     case Stdin =>
-      output == [] && !hadError
+      output == (if result.Err? then Spec.ErrorMessage("-", result.e) else []) &&
+      hadError == result.Err?
     case File(path) =>
       match result
       case Ok(_) => output == [] && !hadError
@@ -948,10 +959,20 @@ module ExpandCore {
         ExpandDataFromMethod(
           cmd.tabs, cmd.initialOnly, data, column, leading
         );
-    case Err(_) =>
-      out := [];
-      nextColumn := column;
-      nextLeading := leading;
+    case Err(error) =>
+      if error.StreamFailure? {
+      ghost var pieces: seq<BenchWorld.Bytes>;
+      ghost var columns: seq<nat>;
+      ghost var leadings: seq<bool>;
+      out, nextColumn, nextLeading, pieces, columns, leadings :=
+        ExpandDataFromMethod(
+          cmd.tabs, cmd.initialOnly, error.partial, column, leading
+        );
+      } else {
+        out := [];
+        nextColumn := column;
+        nextLeading := leading;
+      }
   }
 
   method ErrorPieceMethod(input: Schema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>)
@@ -960,8 +981,8 @@ module ExpandCore {
   {
     match input
     case Stdin =>
-      out := [];
-      had := false;
+      out := if result.Err? then Spec.ErrorMessage("-", result.e) else [];
+      had := result.Err?;
     case File(path) =>
       match result
       case Ok(_) =>
@@ -972,27 +993,26 @@ module ExpandCore {
         had := true;
   }
 
-  twostate predicate CoreSummary(
+  twostate predicate PreparedSummary(
     raw: Schema.ExpandCmdRaw, io: BenchIO.IO, exit: int
-  )
-    reads io.Footprint()
+  , plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := Command(raw);
     if cmd.mode == Schema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == Spec.HelpText() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == Spec.VersionText() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeInvalidTabs then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) +
-      Spec.InvalidTabsMessage(cmd.invalidTabsValue) &&
+      plannedStdout == [] &&
+      plannedStderr == Spec.InvalidTabsMessage(cmd.invalidTabsValue) &&
       exit == 1
     else
       exists output: BenchWorld.Bytes,
@@ -1002,34 +1022,35 @@ module ExpandCore {
           output, errorOutput, hadError,
           old(io.trustedStreams())
         ) &&
-        io.stdout() == old(io.stdout()) + output &&
-        io.stderr() == old(io.stderr()) + errorOutput &&
+        plannedStdout == output &&
+        plannedStderr == errorOutput &&
         exit == (if hadError then 1 else 0)
   }
 
-  method RunCore(raw: Schema.ExpandCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  method {:isolate_assertions} Prepare(raw: Schema.ExpandCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, plannedOut, plannedErr)
     decreases *
   {
+    plannedOut := [];
+    plannedErr := [];
+
     ghost var preFs := io.fs();
     ghost var preStdin := io.stdin();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
     var cmd := Command(raw);
 
     match cmd.mode
     case ModeHelp =>
       var help := Spec.HelpText();
-      var _ := io.WriteStdout(help, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + help;
       exit := 0;
     case ModeVersion =>
       var version := Spec.VersionText();
-      var _ := io.WriteStdout(version, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + version;
       exit := 0;
     case ModeInvalidTabs =>
       var msg := Spec.InvalidTabsMessage(cmd.invalidTabsValue);
-      var _ := io.WriteStderr(msg, BenchWorld.ThrowOnError);
+      plannedErr := plannedErr + msg;
       exit := 1;
     case ModeRun =>
       var out: BenchWorld.Bytes := [];
@@ -1049,8 +1070,8 @@ module ExpandCore {
       while i < inputCount
         invariant inputCount == |cmd.inputs|
         invariant 0 <= i <= inputCount
-        invariant io.stdout() == preStdout
-        invariant io.stderr() == preStderr
+        invariant plannedOut == []
+        invariant plannedErr == []
         invariant |columns| == i + 1 && columns[i] == column
         invariant |leadings| == i + 1 && leadings[i] == leading
         invariant |stdinStates| == i + 1 && stdinStates[i] == io.stdin()
@@ -1068,9 +1089,7 @@ module ExpandCore {
         match input {
           case Stdin =>
             ghost var beforeStdin := io.stdin();
-            var data :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-            readResult := Result.Ok(data);
-            assert IOContract.ReadStdinAllFields(beforeStdin, io.stdin(), data);
+            readResult := io.ReadStdin();
           case File(path) =>
             readResult := io.ReadFile(path);
             assert readResult == IOContract.ObservedReadFileResultFields(preFs, old(io.trustedStreams()), path);
@@ -1112,8 +1131,8 @@ module ExpandCore {
           cmd, preFs, preStdin, io.stdin(), out, err, hadError,
           old(io.trustedStreams())
         );
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
-      var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + out;
+      plannedErr := plannedErr + err;
       exit := if hadError then 1 else 0;
       assert InputTraceSummary(
           cmd, preFs, preStdin, io.stdin(), out, err, hadError,
@@ -1128,9 +1147,63 @@ module ExpandCore {
             output, errorOutput, failed,
             old(io.trustedStreams())
           ) &&
-          io.stdout() == preStdout + output &&
-          io.stderr() == preStderr + errorOutput &&
+          plannedOut == output &&
+          plannedErr == errorOutput &&
           exit == (if failed then 1 else 0);
 
+  }
+
+  twostate predicate CoreSummary(raw: Schema.ExpandCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: Schema.ExpandCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, out, diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, out, diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

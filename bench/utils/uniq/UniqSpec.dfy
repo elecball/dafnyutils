@@ -6,6 +6,9 @@ include "../../core/StringEscaping.dfy"
 include "UniqSchema.dfy"
 
 module UniqSpec {
+  import StreamContract = IOContract
+  import StreamUtf8 = Utf8Semantics
+
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -254,6 +257,11 @@ module UniqSpec {
   function QuoteAlways(path: string): string
   {
     "'" + path + "'"
+  }
+
+  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  {
+    "uniq: error reading 'standard input': " + Utf8.Encode(ErrnoText(error)) + "\n"
   }
 
   function ReadErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
@@ -585,15 +593,15 @@ module UniqSpec {
     new stderrPart: BenchWorld.Bytes,
     hadError: bool
   )
-    reads io.Footprint()
+    reads io.stdinRegion
   {
     |readResults| == 1 &&
     match command.input
     case Stdin =>
-      readResults[0] == Result.Ok(old(io.stdin())) &&
-      OutputRelation(command, old(io.stdin()), stdoutPart) &&
-      stderrPart == [] &&
-      !hadError
+      readResults[0] == IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams())) &&
+      OutputRelation(command, IOContract.ReadResultData(readResults[0]), stdoutPart) &&
+      stderrPart == (if readResults[0].Err? then StdinReadErrorMessage(readResults[0].e) else []) &&
+      hadError == readResults[0].Err?
     case File(path) =>
       readResults[0] == IOContract.ObservedReadFileResultFields(
         old(io.fs()), old(io.trustedStreams()), path
@@ -609,35 +617,35 @@ module UniqSpec {
         hadError
   }
 
-  twostate predicate Spec(raw: UniqSchema.UniqCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSpec(raw: UniqSchema.UniqCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := Command(raw);
     match cmd.mode
     case ModeHelp =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == HelpTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     case ModeVersion =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == VersionTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     case ModeUnsupportedOutput(path) =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + UnsupportedOutputMessageSpec(path) &&
+      plannedStdout == [] &&
+      plannedStderr == UnsupportedOutputMessageSpec(path) &&
       exit == 1
     case ModeUnsupportedSkipChars(operand) =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + UnsupportedSkipCharsMessageSpec(operand) &&
+      plannedStdout == [] &&
+      plannedStderr == UnsupportedSkipCharsMessageSpec(operand) &&
       exit == 1
     case ModeExtraOperand(operand) =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + ExtraOperandMessageSpec(operand) &&
+      plannedStdout == [] &&
+      plannedStderr == ExtraOperandMessageSpec(operand) &&
       exit == 1
     case ModeRun =>
       exists readResults: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
@@ -649,10 +657,65 @@ module UniqSpec {
         ) &&
         io.stdin() ==
         (match cmd.input
-         case Stdin => IOContract.AfterReadStdinFields(old(io.stdin()))
+         case Stdin => IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams()))
          case File(_) => old(io.stdin())) &&
-        io.stdout() == old(io.stdout()) + stdoutPart &&
-        io.stderr() == old(io.stderr()) + stderrPart &&
+        plannedStdout == stdoutPart &&
+        plannedStderr == stderrPart &&
         exit == (if hadError then 1 else 0)
+  }
+
+  function Emits(raw: UniqSchema.UniqCmdRaw): bool
+  {
+    true
+  }
+
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode("uniq: write error: " + message + "\n")
+  }
+
+  ghost predicate EmitFields(
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    beforeStdout: BenchWorld.Bytes, beforeStderr: BenchWorld.Bytes,
+    afterStdout: BenchWorld.Bytes, afterStderr: BenchWorld.Bytes,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
+      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+    stdoutResult.StreamWriteResult? &&
+    var errors := diagnostics + (if stdoutResult.err == 0 then [] else
+      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+    var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
+      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+    stderrResult.StreamWriteResult? &&
+    (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
+      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+    (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
+      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+    exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
+  }
+
+  twostate predicate Emission(raw: UniqSchema.UniqCmdRaw, io: BenchIO.IO,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    if Emits(raw) then
+      EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+    else
+      io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
+      exit == normalExit
+  }
+
+  twostate predicate Spec(raw: UniqSchema.UniqCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit,
+        out, diagnostics) &&
+      Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

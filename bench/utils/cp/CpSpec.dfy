@@ -142,6 +142,9 @@ module CpSpec {
   function CopiedSymlinkError(target: BW.Bytes, reason: string): BW.Bytes {
     "cp: cannot create symbolic link " + target + ": " + Utf8.Encode(reason) + "\n"
   }
+  function ReadSymlinkError(source: BW.Bytes, reason: string): BW.Bytes {
+    "cp: cannot read symbolic link " + source + ": " + Utf8.Encode(reason) + "\n"
+  }
   function RelativeSymlinkError(target: string): BW.Bytes {
     "cp: " + SE.SpecQuoteFBytes(Utf8.Encode(target)) + ": can make relative symbolic links only in current directory\n"
   }
@@ -210,12 +213,13 @@ module CpSpec {
   }
 
   datatype Metadata = Metadata(ok: bool, err: int, value: BW.FileTimeStatus)
-  type FilesystemProvider = (BW.TrustedFilesystemRequest) -> BW.TrustedFilesystemResult
+  datatype FilesystemProvider = FilesystemProvider(
+    filesystem: C.ValidFilesystemObservations, failures: C.ValidNativeFailureObservations)
   type StreamProvider = (BW.TrustedStreamRequest) -> BW.TrustedStreamResult
 
   ghost predicate MetadataFields(fs: BW.FileSystem, provider: FilesystemProvider,
                                  path: string, follow: bool, result: Metadata) {
-    C.GetFileTimesSpec(fs, provider, path, follow, result.ok,
+    C.GetFileTimesSpec(fs, provider.filesystem, path, follow, result.ok,
                        result.value.atimeSec, result.value.atimeNsec, result.value.mtimeSec, result.value.mtimeNsec,
                        result.value.isDir, result.value.isSymlink, result.value.device, result.value.inode,
                        result.value.linkCount, result.err)
@@ -251,11 +255,11 @@ module CpSpec {
     var timeOK, timeErr := observed.1.0,observed.1.1;
     var modeOK, modeErr := observed.2.0,observed.2.1;
     (if raw.policy.preserveTimes then
-       C.SetFileTimesSpec(before, now, provider, middle, target, follow,
+       C.SetFileTimesSpec(before, now, provider.filesystem, middle, target, follow,
                           source.value.atimeSec, source.value.atimeNsec, source.value.mtimeSec, source.value.mtimeNsec, timeOK, timeErr)
      else middle == before && timeOK && timeErr == 0) &&
     (if raw.policy.preserveMode && follow then
-       C.SetFileModeSpec(middle, now, after, target, follow, sourceMode, modeOK, modeErr)
+       C.SetFileModeSpec(middle, now,provider.failures, after, target, follow, sourceMode, modeOK, modeErr)
      else after == middle && modeOK && modeErr == 0) &&
     err == (if timeOK then [] else TimeError(Q(target), E(timeErr))) +
     (if modeOK then [] else ModeError(Q(target), E(modeErr))) &&
@@ -278,13 +282,13 @@ module CpSpec {
     var removeFailed,didRemove := removal.0,removal.1;
     MetadataFields(before,provider,target,true,targetMeta) &&
     (if raw.policy.attributesOnly && targetMeta.ok then
-       C.AppendFileSpec(before,props,now,credentials,provider,first,target,[],firstOK,firstErr,firstCommitted,firstStage)
-     else C.WriteFileSpec(before,props,now,credentials,provider,first,target,data,firstOK,firstErr,firstCommitted,firstStage,CreationMode(raw,mode))) &&
+       C.AppendFileSpec(before,props,now,credentials,provider.filesystem,first,target,[],firstOK,firstErr,firstCommitted,firstStage)
+     else C.WriteFileSpec(before,props,now,credentials,provider.filesystem,first,target,data,firstOK,firstErr,firstCommitted,firstStage,CreationMode(raw,mode))) &&
     (if raw.policy.force && targetMeta.ok && firstStage == BW.WriteOpenFailed then
        exists removed: BW.FileSystem, removeOK: bool, removeErr: int ::
-         C.UnlinkPathSpec(first,now,provider,removed,target,removeOK,removeErr) &&
+         C.UnlinkPathSpec(first,now,provider.filesystem,removed,target,removeOK,removeErr) &&
          (if !removeOK then after == removed && !ok && err == removeErr && committed == 0 && stage == BW.WriteOpenFailed && removeFailed && !didRemove
-          else C.WriteFileSpec(removed,props,now,credentials,provider,after,target,data,ok,err,committed,stage,CreationMode(raw,mode)) && !removeFailed && didRemove)
+          else C.WriteFileSpec(removed,props,now,credentials,provider.filesystem,after,target,data,ok,err,committed,stage,CreationMode(raw,mode)) && !removeFailed && didRemove)
      else after == first && ok == firstOK && err == firstErr && committed == firstCommitted && stage == firstStage && !removeFailed && !didRemove)
   }
 
@@ -434,7 +438,7 @@ module CpSpec {
     var linkTarget := sourceAttributes.1;
     !receipt.selfCopy &&
     (if PreUnlink(raw,sourceMetadata,targetMetadata) then
-       C.UnlinkPathSpec(before, now, provider, ready, target, removeOK, removeErr)
+       C.UnlinkPathSpec(before, now, provider.filesystem, ready, target, removeOK, removeErr)
      else ready == before && removeOK && removeErr == 0) &&
     (if !removeOK && removeErr != 2 then receipt == CopyReceipt(NoDestinationRecord,false,false) && after == ready && out == [] && err == CannotRemove(Q(target), E(removeErr)) && !ok
      else
@@ -445,8 +449,8 @@ module CpSpec {
           (if raw.policy.symbolic then RelativeLinkAllowed(ready,provider,source,target,relativeOK) else relativeOK) &&
           (if !relativeOK then receipt == CopyReceipt(NoDestinationRecord,false,false) && after == ready && !ok && err == RelativeSymlinkError(target)
            else
-             (if raw.policy.hard then C.CreateHardLinkSpec(ready, now, provider, linked, linkTarget, target, linkOK, linkErr, raw.policy.dereference)
-              else C.CreateSymlinkSpec(ready, now, credentials, linked, target, linkTarget, linkOK, linkErr)) &&
+             (if raw.policy.hard then C.CreateHardLinkSpec(ready, now, provider.filesystem, linked, linkTarget, target, linkOK, linkErr, raw.policy.dereference)
+              else C.CreateSymlinkSpec(ready, now, credentials,provider.failures, linked, target, linkTarget, linkOK, linkErr)) &&
              (if linkOK && !raw.policy.hard then Attributes(raw,sourceMetadata,sourceAttributes.0,target,false,linked,after,now,provider,attributeErr,attributeOK)
               else after == linked && attributeErr == [] && attributeOK) &&
              receipt.retained == linkOK &&
@@ -488,20 +492,20 @@ module CpSpec {
     (maximum == 0 || exists i: int :: 0 <= i < |entries| && NumberedVersion(base,entries[i].name,maximum))
   }
 
-  opaque ghost predicate BackupSelectionFields(fs: BW.FileSystem, target: string, mode: string, suffix: string,
+  opaque ghost predicate BackupSelectionFields(fs: BW.FileSystem, provider: FilesystemProvider, target: string, mode: string, suffix: string,
                                                path: string, err: int, observed: (string,string,seq<DirectoryName>,int,bool,nat)) {
     var parent,base,entries,scanErr,wasOpened,maximum := observed.0,observed.1,observed.2,observed.3,observed.4,observed.5;
     if mode == "simple" then path == Paths.SimpleBackupPathSpec(target,suffix) && err == 0
     else Paths.DirnameRelation(target,parent) && Paths.BasenameRelation(target,base) &&
-         EnumerationWithOpen(fs,parent,entries,scanErr,wasOpened) &&
+         EnumerationWithOpen(fs,provider,parent,entries,scanErr,wasOpened) &&
          (if !wasOpened && scanErr == 12 then path == "" && err == 12
           else MaximumBackup(entries,base,maximum) && err == 0 &&
                path == (if mode == "existing" && maximum == 0 then Paths.SimpleBackupPathSpec(target,suffix)
                         else Paths.NumberedBackupPathSpec(target,maximum+1)))
   }
 
-  opaque ghost predicate BackupSelection(fs: BW.FileSystem, target: string, mode: string, suffix: string, path: string, err: int) {
-    exists observed: (string,string,seq<DirectoryName>,int,bool,nat) :: BackupSelectionFields(fs,target,mode,suffix,path,err,observed)
+  opaque ghost predicate BackupSelection(fs: BW.FileSystem, provider: FilesystemProvider, target: string, mode: string, suffix: string, path: string, err: int) {
+    exists observed: (string,string,seq<DirectoryName>,int,bool,nat) :: BackupSelectionFields(fs,provider,target,mode,suffix,path,err,observed)
   }
 
   function CannotBackup(target: BW.Bytes, reason: string): BW.Bytes { "cp: cannot backup " + target + ": " + Utf8.Encode(reason) + "\n" }
@@ -527,9 +531,9 @@ module CpSpec {
      else !observed.candidate.ok) &&
     (if observed.candidate.ok && Identity(observed.candidate) == Identity(sm) then after == before &&
                                                                                    result == BackupRejected(BackupDestroysSource(Q(source),Q(target)))
-     else BackupSelection(before,target,BackupMode(raw),BackupSuffix(raw),observed.selected,observed.selectionErr) &&
+     else BackupSelection(before,provider,target,BackupMode(raw),BackupSuffix(raw),observed.selected,observed.selectionErr) &&
           (if observed.selectionErr != 0 then after == before && result == BackupRejected(CannotBackup(Q(target),E(observed.selectionErr)))
-           else C.RenamePathSpec(before,now,after,target,observed.selected,observed.renameOK,observed.renameErr) &&
+           else C.RenamePathSpec(before,now,provider.failures,after,target,observed.selected,observed.renameOK,observed.renameErr) &&
                 result == (if !observed.renameOK && observed.renameErr != 2 then BackupRejected(CannotBackup(Q(target),E(observed.renameErr)))
                            else BackupReady(observed.selected,observed.renameOK))))
   }
@@ -541,17 +545,17 @@ module CpSpec {
   }
 
   opaque ghost predicate BackupRestorationFields(raw: S.CpCmdRaw, backup: string, target: string, needed: bool,
-                                                 before: BW.FileSystem, after: BW.FileSystem, now: int, out: BW.Bytes, err: BW.Bytes,
+                                                 before: BW.FileSystem, after: BW.FileSystem, now: int, provider: FilesystemProvider, out: BW.Bytes, err: BW.Bytes,
                                                  observed: (bool,int)) {
     if !needed then after == before && out == [] && err == []
-    else C.RenamePathSpec(before,now,after,backup,target,observed.0,observed.1) &&
+    else C.RenamePathSpec(before,now,provider.failures,after,backup,target,observed.0,observed.1) &&
          out == (if observed.0 && raw.policy.verbose then VerboseUnbackup(Q(backup),Q(target)) else []) &&
          err == (if observed.0 then [] else CannotUnbackup(Q(target),E(observed.1)))
   }
 
   opaque ghost predicate BackupRestoration(raw: S.CpCmdRaw, backup: string, target: string, needed: bool,
-                                           before: BW.FileSystem, after: BW.FileSystem, now: int, out: BW.Bytes, err: BW.Bytes) {
-    exists observed: (bool,int) :: BackupRestorationFields(raw,backup,target,needed,before,after,now,out,err,observed)
+                                           before: BW.FileSystem, after: BW.FileSystem, now: int, provider: FilesystemProvider, out: BW.Bytes, err: BW.Bytes) {
+    exists observed: (bool,int) :: BackupRestorationFields(raw,backup,target,needed,before,after,now,provider,out,err,observed)
   }
 
   datatype BackupObservation = BackupObservation(prepared: BW.FileSystem, preparation: BackupPreparationResult, readyMetadata: Metadata,
@@ -572,7 +576,7 @@ module CpSpec {
                           observed.prepared,observed.copied,props,now,credentials,provider,streams,
                           (observed.leafOut,observed.leafErr,observed.leafOK,observed.receipt)) && receipt == observed.receipt &&
                BackupRestoration(raw,observed.preparation.path,target,!observed.leafOK && !receipt.retained && observed.preparation.renamed,
-                                 observed.copied,after,now,observed.restoreOut,observed.restoreErr) &&
+                                 observed.copied,after,now,provider,observed.restoreOut,observed.restoreErr) &&
                out == (if raw.policy.verbose then (if observed.preparation.renamed then VerboseBackup(Q(source),Q(target),Q(observed.preparation.path)) else Verbose(Q(source),Q(target))) else []) +
                observed.leafOut+observed.restoreOut && err == observed.leafErr+observed.restoreErr && ok == observed.leafOK)
   }
@@ -630,7 +634,7 @@ module CpSpec {
 
   opaque ghost predicate {:isolate_assertions} ParentStepFields(raw: S.CpCmdRaw, source: string, target: string,
                                                                 before: BW.FileSystem, after: BW.FileSystem, now: int, mask: bv32,
-                                                                provider: C.ValidFilesystemObservations, out: BW.Bytes, err: BW.Bytes, ok: bool, records: seq<ParentInfo>,
+                                                                provider: FilesystemProvider, out: BW.Bytes, err: BW.Bytes, ok: bool, records: seq<ParentInfo>,
                                                                 observed: ParentStepObservation) {
     var dm,sm := observed.destination,observed.source;
     var need := !dm.ok || raw.policy.preserveMode || raw.policy.preserveTimes;
@@ -640,39 +644,39 @@ module CpSpec {
      else MetadataFields(before,provider,source,true,sm) &&
           (if !sm.ok || !sm.value.isDir then after == before && records == [] && out == [] && !ok &&
                                              err == ParentAttributesError(Q(source),E(if sm.ok then 20 else sm.err))
-           else C.GetFileModeSpec(before,source,true,observed.sourceModeOK,observed.sourceMode,observed.sourceModeErr) &&
+           else C.GetFileModeSpec(before,provider.failures,source,true,observed.sourceModeOK,observed.sourceMode,observed.sourceModeErr) &&
                 (if !observed.sourceModeOK then after == before && records == [] && out == [] && !ok &&
                                                 err == ParentAttributesError(Q(source),E(observed.sourceModeErr))
                  else if dm.ok then after == before && out == [] &&
                                     records == [ParentInfo(source,target,sm,observed.sourceMode,false)] &&
                                     err == (if dm.value.isDir then [] else ParentNotDirectory(Q(target))) && ok == dm.value.isDir
-                 else C.CreateDirectorySpec(before,now,provider,mask,observed.created,target,ParentCreationMode(raw,observed.sourceMode),observed.createOK,observed.createErr) &&
+                 else C.CreateDirectorySpec(before,now,provider.filesystem,mask,observed.created,target,ParentCreationMode(raw,observed.sourceMode),observed.createOK,observed.createErr) &&
                       (if !observed.createOK then after == observed.created && records == [ParentInfo(source,target,sm,observed.sourceMode,false)] && out == [] &&
                                                   err == ParentCreateError(Q(target),E(observed.createErr)) && !ok
                        else out == (if raw.policy.verbose then ParentVerbose(source,target) else []) &&
                             MetadataFields(observed.created,provider,target,false,observed.createdMetadata) &&
                             (if !observed.createdMetadata.ok then after == observed.created && records == [ParentInfo(source,target,sm,observed.sourceMode,false)] &&
                                                                   err == ParentAttributesError(Q(target),E(observed.createdMetadata.err)) && !ok
-                             else C.GetFileModeSpec(observed.created,target,false,observed.createdModeOK,observed.createdMode,observed.createdModeErr) &&
+                             else C.GetFileModeSpec(observed.created,provider.failures,target,false,observed.createdModeOK,observed.createdMode,observed.createdModeErr) &&
                                   (if !observed.createdModeOK then after == observed.created && records == [ParentInfo(source,target,sm,observed.sourceMode,false)] &&
                                                                    err == ParentAttributesError(Q(target),E(observed.createdModeErr)) && !ok
                                    else var restore := !raw.policy.preserveMode && (observed.createdMode & (448 as bv32)) != (448 as bv32);
                                         records == [ParentInfo(source,target,sm,if raw.policy.preserveMode then observed.sourceMode else observed.createdMode,restore)] &&
                                         (if (observed.createdMode | (448 as bv32)) != observed.createdMode then
-                                           C.SetFileModeSpec(observed.created,now,after,target,false,observed.createdMode | (448 as bv32),observed.changeOK,observed.changeErr)
+                                           C.SetFileModeSpec(observed.created,now,provider.failures,after,target,false,observed.createdMode | (448 as bv32),observed.changeOK,observed.changeErr)
                                          else after == observed.created && observed.changeOK && observed.changeErr == 0) &&
                                         ok == observed.changeOK && err == (if ok then [] else ParentSetModeError(Q(target),E(observed.changeErr)))))))))
   }
 
   opaque ghost predicate ParentStep(raw: S.CpCmdRaw, source: string, target: string,
                                     before: BW.FileSystem, after: BW.FileSystem, now: int, mask: bv32,
-                                    provider: C.ValidFilesystemObservations, out: BW.Bytes, err: BW.Bytes, ok: bool, records: seq<ParentInfo>) {
+                                    provider: FilesystemProvider, out: BW.Bytes, err: BW.Bytes, ok: bool, records: seq<ParentInfo>) {
     exists observed: ParentStepObservation :: ParentStepFields(raw,source,target,before,after,now,mask,provider,out,err,ok,records,observed)
   }
 
   opaque ghost predicate ParentPreparationFields(raw: S.CpCmdRaw, source: string, directory: string, target: string,
                                                  before: BW.FileSystem, after: BW.FileSystem, now: int, mask: bv32,
-                                                 provider: C.ValidFilesystemObservations, reported: (BW.Bytes,BW.Bytes,bool,seq<ParentInfo>),
+                                                 provider: FilesystemProvider, reported: (BW.Bytes,BW.Bytes,bool,seq<ParentInfo>),
                                                  observed: (string,string,Metadata,seq<BW.FileSystem>,seq<BW.Bytes>,seq<BW.Bytes>,seq<bool>,seq<seq<ParentInfo>>,seq<string>,seq<nat>)) {
     var out,err,ok,records := reported.0,reported.1,reported.2,reported.3;
     var trimmed,parent,dm,states,outputs,errors,results,groups,targets := observed.0,observed.1,observed.2,observed.3,observed.4,observed.5,observed.6,observed.7,observed.8;
@@ -697,7 +701,7 @@ module CpSpec {
 
   opaque ghost predicate ParentPreparation(raw: S.CpCmdRaw, source: string, directory: string, target: string,
                                            before: BW.FileSystem, after: BW.FileSystem, now: int, mask: bv32,
-                                           provider: C.ValidFilesystemObservations, out: BW.Bytes, err: BW.Bytes, ok: bool, records: seq<ParentInfo>) {
+                                           provider: FilesystemProvider, out: BW.Bytes, err: BW.Bytes, ok: bool, records: seq<ParentInfo>) {
     exists observed: (string,string,Metadata,seq<BW.FileSystem>,seq<BW.Bytes>,seq<BW.Bytes>,seq<bool>,seq<seq<ParentInfo>>,seq<string>,seq<nat>) ::
       ParentPreparationFields(raw,source,directory,target,before,after,now,mask,provider,(out,err,ok,records),observed)
   }
@@ -707,11 +711,11 @@ module CpSpec {
                                                 observed: (BW.FileSystem,bool,int,bool,int)) {
     var middle,timeOK,timeErr,modeOK,modeErr := observed.0,observed.1,observed.2,observed.3,observed.4;
     (if raw.policy.preserveTimes then
-       C.SetFileTimesSpec(before,now,provider,middle,parent.target,true,parent.metadata.value.atimeSec,parent.metadata.value.atimeNsec,
+       C.SetFileTimesSpec(before,now,provider.filesystem,middle,parent.target,true,parent.metadata.value.atimeSec,parent.metadata.value.atimeNsec,
                           parent.metadata.value.mtimeSec,parent.metadata.value.mtimeNsec,timeOK,timeErr)
      else middle == before && timeOK && timeErr == 0) &&
     (if !timeOK then after == middle && !ok && err == ParentTimeError(Q(parent.target),E(timeErr))
-     else (if raw.policy.preserveMode || parent.restore then C.SetFileModeSpec(middle,now,after,parent.target,true,parent.mode,modeOK,modeErr)
+     else (if raw.policy.preserveMode || parent.restore then C.SetFileModeSpec(middle,now,provider.failures,after,parent.target,true,parent.mode,modeOK,modeErr)
            else after == middle && modeOK && modeErr == 0) &&
           ok == modeOK && err == (if ok then [] else if raw.policy.preserveMode then ModeError(Q(parent.target),E(modeErr)) else ParentModeError(Q(parent.target),E(modeErr))))
   }
@@ -740,6 +744,8 @@ module CpSpec {
 
   datatype SourceTree =
     MissingSource(path: string, metadata: Metadata) |
+    ModeFailureSource(path: string, metadata: Metadata, modeErr: int) |
+    LinkFailureSource(path: string, metadata: Metadata, mode: bv32, linkError: BW.IOError) |
     OmittedSource(path: string, metadata: Metadata) |
     CyclicSource(path: string, metadata: Metadata) |
     FileSource(path: string, metadata: Metadata, mode: bv32, linkTarget: string) |
@@ -767,20 +773,26 @@ module CpSpec {
     else 0 <= index < |trees| && trees[index].path == path && (forall i | 0 <= i < index :: trees[i].path != path)
   }
 
-  datatype LiveChildObservation = LiveChildObservation(index: int, metadata: Metadata, mode: bv32, linkTarget: string)
+  datatype LiveChildObservation = LiveChildObservation(index: int, metadata: Metadata, mode: bv32, linkTarget: string,
+    modeOK: bool, modeErr: int, linkResult: BW.IOResult<string>)
 
   opaque ghost predicate LiveChildFields(raw: S.CpCmdRaw, fs: BW.FileSystem, provider: FilesystemProvider,
                                          original: seq<SourceTree>, path: string, value: SourceTree, stopped: bool, observed: LiveChildObservation) {
     OriginalChildIndex(original,path,observed.index) && MetadataFields(fs,provider,path,raw.policy.dereference,observed.metadata) &&
     (if !observed.metadata.ok then !stopped && value == MissingSource(path,observed.metadata)
-     else C.GetFileModeSpec(fs,path,raw.policy.dereference,true,observed.mode,0) &&
-          (if observed.metadata.value.isDir then
+     else C.GetFileModeSpec(fs,provider.failures,path,raw.policy.dereference,observed.modeOK,observed.mode,observed.modeErr) &&
+          (if !observed.modeOK then !stopped && value == ModeFailureSource(path,observed.metadata,observed.modeErr)
+           else if observed.metadata.value.isDir then
              stopped == (observed.index < 0 || !original[observed.index].DirectorySource? || Identity(original[observed.index].metadata) != Identity(observed.metadata)) &&
              (if stopped then value == UncopiedSource(path)
               else value == DirectorySource(path,observed.metadata,observed.mode,original[observed.index].children,original[observed.index].scanErr))
-           else !stopped && value == FileSource(path,observed.metadata,observed.mode,observed.linkTarget) &&
-                (if observed.metadata.value.isSymlink && !raw.policy.hard && !raw.policy.symbolic then C.ReadLinkSpec(fs,path,Results.Ok(observed.linkTarget))
-                 else observed.linkTarget == path))) &&
+           else !stopped &&
+                (if observed.metadata.value.isSymlink && !raw.policy.hard && !raw.policy.symbolic then
+                   C.ReadLinkSpec(fs,provider.failures,path,observed.linkResult) &&
+                   (if observed.linkResult.Ok? then observed.linkTarget == observed.linkResult.v &&
+                     value == FileSource(path,observed.metadata,observed.mode,observed.linkTarget)
+                    else value == LinkFailureSource(path,observed.metadata,observed.mode,observed.linkResult.e))
+                 else observed.linkTarget == path && value == FileSource(path,observed.metadata,observed.mode,path)))) &&
     (stopped || TreeHeight(value) <= ForestHeight(original))
   }
 
@@ -799,7 +811,7 @@ module CpSpec {
     var entries,processed,flags := observed.0,observed.1,observed.2;
     ForestHeight(selected) < TreeHeight(tree) &&
     (if !enabled then selected == tree.children && !stopped && scanErr == tree.scanErr
-     else OrderedEnumeration(fs,tree.path,entries,scanErr) &&
+     else OrderedEnumeration(fs,provider,tree.path,entries,scanErr) &&
           |processed| == |selected| + (if stopped then 1 else 0) && |flags| == |processed| && |processed| <= |entries| &&
           selected == processed[..|selected|] &&
           (forall i | 0 <= i < |processed| :: NameConcat(tree.path,entries[i].name,processed[i].path) &&
@@ -827,26 +839,29 @@ module CpSpec {
     forall i,j | 0 <= i < j < |entries| :: entries[i].inode <= entries[j].inode
   }
 
-  opaque ghost predicate EnumerationWithOpen(fs: BW.FileSystem, path: string, entries: seq<DirectoryName>, err: int, wasOpened: bool) {
+  opaque ghost predicate EnumerationWithOpen(fs: BW.FileSystem, provider: FilesystemProvider, path: string, entries: seq<DirectoryName>, err: int, wasOpened: bool) {
     exists initial: map<int,BW.DirHandleState>, openedHandles: map<int,BW.DirHandleState>,
       handle: int, openErr: int ::
       var openOK := wasOpened;
-      C.OpenDirSpec(fs, initial, openedHandles, path, false, openOK, handle, openErr) &&
+      C.OpenDirSpec(fs, initial, provider.failures, openedHandles, path, false, openOK, handle, openErr) &&
       (if !openOK then entries == [] && err == openErr
-       else exists states: seq<map<int,BW.DirHandleState>>, kinds: seq<BW.DirectoryEntryKind> ::
+       else exists states: seq<map<int,BW.DirHandleState>>, kinds: seq<BW.DirectoryEntryKind>,
+         readErr: int, closed: map<int,BW.DirHandleState>, closeOK: bool, closeErr: int ::
               |states| == |entries| + 1 && |kinds| == |entries| && states[0] == openedHandles &&
               (forall i | 0 <= i < |entries| ::
-                 C.ReadDirSpec(fs, states[i], states[i+1], handle, true, entries[i].name, kinds[i], 0) &&
+                 C.ReadDirSpec(fs, states[i], provider.failures, states[i+1], handle, true, entries[i].name, kinds[i], 0) &&
                  C.ReadDirInodeFields(fs,states[i],handle,entries[i].name,true,entries[i].inode)) &&
-              C.ReadDirSpec(fs, states[|entries|], states[|entries|], handle, false, "", BW.UnknownDirentKind, err))
+              C.ReadDirSpec(fs, states[|entries|], provider.failures, states[|entries|], handle, false, "", BW.UnknownDirentKind, readErr) &&
+              C.CloseDirSpec(states[|entries|], provider.failures, closed, handle, closeOK, closeErr) &&
+              err == (if readErr != 0 then readErr else closeErr))
   }
 
-  opaque ghost predicate Enumeration(fs: BW.FileSystem, path: string, entries: seq<DirectoryName>, err: int) {
-    exists wasOpened: bool :: EnumerationWithOpen(fs,path,entries,err,wasOpened)
+  opaque ghost predicate Enumeration(fs: BW.FileSystem, provider: FilesystemProvider, path: string, entries: seq<DirectoryName>, err: int) {
+    exists wasOpened: bool :: EnumerationWithOpen(fs,provider,path,entries,err,wasOpened)
   }
 
-  opaque ghost predicate OrderedEnumeration(fs: BW.FileSystem, path: string, entries: seq<DirectoryName>, err: int) {
-    exists nativeOrder: seq<DirectoryName> :: Enumeration(fs,path,nativeOrder,err) &&
+  opaque ghost predicate OrderedEnumeration(fs: BW.FileSystem, provider: FilesystemProvider, path: string, entries: seq<DirectoryName>, err: int) {
+    exists nativeOrder: seq<DirectoryName> :: Enumeration(fs,provider,path,nativeOrder,err) &&
                                               (if err == 0 then multiset(entries) == multiset(nativeOrder) && SortedEntries(entries)
                                                else entries == [])
   }
@@ -858,17 +873,24 @@ module CpSpec {
     MetadataFields(fs, provider, tree.path, raw.policy.dereference, tree.metadata) &&
     match tree
     case MissingSource(_, sm) => !sm.ok
+    case ModeFailureSource(path, sm, err) => sm.ok &&
+      !(sm.value.isDir && (!raw.policy.recursive || Identity(sm) in ancestors)) &&
+      C.GetFileModeSpec(fs, provider.failures, path, raw.policy.dereference, false, 0 as bv32, err)
+    case LinkFailureSource(path, sm, mode, err) => sm.ok && !sm.value.isDir &&
+      sm.value.isSymlink && !raw.policy.hard && !raw.policy.symbolic &&
+      C.GetFileModeSpec(fs, provider.failures, path, raw.policy.dereference, true, mode, 0) &&
+      C.ReadLinkSpec(fs, provider.failures, path, Results.Err(err))
     case OmittedSource(_, sm) => sm.ok && sm.value.isDir && !raw.policy.recursive
     case CyclicSource(_, sm) => sm.ok && sm.value.isDir && raw.policy.recursive && Identity(sm) in ancestors
     case FileSource(path, sm, mode, linkTarget) => sm.ok && !sm.value.isDir &&
-                                                   C.GetFileModeSpec(fs, path, raw.policy.dereference, true, mode, 0) &&
-                                                   (if sm.value.isSymlink && !raw.policy.hard && !raw.policy.symbolic then C.ReadLinkSpec(fs,path,Results.Ok(linkTarget))
+                                                   C.GetFileModeSpec(fs,provider.failures, path, raw.policy.dereference, true, mode, 0) &&
+                                                   (if sm.value.isSymlink && !raw.policy.hard && !raw.policy.symbolic then C.ReadLinkSpec(fs,provider.failures,path,Results.Ok(linkTarget))
                                                     else linkTarget == path)
     case DirectorySource(path, sm, mode, children, scanErr) =>
       sm.ok && sm.value.isDir && raw.policy.recursive && Identity(sm) !in ancestors &&
-      C.GetFileModeSpec(fs, path, raw.policy.dereference, true, mode, 0) &&
+      C.GetFileModeSpec(fs,provider.failures, path, raw.policy.dereference, true, mode, 0) &&
       (if raw.policy.oneFileSystem && |ancestors| != 0 && sm.value.device != parentDevice then children == [] && scanErr == 0
-       else exists entries: seq<DirectoryName> :: |entries| == |children| && OrderedEnumeration(fs, path, entries, scanErr) &&
+       else exists entries: seq<DirectoryName> :: |entries| == |children| && OrderedEnumeration(fs,provider, path, entries, scanErr) &&
                                                   forall i | 0 <= i < |children| :: NameConcat(path,entries[i].name,children[i].path) &&
                                                                                     SourceTreeFields(S.ChildCommand(raw), fs, provider, ancestors + {Identity(sm)}, sm.value.device, children[i]))
   }
@@ -910,28 +932,44 @@ module CpSpec {
         linkState.1 == (if PreserveEligible(raw,tree) && receipt.retained then linkState.0[Identity(tree.metadata) := target] else linkState.0) && record == receipt
   }
 
+  datatype FileTreeObservation = FileTreeObservation(metadata: Metadata, allowed: bool, returnNow: bool)
+
+  ghost predicate FileTreeFields(raw: S.CpCmdRaw, tree: SourceTree, target: string,
+      before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
+      credentials: BW.ProcessCredentials, provider: FilesystemProvider, streams: StreamProvider,
+      out: BW.Bytes, err: BW.Bytes, ok: bool, linkState: (LinkMap,LinkMap,bool), record: CopyReceipt,
+      observed: FileTreeObservation)
+    requires tree.FileSource?
+  {
+    var tm, allowed, returnNow := observed.metadata, observed.allowed, observed.returnNow;
+    MetadataFields(before,provider,target,!raw.policy.remove && !raw.policy.symbolic && !raw.policy.hard && !tree.metadata.value.isSymlink && BackupMode(raw) == "off",tm) &&
+    (if tm.ok && !raw.policy.skip && raw.policy.update != "none" && raw.policy.update != "none-fail" then
+       SameFileEligibility(raw,tree.path,target,tree.metadata,tm,before,provider,allowed,returnNow)
+     else allowed && !returnNow) &&
+    (if !allowed then record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == SameFile(Q(tree.path),Q(target)) && !ok
+     else if Skip(raw,tree.metadata,tm) then record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == (if raw.policy.update == "older" && Identity(tree.metadata) !in linkState.0 then linkState.0[Identity(tree.metadata) := target] else linkState.0) && after == before && out == [] && err == (if raw.policy.update == "none-fail" then NotReplaced(Q(target)) else []) && ok == (raw.policy.update != "none-fail")
+     else if returnNow then record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == [] && ok
+     else if tm.ok && tm.value.isDir && BackupMode(raw) == "off" then
+       record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == NonDirectory(Q(tree.path),Q(target)) && !ok
+     else FileEffect(raw,tree,target,tm,before,after,props,now,credentials,provider,streams,out,err,ok,(linkState.0,linkState.1),record))
+  }
+
   opaque ghost predicate CopyTree(raw: S.CpCmdRaw, tree: SourceTree, target: string,
                                   before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                  credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                  credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                   streams: StreamProvider, out: BW.Bytes, err: BW.Bytes, ok: bool,linkState: (LinkMap,LinkMap,bool),record: CopyReceipt)
     decreases TreeHeight(tree), 4
   {
     match tree
     case MissingSource(path, sm) => record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == CannotStat(Q(path),E(sm.err)) && !ok
+    case ModeFailureSource(path, _, modeErr) => record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == CannotStat(Q(path),E(modeErr)) && !ok
+    case LinkFailureSource(path, _, _, failure) => record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == ReadSymlinkError(Q(path),E(C.IOErrorErrno(failure))) && !ok
     case OmittedSource(path, _) => record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == Omitting(Q(path)) && !ok
     case CyclicSource(path, _) => record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == Cycle(Q(path)) && !ok
     case FileSource(source, sm, mode, linkTarget) =>
-      exists tm: Metadata :: MetadataFields(before,provider,target,!raw.policy.remove && !raw.policy.symbolic && !raw.policy.hard && !sm.value.isSymlink && BackupMode(raw) == "off",tm) &&
-        exists allowed: bool, returnNow: bool ::
-          (if tm.ok && !raw.policy.skip && raw.policy.update != "none" && raw.policy.update != "none-fail" then
-             SameFileEligibility(raw,source,target,sm,tm,before,provider,allowed,returnNow)
-           else allowed && !returnNow) &&
-          (if !allowed then record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == SameFile(Q(source),Q(target)) && !ok
-           else if Skip(raw,sm,tm) then record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == (if raw.policy.update == "older" && Identity(sm) !in linkState.0 then linkState.0[Identity(sm) := target] else linkState.0) && after == before && out == [] && err == (if raw.policy.update == "none-fail" then NotReplaced(Q(target)) else []) && ok == (raw.policy.update != "none-fail")
-           else if returnNow then record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == [] && ok
-           else if tm.ok && tm.value.isDir && BackupMode(raw) == "off" then
-             record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == NonDirectory(Q(source),Q(target)) && !ok
-           else FileEffect(raw,tree,target,tm,before,after,props,now,credentials,provider,streams,out,err,ok,(linkState.0,linkState.1),record))
+      exists observed: FileTreeObservation ::
+        FileTreeFields(raw,tree,target,before,after,props,now,credentials,provider,streams,
+          out,err,ok,linkState,record,observed)
     case DirectorySource(source,sm,mode,children,scanErr) =>
       exists tm: Metadata :: MetadataFields(before,provider,target,raw.policy.keepDirectorySymlink,tm) &&
                              (if tm.ok && Identity(sm) == Identity(tm) then record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == SameFile(Q(source),Q(target)) && !ok
@@ -945,23 +983,23 @@ module CpSpec {
 
   opaque ghost predicate {:isolate_assertions} DirectoryReadyFields(raw: S.CpCmdRaw, target: string, tm: Metadata, sourceMode: bv32,
                                                                     before: BW.FileSystem, after: BW.FileSystem, now: int, mask: bv32,
-                                                                    provider: C.ValidFilesystemObservations, ok: bool, err: BW.Bytes, observed: DirectoryReadyObservation) {
+                                                                    provider: FilesystemProvider, ok: bool, err: BW.Bytes, observed: DirectoryReadyObservation) {
     if tm.ok && tm.value.isDir then after == before && ok && err == []
-    else C.CreateDirectorySpec(before,now,provider,mask,observed.created,target,DirectoryCreationMode(raw,sourceMode),observed.createOK,observed.createErr) &&
+    else C.CreateDirectorySpec(before,now,provider.filesystem,mask,observed.created,target,DirectoryCreationMode(raw,sourceMode),observed.createOK,observed.createErr) &&
          (if !observed.createOK then after == observed.created && !ok && err == CreateDirectoryError(Q(target),E(observed.createErr))
           else MetadataFields(observed.created,provider,target,false,observed.metadata) &&
                (if !observed.metadata.ok then after == observed.created && !ok && err == CannotStat(Q(target),E(observed.metadata.err))
-                else C.GetFileModeSpec(observed.created,target,false,observed.modeOK,observed.mode,observed.modeErr) &&
+                else C.GetFileModeSpec(observed.created,provider.failures,target,false,observed.modeOK,observed.mode,observed.modeErr) &&
                      (if !observed.modeOK then after == observed.created && !ok && err == CannotStat(Q(target),E(observed.modeErr))
                       else (if (observed.mode & (448 as bv32)) != (448 as bv32) then
-                              C.SetFileModeSpec(observed.created,now,after,target,false,observed.mode | (448 as bv32),observed.changeOK,observed.changeErr)
+                              C.SetFileModeSpec(observed.created,now,provider.failures,after,target,false,observed.mode | (448 as bv32),observed.changeOK,observed.changeErr)
                             else after == observed.created && observed.changeOK && observed.changeErr == 0) &&
                            ok == observed.changeOK && err == (if ok then [] else ParentSetModeError(Q(target),E(observed.changeErr))))))
   }
 
   opaque ghost predicate DirectoryReady(raw: S.CpCmdRaw, target: string, tm: Metadata, sourceMode: bv32,
                                         before: BW.FileSystem, after: BW.FileSystem, now: int, mask: bv32,
-                                        provider: C.ValidFilesystemObservations, ok: bool, err: BW.Bytes, createdMode: bv32) {
+                                        provider: FilesystemProvider, ok: bool, err: BW.Bytes, createdMode: bv32) {
     exists observed: DirectoryReadyObservation :: observed.mode == createdMode &&
                                                   DirectoryReadyFields(raw,target,tm,sourceMode,before,after,now,mask,provider,ok,err,observed)
   }
@@ -972,7 +1010,7 @@ module CpSpec {
 
   opaque ghost predicate BackupDirectoryFields(raw: S.CpCmdRaw, tree: SourceTree, target: string, tm: Metadata,
                                                before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                               credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                               credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                                streams: StreamProvider, reported: (BW.Bytes,BW.Bytes,bool,CopyReceipt), linkState: (LinkMap,LinkMap,bool), observed: DirectoryBackupObservation)
     requires tree.DirectorySource?
     decreases TreeHeight(tree),2
@@ -984,7 +1022,7 @@ module CpSpec {
       Paths.BasenameRelation(tree.path,observed.sourceBase) &&
       (if observed.sourceBase == "." || observed.sourceBase == ".." then
          (if PreUnlink(raw,tree.metadata,tm) then
-            C.UnlinkPathSpec(before,now,provider,observed.prepared,target,observed.removeOK,observed.removeErr)
+            C.UnlinkPathSpec(before,now,provider.filesystem,observed.prepared,target,observed.removeOK,observed.removeErr)
           else observed.prepared == before && observed.removeOK && observed.removeErr == 0) &&
          (if !observed.removeOK && observed.removeErr != 2 then
             after == observed.prepared && out == [] && err == CannotRemove(Q(target),E(observed.removeErr)) && !ok &&
@@ -1001,13 +1039,13 @@ module CpSpec {
                DirectoryEffect(raw,tree,target,observed.readyMetadata,observed.prepared,observed.copied,props,now,credentials,mask,provider,streams,
                                (observed.copyOut,observed.copyErr,observed.copyOK,observed.receipt),linkState) && receipt == observed.receipt &&
                BackupRestoration(raw,observed.preparation.path,target,!observed.copyOK && !receipt.retained && observed.preparation.renamed,
-                                 observed.copied,after,now,observed.restoreOut,observed.restoreErr) &&
+                                 observed.copied,after,now,provider,observed.restoreOut,observed.restoreErr) &&
                out == observed.copyOut+observed.restoreOut && err == observed.copyErr+observed.restoreErr && ok == observed.copyOK))
   }
 
   opaque ghost predicate BackupDirectory(raw: S.CpCmdRaw, tree: SourceTree, target: string, tm: Metadata,
                                          before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                         credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                         credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                          streams: StreamProvider, reported: (BW.Bytes,BW.Bytes,bool,CopyReceipt), linkState: (LinkMap,LinkMap,bool))
     requires tree.DirectorySource?
     decreases TreeHeight(tree),3
@@ -1017,7 +1055,7 @@ module CpSpec {
 
   opaque ghost predicate DirectoryOutcome(raw: S.CpCmdRaw, tree: SourceTree, target: string, tm: Metadata,
                                           before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                          credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                          credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                           streams: StreamProvider, reported: (BW.Bytes,BW.Bytes,bool,CopyReceipt), observed: (BW.FileSystem,bool,BW.Bytes,BW.FileSystem,BW.Bytes,BW.Bytes,bool,BW.Bytes,bool,bv32,seq<SourceTree>,bool,int,bool),linkState: (LinkMap,LinkMap,bool))
     requires tree.DirectorySource?
     decreases TreeHeight(tree), 0
@@ -1041,7 +1079,7 @@ module CpSpec {
 
   opaque ghost predicate DirectoryEffect(raw: S.CpCmdRaw, tree: SourceTree, target: string, tm: Metadata,
                                          before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                         credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                         credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                          streams: StreamProvider, reported: (BW.Bytes,BW.Bytes,bool,CopyReceipt),linkState: (LinkMap,LinkMap,bool))
     requires tree.DirectorySource?
     decreases TreeHeight(tree), 1
@@ -1063,7 +1101,7 @@ module CpSpec {
 
   opaque ghost predicate ChildrenFields(raw: S.CpCmdRaw, trees: seq<SourceTree>, target: string,
                                         before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                        credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                        credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                         streams: StreamProvider, out: BW.Bytes, err: BW.Bytes, ok: bool,linkState: (LinkMap,LinkMap,bool,bool), observed: (seq<BW.FileSystem>,seq<BW.Bytes>,seq<BW.Bytes>,seq<bool>,seq<string>,seq<LinkMap>,seq<CopyReceipt>))
     decreases ForestHeight(trees), 5
   {
@@ -1083,7 +1121,7 @@ module CpSpec {
 
   opaque ghost predicate Children(raw: S.CpCmdRaw, trees: seq<SourceTree>, target: string,
                                   before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                  credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                  credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                   streams: StreamProvider, out: BW.Bytes, err: BW.Bytes, ok: bool,linkState: (LinkMap,LinkMap,bool,bool))
     decreases ForestHeight(trees), 6
   {
@@ -1091,24 +1129,24 @@ module CpSpec {
       ChildrenFields(raw,trees,target,before,after,props,now,credentials,mask,provider,streams,out,err,ok,linkState,observed)
   }
 
-  opaque ghost predicate SelfDestination(fs: BW.FileSystem, cwd: string, source: string, target: string, result: bool) {
+  opaque ghost predicate SelfDestination(fs: BW.FileSystem, cwd: string, provider: FilesystemProvider, source: string, target: string, result: bool) {
     exists sourceOK: bool, sourcePath: string, sourceErr: int, parent: string,
       parentOK: bool, parentPath: string, parentErr: int ::
       Paths.DirnameRelation(target,parent) &&
-      C.ResolvePathIdentitySpec(fs,cwd,source,sourceOK,sourcePath,sourceErr) &&
-      C.ResolvePathIdentitySpec(fs,cwd,parent,parentOK,parentPath,parentErr) &&
+      C.ResolvePathIdentitySpec(fs,cwd,provider.failures,source,sourceOK,sourcePath,sourceErr) &&
+      C.ResolvePathIdentitySpec(fs,cwd,provider.failures,parent,parentOK,parentPath,parentErr) &&
       result == (sourceOK && parentOK && (sourcePath == "/" || C.HasPathPrefix(sourcePath,parentPath)))
   }
 
   opaque ghost predicate RootOutcome(raw: S.CpCmdRaw, tree: SourceTree, target: string, cwd: string,
                                      before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                     credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                     credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                      streams: StreamProvider, reported: (BW.Bytes,BW.Bytes,bool,CopyReceipt), observed: (bool,bool,BW.Bytes,bool,bool,Metadata,Metadata),linkState: (LinkMap,LinkMap)) {
     var out,err,ok,record := reported.0,reported.1,reported.2,reported.3;
     var candidateSelf,self,childErr,childOK,inside,beforeTarget,afterTarget :=
       observed.0,observed.1,observed.2,observed.3,observed.4,observed.5,observed.6;
     (if tree.DirectorySource? && tree.scanErr == 0 then
-       SelfDestination(before,cwd,tree.path,target,inside) &&
+       SelfDestination(before,cwd,provider,tree.path,target,inside) &&
        (if inside then MetadataFields(before,provider,target,raw.policy.keepDirectorySymlink,beforeTarget) &&
                        candidateSelf == (!beforeTarget.ok || (if beforeTarget.value.isDir then Identity(beforeTarget) != Identity(tree.metadata) else BackupMode(raw) != "off"))
         else !candidateSelf)
@@ -1121,7 +1159,7 @@ module CpSpec {
 
   opaque ghost predicate RootCopy(raw: S.CpCmdRaw, tree: SourceTree, target: string, cwd: string,
                                   before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                  credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                  credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                   streams: StreamProvider, reported: (BW.Bytes,BW.Bytes,bool,CopyReceipt),linkState: (LinkMap,LinkMap)) {
     exists observed: (bool,bool,BW.Bytes,bool,bool,Metadata,Metadata) ::
       RootOutcome(raw,tree,target,cwd,before,after,props,now,credentials,mask,provider,streams,reported,observed,linkState)
@@ -1224,7 +1262,7 @@ module CpSpec {
 
   opaque ghost predicate OperandFields(raw: S.CpCmdRaw, source: string, target: string, directory: bool, cwd: string,
                                        filesystem: (BW.FileSystem,BW.FileSystem), props: map<string,string>, now: int,
-                                       credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations, streams: StreamProvider,
+                                       credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider, streams: StreamProvider,
                                        reported: (BW.Bytes,BW.Bytes,bool,SourceTree), past: (seq<string>,seq<SourceTree>,LinkMap,LinkMap,SeenDestinations,SeenDestinations), observed: OperandObservation) {
     var out,err,ok,tree := reported.0,reported.1,reported.2,reported.3;
     var before,after := filesystem.0,filesystem.1;
@@ -1253,14 +1291,14 @@ module CpSpec {
 
   opaque ghost predicate Operand(raw: S.CpCmdRaw, source: string, target: string, directory: bool, cwd: string,
                                  filesystem: (BW.FileSystem,BW.FileSystem), props: map<string,string>, now: int,
-                                 credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations, streams: StreamProvider,
+                                 credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider, streams: StreamProvider,
                                  reported: (BW.Bytes,BW.Bytes,bool,SourceTree), past: (seq<string>,seq<SourceTree>,LinkMap,LinkMap,SeenDestinations,SeenDestinations)) {
     exists observed: OperandObservation :: OperandFields(raw,source,target,directory,cwd,filesystem,props,now,credentials,mask,provider,streams,reported,past,observed)
   }
 
   opaque ghost predicate BatchOutcome(raw: S.CpCmdRaw, sources: seq<string>, target: string, directory: bool, cwd: string,
                                       before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                      credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                      credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                       streams: StreamProvider, reported: (BW.Bytes,BW.Bytes,bool), observed: (seq<BW.FileSystem>,seq<SourceTree>,seq<BW.Bytes>,seq<BW.Bytes>,seq<bool>,seq<string>,seq<LinkMap>,seq<SeenDestinations>)) {
     var out,err,ok := reported.0,reported.1,reported.2;
     var states,trees,outputs,errors,results,targets,maps,seens := observed.0,observed.1,observed.2,observed.3,observed.4,observed.5,observed.6,observed.7;
@@ -1275,7 +1313,7 @@ module CpSpec {
 
   opaque ghost predicate Batch(raw: S.CpCmdRaw, sources: seq<string>, target: string, directory: bool, cwd: string,
                                before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                               credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                               credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider,
                                streams: StreamProvider, out: BW.Bytes, err: BW.Bytes, ok: bool) {
     exists observed: (seq<BW.FileSystem>,seq<SourceTree>,seq<BW.Bytes>,seq<BW.Bytes>,seq<bool>,seq<string>,seq<LinkMap>,seq<SeenDestinations>) ::
       BatchOutcome(raw,sources,target,directory,cwd,before,after,props,now,credentials,mask,provider,streams,(out,err,ok),observed)
@@ -1296,10 +1334,10 @@ module CpSpec {
                                           out: BW.Bytes, err: BW.Bytes, ok: bool, exit: int, observed: (nat,int,nat,int)) {
     var committed,writeErr,stderrCommitted,stderrErr := observed.0,observed.1,observed.2,observed.3;
     (if |out| == 0 then afterOut == beforeOut && committed == 0 && writeErr == 0
-     else C.WriteStdoutSpec(beforeOut, streams, afterOut, out, BW.ReturnError, committed, writeErr)) &&
+     else C.WriteStdoutSpec(beforeOut, streams, afterOut, out, committed, writeErr)) &&
     (var diagnostic := err + (if writeErr == 0 then [] else StdoutError(E(writeErr)));
      if |diagnostic| == 0 then afterErr == beforeErr && stderrCommitted == 0 && stderrErr == 0
-     else C.WriteStderrSpec(beforeErr, streams, afterErr, diagnostic, BW.ReturnError, stderrCommitted, stderrErr)) &&
+     else C.WriteStderrSpec(beforeErr, streams, afterErr, diagnostic, stderrCommitted, stderrErr)) &&
     exit == (if ok && writeErr == 0 && stderrErr == 0 then 0 else 1)
   }
 
@@ -1312,10 +1350,10 @@ module CpSpec {
 
   twostate predicate Spec(raw: S.CpCmdRaw, io: BenchIO.IO, exit: int)
     reads io.fsRegion, io.dirHandlesRegion, io.propsRegion, io.nowRegion, io.credentialsRegion,
-          io.umaskRegion, io.cwdRegion, io.envRegion, io.trustedFilesystemRegion, io.trustedStreamsRegion, io.stdoutRegion, io.stderrRegion
+          io.umaskRegion, io.cwdRegion, io.envRegion, io.trustedFilesystemRegion,io.trustedNativeFailuresRegion, io.trustedStreamsRegion, io.stdoutRegion, io.stderrRegion
   {
     exists out: BW.Bytes, err: BW.Bytes, ok: bool ::
-      Command(raw, old(io.fs()), io.fs(), io.cwd(), io.env(), io.props(), io.now(), io.credentials(), io.umask(), io.trustedFilesystem(), io.trustedStreams(), out, err, ok) &&
+      Command(raw, old(io.fs()), io.fs(), io.cwd(), io.env(), io.props(), io.now(), io.credentials(), io.umask(), FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()), io.trustedStreams(), out, err, ok) &&
       Published(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(), io.trustedStreams(), out, err, ok, exit)
   }
 
@@ -1329,26 +1367,26 @@ module CpSpec {
 
   opaque ghost predicate SingleTargetFields(raw: S.CpCmdRaw, source: string, target: string, tm: Metadata, cwd: string,
                                             before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                            credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations, streams: StreamProvider,
+                                            credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider, streams: StreamProvider,
                                             reported: (BW.Bytes,BW.Bytes,bool), observed: (string,int)) {
     var out,err,ok := reported.0,reported.1,reported.2;
     if !SpecialSourceBackup(raw,source,target,tm) then
       Batch(raw,[source],target,false,cwd,before,after,props,now,credentials,mask,provider,streams,out,err,ok)
-    else BackupSelection(before,target,BackupMode(raw),BackupSuffix(raw),observed.0,observed.1) &&
+    else BackupSelection(before,provider,target,BackupMode(raw),BackupSuffix(raw),observed.0,observed.1) &&
          (if observed.1 != 0 then after == before && out == [] && err == MemoryExhausted() && !ok
           else Batch(WithoutBackup(raw),[source],observed.0,false,cwd,before,after,props,now,credentials,mask,provider,streams,out,err,ok))
   }
 
   opaque ghost predicate SingleTarget(raw: S.CpCmdRaw, source: string, target: string, tm: Metadata, cwd: string,
                                       before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                      credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations, streams: StreamProvider,
+                                      credentials: BW.ProcessCredentials, mask: bv32, provider: FilesystemProvider, streams: StreamProvider,
                                       out: BW.Bytes, err: BW.Bytes, ok: bool) {
     exists observed: (string,int) :: SingleTargetFields(raw,source,target,tm,cwd,before,after,props,now,credentials,mask,provider,streams,(out,err,ok),observed)
   }
 
   opaque ghost predicate CommandOutcome(raw: S.CpCmdRaw, before: BW.FileSystem, after: BW.FileSystem, cwd: string,
                                         props: map<string,string>, now: int, credentials: BW.ProcessCredentials,
-                                        mask: bv32, provider: C.ValidFilesystemObservations, streams: StreamProvider,
+                                        mask: bv32, provider: FilesystemProvider, streams: StreamProvider,
                                         out: BW.Bytes, err: BW.Bytes, ok: bool, tm: Metadata)
     requires |raw.operands| > 0
     requires raw.target.Some? || |raw.operands| > 1
@@ -1369,14 +1407,14 @@ module CpSpec {
 
   opaque ghost predicate Command(raw: S.CpCmdRaw, before: BW.FileSystem, after: BW.FileSystem, cwd: string,
                                  env: map<string,string>, props: map<string,string>, now: int, credentials: BW.ProcessCredentials,
-                                 mask: bv32, provider: C.ValidFilesystemObservations, streams: StreamProvider,
+                                 mask: bv32, provider: FilesystemProvider, streams: StreamProvider,
                                  out: BW.Bytes, err: BW.Bytes, ok: bool) {
     NormalizedCommand(EnvironmentCommand(raw,env),before,after,cwd,props,now,credentials,mask,provider,streams,out,err,ok)
   }
 
   opaque ghost predicate NormalizedCommand(raw: S.CpCmdRaw, before: BW.FileSystem, after: BW.FileSystem, cwd: string,
                                            props: map<string,string>, now: int, credentials: BW.ProcessCredentials,
-                                           mask: bv32, provider: C.ValidFilesystemObservations, streams: StreamProvider,
+                                           mask: bv32, provider: FilesystemProvider, streams: StreamProvider,
                                            out: BW.Bytes, err: BW.Bytes, ok: bool) {
     if raw.mode == S.Help then after == before && out == HelpText() && err == [] && ok
     else if raw.mode == S.Version then after == before && out == VersionText() && err == [] && ok

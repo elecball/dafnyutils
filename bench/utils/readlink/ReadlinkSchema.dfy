@@ -23,12 +23,18 @@ module ReadlinkSchema {
     operands: seq<string>
   )
 
+  datatype NativeReadContext =
+    | UnboundNativeReads
+    | BoundNativeReads(failures: (BenchWorld.NativeFailureRequest) -> int,
+        context: BenchWorld.CwdContext)
+
   datatype ReadlinkCmd = ReadlinkCmd(
     mode: ReadlinkMode,
     noNewline: bool,
     zeroTerminated: bool,
     verbose: bool,
-    operands: seq<string>
+    operands: seq<string>,
+    ghost nativeReads: NativeReadContext
   )
 
   function RequestedMode(raw: ReadlinkCmdRaw): ReadlinkMode
@@ -50,8 +56,38 @@ module ReadlinkSchema {
       raw.seenNoNewline,
       raw.seenZero,
       raw.diagnosticMode == 1,
-      raw.operands
+      raw.operands,
+      UnboundNativeReads
     )
+  }
+
+  function WithNativeFailures(
+    cmd: ReadlinkCmd, ghost failures: (BenchWorld.NativeFailureRequest) -> int,
+    ghost context: BenchWorld.CwdContext
+  ): ReadlinkCmd
+  {
+    cmd.(nativeReads := BoundNativeReads(failures,context))
+  }
+
+  ghost function NativeReadCount(files: seq<BenchWorld.Path>): nat
+  {
+    |set i: nat | i < |files| && files[i] != "" :: i|
+  }
+
+  function WithNativeReadOffset(cmd: ReadlinkCmd, ghost preceding: seq<BenchWorld.Path>): ReadlinkCmd
+  {
+    cmd.(nativeReads :=
+      match cmd.nativeReads
+      case UnboundNativeReads => UnboundNativeReads
+      case BoundNativeReads(failures,context) =>
+        BoundNativeReads(failures,context.(ordinal := context.ordinal+NativeReadCount(preceding))))
+  }
+
+  ghost function FinalNativeContext(cmd: ReadlinkCmd, initial: BenchWorld.CwdContext): BenchWorld.CwdContext
+  {
+    if cmd.mode == ModeRun && |cmd.operands| != 0 then
+      initial.(ordinal := initial.ordinal+NativeReadCount(cmd.operands))
+    else initial
   }
 
   method Schema() returns (s: CliTypes.CliSchema)

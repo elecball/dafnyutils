@@ -2,25 +2,19 @@ include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
 include "../../core/BenchmarkItem.dfy"
 include "ChmodSchema.dfy"
-include "ChmodCore.dfy"
-include "ChmodProof.dfy"
 include "ChmodSpec.dfy"
-include "ChmodRecursiveSpec.dfy"
-include "ChmodRecursiveRuntime.dfy"
-include "ChmodRecursiveProof.dfy"
+include "ChmodDescriptorCore.dfy"
+include "ChmodDescriptorPrincipalSpec.dfy"
 
 module Chmod {
   import BenchIO
-  import CP = ChmodProof
   import BenchWorld
   import CliTypes
   import BenchItem
   import ChmodSchema
-  import Core = ChmodCore
+  import Core = ChmodDescriptorCore
   import CS = ChmodSpec
-  import RecursiveSpec = ChmodRecursiveSpec
-  import RecursiveRuntime = ChmodRecursiveRuntime
-  import RecursiveProof = ChmodRecursiveProof
+  import Spec = ChmodDescriptorPrincipalSpec
 
   class {:termination false} ChmodBenchmarkItem extends BenchItem.BenchmarkItemTwostate<ChmodSchema.ChmodCmdRaw> {
     constructor()
@@ -64,17 +58,11 @@ module Chmod {
     }
 
     method RunCore(raw: ChmodSchema.ChmodCmdRaw, io: BenchIO.IO) returns (exit: int)
-      modifies io.fsRegion, io.stdoutRegion, io.stderrRegion, io.dirHandlesRegion, io.statusObservationsRegion
-      ensures RecursiveSpec.Spec(raw, io, exit)
+      modifies io.fsRegion, io.stdoutRegion, io.stderrRegion, io.directoryStateRegion, io.statusObservationsRegion
+      ensures Spec.Spec(raw, io, exit)
       decreases *
     {
-      if ChmodSchema.Command(raw).recursive {
-        exit := RecursiveRuntime.RunRecursiveCore(raw, io);
-        RecursiveProof.RecursiveCoreSummaryImpliesSpec(raw, io, exit);
-      } else {
-        exit := Core.RunCore(raw, io);
-        CP.CoreSummaryImpliesSpec(raw, io, exit);
-      }
+      exit := Core.RunCore(raw, io);
     }
   }
 

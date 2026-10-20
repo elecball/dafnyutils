@@ -5,6 +5,8 @@ include "FoldSchema.dfy"
 include "FoldSpec.dfy"
 
 module FoldCore {
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -248,24 +250,24 @@ module FoldCore {
     return ch == ' ' || ch == '\t';
   }
 
-  twostate predicate CoreSummary(raw: Schema.FoldCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSummary(raw: Schema.FoldCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := Command(raw);
     if cmd.mode == Schema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == Spec.HelpText() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == Spec.VersionText() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeInvalidWidth then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.InvalidWidthMessage(cmd.invalidWidthValue) &&
+      plannedStdout == [] &&
+      plannedStderr == Spec.InvalidWidthMessage(cmd.invalidWidthValue) &&
       exit == 1
     else
       exists stdoutPart: BenchWorld.Bytes, stderrPart: BenchWorld.Bytes, hadError: bool ::
@@ -279,8 +281,8 @@ module FoldCore {
           hadError,
           old(io.trustedStreams())
         ) &&
-        io.stdout() == old(io.stdout()) + stdoutPart &&
-        io.stderr() == old(io.stderr()) + stderrPart &&
+        plannedStdout == stdoutPart &&
+        plannedStderr == stderrPart &&
         exit == (if hadError then 1 else 0)
   }
 
@@ -329,25 +331,11 @@ module FoldCore {
                hadError,
                preStreams
              )
-    requires result == Spec.ReadResultAt(cmd, preFs, preStdin, count, preStreams)
-    requires match result
-             case Ok(data) =>
-               Spec.DataFoldRelation(
-                 cmd.width, cmd.byteMode, cmd.spaceMode, data, stdoutFragment
-               ) &&
-               stderrFragment == []
-             case Err(err) =>
-               stdoutFragment == [] &&
-               match cmd.inputs[count]
-               case Stdin => false
-               case File(path) => stderrFragment == Spec.ErrorMessage(path, err)
-    requires nextPostStdin ==
-             (if Spec.HasEarlierStdin(cmd, count + 1) then [] else preStdin)
-    requires nextHadError ==
-             (hadError ||
-              match result
-              case Ok(_) => false
-              case Err(_) => cmd.inputs[count].File?)
+    requires result == Spec.ReadResultAt(cmd, preFs, postStdin, count, preStreams)
+    requires Spec.InputPieceRelation(cmd, cmd.inputs[count], result, stdoutFragment, stderrFragment)
+    requires nextPostStdin == (if cmd.inputs[count].Stdin? then
+      IOContract.ObservedReadStdinRemainingFields(postStdin, preStreams) else postStdin)
+    requires nextHadError == (hadError || result.Err?)
     ensures Spec.InputPrefixTraceRelation(
               cmd,
               preFs,
@@ -362,58 +350,21 @@ module FoldCore {
             )
   {
     reveal Spec.InputPrefixTraceRelation();
-    assert forall i :: 0 <= i < |results + [result]| ==>
-                         (results + [result])[i] ==
-                         Spec.ReadResultAt(cmd, preFs, preStdin, i, preStreams) by {
-      forall i | 0 <= i < |results + [result]|
-        ensures (results + [result])[i] ==
-                Spec.ReadResultAt(cmd, preFs, preStdin, i, preStreams)
-      {
-      }
+    var states: seq<BenchWorld.Bytes> :|
+      Spec.InputStateTraceRelation(cmd, preStdin, count, postStdin, results, preStreams, states, preFs);
+    var nextStates := states + [nextPostStdin];
+    forall i: nat | i < count + 1
+      ensures (results + [result])[i] == Spec.ReadResultAt(cmd, preFs, nextStates[i], i, preStreams)
+      ensures nextStates[i + 1] == (if cmd.inputs[i].Stdin? then
+        IOContract.ObservedReadStdinRemainingFields(nextStates[i], preStreams) else nextStates[i])
+      ensures Spec.InputPieceRelation(cmd, cmd.inputs[i], (results + [result])[i],
+        (stdoutFragments + [stdoutFragment])[i], (stderrFragments + [stderrFragment])[i])
+    {
+      if i < count {
+      } else { assert i == count; }
     }
-    assert forall i :: 0 <= i < |results + [result]| ==>
-                         match (results + [result])[i]
-                         case Ok(data) =>
-                           Spec.DataFoldRelation(
-                             cmd.width,
-                             cmd.byteMode,
-                             cmd.spaceMode,
-                             data,
-                             (stdoutFragments + [stdoutFragment])[i]
-                           ) &&
-                           (stderrFragments + [stderrFragment])[i] == []
-                         case Err(err) =>
-                           (stdoutFragments + [stdoutFragment])[i] == [] &&
-                           match cmd.inputs[i]
-                           case Stdin => false
-                           case File(path) =>
-                             (stderrFragments + [stderrFragment])[i] ==
-                             Spec.ErrorMessage(path, err) by {
-      forall i | 0 <= i < |results + [result]|
-        ensures match (results + [result])[i]
-                case Ok(data) =>
-                  Spec.DataFoldRelation(
-                    cmd.width,
-                    cmd.byteMode,
-                    cmd.spaceMode,
-                    data,
-                    (stdoutFragments + [stdoutFragment])[i]
-                  ) &&
-                  (stderrFragments + [stderrFragment])[i] == []
-                case Err(err) =>
-                  (stdoutFragments + [stdoutFragment])[i] == [] &&
-                  match cmd.inputs[i]
-                  case Stdin => false
-                  case File(path) =>
-                    (stderrFragments + [stderrFragment])[i] ==
-                    Spec.ErrorMessage(path, err)
-      {
-        if i < count {
-        } else {
-          assert i == count;
-        }
-      }
-    }
+    assert Spec.InputStateTraceRelation(cmd, preStdin, count + 1, nextPostStdin,
+      results + [result], preStreams, nextStates, preFs);
   }
 
   lemma HasEarlierFileStep(cmd: Schema.FoldCmd, i: nat)
@@ -589,6 +540,20 @@ module FoldCore {
     }
   }
 
+  lemma LineOutputFromSegments(width: nat, byteMode: bool, spaceMode: bool,
+    line: BenchWorld.Bytes, output: BenchWorld.Bytes, segments: seq<BenchWorld.Bytes>)
+    requires Spec.LinePartitionRelation(width, byteMode, spaceMode, line, segments)
+    requires output == Spec.RenderSegments(segments)
+    ensures Spec.LineOutputRelation(width, byteMode, spaceMode, line, output)
+  {
+    hide *;
+    reveal Spec.LineOutputRelation();
+    assert exists segmentWitness: seq<BenchWorld.Bytes> ::
+      segmentWitness == segments &&
+      Spec.LinePartitionRelation(width, byteMode, spaceMode, line, segmentWitness) &&
+      output == Spec.RenderSegments(segmentWitness);
+  }
+
   method {:isolate_assertions} FoldLineMethod(
     width: nat,
     byteMode: bool,
@@ -606,14 +571,22 @@ module FoldCore {
       out := [];
       segments := [];
       reveal Spec.LinePartitionRelation();
-      reveal Spec.LineOutputRelation();
+      LineOutputFromSegments(width, byteMode, spaceMode, line, out, segments);
     } else {
       var prefix := BreakPrefixMethod(width, byteMode, spaceMode, line);
       if |prefix| == |line| {
         out := prefix;
         segments := [prefix];
         reveal Spec.LinePartitionRelation();
-        reveal Spec.LineOutputRelation();
+        assert prefix == line;
+        assert Spec.JoinFragments(segments) == line;
+        assert Spec.BreakPointRelation(width, byteMode, spaceMode,
+          Spec.JoinFragments(segments), 0, |prefix|);
+        assert Spec.LinePartitionRelation(width, byteMode, spaceMode, line, segments) by {
+          hide *;
+          reveal Spec.LinePartitionRelation();
+        }
+        LineOutputFromSegments(width, byteMode, spaceMode, line, out, segments);
       } else {
         var tail, tailSegments :=
           FoldLineMethod(width, byteMode, spaceMode, line[|prefix|..]);
@@ -650,7 +623,7 @@ module FoldCore {
             }
           }
         }
-        reveal Spec.LineOutputRelation();
+        LineOutputFromSegments(width, byteMode, spaceMode, line, out, segments);
       }
     }
   }
@@ -816,50 +789,53 @@ module FoldCore {
     ensures match result
             case Ok(data) =>
               Spec.DataFoldRelation(cmd.width, cmd.byteMode, cmd.spaceMode, data, out)
-            case Err(_) => out == []
+            case Err(error) => if error.StreamFailure? then Spec.DataFoldRelation(cmd.width, cmd.byteMode, cmd.spaceMode, error.partial, out) else out == []
   {
     match result
     case Ok(data) =>
       out := FoldDataMethod(cmd.width, cmd.byteMode, cmd.spaceMode, data);
-    case Err(_) =>
-      out := [];
+    case Err(error) =>
+      if error.StreamFailure? {
+        out := FoldDataMethod(cmd.width, cmd.byteMode, cmd.spaceMode, error.partial);
+      } else { out := []; }
   }
 
-  method {:isolate_assertions} RunCore(
+  method {:isolate_assertions} Prepare(
     raw: Schema.FoldCmdRaw,
     io: BenchIO.IO
-  ) returns (exit: int)
-    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  ) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, plannedOut, plannedErr)
     decreases *
   {
+    plannedOut := [];
+    plannedErr := [];
+
     ghost var preFs := io.fs();
     ghost var preStdin := io.stdin();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
     var cmd := Command(raw);
     if cmd.mode == Schema.ModeHelp {
       var help := GetHelpText();
-      var _ := io.WriteStdout(help, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + help;
       exit := 0;
       assert help == Spec.HelpText();
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by { hide *; reveal PreparedSummary(); }
       return;
     }
     if cmd.mode == Schema.ModeVersion {
       var version := GetVersionText();
-      var _ := io.WriteStdout(version, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + version;
       exit := 0;
       assert version == Spec.VersionText();
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by { hide *; reveal PreparedSummary(); }
       return;
     }
     if cmd.mode == Schema.ModeInvalidWidth {
       var msg := GetInvalidWidthMessage(cmd.invalidWidthValue);
-      var _ := io.WriteStderr(msg, BenchWorld.ThrowOnError);
+      plannedErr := plannedErr + msg;
       exit := 1;
       assert msg == Spec.InvalidWidthMessage(cmd.invalidWidthValue);
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by { hide *; reveal PreparedSummary(); }
       return;
     }
 
@@ -872,11 +848,13 @@ module FoldCore {
     ghost var stderrFragments: seq<BenchWorld.Bytes> := [];
     var i := 0;
     reveal Spec.InputPrefixTraceRelation();
+    assert Spec.InputStateTraceRelation(cmd, preStdin, 0, io.stdin(), results,
+      old(io.trustedStreams()), [preStdin], preFs);
     while i < |cmd.inputs|
       invariant 0 <= i <= |cmd.inputs|
       invariant cmd.width > 0
-      invariant io.stdout() == preStdout
-      invariant io.stderr() == preStderr
+      invariant plannedOut == []
+      invariant plannedErr == []
       invariant Spec.InputPrefixTraceRelation(
                   cmd,
                   preFs,
@@ -894,115 +872,29 @@ module FoldCore {
       decreases |cmd.inputs| - i
     {
       var input := cmd.inputs[i];
-      match input
-      case Stdin =>
-        ghost var beforeStdin := io.stdin();
-        var data :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-        assert IOContract.ReadStdinAllFields(beforeStdin, io.stdin(), data);
-        var piece := OutputPieceMethod(cmd, Result.Ok(data));
-        assert Spec.DataFoldRelation(
-            cmd.width, cmd.byteMode, cmd.spaceMode, data, piece
-          );
-        assert data ==
-               (if Spec.HasEarlierStdin(cmd, i) then [] else preStdin);
-        JoinFragmentsSnoc(stdoutFragments, piece);
-        JoinFragmentsSnoc(stderrFragments, []);
-        assert Result.Ok(data) ==
-               Spec.ReadResultAt(cmd, preFs, preStdin, i, old(io.trustedStreams()));
-        assert io.stdin() ==
-               (if Spec.HasEarlierStdin(cmd, i + 1) then [] else preStdin);
-        ExtendInputPrefixTrace(
-          cmd,
-          preFs,
-          preStdin,
-          i,
-          beforeStdin,
-          results,
-          stdoutFragments,
-          stderrFragments,
-          hadError,
-          Result.Ok(data),
-          piece,
-          [],
-          io.stdin(),
-          hadError,
-          old(io.trustedStreams())
-        );
-        results := results + [Result.Ok(data)];
-        stdoutFragments := stdoutFragments + [piece];
-        stderrFragments := stderrFragments + [[]];
-        output := output + piece;
-        i := i + 1;
-        reveal Spec.InputPrefixTraceRelation();
-        // State the invariant's stdin conjunct at the new index on this path.
-        assert io.stdin() ==
-               (if Spec.HasEarlierStdin(cmd, i) then [] else preStdin);
-      case File(path) =>
-        var result := io.ReadFile(path);
-        assert result == IOContract.ObservedReadFileResultFields(preFs, old(io.trustedStreams()), path);
-        HasEarlierFileStep(cmd, i);
-        match result
-        case Ok(data) =>
-          var piece := OutputPieceMethod(cmd, result);
-          JoinFragmentsSnoc(stdoutFragments, piece);
-          JoinFragmentsSnoc(stderrFragments, []);
-          assert result == Spec.ReadResultAt(cmd, preFs, preStdin, i, old(io.trustedStreams()));
-          assert io.stdin() ==
-                 (if Spec.HasEarlierStdin(cmd, i + 1) then [] else preStdin);
-          ExtendInputPrefixTrace(
-            cmd,
-            preFs,
-            preStdin,
-            i,
-            io.stdin(),
-            results,
-            stdoutFragments,
-            stderrFragments,
-            hadError,
-            result,
-            piece,
-            [],
-            io.stdin(),
-            hadError,
-            old(io.trustedStreams())
-          );
-          results := results + [result];
-          stdoutFragments := stdoutFragments + [piece];
-          stderrFragments := stderrFragments + [[]];
-          output := output + piece;
-          i := i + 1;
-          reveal Spec.InputPrefixTraceRelation();
-        case Err(err) =>
-          var msg := ErrorMessageMethod(path, err);
-          JoinFragmentsSnoc(stdoutFragments, []);
-          JoinFragmentsSnoc(stderrFragments, msg);
-          assert result == Spec.ReadResultAt(cmd, preFs, preStdin, i, old(io.trustedStreams()));
-          assert io.stdin() ==
-                 (if Spec.HasEarlierStdin(cmd, i + 1) then [] else preStdin);
-          ExtendInputPrefixTrace(
-            cmd,
-            preFs,
-            preStdin,
-            i,
-            io.stdin(),
-            results,
-            stdoutFragments,
-            stderrFragments,
-            hadError,
-            result,
-            [],
-            msg,
-            io.stdin(),
-            true,
-            old(io.trustedStreams())
-          );
-          results := results + [result];
-          stdoutFragments := stdoutFragments + [[]];
-          stderrFragments := stderrFragments + [msg];
-          errors := errors + msg;
-          hadError := true;
-          i := i + 1;
-          reveal Spec.InputPrefixTraceRelation();
+      ghost var beforeStdin := io.stdin();
+      var result: BenchWorld.IOResult<BenchWorld.Bytes>;
+      match input {
+        case Stdin => result := io.ReadStdin();
+        case File(path) => result := io.ReadFile(path);
+      }
+      assert result == Spec.ReadResultAt(cmd, preFs, beforeStdin, i, old(io.trustedStreams()));
+      var piece := OutputPieceMethod(cmd, result);
+      var diagnostic := if result.Err? then
+        Spec.ErrorMessage(if input.Stdin? then "-" else input.path, result.e) else [];
+      var failed := hadError || result.Err?;
+      JoinFragmentsSnoc(stdoutFragments, piece);
+      JoinFragmentsSnoc(stderrFragments, diagnostic);
+      ExtendInputPrefixTrace(cmd, preFs, preStdin, i, beforeStdin,
+        results, stdoutFragments, stderrFragments, hadError, result, piece, diagnostic,
+        io.stdin(), failed, old(io.trustedStreams()));
+      results := results + [result];
+      stdoutFragments := stdoutFragments + [piece];
+      stderrFragments := stderrFragments + [diagnostic];
+      output := output + piece;
+      errors := errors + diagnostic;
+      hadError := failed;
+      i := i + 1;
     }
 
     reveal Spec.InputTraceRelation();
@@ -1010,8 +902,8 @@ module FoldCore {
         cmd, preFs, preStdin, io.stdin(), output, errors, hadError,
         old(io.trustedStreams())
       );
-    var _ := io.WriteStdout(output, BenchWorld.ThrowOnError);
-    var _ := io.WriteStderr(errors, BenchWorld.ThrowOnError);
+    plannedOut := output;
+    plannedErr := errors;
     exit := if hadError then 1 else 0;
     assert exists stdoutPart: BenchWorld.Bytes,
         stderrPart: BenchWorld.Bytes,
@@ -1026,14 +918,68 @@ module FoldCore {
           traceHadError,
           old(io.trustedStreams())
         ) &&
-        io.stdout() == preStdout + stdoutPart &&
-        io.stderr() == preStderr + stderrPart &&
+        plannedOut == stdoutPart &&
+        plannedErr == stderrPart &&
         exit == (if traceHadError then 1 else 0) by {
       assert Spec.InputTraceRelation(
           cmd, preFs, preStdin, io.stdin(), output, errors, hadError,
           old(io.trustedStreams())
         );
     }
-    assert CoreSummary(raw, io, exit);
+    assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by { hide *; reveal PreparedSummary(); }
+  }
+
+  twostate predicate CoreSummary(raw: Schema.FoldCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: Schema.FoldCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, out, diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, out, diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

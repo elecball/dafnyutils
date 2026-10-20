@@ -146,7 +146,23 @@ source probe uses a separate open/close observation without weakening the
 existing full-read contract. Native creation ownership and other inherited
 model limits are documented in [the core API guide](../../../docs/core-api.md).
 
-## Validation and evidence
+## Native failure observations
+
+Metadata, mode, symlink-target, path-identity, directory open/read/close, and
+mutation failures are bound to the exact primitive request. The utility-owned
+observation bundle keeps these native failures alongside filesystem results.
+A failed mode or symlink query retains the earlier successful metadata
+observation; it does not substitute a failed initial stat. Copying and
+restoration retain the filesystem effects of earlier successful operations.
+Directory cleanup consumes the opened handle on a close error and preserves
+the primary read error when both reading and closing fail.
+
+## Historical validation and evidence
+
+The following records describe the earlier filesystem implementation. They
+are historical evidence, not verification of the subsequent native-failure
+contract changes. Current failure-model checks are recorded separately in
+[the failure-model audit](../../../docs/trustbase-failures.md).
 
 Maintenance starts at repository revision
 `1ed3144e6b092f50ce99b0450d242a43309e1bd4`. Integrated commands run in

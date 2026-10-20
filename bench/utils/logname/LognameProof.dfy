@@ -11,9 +11,9 @@ module LognameProof {
   import Core = LognameCore
   import Spec = LognameSpec
 
-  twostate lemma CoreSummaryImpliesSpec(raw: Schema.LognameCmdRaw, io: BenchIO.IO, exit: int)
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.LognameCmdRaw, io: BenchIO.IO, exit: int, new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeHelp {
@@ -26,8 +26,8 @@ module LognameProof {
           login,
           old(io.stdout()),
           old(io.stderr()),
-          io.stdout(),
-          io.stderr(),
+          plannedStdout,
+          plannedStderr,
           exit
         );
       match login
@@ -37,5 +37,17 @@ module LognameProof {
       case Err(_) =>
         assert !Spec.HasLoginNameProps(old(io.props()));
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.LognameCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

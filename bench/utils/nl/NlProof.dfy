@@ -4,6 +4,9 @@ include "NlCore.dfy"
 include "NlSpec.dfy"
 
 module NlProof {
+  import IOContract
+  import BenchWorld
+
   import Result = Results
   import BenchIO
   import BW = BenchWorld
@@ -228,43 +231,49 @@ module NlProof {
     hadError: bool,
     hasDelimiter: bool,
     preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult
-  )
+  , postStdin: BenchWorld.Bytes)
     requires Core.InputTraceSummary(
                cmd, preFs, preStdin, readResults, inputFragments,
                combined, inputCuts, errorFragments, errorOutput, errorCuts,
-               hadError, hasDelimiter, preStreams)
+               hadError, hasDelimiter, preStreams, postStdin)
     ensures Spec.InputTraceRelation(
               cmd, preFs, preStdin, readResults, inputFragments,
               combined, inputCuts, errorFragments, errorOutput, errorCuts,
-              hadError, hasDelimiter, preStreams)
+              hadError, hasDelimiter, preStreams, postStdin)
   {
     reveal Core.InputTraceSummary();
-    reveal Spec.InputTraceRelation();
+    var states := seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams));
+    forall i: nat | i < |cmd.inputs|
+      ensures states[i + 1] == (if cmd.inputs[i].Stdin? then
+        IOContract.ObservedReadStdinRemainingFields(states[i], preStreams) else states[i])
+    { Core.PrefixStdinStep(cmd, preStdin, i, preStreams); }
+    assert states[0] == preStdin by { reveal Core.PrefixStdinCore(); }
+    assert Spec.StdinTraceRelation(cmd, preStdin, postStdin, preStreams, states);
     assert forall i :: 0 <= i < |cmd.inputs| ==>
-                         Spec.ReadResultRelation(
-                           cmd, preFs, preStdin, i, readResults[i], preStreams) &&
+                         Spec.ReadResultRelation(cmd, preFs, states[i], i, readResults[i], preStreams) &&
                          (match readResults[i]
                           case Ok(data) =>
                             Spec.NormalizedInputRelation(data, inputFragments[i])
-                          case Err(_) =>
-                            inputFragments[i] == []) &&
+                          case Err(error) =>
+                            if error.StreamFailure? then Spec.NormalizedInputRelation(error.partial, inputFragments[i]) else inputFragments[i] == []) &&
                          errorFragments[i] ==
                          Spec.ErrorPiece(cmd.inputs[i], readResults[i]) by {
       forall i | 0 <= i < |cmd.inputs|
-        ensures Spec.ReadResultRelation(
-                  cmd, preFs, preStdin, i, readResults[i], preStreams) &&
+        ensures Spec.ReadResultRelation(cmd, preFs, states[i], i, readResults[i], preStreams) &&
                 (match readResults[i]
                  case Ok(data) =>
                    Spec.NormalizedInputRelation(data, inputFragments[i])
-                 case Err(_) =>
-                   inputFragments[i] == []) &&
+                 case Err(error) =>
+                   if error.StreamFailure? then Spec.NormalizedInputRelation(error.partial, inputFragments[i]) else inputFragments[i] == []) &&
                 errorFragments[i] ==
                 Spec.ErrorPiece(cmd.inputs[i], readResults[i])
       {
+        assert states[i] == Core.PrefixStdinCore(cmd, preStdin, i, preStreams);
         match readResults[i]
         case Ok(data) =>
           NormalizeInputDataRefines(data);
-        case Err(_) =>
+        case Err(error) =>
+          if error.StreamFailure? { NormalizeInputDataRefines(error.partial); }
       }
     }
     var lines: seq<BW.Bytes>,
@@ -288,6 +297,99 @@ module NlProof {
       assert Spec.LinePartitionRelation(
           combined, lines, terminated, fragments, cuts);
     }
+    assert |readResults| == |cmd.inputs|;
+    assert |inputFragments| == |cmd.inputs|;
+    assert |errorFragments| == |cmd.inputs|;
+    assert Spec.FragmentsConcatenate(inputFragments, combined, inputCuts);
+    assert Spec.FragmentsConcatenate(errorFragments, errorOutput, errorCuts);
+    assert hadError == (exists i :: 0 <= i < |cmd.inputs| && Spec.HadErrorPiece(cmd.inputs[i], readResults[i]));
+    assert Spec.InputTraceWitnessRelation(cmd, preFs, preStdin, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, preStreams, postStdin, states) by {
+      hide *;
+      reveal Spec.InputTraceWitnessRelation();
+    }
+    assert Spec.InputTraceRelation(cmd, preFs, preStdin, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, preStreams, postStdin) by {
+      hide *;
+      reveal Spec.InputTraceRelation();
+    }
+  }
+
+  twostate lemma PreparedSpecFromTrace(
+    raw: Schema.NlCmdRaw, io: BenchIO.IO, exit: int,
+    new readResults: seq<BW.IOResult<BW.Bytes>>, new inputFragments: seq<BW.Bytes>,
+    new combined: BW.Bytes, new inputCuts: seq<nat>, new errorFragments: seq<BW.Bytes>,
+    new errorOutput: BW.Bytes, new errorCuts: seq<nat>, hadError: bool, hasDelimiter: bool,
+    new outputPart: BW.Bytes, new plannedStdout: BW.Bytes, new plannedStderr: BW.Bytes)
+    requires Schema.Command(raw).mode == Schema.ModeRun
+    requires Spec.InputTraceRelation(Schema.Command(raw), old(io.fs()), old(io.stdin()), readResults,
+      inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts,
+      hadError, hasDelimiter, old(io.trustedStreams()), io.stdin())
+    requires if hasDelimiter then outputPart == [] else Spec.OutputRelation(Schema.Command(raw), combined, outputPart)
+    requires plannedStdout == outputPart
+    requires plannedStderr == errorOutput + (if hasDelimiter then Spec.UnsupportedLogicalPageDelimiterMessage() else [])
+    requires exit == (if hasDelimiter || hadError then 1 else 0)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
+  {
+    var trace := Spec.RunWitness(readResults, inputFragments, combined, inputCuts, errorFragments,
+      errorOutput, errorCuts, hadError, hasDelimiter, outputPart);
+    assert Spec.PreparedRunRelation(Schema.Command(raw), old(io.fs()), old(io.stdin()), io.stdin(),
+      old(io.trustedStreams()), plannedStdout, plannedStderr, exit, trace) by {
+      hide *;
+      reveal Spec.PreparedRunRelation();
+    }
+    assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr) by {
+      hide *;
+      reveal Spec.PreparedSpec();
+    }
+  }
+
+  twostate lemma PreparedSummaryImpliesPreparedSpec(
+    raw: Schema.NlCmdRaw,
+    io: BenchIO.IO,
+    exit: int,
+    new readResults: seq<BW.IOResult<BW.Bytes>>,
+    new inputFragments: seq<BW.Bytes>,
+    new combined: BW.Bytes,
+    new inputCuts: seq<nat>,
+    new errorFragments: seq<BW.Bytes>,
+    new errorOutput: BW.Bytes,
+    new errorCuts: seq<nat>,
+    hadError: bool,
+    hasDelimiter: bool,
+    new outputPart: BW.Bytes
+  , new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(
+               raw, io, exit, readResults, inputFragments, combined, inputCuts,
+               errorFragments, errorOutput, errorCuts, hadError, hasDelimiter,
+               outputPart
+             , plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
+  {
+    reveal Core.PreparedSummary();
+    var cmd := Schema.Command(raw);
+    if cmd.mode == Schema.ModeRun {
+      InputTraceRefines(
+        cmd, old(io.fs()), old(io.stdin()), readResults, inputFragments,
+        combined, inputCuts, errorFragments, errorOutput, errorCuts,
+        hadError, hasDelimiter, old(io.trustedStreams()), io.stdin());
+      if !hasDelimiter {
+        OutputSummaryRefines(cmd, combined, outputPart);
+      }
+      assert Spec.InputTraceRelation(cmd, old(io.fs()), old(io.stdin()), readResults,
+        inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts,
+        hadError, hasDelimiter, old(io.trustedStreams()), io.stdin());
+      assert (if hasDelimiter then outputPart == [] else Spec.OutputRelation(cmd, combined, outputPart));
+      assert plannedStdout == outputPart;
+      assert plannedStderr == errorOutput + (if hasDelimiter then Spec.UnsupportedLogicalPageDelimiterMessage() else []);
+      assert exit == (if hasDelimiter || hadError then 1 else 0);
+      PreparedSpecFromTrace(raw, io, exit, readResults, inputFragments, combined, inputCuts,
+        errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, outputPart, plannedStdout, plannedStderr);
+      return;
+    }
+    assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr) by {
+      hide *;
+      reveal Core.PreparedSummary();
+      reveal Spec.PreparedSpec();
+    }
   }
 
   twostate lemma CoreSummaryImpliesSpec(
@@ -305,24 +407,14 @@ module NlProof {
     hasDelimiter: bool,
     new outputPart: BW.Bytes
   )
-    requires Core.CoreSummary(
-               raw, io, exit, readResults, inputFragments, combined, inputCuts,
-               errorFragments, errorOutput, errorCuts, hadError, hasDelimiter,
-               outputPart
-             )
+    requires Core.CoreSummary(raw, io, exit, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, outputPart)
     ensures Spec.Spec(raw, io, exit)
   {
-    reveal Core.CoreSummary();
-    var cmd := Schema.Command(raw);
-    if cmd.mode == Schema.ModeRun {
-      InputTraceRefines(
-        cmd, old(io.fs()), old(io.stdin()), readResults, inputFragments,
-        combined, inputCuts, errorFragments, errorOutput, errorCuts,
-        hadError, hasDelimiter, old(io.trustedStreams()));
-      if !hasDelimiter {
-        OutputSummaryRefines(cmd, combined, outputPart);
-      }
-    }
-    reveal Spec.Spec();
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, outputPart,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, outputPart,
+      out, diagnostics);
   }
 }

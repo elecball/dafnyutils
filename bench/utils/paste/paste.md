@@ -65,5 +65,14 @@ The following documented behavior is outside this benchmark slice:
 ### Exit Status
 
 The supported slice exits with status 0 for successful output, help, and
-version output. It exits with status 1 for delimiter-list syntax errors or if
-any file operand cannot be read.
+version output. It exits with status 1 for delimiter-list syntax errors, input
+read errors, or failed standard descriptor writes. A successful planned output
+does not imply that the host accepted every byte.
+
+Standard-input errors contain the successfully read prefix and the remaining
+modeled input. Repeated `-` operands have a finite sequence of observed stdin
+states; their consumed prefixes are partitioned into the parallel or serial
+input records. Read errors preserve the records already available instead of
+turning the entire input into an empty successful read. The final emission
+relation binds the stdout and stderr committed prefixes and errors to the
+actual stream requests.

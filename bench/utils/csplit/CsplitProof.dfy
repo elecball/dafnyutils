@@ -5,6 +5,7 @@ include "CsplitSpec.dfy"
 
 module CsplitProof {
   import BenchIO
+  import Result = Results
   import BenchWorld
   import IOContract
   import Schema = CsplitSchema
@@ -340,6 +341,9 @@ module CsplitProof {
             )
     decreases |lines|
   {
+    hide *;
+    reveal Core.SplitPlanFrom(), Core.LineExists(), Core.SafeSlice();
+    reveal SplitPlanView(), SplitFromRelation(), PiecesFromCuts();
     if |lines| == 0 {
       var cuts := [start, |data|];
       assert Core.SafeSlice(data, start, |data|) == data[start..|data|];
@@ -522,10 +526,29 @@ module CsplitProof {
               SplitPlanView(Core.SplitPlanFor(data, lines))
             )
   {
+    hide *;
     reveal Spec.ValidNumberPrefix();
     SplitPlanFromRefines(data, lines, 0);
+    reveal Core.SplitPlanFor(), SplitPlanView(), Spec.SplitPlanRelation();
     reveal SplitFromRelation();
     reveal Spec.PiecePartitionRelation();
+  }
+
+  lemma ReadFailurePiecesRefines(data: BenchWorld.Bytes, lines: seq<nat>)
+    requires Spec.ValidNumberPrefix(lines, |lines|)
+    ensures Spec.ReadFailurePiecesRelation(data, lines, Core.ReadFailurePieces(data, lines))
+  {
+    var complete := Core.CompletedInputPrefix(data);
+    var plan := Core.SplitPlanFor(complete, lines);
+    SplitPlanRefines(complete, lines);
+    assert Spec.ReadFailurePiecesRelation(data, lines, Core.ReadFailurePieces(data, lines)) by {
+      reveal Spec.ReadFailurePiecesRelation();
+      assert Spec.CompleteInputPrefixRelation(data, complete);
+      assert Spec.SplitPlanRelation(complete, lines, SplitPlanView(plan));
+      match plan
+      case SplitComplete(pieces) =>
+      case SplitOutOfRange(pieces, _) =>
+    }
   }
 
   ghost predicate WarningsFromWitnessRelation(
@@ -754,7 +777,7 @@ module CsplitProof {
     assert Spec.FragmentsConcatenate(fragments, [], cuts);
   }
 
-  lemma {:isolate_assertions} {:induction false} PrependWriteAttempt(
+  lemma {:isolate_assertions} {:induction false} PrependWriteAttempt(observations: Spec.ObservationContext,
     pieces: seq<BenchWorld.Bytes>,
     index: nat,
     count: nat,
@@ -769,7 +792,7 @@ module CsplitProof {
   )
     requires |pieces| > 0
     requires count <= |pieces[1..]|
-    requires IOContract.WriteFileContractFields(
+    requires Spec.WriteObservation(observations,
                preFs,
                preNow,
                Spec.OutputName(index),
@@ -778,7 +801,7 @@ module CsplitProof {
                headErr,
                afterHeadFs
              )
-    requires Spec.WriteAttemptsRelation(
+    requires Spec.WriteAttemptsRelation(observations,
                pieces[1..],
                index + 1,
                count,
@@ -788,7 +811,7 @@ module CsplitProof {
                tailOks,
                tailErrs
              )
-    ensures Spec.WriteAttemptsRelation(
+    ensures Spec.WriteAttemptsRelation(observations,
               pieces,
               index,
               count + 1,
@@ -801,7 +824,7 @@ module CsplitProof {
   {
     reveal Spec.WriteAttemptsRelation();
     forall i | 0 <= i < count + 1
-      ensures IOContract.WriteFileContractFields(
+      ensures Spec.WriteObservation(observations,
                 ([preFs] + tailStates)[i],
                 preNow,
                 Spec.OutputName(index + i),
@@ -826,14 +849,14 @@ module CsplitProof {
         assert ([preFs] + tailStates)[i + 1] == tailStates[i];
         assert ([headOk] + tailOks)[i] == tailOks[i - 1];
         assert ([headErr] + tailErrs)[i] == tailErrs[i - 1];
-        assert IOContract.WriteFileContractFields(tailStates[i - 1], preNow,
+        assert Spec.WriteObservation(observations, tailStates[i - 1], preNow,
           Spec.OutputName(index + 1 + (i - 1)), pieces[1..][i - 1],
           tailOks[i - 1], tailErrs[i - 1], tailStates[i]);
       }
     }
   }
 
-  lemma {:isolate_assertions} AppendCleanup(
+  lemma {:isolate_assertions} AppendCleanup(observations: Spec.ObservationContext,
     index: nat,
     count: nat,
     preFs: BenchWorld.FileSystem,
@@ -843,25 +866,27 @@ module CsplitProof {
     ok: bool,
     err: int
   )
-    requires Spec.CleanupRelation(index + 1, count, preFs, middleFs, states)
-    requires IOContract.DeletePathContractFields(
+    requires Spec.CleanupRelation(observations, index + 1, count, preFs, middleFs, states)
+    requires Spec.DeleteObservation(observations,
                middleFs, Spec.OutputName(index), ok, err, fs2
              )
-    ensures Spec.CleanupRelation(
+    ensures Spec.CleanupRelation(observations,
               index, count + 1, preFs, fs2, states + [fs2]
             )
   {
     reveal Spec.CleanupRelation();
     var priorOks, priorErrs :|
-      Spec.CleanupWitnessRelation(
+      Spec.CleanupWitnessRelation(observations,
         index + 1, count, preFs, middleFs, states, priorOks, priorErrs
       );
     reveal Spec.CleanupWitnessRelation();
     var oks := priorOks + [ok];
     var errs := priorErrs + [err];
+    assert |states| == count + 1;
+    assert |oks| == count + 1 && |errs| == count + 1;
     forall i | 0 <= i < count + 1
       ensures
-        IOContract.DeletePathContractFields(
+        Spec.DeleteObservation(observations,
           (states + [fs2])[i],
           Spec.OutputName(index + count - i),
           oks[i],
@@ -878,40 +903,42 @@ module CsplitProof {
         assert i == count;
         assert (states + [fs2])[i] == middleFs;
         assert (states + [fs2])[i + 1] == fs2;
-        assert IOContract.DeletePathContractFields(
+        assert Spec.DeleteObservation(observations,
             (states + [fs2])[i],
             Spec.OutputName(index + count - i),
             oks[i],
             errs[i],
             (states + [fs2])[i + 1]
-          );
+          ) by {
+          hide *;
+        }
       }
     }
-    assert Spec.CleanupWitnessRelation(
+    assert Spec.CleanupWitnessRelation(observations,
         index, count + 1, preFs, fs2, states + [fs2], oks, errs
       );
-    assert Spec.CleanupRelation(
+    assert Spec.CleanupRelation(observations,
         index, count + 1, preFs, fs2, states + [fs2]
       );
   }
 
-  lemma EmptyCleanup(
+  lemma EmptyCleanup(observations: Spec.ObservationContext,
     index: nat,
     fs: BenchWorld.FileSystem,
     states: seq<BenchWorld.FileSystem>
   )
     requires states == [fs]
-    ensures Spec.CleanupRelation(index, 0, fs, fs, states)
+    ensures Spec.CleanupRelation(observations, index, 0, fs, fs, states)
   {
     var oks: seq<bool> := [];
     var errs: seq<int> := [];
-    assert Spec.CleanupWitnessRelation(
+    assert Spec.CleanupWitnessRelation(observations,
         index, 0, fs, fs, states, oks, errs
       );
-    assert Spec.CleanupRelation(index, 0, fs, fs, states);
+    assert Spec.CleanupRelation(observations, index, 0, fs, fs, states);
   }
 
-  lemma {:isolate_assertions} {:induction false} SingleWriteFailureRefines(
+  lemma {:isolate_assertions} {:induction false} SingleWriteFailureRefines(observations: Spec.ObservationContext,
     pieces: seq<BenchWorld.Bytes>,
     index: nat,
     terminalError: BenchWorld.Bytes,
@@ -923,7 +950,7 @@ module CsplitProof {
     fs2: BenchWorld.FileSystem
   )
     requires |pieces| > 0
-    requires IOContract.WriteFileContractFields(
+    requires Spec.WriteObservation(observations,
                preFs,
                preNow,
                Spec.OutputName(index),
@@ -932,8 +959,8 @@ module CsplitProof {
                err,
                afterWriteFs
              )
-    requires Spec.FailedWriteCleanupRelation(preFs, preNow, Spec.OutputName(index), pieces[0], err, afterWriteFs, fs2)
-    ensures Spec.WriteTraceRelation(
+    requires Spec.FailedWriteCleanupRelation(observations, preFs, preNow, Spec.OutputName(index), pieces[0], err, afterWriteFs, fs2)
+    ensures Spec.WriteTraceRelation(observations,
               pieces,
               index,
               terminalError,
@@ -950,7 +977,7 @@ module CsplitProof {
     var writeOk := [false];
     var writeErr := [err];
     var cleanupStates := [fs2];
-    assert Spec.WriteAttemptsRelation(
+    assert Spec.WriteAttemptsRelation(observations,
         pieces,
         index,
         1,
@@ -961,9 +988,9 @@ module CsplitProof {
         writeErr
       );
     EmptyCountOutput(pieces);
-    EmptyCleanup(index, fs2, cleanupStates);
+    EmptyCleanup(observations, index, fs2, cleanupStates);
     assert cleanupStates[0] == fs2;
-    assert Spec.WriteTraceWitnessRelation(
+    assert Spec.WriteTraceWitnessRelation(observations,
         pieces,
         index,
         terminalError,
@@ -980,7 +1007,7 @@ module CsplitProof {
         writeErr,
         cleanupStates
       );
-    assert Spec.WriteTraceRelation(
+    assert Spec.WriteTraceRelation(observations,
         pieces,
         index,
         terminalError,
@@ -996,7 +1023,7 @@ module CsplitProof {
     }
   }
 
-  lemma WriteTraceWitnessGivesRelation(
+  lemma WriteTraceWitnessGivesRelation(observations: Spec.ObservationContext,
     pieces: seq<BenchWorld.Bytes>,
     index: nat,
     terminalError: BenchWorld.Bytes,
@@ -1013,7 +1040,7 @@ module CsplitProof {
     writeErr: seq<int>,
     cleanupStates: seq<BenchWorld.FileSystem>
   )
-    requires Spec.WriteTraceWitnessRelation(
+    requires Spec.WriteTraceWitnessRelation(observations,
                pieces,
                index,
                terminalError,
@@ -1030,7 +1057,7 @@ module CsplitProof {
                writeErr,
                cleanupStates
              )
-    ensures Spec.WriteTraceRelation(
+    ensures Spec.WriteTraceRelation(observations,
               pieces,
               index,
               terminalError,
@@ -1045,7 +1072,7 @@ module CsplitProof {
   {
   }
 
-  lemma ExtractWriteTraceWitness(
+  lemma ExtractWriteTraceWitness(observations: Spec.ObservationContext,
     pieces: seq<BenchWorld.Bytes>,
     index: nat,
     terminalError: BenchWorld.Bytes,
@@ -1063,7 +1090,7 @@ module CsplitProof {
       writeErr: seq<int>,
       cleanupStates: seq<BenchWorld.FileSystem>
     )
-    requires Spec.WriteTraceRelation(
+    requires Spec.WriteTraceRelation(observations,
                pieces,
                index,
                terminalError,
@@ -1075,7 +1102,7 @@ module CsplitProof {
                stderr,
                exit
              )
-    ensures Spec.WriteTraceWitnessRelation(
+    ensures Spec.WriteTraceWitnessRelation(observations,
               pieces,
               index,
               terminalError,
@@ -1095,7 +1122,7 @@ module CsplitProof {
   {
     reveal Spec.WriteTraceRelation();
     attempted, writeStates, writeOk, writeErr, cleanupStates :|
-      Spec.WriteTraceWitnessRelation(
+      Spec.WriteTraceWitnessRelation(observations,
         pieces,
         index,
         terminalError,
@@ -1114,7 +1141,7 @@ module CsplitProof {
       );
   }
 
-  lemma {:isolate_assertions} {:induction false} PrependSuccessfulWriteWitness(
+  lemma {:isolate_assertions} {:induction false} PrependSuccessfulWriteWitness(observations: Spec.ObservationContext,
     pieces: seq<BenchWorld.Bytes>,
     index: nat,
     terminalError: BenchWorld.Bytes,
@@ -1137,7 +1164,7 @@ module CsplitProof {
     tailCleanupStates: seq<BenchWorld.FileSystem>
   )
     requires |pieces| > 0
-    requires IOContract.WriteFileContractFields(
+    requires Spec.WriteObservation(observations,
                preFs,
                preNow,
                Spec.OutputName(index),
@@ -1146,7 +1173,7 @@ module CsplitProof {
                headErr,
                afterWriteFs
              )
-    requires Spec.WriteTraceWitnessRelation(
+    requires Spec.WriteTraceWitnessRelation(observations,
                pieces[1..],
                index + 1,
                terminalError,
@@ -1164,12 +1191,12 @@ module CsplitProof {
                tailCleanupStates
              )
     requires if hasTerminalError || tailExit != 0 then
-               IOContract.DeletePathContractFields(
+               Spec.DeleteObservation(observations,
                  tailFs, Spec.OutputName(index), deleteOk, deleteErr, fs2
                )
              else
                fs2 == tailFs
-    ensures Spec.WriteTraceRelation(
+    ensures Spec.WriteTraceRelation(observations,
               pieces,
               index,
               terminalError,
@@ -1182,11 +1209,13 @@ module CsplitProof {
               tailExit
             )
   {
-    reveal Spec.WriteTraceWitnessRelation();
+    hide *;
+    reveal Spec.WriteTraceWitnessRelation(), Spec.WriteAttemptsRelation();
+    assert pieces == [pieces[0]] + pieces[1..];
     var writeStates := [preFs] + tailWriteStates;
     var writeOk := [true] + tailWriteOk;
     var writeErr := [headErr] + tailWriteErr;
-    PrependWriteAttempt(
+    PrependWriteAttempt(observations,
       pieces,
       index,
       attempted,
@@ -1202,7 +1231,7 @@ module CsplitProof {
     if attempted > 0 && !tailWriteOk[attempted - 1] {
       var failedCleanupFs := tailCleanupStates[0];
       PrependCountOutput(pieces[0], pieces[1..], attempted - 1, tailOut);
-      AppendCleanup(
+      AppendCleanup(observations,
         index,
         attempted - 1,
         failedCleanupFs,
@@ -1213,11 +1242,11 @@ module CsplitProof {
         deleteErr
       );
       var cleanupStates := tailCleanupStates + [fs2];
-      assert Spec.FailedWriteCleanupRelation(writeStates[attempted], preNow,
+      assert Spec.FailedWriteCleanupRelation(observations, writeStates[attempted], preNow,
         Spec.OutputName(index + attempted), pieces[attempted], writeErr[attempted],
         writeStates[attempted + 1], failedCleanupFs);
-      assert Spec.CleanupRelation(index, attempted, failedCleanupFs, fs2, cleanupStates);
-      assert Spec.WriteTraceWitnessRelation(
+      assert Spec.CleanupRelation(observations, index, attempted, failedCleanupFs, fs2, cleanupStates);
+      assert Spec.WriteTraceWitnessRelation(observations,
           pieces,
           index,
           terminalError,
@@ -1234,7 +1263,7 @@ module CsplitProof {
           writeErr,
           cleanupStates
         );
-      WriteTraceWitnessGivesRelation(
+      WriteTraceWitnessGivesRelation(observations,
         pieces, index, terminalError, hasTerminalError, preFs, preNow,
         fs2, Spec.CountLine(|pieces[0]|) + tailOut, tailErr, tailExit,
         attempted + 1, writeStates, writeOk, writeErr, cleanupStates
@@ -1242,7 +1271,7 @@ module CsplitProof {
     } else {
       PrependCountOutput(pieces[0], pieces[1..], attempted, tailOut);
       if hasTerminalError {
-        AppendCleanup(
+        AppendCleanup(observations,
           index,
           attempted,
           tailWriteStates[attempted],
@@ -1253,7 +1282,7 @@ module CsplitProof {
           deleteErr
         );
         var cleanupStates := tailCleanupStates + [fs2];
-        assert Spec.WriteTraceWitnessRelation(
+        assert Spec.WriteTraceWitnessRelation(observations,
             pieces,
             index,
             terminalError,
@@ -1270,14 +1299,14 @@ module CsplitProof {
             writeErr,
             cleanupStates
           );
-        WriteTraceWitnessGivesRelation(
+        WriteTraceWitnessGivesRelation(observations,
           pieces, index, terminalError, hasTerminalError, preFs, preNow,
           fs2, Spec.CountLine(|pieces[0]|) + tailOut, tailErr, tailExit,
           attempted + 1, writeStates, writeOk, writeErr, cleanupStates
         );
       } else {
         var cleanupStates := [fs2];
-        assert Spec.WriteTraceWitnessRelation(
+        assert Spec.WriteTraceWitnessRelation(observations,
             pieces,
             index,
             terminalError,
@@ -1294,7 +1323,7 @@ module CsplitProof {
             writeErr,
             cleanupStates
           );
-        WriteTraceWitnessGivesRelation(
+        WriteTraceWitnessGivesRelation(observations,
           pieces, index, terminalError, hasTerminalError, preFs, preNow,
           fs2, Spec.CountLine(|pieces[0]|) + tailOut, tailErr, tailExit,
           attempted + 1, writeStates, writeOk, writeErr, cleanupStates
@@ -1303,7 +1332,7 @@ module CsplitProof {
     }
   }
 
-  lemma {:isolate_assertions} WriteTraceSummaryRefines(
+  lemma {:isolate_assertions} WriteTraceSummaryRefines(observations: Spec.ObservationContext,
     pieces: seq<BenchWorld.Bytes>,
     index: nat,
     terminalError: BenchWorld.Bytes,
@@ -1315,7 +1344,7 @@ module CsplitProof {
     stderr: BenchWorld.Bytes,
     exit: int
   )
-    requires Core.WriteTraceSummaryFields(
+    requires Core.WriteTraceSummaryFields(observations,
                pieces,
                index,
                terminalError,
@@ -1327,7 +1356,7 @@ module CsplitProof {
                stderr,
                exit
              )
-    ensures Spec.WriteTraceRelation(
+    ensures Spec.WriteTraceRelation(observations,
               pieces,
               index,
               terminalError,
@@ -1347,12 +1376,12 @@ module CsplitProof {
       var writeOk: seq<bool> := [];
       var writeErr: seq<int> := [];
       var cleanupStates := [preFs];
-      assert Spec.WriteAttemptsRelation(
+      assert Spec.WriteAttemptsRelation(observations,
           pieces, index, 0, preFs, preNow, writeStates, writeOk, writeErr
         );
       EmptyCountOutput(pieces);
-      EmptyCleanup(index, preFs, cleanupStates);
-      assert Spec.WriteTraceWitnessRelation(
+      EmptyCleanup(observations, index, preFs, cleanupStates);
+      assert Spec.WriteTraceWitnessRelation(observations,
           pieces,
           index,
           terminalError,
@@ -1369,7 +1398,7 @@ module CsplitProof {
           writeErr,
           cleanupStates
         );
-      WriteTraceWitnessGivesRelation(
+      WriteTraceWitnessGivesRelation(observations,
         pieces, index, terminalError, hasTerminalError, preFs, preNow,
         fs2, stdout, stderr, exit, 0, writeStates, writeOk, writeErr,
         cleanupStates
@@ -1377,7 +1406,7 @@ module CsplitProof {
     } else {
       CountLineEq(|pieces[0]|);
       var afterWriteFs, ok, err :|
-        IOContract.WriteFileContractFields(
+        Spec.WriteObservation(observations,
           preFs,
           preNow,
           Spec.OutputName(index),
@@ -1389,7 +1418,7 @@ module CsplitProof {
         if ok then
           exists tailFs: BenchWorld.FileSystem, tailOut: BenchWorld.Bytes,
             tailErr: BenchWorld.Bytes, tailExit: int
-            {:trigger Core.WriteTraceSummaryFields(
+            {:trigger Core.WriteTraceSummaryFields(observations,
               pieces[1..],
               index + 1,
               terminalError,
@@ -1401,7 +1430,7 @@ module CsplitProof {
               tailErr,
               tailExit
             )} ::
-            Core.WriteTraceSummaryFields(
+            Core.WriteTraceSummaryFields(observations,
               pieces[1..],
               index + 1,
               terminalError,
@@ -1415,7 +1444,7 @@ module CsplitProof {
             ) &&
             (if hasTerminalError || tailExit != 0 then
                exists deleteOk: bool, deleteErr: int ::
-                 IOContract.DeletePathContractFields(
+                 Spec.DeleteObservation(observations,
                    tailFs, Spec.OutputName(index), deleteOk, deleteErr, fs2
                  )
              else
@@ -1424,12 +1453,12 @@ module CsplitProof {
             stderr == tailErr &&
             exit == tailExit
         else
-          Spec.FailedWriteCleanupRelation(preFs, preNow, Spec.OutputName(index), pieces[0], err, afterWriteFs, fs2) &&
+          Spec.FailedWriteCleanupRelation(observations, preFs, preNow, Spec.OutputName(index), pieces[0], err, afterWriteFs, fs2) &&
           stdout == [] &&
           stderr == Spec.WriteErrorMessage(Spec.OutputName(index), err) &&
           exit == 1;
       if !ok {
-        SingleWriteFailureRefines(
+        SingleWriteFailureRefines(observations,
           pieces,
           index,
           terminalError,
@@ -1442,7 +1471,7 @@ module CsplitProof {
         );
       } else {
         var tailFs, tailOut, tailErr, tailExit :|
-          Core.WriteTraceSummaryFields(
+          Core.WriteTraceSummaryFields(observations,
             pieces[1..],
             index + 1,
             terminalError,
@@ -1456,7 +1485,7 @@ module CsplitProof {
           ) &&
           (if hasTerminalError || tailExit != 0 then
              exists deleteOk: bool, deleteErr: int ::
-               IOContract.DeletePathContractFields(
+               Spec.DeleteObservation(observations,
                  tailFs, Spec.OutputName(index), deleteOk, deleteErr, fs2
                )
            else
@@ -1464,7 +1493,7 @@ module CsplitProof {
           stdout == Spec.CountLine(|pieces[0]|) + tailOut &&
           stderr == tailErr &&
           exit == tailExit;
-        WriteTraceSummaryRefines(
+        WriteTraceSummaryRefines(observations,
           pieces[1..],
           index + 1,
           terminalError,
@@ -1477,7 +1506,7 @@ module CsplitProof {
           tailExit
         );
         var attempted, tailWriteStates, tailWriteOk, tailWriteErr,
-            tailCleanupStates := ExtractWriteTraceWitness(
+            tailCleanupStates := ExtractWriteTraceWitness(observations,
           pieces[1..],
           index + 1,
           terminalError,
@@ -1493,13 +1522,13 @@ module CsplitProof {
         var deleteErr: int := 0;
         if hasTerminalError || tailExit != 0 {
           deleteOk, deleteErr :|
-            IOContract.DeletePathContractFields(
+            Spec.DeleteObservation(observations,
               tailFs, Spec.OutputName(index), deleteOk, deleteErr, fs2
             );
         } else {
           assert fs2 == tailFs;
         }
-        PrependSuccessfulWriteWitness(
+        PrependSuccessfulWriteWitness(observations,
           pieces,
           index,
           terminalError,
@@ -1525,7 +1554,7 @@ module CsplitProof {
     }
   }
 
-  lemma WritePiecesSummaryRefines(
+  lemma WritePiecesSummaryRefines(observations: Spec.ObservationContext,
     pieces: seq<BenchWorld.Bytes>,
     index: nat,
     preFs: BenchWorld.FileSystem,
@@ -1535,19 +1564,19 @@ module CsplitProof {
     stderr: BenchWorld.Bytes,
     exit: int
   )
-    requires Core.WritePiecesSummaryFields(
+    requires Core.WritePiecesSummaryFields(observations,
                pieces, index, preFs, preNow, fs2, stdout, stderr, exit
              )
-    ensures Spec.WritePiecesSummaryFields(
+    ensures Spec.WritePiecesSummaryFields(observations,
               pieces, index, preFs, preNow, fs2, stdout, stderr, exit
             )
   {
-    WriteTraceSummaryRefines(
+    WriteTraceSummaryRefines(observations,
       pieces, index, [], false, preFs, preNow, fs2, stdout, stderr, exit
     );
   }
 
-  lemma WritePiecesThenErrorSummaryRefines(
+  lemma WritePiecesThenErrorSummaryRefines(observations: Spec.ObservationContext,
     pieces: seq<BenchWorld.Bytes>,
     index: nat,
     line: nat,
@@ -1558,14 +1587,14 @@ module CsplitProof {
     stderr: BenchWorld.Bytes,
     exit: int
   )
-    requires Core.WritePiecesThenErrorSummaryFields(
+    requires Core.WritePiecesThenErrorSummaryFields(observations,
                pieces, index, line, preFs, preNow, fs2, stdout, stderr, exit
              )
-    ensures Spec.WritePiecesThenErrorSummaryFields(
+    ensures Spec.WritePiecesThenErrorSummaryFields(observations,
               pieces, index, line, preFs, preNow, fs2, stdout, stderr, exit
             )
   {
-    WriteTraceSummaryRefines(
+    WriteTraceSummaryRefines(observations,
       pieces,
       index,
       Spec.OutOfRangeMessage(line),
@@ -1579,28 +1608,82 @@ module CsplitProof {
     );
   }
 
-  twostate lemma CoreSummaryImpliesSpec(raw: Schema.CsplitCmdRaw, io: BenchIO.IO, exit: int)
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  lemma DeferredReadResultRefines(raw: Schema.CsplitCmdRaw,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes)
+    ensures Core.DeferredReadResultFields(raw, preFs, preStreams, preStdin) ==
+      Spec.DeferredReadResultFields(raw, preFs, preStreams, preStdin)
+  {
+    AnalyzeNumbersRefines(raw.lineNumbers);
+    var analysis := Core.AnalyzeNumbers(raw.lineNumbers);
+    assert (analysis.status == Core.NumbersOk) == Spec.ValidNumberPrefix(raw.lineNumbers, |raw.lineNumbers|) by {
+      match analysis.status
+      case NumbersOk =>
+      case NumberZero =>
+        assert raw.lineNumbers[analysis.processed] == 0;
+      case NumberBackwards(current, previous) =>
+        assert raw.lineNumbers[analysis.processed] < raw.lineNumbers[analysis.processed - 1];
+    }
+  }
+
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.CsplitCmdRaw, io: BenchIO.IO, exit: int, new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     if raw.mode == Schema.ModeHelp {
-      assert Spec.Spec(raw, io, exit);
+      assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr);
       return;
     }
     if raw.mode == Schema.ModeVersion {
-      assert Spec.Spec(raw, io, exit);
+      assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr);
       return;
     }
 
-    match Spec.ReadResultFields(raw.input, old(io.fs()), old(io.trustedStreams()), old(io.stdin()))
+    DeferredReadResultRefines(raw, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
+    AnalyzeNumbersRefines(raw.lineNumbers);
+    match Spec.DeferredReadResultFields(raw, old(io.fs()), old(io.trustedStreams()), old(io.stdin()))
     case Err(err) =>
-      assert Spec.Spec(raw, io, exit);
+      assert io.stdin() == Spec.ReadStdinAfterFields(raw.input, old(io.stdin()), old(io.trustedStreams()));
+      if raw.input.Stdin? {
+        var analysis := Core.AnalyzeNumbers(raw.lineNumbers);
+        assert analysis.status == Core.NumbersOk;
+        assert analysis.processed == |raw.lineNumbers|;
+        assert Spec.NumberAnalysisRelation(raw.lineNumbers, Spec.NumbersOk,
+          analysis.processed, analysis.warnings);
+        assert Spec.ValidNumberPrefix(raw.lineNumbers, |raw.lineNumbers|);
+        assert Spec.DuplicateWarningsRelation(raw.lineNumbers, analysis.warnings) by {
+          hide *;
+          reveal Spec.NumberAnalysisRelation();
+          assert raw.lineNumbers[..analysis.processed] == raw.lineNumbers;
+        }
+        var pieces := Core.ReadFailurePieces(IOContract.ReadResultData(Result.Err(err)), raw.lineNumbers);
+        ReadFailurePiecesRefines(IOContract.ReadResultData(Result.Err(err)), raw.lineNumbers);
+        var writeDiagnostics :|
+          Core.WriteTraceSummaryFields(old(Spec.Context(io)), pieces, 0, Spec.ReadErrorMessage(raw.input, err), true,
+            old(io.fs()), old(io.now()), io.fs(), plannedStdout, writeDiagnostics, exit) &&
+          plannedStderr == analysis.warnings + writeDiagnostics && exit == 1;
+        WriteTraceSummaryRefines(old(Spec.Context(io)), pieces, 0, Spec.ReadErrorMessage(raw.input, err), true,
+          old(io.fs()), old(io.now()), io.fs(), plannedStdout, writeDiagnostics, exit);
+        assert Spec.PartialStdinFailureFields(old(Spec.Context(io)), raw, err, old(io.fs()), old(io.now()), io.fs(),
+          plannedStdout, plannedStderr, exit) by {
+          reveal Spec.PartialStdinFailureFields();
+        }
+      } else {
+        assert io.fs() == old(io.fs());
+        assert plannedStdout == [];
+        assert plannedStderr == Spec.ReadErrorMessage(raw.input, err);
+        assert exit == 1;
+      }
+      assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr) by {
+        hide *;
+        reveal Spec.PreparedSpec();
+      }
     case Ok(data) =>
       AnalyzeNumbersRefines(raw.lineNumbers);
       var analysis := Core.AnalyzeNumbers(raw.lineNumbers);
       match analysis.status
       case NumberZero =>
-        assert Spec.Spec(raw, io, exit) by {
+        assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr) by {
           assert exists status: Spec.NumberStatus, processed: nat,
               warnings: BenchWorld.Bytes ::
               Spec.NumberAnalysisRelation(
@@ -1611,7 +1694,7 @@ module CsplitProof {
               warnings == analysis.warnings;
         }
       case NumberBackwards(current, previous) =>
-        assert Spec.Spec(raw, io, exit) by {
+        assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr) by {
           assert exists status: Spec.NumberStatus, processed: nat,
               warnings: BenchWorld.Bytes ::
               Spec.NumberAnalysisRelation(
@@ -1634,7 +1717,7 @@ module CsplitProof {
         match splitPlan
         case SplitOutOfRange(pieces, line) =>
           var writeOut, writeErr :|
-            Core.WritePiecesThenErrorSummaryFields(
+            Core.WritePiecesThenErrorSummaryFields(old(Spec.Context(io)),
               pieces,
               0,
               line,
@@ -1645,9 +1728,9 @@ module CsplitProof {
               writeErr,
               exit
             ) &&
-            io.stdout() == old(io.stdout()) + writeOut &&
-            io.stderr() == old(io.stderr()) + warnings + writeErr;
-          WritePiecesThenErrorSummaryRefines(
+            plannedStdout == writeOut &&
+            plannedStderr == warnings + writeErr;
+          WritePiecesThenErrorSummaryRefines(old(Spec.Context(io)),
             pieces,
             0,
             line,
@@ -1658,7 +1741,7 @@ module CsplitProof {
             writeErr,
             exit
           );
-          assert Spec.Spec(raw, io, exit) by {
+          assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr) by {
             assert exists status: Spec.NumberStatus, processed: nat,
                 warningOutput: BenchWorld.Bytes ::
                 Spec.NumberAnalysisRelation(
@@ -1673,7 +1756,7 @@ module CsplitProof {
           }
         case SplitComplete(pieces) =>
           var writeOut, writeErr :|
-            Core.WritePiecesSummaryFields(
+            Core.WritePiecesSummaryFields(old(Spec.Context(io)),
               pieces,
               0,
               old(io.fs()),
@@ -1683,9 +1766,9 @@ module CsplitProof {
               writeErr,
               exit
             ) &&
-            io.stdout() == old(io.stdout()) + writeOut &&
-            io.stderr() == old(io.stderr()) + warnings + writeErr;
-          WritePiecesSummaryRefines(
+            plannedStdout == writeOut &&
+            plannedStderr == warnings + writeErr;
+          WritePiecesSummaryRefines(old(Spec.Context(io)),
             pieces,
             0,
             old(io.fs()),
@@ -1695,7 +1778,7 @@ module CsplitProof {
             writeErr,
             exit
           );
-          assert Spec.Spec(raw, io, exit) by {
+          assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr) by {
             assert exists status: Spec.NumberStatus, processed: nat,
                 warningOutput: BenchWorld.Bytes ::
                 Spec.NumberAnalysisRelation(
@@ -1708,5 +1791,17 @@ module CsplitProof {
                 Spec.SplitPlanRelation(data, raw.lineNumbers, plan) &&
                 plan == Spec.SplitComplete(pieces);
           }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.CsplitCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      out, diagnostics);
   }
 }

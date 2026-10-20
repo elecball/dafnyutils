@@ -4,6 +4,9 @@
 holds only under these contracts; libc, gnulib and the C/C# adapters are trusted,
 not verified.
 
+Current maintenance validation and source-snapshot evidence are recorded in the
+[trusted API audit](trustbase-failures.md).
+
 ## Contents
 
 - [Index](#index)
@@ -52,10 +55,10 @@ module StreamCopy {
     ensures readErr == 0 && writeErr == 0 ==>
       io.stdin() == [] && io.stdout() == old(io.stdout()) + old(io.stdin())
   {
-    var read := io.ReadStdin(BW.ReturnError);
+    var read := io.ReadStdin();
     var data := C.ReadResultData(read);
     readErr := C.ResultErrno(read);
-    var write := io.WriteStdout(data, BW.ReturnError);
+    var write := io.WriteStdout(data);
     writeErr := C.ResultErrno(write);
   }
 
@@ -94,7 +97,9 @@ A utility is a `BenchItem.BenchmarkItemTwostate<CmdRaw>` with hooks `Name`,
 `Schema`, `ParseConfig`, `Decode`, `FormatParseError`, `PlanParsed`,
 `PlanParseFailure`, `PlanArgv` and `RunCore`. `BenchItem.RunMain(item, argv, io)`
 runs `RunCore` for `CliRun(raw)`, or writes the planned output and exit status
-for `CliEarlyExit`.
+for `CliEarlyExit`. Early-exit writes are checked explicitly; stdout failure
+appends the named GNU write-error diagnostic after the planned diagnostics, and
+either write failure returns exit status 1.
 
 - `RunCore` must ensure `Spec(raw, io, exit)` directly; a proof about a helper
   is not enough.
@@ -125,14 +130,34 @@ Direct access to `*Region` field is not allowed.
 | --- | --- |
 | `fs()` | Inode filesystem, including aliases |
 | `stdin()`, `stdout()`, `stderr()` | Unread input; output written so far |
-| `cwd()`, `env()`, `props()` | Working directory, environment, process properties |
+| `cwd()`, `env()`, `props()` | Historical cwd hint, environment, process properties |
+| `cwdContext()` | Authenticated current directory context and operation ordinal |
+| `directoryState()`, `directoryModel()` | Validated live state; FS-indexed model and immutable response provider |
+| `directoryTopology()`, `directoryPosition()` | Current full-record directory view and position token |
+| `currentDirectoryPath()` | Genuine current pathname as a sequence of length zero or one |
+| `directoryCapabilities()`, `directoryOrdinal()`, `directoryObservations()` | Owned live capabilities, next occurrence, immutable responses |
 | `credentials()`, `security()`, `umask()` | Process identity and filesystem security context |
-| `dirHandles()` | Directory iteration state |
+| `dirHandles()`, `directoryOrigins()` | Exact legacy handle map and authenticated opening snapshots |
 | `now()`, `stdoutTimestamp()` | Current seconds; stdout timestamp state |
 | `statusObservations()`, `statusCursor()` | File-status observations and the next position (`statusObservationsRegion`) |
 | `trustedTimeParses()` | Result per date/timestamp parse request |
 | `trustedStreams()` | Result per read/write request |
 | `trustedFilesystem()` | Result per filesystem request |
+| `trustedNativeFailures()` | Exact errno per metadata, identity, legacy mutation, stdout timestamp or directory request |
+
+Observation providers are functions of their request keys. An identical key has
+the same result. Status ordinals distinguish old ordered status calls, and the
+typed cwd/directory context advances an operation ordinal. Other legacy native
+and stream requests can repeat a key without a new occurrence. See the
+[maintenance audit](trustbase-failures.md) for this temporal abstraction limit.
+
+`directoryStateRegion` aliases `dirHandlesRegion`. That region contains one
+validated joint resource value; its legacy and live handle keys are disjoint.
+Observers preserve the exact legacy map without sign-based filtering. Candidates
+cannot mutate the region's private representation. The full context contains
+current topology/position, live capabilities, legacy maps and an operation
+ordinal. `cwd()` is a historical hint; unnamed cwd access uses the authenticated
+position and full records, never a pathname fallback.
 
 In the tables below, "Modifies" names an IO region. `none` means no modeled
 change; a native read may still update host access times. Specs use `reads` and
@@ -142,22 +167,25 @@ methods use `modifies` to state what stays unchanged.
 
 Stream methods return `IOResult<T>`.
 
-| Policy | On failure |
-| --- | --- |
-| `ReturnError` | Returns `Err` |
-| `ThrowOnError` | Only for non-recoverable errors. Raises `IOException`; a normal return is always `Ok` |
+Every stream call returns an explicit result, including a failed call that has
+already consumed or committed a prefix. Callers inspect `Err` and choose their
+own diagnostics and exit status. There is no stream error policy or exception
+path that can turn a failed call into a success-only proof obligation. Writes
+to standard descriptors are unbuffered.
 
-Use `var data :- assert io.ReadStdin(ThrowOnError)`, or
-`var _ := io.WriteStdout(data, ThrowOnError)` to ignore a write result. Writes to
-standard descriptors are unbuffered.
+`ReadStdin` returns the exact result selected by
+`ObservedReadStdinResultFields(beforeStdin, observations)` and leaves the exact
+unread suffix selected by `ObservedReadStdinRemainingFields`. Every public
+stream result is `Ok` exactly when `ResultErrno(result) == 0`; failed results
+retain the native errno and committed prefix.
 
 | Function | Return |
 | --- | --- |
 | `ReadFile(path)` → `IOResult<Bytes>` | `Ok`: the byte stream of whole file. `Err(ReadFailure(errno, message, partial, readStage))`: errno, message, bytes read, failed stage. |
 | `ProbeReadFile(path)` → `IOResult<Bytes>` | Opens read-only and closes without reading contents. Data is empty; the exact errno and `OpenFailed`/`CloseFailed` stage remain observable. |
-| `ReadStdin(ReturnError)` → `IOResult<Bytes>` | `StreamFailure` holds the bytes read; bytes read + remaining input = old stdin. |
-| `WriteStdout(data, ReturnError)` → `IOResult<WriteReceipt>` | Appends exactly the committed prefix; `StreamFailure` holds the count. |
-| `WriteStderr(data, ReturnError)` → `IOResult<WriteReceipt>` | Same, for stderr. |
+| `ReadStdin()` → `IOResult<Bytes>` | `StreamFailure` holds the bytes read; bytes read + remaining input = old stdin. |
+| `WriteStdout(data)` → `IOResult<WriteReceipt>` | Appends exactly the committed prefix; `StreamFailure` holds the count. |
+| `WriteStderr(data)` → `IOResult<WriteReceipt>` | Same, for stderr. |
 
 Full data does not mean success: a read can fail at close after returning all
 bytes, and an empty write can fail with nothing committed.
@@ -206,7 +234,7 @@ later metadata lookup.
 | `GetCLocaleErrnoText` | `GetCLocaleErrnoTextSpec` | `none` |
 | `QuoteafPath` | `QuoteafPathSpec` | `none` |
 | `QuoteArgument` | `QuoteArgumentSpec` | `none` |
-| `GetCwd` | `GetCwdSpec` | `none` |
+| `GetCwd` | `DirectoryOperationSpec` with `DirectoryGetCwd` | `directoryStateRegion` |
 | `GetEnv` | `GetEnvSpec` | `none` |
 | `GetEnvironment` | `ValidEnvironment`; `GetEnvironmentSpec` | `none` |
 | `GetLoginName` | `GetLoginNameSpec` | `none` |
@@ -214,6 +242,15 @@ later metadata lookup.
 | `Now` | `NowSpec` | `none` |
 | `ParseTimestamp` | `ParseTimestampSpec` | `none` |
 | `ParseDate` | `ParseDateSpec` | `none` |
+
+`Now`, the environment map and the umask are supplied process-context observations.
+POSIX `umask` has no error return; its adapter observes and restores the actual
+value. Invalid environment keys cannot be found in the validated map. `GetCwd`
+is different: it returns `IOResult<Path>` from libc `getcwd(NULL, 0)`, preserves
+the immediate native errno, and frees a successful allocation. It has no `"."`
+substitute. Success identifies the genuine pathname of the authenticated current
+position; failure is allowed even when a pathname exists. GNU recovery belongs
+to Pwd's utility implementation and proof.
 
 ## Paths and metadata
 
@@ -233,8 +270,61 @@ later metadata lookup.
   times. Identity tells aliases apart.
 - `GetFileStatus` consumes the next status observation and advances the cursor,
   even on failure.
-- `IsDirectory` must succeed on paths the model resolves; other paths get the
-  native error.
+- Resolvable paths may still fail with a modeled native errno. Success retains
+  the exact kind, mode, target, identity and status guarantees; a finite error
+  domain does not itself identify the actual failure.
+- These APIs bind errno to `trustedNativeFailures()` using the exact operation,
+  prior filesystem, operands and status ordinal where applicable. Bound status
+  contexts carry both the time provider and native failure provider. Use the
+  observed API relation in a utility's principal specification; an existential
+  lower projection such as `IsDirectoryStrictContractFields` is insufficient to
+  justify a native failure.
+- ABI path validation rejects embedded NUL with `EINVAL`. `ReadLink` preserves
+  the actual `EINVAL` for an ordinary file instead of relabeling it as `ELOOP`.
+  Metadata name-length failures retain `ENAMETOOLONG`.
+
+### Authenticated relative paths
+
+The following methods pass the raw operand unchanged and start resolution at the
+authenticated current position or a held directory. They can describe a renamed
+or detached cwd without requiring a recoverable absolute pathname.
+
+| Method | Contract | Modifies |
+| --- | --- | --- |
+| `ReadLinkAtCwd(path)` | `ReadLinkAtCwdSpec` | `directoryStateRegion` |
+| `GetFileStatusAtCwd(path, follow)` | `GetFileStatusAtCwdSpec` | `directoryStateRegion`, `statusObservationsRegion` |
+| `GetFileStatusAtDir(parent, path, follow)` | `GetFileStatusAtDirSpec` | same |
+| `SetFileModeAtCwd(path, follow, mode)` | `SetFileModeAtCwdSpec` | `fsRegion`, `directoryStateRegion` |
+| `SetFileModeAtDir(parent, path, follow, mode)` | `SetFileModeAtDirSpec` | same |
+| `OpenDirAtCwd(path, dots)` | `OpenDirAtCwdSpec` | `directoryStateRegion` |
+| `OpenDirAtDir(parent, path, dots)` | `OpenDirAtDirSpec` | `directoryStateRegion` |
+
+Every call returns an `IOResult` and binds the exact native request. Read-only
+calls satisfy `CwdContextReadStepFields`: only the operation ordinal advances.
+Status also advances its separate cursor on failure. Mode success preserves
+identity and all record fields except mode/change time across visible aliases
+and live unnamed objects. Open success returns an owned live capability with
+its authenticated anchor, entry set and dot policy; failure retains ownership.
+
+`ResolvePathAtCwdForMetadataFields` and
+`ResolvePathAtDirContextForMetadataFields` return an `IOResult<CwdTarget>`.
+`CwdTargetRecordFields` selects the exact full record;
+`CwdTargetNamedPathFields` supplies a genuine optional namespace path. Do not
+assert that every successful target is namespace-reachable. Resolution starts
+at the directory itself, preserving symlink-hop behavior and avoiding permission
+checks on unrelated ancestors. It does not lexically normalize the raw operand.
+For an owned relative parent, the AtDir methods require
+`DirectoryParentAnchorForContextRequestFields`; callers prove its current-anchor
+fact from their own trace. Absolute, empty, NUL and unknown-parent errors remain
+callable under that predicate.
+
+The legacy path APIs above retain their existing root-based model projection
+for relative spellings while native calls use process cwd. The new APIs repair
+their explicit clients; they do not claim a general correction to every legacy
+relative-path contract or composition after cwd movement. New typed mode effects
+prove their before/after identity and topology transport. Arbitrary legacy
+filesystem mutations do not gain a general transport theorem between their
+FS-indexed directory views. Old CLI and API input domains are unchanged.
 
 ## Filesystem effects
 
@@ -269,8 +359,11 @@ later metadata lookup.
   `AT_SYMLINK_FOLLOW` to follow a terminal source symlink; destination creation
   does not follow an existing terminal link. Empty paths retain native errno;
   a path with NUL fails with `EINVAL`.
-- `DeletePath` computes its result from the model; `UnlinkPath` uses the trusted
-  result. Their error models differ; do not swap them.
+- `CreateSymlink`, `DeletePath`, `SetFileMode` and `RenamePath` retain their
+  modeled successful effects and failure frames, while binding a native errno
+  to an exact `trustedNativeFailures()` request. In particular, an unsupported
+  symlink mode change remains an error. `UnlinkPath` uses a richer whole-result
+  filesystem observation; these operations are not interchangeable.
 - Recursion, parent creation, overwrite policy and diagnostics are up to the
   utility. An available API does not mean device privileges or every filesystem
   setup are approved.
@@ -298,6 +391,10 @@ later metadata lookup.
 `IOResult<Unit>`. File setters modify `fsRegion`; stdout setters modify
 `stdoutTimestampRegion`. Access-only and modification-only setters `Keep` the
 other time. The current time is the modeled `now()`.
+Path setters use the validated filesystem provider. Stdout setters additionally
+bind the exact prior target, requested updates and native errno through
+`trustedNativeFailures()`: even an available target can fail, and a failed
+setter preserves its modeled timestamp state.
 
 | Method | Contract | Modifies |
 | --- | --- | --- |
@@ -320,7 +417,15 @@ other time. The current time is the modeled `now()`.
   without adding metadata lookups. Existing name/kind and handle contracts remain.
 - `ReadDirContractFields` requires `0 <= err`: an entry or end-of-directory
   returns zero, and failure returns a positive libc error number.
-- `CloseDir(handle)` closes the handle.
+- `CloseDir(handle)` → `IOResult<Unit>` consumes an owned handle on both
+  success and failure. Its exact native errno remains observable. Invalid handles
+  return `EINVAL` and leave the handle map unchanged.
+- Open, read, opened-directory status and close each use a distinct request in
+  `trustedNativeFailures()`. Preserve those links through utility trace
+  relations. Cleanup-close failures follow each utility's GNU policy: some
+  callers report them, while GNU traversal helpers deliberately preserve an
+  earlier read result across cleanup. Either policy must retain the actual
+  observed close result and handle transition in the specification.
 - Recursion, ordering and filtering are up to the utility.
 - `OpenDirOutcomeFields` admits only a positive modeled lookup error or a
   listed native access, I/O, memory, name-length or descriptor-allocation error
@@ -352,6 +457,44 @@ for cycle detection without a separate status call before the open.
 | `GetOpenDirectoryStatus` | `GetOpenDirectoryStatusSpec` | `statusObservationsRegion` |
 | `CloseDir` | `CloseDirSpec` | `dirHandlesRegion` |
 
+### Live capabilities and physical cwd recovery
+
+`OpenDirAtCwd`, `OpenDirAtDir`, and `OpenParentDirectory` use the live registry;
+legacy `OpenDir` uses its original registry. Handles are opaque Dafny integers,
+with no abstract sign restriction. Native legacy keys use an unbounded
+`BigInteger` allocator. The registries cannot consume each other's handles.
+
+| Method | Operation and result | Modifies |
+| --- | --- | --- |
+| `GetCwdDirectoryIdentity()` | `DirectoryCurrentStatus`; exact current `FileStatus` | `directoryStateRegion`, `statusObservationsRegion` |
+| `OpenParentDirectory()` | `DirectoryOpenParent`; owned parent handle, dots omitted | `directoryStateRegion` |
+| `GetDirectoryDescriptor(handle)` | `DirectoryGetDescriptor`; actual libc fd | `directoryStateRegion` |
+| `FchdirDirectory(fd)` | `DirectoryFchdir`; exact cwd movement | `directoryStateRegion`, `cwdRegion` |
+| `ChdirParent()` | `DirectoryChdirParent`; source-derived descriptor fallback | `directoryStateRegion`, `cwdRegion` |
+| `FstatDirectory(fd)` | `DirectoryFstat`; descriptor status | `directoryStateRegion`, `statusObservationsRegion` |
+| `ReadDirectoryCapability(handle)` | `DirectoryReadNext`; raw name, kind, inode or EOF | `directoryStateRegion` |
+| `LstatCwdEntry(name)` | `DirectoryEntryLstat`; status of a valid child name | `directoryStateRegion`, `statusObservationsRegion` |
+| `CloseDirectoryCapability(handle)` | `DirectoryClose`; consumes on both outcomes | `directoryStateRegion` |
+| `GetOpenDirectoryCapabilityStatus(handle)` | Exact live opened libc `statx` status, including a returned ENOSYS | `directoryStateRegion`, `statusObservationsRegion` |
+
+The first nine operations use `DirectoryOperationSpec`; the context-form
+`ContextOperationSpec` binds the same request and full before/after context.
+Requests include the actual occupied legacy keys, so live allocation is fresh
+across both registries. Each occurrence advances the context ordinal. A failed
+read retains the exact observed subset `remainingAfterReadError`, admitting
+native entry advancement without inventing a returned entry. Dot policy and raw
+inode observations remain explicit, including unavailable inode zero and mount
+boundaries. An owned read or descriptor operation requires its corresponding
+current-anchor predicate; utility traces derive and preserve that fact.
+
+Read-only recovery preserves the filesystem and complete legacy handle/origin
+maps. Mode and open operations preserve those same legacy projections despite
+sharing their resource region. The joint validity witnesses are proved from
+valid model/provider values; native postconditions do not manufacture an old
+state invariant. Pwd performs its GNU parent walk in task-owned code and proofs,
+including search, errno precedence, fallback selection and output. None of
+these primitives implements robust_getcwd for the utility.
+
 ## CLI and pure helpers
 
 | Module | Main names | Use |
@@ -373,15 +516,16 @@ them.
 
 - Stream contracts fix only the consumed or committed prefix and the errno. They
   describe library results, not syscalls. `FileReadStage` is success, or an
-  open, read or close failure. There are no incremental stdin reads.
+  open, read or close failure. There are no incremental stdin reads or public
+  standard-stream close receipts. Whole operations and utility output plans do
+  not establish every libc buffer-flush or syscall-order behavior.
 - `AppendFile` results come from native observations. `AppendFile` keeps the
   file on empty input, appends exactly the bytes to the file (or symlink target)
   on success, and leaves other inodes alone; mode and timestamp effects are
   host-specific.
 - `GetEnvironment` may list the same map in different orders.
 - Ghost credentials are not real UID/GID or name-service lookups.
-- `GetFileTimes` and `GetFileStatus` report `ENAMETOOLONG` as `ENOENT`;
-  `GetFileMode` does not.
+- Path metadata adapters retain the actual `ENAMETOOLONG` errno.
 - `TruncateFile` does not create a missing file. Path `Sync` lacks GNU's
   write-only-open retry and separate failure phases.
 - There is no API for running processes, user/group lookup, terminal control,
@@ -439,6 +583,13 @@ symlink. Concurrent outside changes are not modeled.
 | `WriteOpenFailed` | 0 | Unchanged, except symlink access times |
 | `WriteFailed` | Fewer than requested | `WriteFile`: the file may be created or truncated and holds exactly the committed prefix. `AppendFile`: old contents + committed prefix. |
 | `WriteCloseFailed` | All | Same as `WriteFailed` |
+
+`WriteFileSpec` and `AppendFileSpec` bind committed bytes, stage, errno and the
+resulting filesystem to the exact validated filesystem request. Legacy
+`WriteFileContractFields`/`AppendFileContractFields` project the same partial
+creation, truncation, append and close effects, but existentially hide the
+receipt and do not identify the actual observation. They cannot replace the
+bound API relation in a principal utility specification.
 
 Files created by a failed write still follow the creation mode and owner rules.
 `CreateFile` can fail at close after creating its empty file.

@@ -190,10 +190,8 @@ module MkdirSpec {
       (if outErr == 0 then [] else WriteErrorText(C.CLocaleErrnoTextResult(outErr)));
     var errObservation := observations(BenchWorld.StreamWriteStderr(beforeErr, finalDiagnostic));
     errObservation.StreamWriteResult? &&
-    C.WriteStdoutSpec(beforeOut, observations, afterOut, output,
-      BenchWorld.ReturnError, outObservation.committed, outErr) &&
-    C.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostic,
-      BenchWorld.ReturnError, errObservation.committed, errObservation.err) &&
+    C.WriteStdoutSpec(beforeOut, observations, afterOut, output, outObservation.committed, outErr) &&
+    C.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostic, errObservation.committed, errObservation.err) &&
     exit == (if creationExit == 0 && outErr == 0 && errObservation.err == 0 then 0 else 1)
   }
 

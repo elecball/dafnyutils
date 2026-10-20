@@ -9,6 +9,7 @@ module RmCore {
   import Schema = RmSchema
   import Spec = RmSpec
   import Facts = RmProof
+  import Errno = Errnos
   import C = IOContract
   import Utf8Semantics
   import PathCore = MvPathCore
@@ -70,28 +71,36 @@ module RmCore {
 
   method ReadDirectory(io: BenchIO.IO, path: Path) returns (listing: Spec.Listing)
     modifies io.dirHandlesRegion
-    ensures Spec.Listed(io.fs(),path,listing)
+    ensures Spec.Listed(Spec.ObservationContextFor(io), io.fs(),path,listing)
     ensures io.dirHandles() == old(io.dirHandles())
   {
     ghost var beforeHandles := io.dirHandles();
+    ghost var context := Spec.ObservationContextFor(io);
     var openResult := io.OpenDir(path,false);
     assert C.OpenDirOutcomeFields(io.fs(),path,openResult.Ok?,C.ResultErrno(openResult)) by {
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       reveal C.OpenDirSpec;
       reveal C.OpenDirContractFields;
     }
     if openResult.Err? {
       assert 0 < C.ResultErrno(openResult) by {
-        hide *;
+        hide *; reveal Spec.ObservationContextFor();
         reveal C.OpenDirOutcomeFields;
+        reveal Errno.EINVAL;
       }
       assert io.dirHandles() == beforeHandles;
       listing := Spec.Listing([],{},C.ResultErrno(openResult),0);
-      assert Spec.Listed(io.fs(),path,listing) by {
-        hide *;
+      assert C.OpenDirSpec(io.fs(), context.handles, context.failures, io.dirHandles(),
+        path, false, false, 0, listing.openError) by {
+        hide *; reveal Spec.ObservationContextFor(); reveal Spec.ObservationContextFor(), C.ResultValue(), C.ResultErrno();
+      }
+      Facts.ListingOpenFailureWitness(context, io.fs(), path, listing, io.dirHandles());
+      assert Spec.ObservationContextFor(io) == context by { reveal Spec.ObservationContextFor(); }
+      assert Spec.Listed(context, io.fs(),path,listing) by {
+        hide *; reveal Spec.ObservationContextFor();
         reveal Spec.Listed;
       }
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       return;
     }
     assert C.OpenDirOutcomeFields(io.fs(),path,true,0);
@@ -102,6 +111,11 @@ module RmCore {
     assert FsContainsPath(io.fs(),resolved);
     assert initial == C.DirectoryEntriesForPathFields(io.fs(),resolved);
     Facts.EntryNamesUnique(io.fs(),resolved);
+    ghost var initialHandles := io.dirHandles();
+    ghost var steps: seq<Spec.DirectoryObservation> := [];
+    ghost var beforeEnd := io.dirHandles();
+    ghost var afterEnd := io.dirHandles();
+    ghost var endKind := UnknownDirentKind;
     ghost var seen: set<DirEntry> := {};
     var names: seq<string> := [];
     var readError := 0;
@@ -116,24 +130,31 @@ module RmCore {
       invariant seen * io.dirHandles()[handle].remaining == {}
       invariant Spec.Names(names) == Spec.EntryNames(seen)
       invariant |Spec.Names(names)| == |names|
+      invariant Spec.ReadPrefix(io.fs(), context, handle, initialHandles, names, steps, io.dirHandles())
       invariant readError == 0
       decreases |io.dirHandles()[handle].remaining|
     {
       ghost var prior := io.dirHandles();
       var result := io.ReadDir(handle);
       assert 0 <= C.ResultErrno(result) by {
-        hide *;
+        hide *; reveal Spec.ObservationContextFor();
         reveal C.ReadDirSpec;
         reveal C.ReadDirContractFields;
       }
       if result.Err? {
+        beforeEnd, afterEnd, endKind := prior, io.dirHandles(), UnknownDirentKind;
         readError := C.ResultErrno(result);
         break;
       } else if result.v.DirectoryEnd? {
+        beforeEnd, afterEnd, endKind := prior, io.dirHandles(), UnknownDirentKind;
         assert prior[handle].remaining == {};
         break;
       } else {
         var name := result.v.name;
+        ghost var step := Spec.DirectoryObservation(prior, io.dirHandles(), true, name, result.v.kind, 0);
+        Facts.AppendReadPrefix(context, io.fs(), handle, initialHandles, names, steps,
+          prior, io.dirHandles(), name, result.v.kind);
+        steps := steps + [step];
         ghost var entry :| entry in prior[handle].remaining && entry.name == name &&
           io.dirHandles()[handle].remaining == prior[handle].remaining - {entry};
         assert name !in Spec.Names(names) by {
@@ -145,12 +166,13 @@ module RmCore {
         Facts.AppendDirectoryName(names,seen,entry);
         seen := seen + {entry};
         names := names + [name];
+        assert Spec.ReadPrefix(io.fs(), context, handle, initialHandles, names, steps, io.dirHandles());
       }
     }
     assert 0 <= readError;
     assert readError == 0 ==> io.dirHandles()[handle].remaining == {};
     assert Spec.Names(names) <= Spec.EntryNames(initial) by {
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       reveal Spec.EntryNames;
     }
     assert readError == 0 ==> Spec.Names(names) == Spec.EntryNames(initial);
@@ -159,13 +181,21 @@ module RmCore {
       C.ResolvePathForMetadataFields(io.fs(),path,true) == R.Ok(candidate) &&
       FsContainsPath(io.fs(),candidate) &&
       listing.entries == C.DirectoryEntriesForPathFields(io.fs(),candidate);
-    assert Spec.Listed(io.fs(),path,listing) by {
-      hide *;
-      reveal Spec.Listed;
-    }
-    io.CloseDir(handle);
+    assert Spec.ReadPrefix(io.fs(), context, handle, initialHandles, names, steps, beforeEnd);
+    var closeResult := io.CloseDir(handle);
     assert io.dirHandles() == beforeHandles;
-    hide *;
+    assert C.OpenDirSpec(io.fs(), context.handles, context.failures, initialHandles,
+      path, false, true, handle, 0) by { hide *; reveal Spec.ObservationContextFor(); reveal Spec.ObservationContextFor(), C.ResultValue(), C.ResultErrno(); }
+    assert C.CloseDirSpec(afterEnd, context.failures, context.handles,
+      handle, closeResult.Ok?, C.ResultErrno(closeResult)) by { hide *; reveal Spec.ObservationContextFor(); reveal Spec.ObservationContextFor(), C.ResultValue(), C.ResultErrno(); }
+    Facts.ListingReadWitness(context, io.fs(), path, listing, initialHandles, handle,
+      steps, beforeEnd, afterEnd, endKind, closeResult.Ok?, C.ResultErrno(closeResult));
+    assert Spec.ObservationContextFor(io) == context by { reveal Spec.ObservationContextFor(); }
+    assert Spec.Listed(context, io.fs(),path,listing) by {
+      hide *; reveal Spec.ObservationContextFor();
+      reveal Spec.Listed();
+    }
+    hide *; reveal Spec.ObservationContextFor();
   }
 
   method Excise(raw: Schema.RmCmdRaw, io: BenchIO.IO, buffer: OutputBuffer, path: Path, directory: bool,
@@ -185,7 +215,7 @@ module RmCore {
     hide C.RemoveDirectorySpec;
     hide C.UnlinkPathSpec;
     assert Spec.HostKeys(io.fs()) <= Spec.HostKeys(before) by {
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       Facts.RemovalKeys(before,io.fs(),path,directory,io.now(),io.trustedFilesystem(),ok,err);
     }
     failed := !ok && !Spec.Ignored(raw,err);
@@ -199,11 +229,11 @@ module RmCore {
     }
     assert Spec.Attempt(raw,path,directory,old(io.now()),old(io.trustedFilesystem()),
       old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,ok,err,earlierError,failed) by {
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       reveal Spec.Attempt;
       reveal Spec.RemovedText;
     }
-    hide *;
+    hide *; reveal Spec.ObservationContextFor();
   }
 
   method Remove(raw: Schema.RmCmdRaw, io: BenchIO.IO, buffer: OutputBuffer, path: Path, top: bool,
@@ -211,7 +241,7 @@ module RmCore {
     returns (failed: bool, ghost proof: Spec.Removal)
     requires Spec.HostKeys(io.fs()) <= universe
     modifies io.fsRegion, io.dirHandlesRegion, buffer
-    ensures Spec.RemoveJudgment(raw,path,top,rootKey,rootDevice,seen,old(io.now()),old(io.trustedFilesystem()),
+    ensures Spec.RemoveJudgment(Spec.ObservationContextFor(io), raw,path,top,Spec.RemovalScope(rootKey,rootDevice,seen),old(io.now()),old(io.trustedFilesystem()),
       old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,failed,proof)
     ensures Spec.HostKeys(io.fs()) <= universe
     ensures io.dirHandles() == old(io.dirHandles())
@@ -225,15 +255,15 @@ module RmCore {
       var bad, ok, err := Excise(raw,io,buffer,path,false,0);
       failed := bad;
       proof := Spec.Atomic(status,false,Spec.Listing([],{},0,0),ok,err);
-      hide *;
-      Facts.AtomicJudgment(raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
+      hide *; reveal Spec.ObservationContextFor();
+      Facts.AtomicJudgment(Spec.ObservationContextFor(io), raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
         old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,failed,
         status,false,Spec.Listing([],{},0,0),ok,err);
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       return;
     }
     failed, proof := RemoveDirectory(raw,io,buffer,path,top,rootKey,rootDevice,seen,universe,status);
-    hide *;
+    hide *; reveal Spec.ObservationContextFor();
   }
 
   method RemoveDirectory(raw: Schema.RmCmdRaw, io: BenchIO.IO, buffer: OutputBuffer, path: Path, top: bool,
@@ -243,7 +273,7 @@ module RmCore {
     requires status.Ok? && status.v.isDir
     requires Spec.StatusResult(io.fs(),io.trustedFilesystem(),path,status)
     modifies io.fsRegion, io.dirHandlesRegion, buffer
-    ensures Spec.RemoveJudgment(raw,path,top,rootKey,rootDevice,seen,old(io.now()),old(io.trustedFilesystem()),
+    ensures Spec.RemoveJudgment(Spec.ObservationContextFor(io), raw,path,top,Spec.RemovalScope(rootKey,rootDevice,seen),old(io.now()),old(io.trustedFilesystem()),
       old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,failed,proof)
     ensures Spec.HostKeys(io.fs()) <= universe
     ensures io.dirHandles() == old(io.dirHandles())
@@ -259,10 +289,10 @@ module RmCore {
       buffer.diagnostics := buffer.diagnostics + text;
       proof := Spec.Refused(status,why,parent);
       failed := true;
-      hide *;
-      Facts.RefusedJudgment(raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
+      hide *; reveal Spec.ObservationContextFor();
+      Facts.RefusedJudgment(Spec.ObservationContextFor(io), raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
         old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,failed,status,why,parent);
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       return;
     }
     if raw.recursive && raw.preserveAll && top {
@@ -274,10 +304,10 @@ module RmCore {
         buffer.diagnostics := buffer.diagnostics + text;
         proof := Spec.Refused(status,why,parent);
         failed := true;
-        hide *;
-        Facts.RefusedJudgment(raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
+        hide *; reveal Spec.ObservationContextFor();
+        Facts.RefusedJudgment(Spec.ObservationContextFor(io), raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
           old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,failed,status,why,parent);
-        hide *;
+        hide *; reveal Spec.ObservationContextFor();
         return;
       }
     }
@@ -286,18 +316,18 @@ module RmCore {
       var bad, ok, err := Excise(raw,io,buffer,path,true,0);
       failed := bad;
       proof := Spec.Atomic(status,true,Spec.Listing([],{},0,0),ok,err);
-      hide *;
-      Facts.AtomicJudgment(raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
+      hide *; reveal Spec.ObservationContextFor();
+      Facts.AtomicJudgment(Spec.ObservationContextFor(io), raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
         old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,failed,
         status,true,Spec.Listing([],{},0,0),ok,err);
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       return;
     }
     var key := HostInodeKey(status.v.device,status.v.inode);
     Facts.StatusKey(io.fs(),io.trustedFilesystem(),path,status);
     assert key in universe && key !in seen;
     failed, proof := RemoveHierarchy(raw,io,buffer,path,top,rootKey,rootDevice,seen,universe,status);
-    hide *;
+    hide *; reveal Spec.ObservationContextFor();
   }
 
   method RemoveHierarchy(raw: Schema.RmCmdRaw, io: BenchIO.IO, buffer: OutputBuffer, path: Path, top: bool,
@@ -311,7 +341,7 @@ module RmCore {
     requires Spec.ParentAllowed(raw,path,top,status.v,io.fs(),io.trustedFilesystem())
     requires HostInodeKey(status.v.device,status.v.inode) in universe - seen
     modifies io.fsRegion, io.dirHandlesRegion, buffer
-    ensures Spec.RemoveJudgment(raw,path,top,rootKey,rootDevice,seen,old(io.now()),old(io.trustedFilesystem()),
+    ensures Spec.RemoveJudgment(Spec.ObservationContextFor(io), raw,path,top,Spec.RemovalScope(rootKey,rootDevice,seen),old(io.now()),old(io.trustedFilesystem()),
       old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,failed,proof)
     ensures Spec.HostKeys(io.fs()) <= universe
     ensures io.dirHandles() == old(io.dirHandles())
@@ -328,15 +358,15 @@ module RmCore {
       var bad, ok, err := Excise(raw,io,buffer,path,true,earlier);
       failed := bad;
       proof := Spec.Atomic(status,true,listing,ok,err);
-      hide *;
-      Facts.AtomicJudgment(raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
+      hide *; reveal Spec.ObservationContextFor();
+      Facts.AtomicJudgment(Spec.ObservationContextFor(io), raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
         old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,failed,
         status,true,listing,ok,err);
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       return;
     }
     failed, proof := ProcessHierarchy(raw,io,buffer,path,top,rootKey,rootDevice,seen,universe,status,listing);
-    hide *;
+    hide *; reveal Spec.ObservationContextFor();
   }
 
   method ProcessHierarchy(raw: Schema.RmCmdRaw, io: BenchIO.IO, buffer: OutputBuffer, path: Path, top: bool,
@@ -349,15 +379,17 @@ module RmCore {
     requires Spec.BasicRefusal(raw,path,top,rootKey,rootDevice,seen,status.v) == Spec.NoRefusal
     requires Spec.ParentAllowed(raw,path,top,status.v,io.fs(),io.trustedFilesystem())
     requires HostInodeKey(status.v.device,status.v.inode) in universe - seen
-    requires Spec.Listed(io.fs(),path,listing) && listing.openError == 0
+    requires Spec.Listed(Spec.ObservationContextFor(io), io.fs(),path,listing) && listing.openError == 0
     requires listing.readError == 0 || |listing.order| > 0
     modifies io.fsRegion, io.dirHandlesRegion, buffer
-    ensures Spec.RemoveJudgment(raw,path,top,rootKey,rootDevice,seen,old(io.now()),old(io.trustedFilesystem()),
+    ensures Spec.RemoveJudgment(Spec.ObservationContextFor(io), raw,path,top,Spec.RemovalScope(rootKey,rootDevice,seen),old(io.now()),old(io.trustedFilesystem()),
       old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,failed,proof)
     ensures Spec.HostKeys(io.fs()) <= universe
     ensures io.dirHandles() == old(io.dirHandles())
     decreases universe - seen, 0
   {
+    ghost var context := Spec.ObservationContextFor(io);
+    assert Spec.Listed(context, io.fs(), path, listing);
     Facts.StatusKey(io.fs(),io.trustedFilesystem(),path,status);
     // Preserve the established query relation without expanding its resolver.
     hide C.GetFileTimesSpec;
@@ -379,6 +411,7 @@ module RmCore {
       invariant 0 <= i <= |listing.order|
       invariant Spec.HostKeys(io.fs()) <= universe
       invariant io.dirHandles() == old(io.dirHandles())
+      invariant Spec.ObservationContextFor(io) == context
       invariant |states| == i+1 && |outputs| == i+1 && |errors| == i+1
       invariant |children| == i && |failures| == i
       invariant states[0] == old(io.fs()) && states[i] == io.fs()
@@ -386,15 +419,15 @@ module RmCore {
       invariant errors[0] == old(buffer.diagnostics) && errors[i] == buffer.diagnostics
       invariant anyFailure == Spec.HasFailure(failures)
       invariant forall j: int :: 0 <= j < i ==>
-        Spec.RemoveJudgment(raw,Spec.ChildPath(path,listing.order[j]),false,rootKey,
-          if top then status.v.device else rootDevice,seen + {key},io.now(),io.trustedFilesystem(),
+        Spec.RemoveJudgment(context, raw,Spec.ChildPath(path,listing.order[j]),false,Spec.RemovalScope(rootKey,
+          if top then status.v.device else rootDevice,seen + {key}),io.now(),io.trustedFilesystem(),
           states[j],states[j+1],outputs[j],outputs[j+1],errors[j],errors[j+1],failures[j],children[j])
       decreases |listing.order|-i
     {
       var bad, child := Remove(raw,io,buffer,Spec.ChildPath(path,listing.order[i]),false,
         rootKey,if top then status.v.device else rootDevice,seen + {key},universe);
       // The exact recursive judgment is established by the terminating call.
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       Facts.AppendFailure(failures,bad);
       states := states + [io.fs()];
       outputs := outputs + [buffer.output];
@@ -417,24 +450,29 @@ module RmCore {
     else { failed, ok, err := Excise(raw,io,buffer,path,true,0); }
     proof := Spec.Hierarchy(status,listing,children,states,outputs,errors,failures,ok,err);
     // Each child and the final native effect already establish their exact contracts.
-    hide *;
-    Facts.HierarchyJudgment(raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
+    hide *; reveal Spec.ObservationContextFor();
+    Facts.HierarchyJudgment(context, raw,path,top,rootKey,rootDevice,seen,io.now(),io.trustedFilesystem(),
       old(io.fs()),io.fs(),old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,failed,
       status,listing,children,states,outputs,errors,failures,ok,err);
-    hide *;
+    hide *; reveal Spec.ObservationContextFor();
   }
 
   twostate predicate CoreSummary(raw: Schema.RmCmdRaw, io: BenchIO.IO, exit: int)
     reads io.fsRegion, io.stdoutRegion, io.stderrRegion, io.dirHandlesRegion,
-      io.nowRegion, io.trustedFilesystemRegion, io.trustedStreamsRegion
+      io.nowRegion, io.trustedFilesystemRegion, io.trustedStreamsRegion, io.trustedNativeFailuresRegion
   { Spec.Spec(raw,io,exit) }
 
   method Prepare(raw: Schema.RmCmdRaw, io: BenchIO.IO, buffer: OutputBuffer) returns (exit: int)
     requires buffer.output == [] && buffer.diagnostics == []
     modifies io.fsRegion, io.dirHandlesRegion, buffer
-    ensures Spec.Prepared(raw,io.now(),io.trustedFilesystem(),old(io.fs()),io.fs(),buffer.output,buffer.diagnostics,exit)
+    ensures Spec.Prepared(Spec.ObservationContextFor(io), raw,io.now(),io.trustedFilesystem(),old(io.fs()),io.fs(),buffer.output,buffer.diagnostics,exit)
     ensures io.dirHandles() == old(io.dirHandles())
   {
+    // Keep recursive judgments folded until their local witness is ready.
+    hide Spec.OperandsJudgment, Spec.RemoveJudgment, Spec.StatusResult;
+    hide Spec.ListingObservation, Spec.ReadPrefix;
+    hide C.ValidFilesystemObservation, BenchWorld.ValidInodeFileSystemData;
+    ghost var context := Spec.ObservationContextFor(io);
     if raw.mode == Schema.ModeHelp {
       buffer.output := Spec.HelpTextSpec();
       exit := 0;
@@ -487,6 +525,7 @@ module RmCore {
       invariant 0 <= i <= |raw.operands|
       invariant Spec.HostKeys(io.fs()) <= universe
       invariant io.dirHandles() == old(io.dirHandles())
+      invariant Spec.ObservationContextFor(io) == context
       invariant |states| == i+1 && |outputs| == i+1 && |errors| == i+1
       invariant |proofs| == i && |failures| == i
       invariant states[0] == old(io.fs()) && states[i] == io.fs()
@@ -494,17 +533,17 @@ module RmCore {
       invariant errors[0] == old(buffer.diagnostics) && errors[i] == buffer.diagnostics
       invariant anyFailure == Spec.HasFailure(failures)
       invariant forall j: int :: 0 <= j < i ==>
-        Facts.OperandJudgment(raw,raw.operands[j],rootKey,io.now(),io.trustedFilesystem(),
+        Facts.OperandJudgment(context, raw,raw.operands[j],rootKey,io.now(),io.trustedFilesystem(),
           states[j],states[j+1],outputs[j],outputs[j+1],errors[j],errors[j+1],failures[j],proofs[j])
       decreases |raw.operands|-i
     {
       var path := CommandPath(raw.operands[i]);
       var bad, proof := Remove(raw,io,buffer,path,true,rootKey,0,{},universe);
-      Facts.NormalizedOperand(raw,raw.operands[i],path,rootKey,io.now(),io.trustedFilesystem(),
+      Facts.NormalizedOperand(context, raw,raw.operands[i],path,rootKey,io.now(),io.trustedFilesystem(),
         states[i],io.fs(),outputs[i],buffer.output,errors[i],buffer.diagnostics,bad,proof);
       // Preserve the established judgment while extending the operand partition.
-      hide *;
-      Facts.AppendOperandJudgment(raw,io.now(),io.trustedFilesystem(),rootKey,i,states,outputs,errors,
+      hide *; reveal Spec.ObservationContextFor();
+      Facts.AppendOperandJudgment(context, raw,io.now(),io.trustedFilesystem(),rootKey,i,states,outputs,errors,
         failures,proofs,io.fs(),buffer.output,buffer.diagnostics,bad,proof);
       Facts.AppendFailure(failures,bad);
       states := states + [io.fs()];
@@ -518,12 +557,12 @@ module RmCore {
     // The complete operand partition is now established by the loop.
     hide Spec.RemoveJudgment;
     exit := if anyFailure then 1 else 0;
-    Facts.AssembleOperands(raw,io.now(),io.trustedFilesystem(),rootKey,old(io.fs()),io.fs(),
+    Facts.AssembleOperands(context, raw,io.now(),io.trustedFilesystem(),rootKey,old(io.fs()),io.fs(),
       old(buffer.output),buffer.output,old(buffer.diagnostics),buffer.diagnostics,exit,states,outputs,errors,failures,proofs);
     // AssembleOperands has separately proved this exact existential judgment.
-    hide *;
-    Facts.AssemblePrepared(raw,io.now(),io.trustedFilesystem(),old(io.fs()),io.fs(),buffer.output,buffer.diagnostics,exit,root);
-    hide *;
+    hide *; reveal Spec.ObservationContextFor();
+    Facts.AssemblePrepared(context, raw,io.now(),io.trustedFilesystem(),old(io.fs()),io.fs(),buffer.output,buffer.diagnostics,exit,root);
+    hide *; reveal Spec.ObservationContextFor();
   }
 
   method Flush(output: Bytes, diagnostics: Bytes, removalExit: int, io: BenchIO.IO) returns (exit: int)
@@ -533,7 +572,7 @@ module RmCore {
   {
     ghost var observations := io.trustedStreams();
     ghost var beforeOut, beforeErr := io.stdout(), io.stderr();
-    var outResult := io.WriteStdout(output,ReturnError);
+    var outResult := io.WriteStdout(output);
     var outErr := C.ResultErrno(outResult);
     ghost var outObservation := observations(StreamWriteStdout(beforeOut,output));
     assert outObservation.StreamWriteResult? && outObservation.err == outErr;
@@ -544,7 +583,7 @@ module RmCore {
     }
     assert finalDiagnostic == diagnostics + (if outObservation.err == 0 then []
       else Spec.WriteErrorText(C.CLocaleErrnoTextResult(outObservation.err)));
-    var errResult := io.WriteStderr(finalDiagnostic,ReturnError);
+    var errResult := io.WriteStderr(finalDiagnostic);
     ghost var errObservation := observations(StreamWriteStderr(beforeErr,finalDiagnostic));
     assert errObservation.StreamWriteResult? && errObservation.err == C.ResultErrno(errResult);
     exit := if removalExit == 0 && outErr == 0 && C.ResultErrno(errResult) == 0 then 0 else 1;
@@ -555,14 +594,16 @@ module RmCore {
     ensures Spec.Spec(raw,io,exit)
     ensures CoreSummary(raw,io,exit)
   {
+    ghost var context := Spec.ObservationContextFor(io);
     var buffer := new OutputBuffer();
     var removalExit := Prepare(raw,io,buffer);
     exit := Flush(buffer.output,buffer.diagnostics,removalExit,io);
+    assert Spec.ObservationContextFor(io) == context by { reveal Spec.ObservationContextFor(); }
     assert Spec.Spec(raw,io,exit) by {
-      hide *;
+      hide *; reveal Spec.ObservationContextFor();
       reveal Spec.Spec;
     }
-    hide *;
+    hide *; reveal Spec.ObservationContextFor();
     reveal CoreSummary;
   }
 }

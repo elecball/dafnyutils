@@ -18,7 +18,7 @@ module CpCore {
   import Utf8 = Utf8Semantics
 
   method Metadata(path: string, follow: bool, io: BenchIO.IO) returns (meta: Spec.Metadata)
-    ensures Spec.MetadataFields(io.fs(),io.trustedFilesystem(),path,follow,meta)
+    ensures Spec.MetadataFields(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,follow,meta)
   {
     hide C.GetFileTimesSpec;
     var result := io.GetFileTimes(path,follow);
@@ -65,7 +65,7 @@ module CpCore {
     ensures Spec.Identity(meta) in Spec.Identities(fs)
   {
     var request := BW.FilesystemQuery(fs,path,follow);
-    var observation := provider(request);
+    var observation := provider.filesystem(request);
     var target := C.ResolvePathForMetadataFields(fs,path,follow).v;
     var id := BW.FsIdAt(fs,target);
     assert id in fs.inodes;
@@ -75,8 +75,8 @@ module CpCore {
   method {:isolate_assertions} Enumerate(path: string, io: BenchIO.IO) returns (entries: seq<Spec.DirectoryName>, err: int, wasOpened: bool)
     modifies io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.Enumeration(io.fs(),path,entries,err)
-    ensures Spec.EnumerationWithOpen(io.fs(),path,entries,err,wasOpened)
+    ensures Spec.Enumeration(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,entries,err)
+    ensures Spec.EnumerationWithOpen(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,entries,err,wasOpened)
   {
     reveal Spec.Enumeration(), Spec.EnumerationWithOpen();
     ghost var initial := io.dirHandles();
@@ -86,18 +86,18 @@ module CpCore {
     err := C.ResultErrno(result);
     ghost var openedHandles := io.dirHandles();
     if result.Err? {
-      assert Spec.EnumerationWithOpen(io.fs(),path,entries,err,wasOpened) by {
+      assert Spec.EnumerationWithOpen(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,entries,err,wasOpened) by {
         hide *;
         reveal Spec.EnumerationWithOpen();
       }
-      assert Spec.Enumeration(io.fs(),path,entries,err) by {
+      assert Spec.Enumeration(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,entries,err) by {
         hide *;
         reveal Spec.Enumeration();
       }
       return;
     }
     var handle := result.v;
-    assert C.OpenDirSpec(io.fs(),initial,openedHandles,path,false,true,handle,0) by {
+    assert C.OpenDirSpec(io.fs(),initial,io.trustedNativeFailures(),openedHandles,path,false,true,handle,0) by {
       hide *;
       reveal C.ResultValue(), C.ResultErrno();
     }
@@ -111,11 +111,11 @@ module CpCore {
       invariant handle in io.dirHandles()
       invariant io.dirHandles().Keys == openedHandles.Keys
       invariant forall other | other in initial :: io.dirHandles()[other] == initial[other]
-      invariant C.OpenDirSpec(io.fs(),initial,openedHandles,path,false,true,handle,0)
+      invariant C.OpenDirSpec(io.fs(),initial,io.trustedNativeFailures(),openedHandles,path,false,true,handle,0)
       invariant |states| == |entries| + 1 && |kinds| == |entries|
       invariant states[0] == openedHandles && states[|entries|] == io.dirHandles()
       invariant forall i | 0 <= i < |entries| ::
-                  C.ReadDirSpec(io.fs(),states[i],states[i+1],handle,true,entries[i].name,kinds[i],0) &&
+                  C.ReadDirSpec(io.fs(),states[i],io.trustedNativeFailures(),states[i+1],handle,true,entries[i].name,kinds[i],0) &&
                   C.ReadDirInodeFields(io.fs(),states[i],handle,entries[i].name,true,entries[i].inode)
       decreases |io.dirHandles()[handle].remaining|
     {
@@ -127,21 +127,21 @@ module CpCore {
           hide *;
           reveal C.ReadDirSpec(), C.ReadDirContractFields();
         }
-        assert C.ReadDirSpec(io.fs(),states[|entries|],states[|entries|],handle,false,"",BW.UnknownDirentKind,err);
+        assert C.ReadDirSpec(io.fs(),states[|entries|],io.trustedNativeFailures(),states[|entries|],handle,false,"",BW.UnknownDirentKind,err);
         break;
       }
-      assert C.ReadDirSpec(io.fs(),before,io.dirHandles(),handle,true,item.v.name,item.v.kind,0);
+      assert C.ReadDirSpec(io.fs(),before,io.trustedNativeFailures(),io.dirHandles(),handle,true,item.v.name,item.v.kind,0);
       assert C.ReadDirInodeFields(io.fs(),before,handle,item.v.name,true,item.v.inode);
       ghost var previousEntries, previousKinds, previousStates := entries,kinds,states;
       entries := entries + [Spec.DirectoryName(item.v.name,item.v.inode)];
       kinds := kinds + [item.v.kind];
       states := states + [io.dirHandles()];
       assert forall j | 0 <= j < |entries| ::
-          C.ReadDirSpec(io.fs(),states[j],states[j+1],handle,true,entries[j].name,kinds[j],0) &&
+          C.ReadDirSpec(io.fs(),states[j],io.trustedNativeFailures(),states[j+1],handle,true,entries[j].name,kinds[j],0) &&
           C.ReadDirInodeFields(io.fs(),states[j],handle,entries[j].name,true,entries[j].inode) by {
         hide *;
         forall j | 0 <= j < |entries|
-          ensures C.ReadDirSpec(io.fs(),states[j],states[j+1],handle,true,entries[j].name,kinds[j],0)
+          ensures C.ReadDirSpec(io.fs(),states[j],io.trustedNativeFailures(),states[j+1],handle,true,entries[j].name,kinds[j],0)
           ensures C.ReadDirInodeFields(io.fs(),states[j],handle,entries[j].name,true,entries[j].inode)
         {
           if j < |previousEntries| {
@@ -154,18 +154,12 @@ module CpCore {
         }
       }
     }
-    assert Spec.EnumerationWithOpen(io.fs(),path,entries,err,wasOpened) by {
-      hide *;
-      reveal Spec.EnumerationWithOpen();
-    }
-    assert Spec.Enumeration(io.fs(),path,entries,err) by {
-      hide *;
-      reveal Spec.Enumeration();
-    }
     ghost var finalHandles := io.dirHandles();
     assert finalHandles.Keys == openedHandles.Keys;
     assert forall other | other in initial :: finalHandles[other] == initial[other];
-    io.CloseDir(handle);
+    ghost var readErr := err;
+    var closeResult := io.CloseDir(handle);
+    if err == 0 { err := C.ResultErrno(closeResult); }
     assert io.dirHandles() == initial by {
       hide *;
       reveal C.CloseDirSpec(), C.CloseDirContractFields();
@@ -177,6 +171,15 @@ module CpCore {
         assert other != handle;
       }
     }
+    assert Spec.EnumerationWithOpen(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,entries,err,wasOpened) by {
+      hide *;
+      reveal Spec.EnumerationWithOpen();
+    }
+    assert Spec.Enumeration(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,entries,err) by {
+      hide *;
+      reveal Spec.Enumeration();
+    }
+
   }
 
   method InsertEntry(entries: seq<Spec.DirectoryName>, entry: Spec.DirectoryName)
@@ -295,7 +298,7 @@ module CpCore {
     returns (tree: Spec.SourceTree)
     modifies io.dirHandlesRegion
     ensures tree.path == path
-    ensures Spec.SourceTreeFields(raw,io.fs(),io.trustedFilesystem(),ancestors,parentDevice,tree)
+    ensures Spec.SourceTreeFields(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ancestors,parentDevice,tree)
     ensures io.dirHandles() == old(io.dirHandles())
     decreases Spec.Identities(io.fs()) - ancestors
   {
@@ -305,9 +308,11 @@ module CpCore {
     if meta.value.isDir && !raw.policy.recursive { return Spec.OmittedSource(path,meta); }
     if meta.value.isDir && Spec.Identity(meta) in ancestors { return Spec.CyclicSource(path,meta); }
     var modeResult := io.GetFileMode(path,raw.policy.dereference);
-    assert modeResult.Ok?;
+    if modeResult.Err? {
+      return Spec.ModeFailureSource(path,meta,C.ResultErrno(modeResult));
+    }
     var mode := modeResult.v;
-    assert C.GetFileModeSpec(io.fs(),path,raw.policy.dereference,true,mode,0);
+    assert C.GetFileModeSpec(io.fs(),io.trustedNativeFailures(),path,raw.policy.dereference,true,mode,0);
     if !meta.value.isDir {
       var linkTarget := path;
       if meta.value.isSymlink && !raw.policy.hard && !raw.policy.symbolic {
@@ -316,10 +321,12 @@ module CpCore {
         assert C.ResolvePathForMetadataFields(io.fs(),path,false).Ok?;
         assert BW.FsNodeAt(io.fs(),C.ResolvePathForMetadataFields(io.fs(),path,false).v).Symlink?;
         var link := io.ReadLink(path);
-        assert link.Ok?;
+        if link.Err? {
+          return Spec.LinkFailureSource(path,meta,mode,link.e);
+        }
         linkTarget := link.v;
       }
-      assert Spec.SourceTreeFields(raw,io.fs(),io.trustedFilesystem(),ancestors,parentDevice,
+      assert Spec.SourceTreeFields(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ancestors,parentDevice,
                                    Spec.FileSource(path,meta,mode,linkTarget)) by {
         hide *;
         reveal Spec.SourceTreeFields();
@@ -329,12 +336,12 @@ module CpCore {
     if raw.policy.oneFileSystem && |ancestors| != 0 && meta.value.device != parentDevice {
       return Spec.DirectorySource(path,meta,mode,[],0);
     }
-    MetadataIdentityInFilesystem(io.fs(),io.trustedFilesystem(),path,raw.policy.dereference,meta);
+    MetadataIdentityInFilesystem(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,raw.policy.dereference,meta);
     var nativeEntries, err, wasOpened := Enumerate(path,io);
     var entries: seq<Spec.DirectoryName> := [];
     if err == 0 { entries := SortEntries(nativeEntries); }
     reveal Spec.OrderedEnumeration();
-    assert Spec.OrderedEnumeration(io.fs(),path,entries,err);
+    assert Spec.OrderedEnumeration(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,entries,err);
     var children: seq<Spec.SourceTree> := [];
     var i := 0;
     while i < |entries|
@@ -342,7 +349,7 @@ module CpCore {
       invariant |children| == i
       invariant (forall j | 0 <= j < i ::
                    Spec.NameConcat(path,entries[j].name,children[j].path) &&
-                   Spec.SourceTreeFields(S.ChildCommand(raw),io.fs(),io.trustedFilesystem(),ancestors + {Spec.Identity(meta)},meta.value.device,children[j]))
+                   Spec.SourceTreeFields(S.ChildCommand(raw),io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ancestors + {Spec.Identity(meta)},meta.value.device,children[j]))
       invariant io.dirHandles() == old(io.dirHandles())
       decreases |entries| - i
     {
@@ -352,11 +359,11 @@ module CpCore {
       children := children + [child];
       assert forall j | 0 <= j < |children| ::
           Spec.NameConcat(path,entries[j].name,children[j].path) &&
-          Spec.SourceTreeFields(S.ChildCommand(raw),io.fs(),io.trustedFilesystem(),ancestors + {Spec.Identity(meta)},meta.value.device,children[j]) by {
+          Spec.SourceTreeFields(S.ChildCommand(raw),io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ancestors + {Spec.Identity(meta)},meta.value.device,children[j]) by {
         hide *;
         forall j | 0 <= j < |children|
           ensures Spec.NameConcat(path,entries[j].name,children[j].path)
-          ensures Spec.SourceTreeFields(S.ChildCommand(raw),io.fs(),io.trustedFilesystem(),ancestors + {Spec.Identity(meta)},meta.value.device,children[j])
+          ensures Spec.SourceTreeFields(S.ChildCommand(raw),io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ancestors + {Spec.Identity(meta)},meta.value.device,children[j])
         {
           if j < i {
             assert children[j] == previousChildren[j];
@@ -368,7 +375,7 @@ module CpCore {
       i := i + 1;
     }
     tree := Spec.DirectorySource(path,meta,mode,children,err);
-    assert Spec.SourceTreeFields(raw,io.fs(),io.trustedFilesystem(),ancestors,parentDevice,tree) by {
+    assert Spec.SourceTreeFields(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ancestors,parentDevice,tree) by {
       hide *;
       reveal Spec.SourceTreeFields();
     }
@@ -377,19 +384,19 @@ module CpCore {
   method Attributes(raw: S.CpCmdRaw, meta: Spec.Metadata, mode: bv32, target: string, follow: bool,
                     io: BenchIO.IO) returns (err: BW.Bytes, ok: bool)
     modifies io.fsRegion
-    ensures Spec.Attributes(raw,meta,mode,target,follow,old(io.fs()),io.fs(),io.now(),io.trustedFilesystem(),err,ok)
+    ensures Spec.Attributes(raw,meta,mode,target,follow,old(io.fs()),io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),err,ok)
   {
     hide *;
     reveal Spec.Attributes();
     ghost var before := io.fs();
     ghost var now := io.now();
-    ghost var provider := io.trustedFilesystem();
+    ghost var provider := Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures());
     err, ok := [], true;
     var timeOK, timeErr := true, 0;
     if raw.policy.preserveTimes {
       var result := io.SetFileTimes(target,follow,meta.value.atimeSec,meta.value.atimeNsec,
                                     meta.value.mtimeSec,meta.value.mtimeNsec);
-      assert C.SetFileTimesSpec(before,now,provider,io.fs(),target,follow,
+      assert C.SetFileTimesSpec(before,now,provider.filesystem,io.fs(),target,follow,
                                 meta.value.atimeSec,meta.value.atimeNsec,meta.value.mtimeSec,meta.value.mtimeNsec,result.Ok?,C.ResultErrno(result));
       timeOK, timeErr := result.Ok?, C.ResultErrno(result);
       if !timeOK {
@@ -401,7 +408,7 @@ module CpCore {
     }
     ghost var middle := io.fs();
     assert (if raw.policy.preserveTimes then
-              C.SetFileTimesSpec(before,now,provider,middle,target,follow,
+              C.SetFileTimesSpec(before,now,provider.filesystem,middle,target,follow,
                                  meta.value.atimeSec,meta.value.atimeNsec,meta.value.mtimeSec,meta.value.mtimeNsec,timeOK,timeErr)
             else middle == before && timeOK && timeErr == 0);
     var modeOK, modeErr := true, 0;
@@ -416,17 +423,17 @@ module CpCore {
       }
     }
     assert (if raw.policy.preserveTimes then
-              C.SetFileTimesSpec(before,now,provider,middle,target,follow,
+              C.SetFileTimesSpec(before,now,provider.filesystem,middle,target,follow,
                                  meta.value.atimeSec,meta.value.atimeNsec,meta.value.mtimeSec,meta.value.mtimeNsec,timeOK,timeErr)
             else middle == before && timeOK && timeErr == 0);
     assert (if raw.policy.preserveMode && follow then
-              C.SetFileModeSpec(middle,io.now(),io.fs(),target,follow,mode,modeOK,modeErr)
+              C.SetFileModeSpec(middle,io.now(),io.trustedNativeFailures(),io.fs(),target,follow,mode,modeOK,modeErr)
             else io.fs() == middle && modeOK && modeErr == 0);
     assert err == (if timeOK then [] else Spec.TimeError(Spec.Q(target),Spec.E(timeErr))) +
                   (if modeOK then [] else Spec.ModeError(Spec.Q(target),Spec.E(modeErr)));
     assert ok == (timeOK && modeOK);
     reveal Spec.AttributeOutcome();
-    assert Spec.AttributeOutcome(raw,meta,mode,target,follow,before,io.fs(),io.now(),io.trustedFilesystem(),err,ok,
+    assert Spec.AttributeOutcome(raw,meta,mode,target,follow,before,io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),err,ok,
                                  (middle,(timeOK,timeErr),(modeOK,modeErr)));
 
   }
@@ -435,7 +442,7 @@ module CpCore {
     returns (result: BW.IOResult<BW.WriteReceipt>, removeFailed: bool, didRemove: bool)
     modifies io.fsRegion
     ensures Spec.PayloadWrite(raw,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),
-                              io.trustedFilesystem(),target,data,mode,result.Ok?,C.ResultErrno(result),C.WriteResultCommitted(result),C.WriteResultStage(result),removeFailed,didRemove)
+                              Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,data,mode,result.Ok?,C.ResultErrno(result),C.WriteResultCommitted(result),C.WriteResultStage(result),removeFailed,didRemove)
   {
     hide *;
     reveal Spec.PayloadWrite();
@@ -459,7 +466,7 @@ module CpCore {
       }
     }
     reveal Spec.PayloadOutcome();
-    assert Spec.PayloadOutcome(raw,before,io.fs(),io.props(),io.now(),io.credentials(),io.trustedFilesystem(),
+    assert Spec.PayloadOutcome(raw,before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),
                                target,data,mode,result.Ok?,C.ResultErrno(result),C.WriteResultCommitted(result),C.WriteResultStage(result),(removeFailed,didRemove),
                                (first,firstResult.Ok?,C.ResultErrno(firstResult),C.WriteResultCommitted(firstResult),C.WriteResultStage(firstResult),targetMeta));
   }
@@ -469,7 +476,7 @@ module CpCore {
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool)
     modifies io.fsRegion
     ensures Spec.DataCopy(raw,source,target,meta,mode,old(io.fs()),io.fs(),io.props(),io.now(),
-                          io.credentials(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok)
+                          io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok)
   {
     hide *;
     reveal Spec.DataCopy(), Spec.DataOutcome();
@@ -484,14 +491,14 @@ module CpCore {
     out := [];
     if readStage == BW.OpenFailed {
       var reason := Reason(readErr,io);
-      assert Spec.DataOutcome(raw,source,target,meta,mode,before,io.fs(),io.props(),io.now(),io.credentials(),io.trustedFilesystem(),io.trustedStreams(),
+      assert Spec.DataOutcome(raw,source,target,meta,mode,before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                               [],Spec.CannotOpen(qs,reason),false,(data,readErr,readStage,meta,meta,(before,true,0,0,BW.WriteSucceeded,false,[],true,meta,false)));
       return [],Spec.CannotOpen(qs,reason),false;
     }
     var targetMetadata := Metadata(target,true,io);
     var entryMetadata := Metadata(target,false,io);
     if !targetMetadata.ok && entryMetadata.ok && entryMetadata.value.isSymlink && !raw.policy.creation.writeDangling {
-      assert Spec.DataOutcome(raw,source,target,meta,mode,before,io.fs(),io.props(),io.now(),io.credentials(),io.trustedFilesystem(),io.trustedStreams(),
+      assert Spec.DataOutcome(raw,source,target,meta,mode,before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                               [],Spec.Dangling(qt),false,(data,readErr,readStage,targetMetadata,entryMetadata,(before,true,0,0,BW.WriteSucceeded,false,[],true,meta,false)));
       return [],Spec.Dangling(qt),false;
     }
@@ -523,13 +530,13 @@ module CpCore {
       err := err + (if readStage == BW.CloseFailed then Spec.CloseError(qs,reason) else Spec.ReadError(qs,reason));
     }
     ok := write.Ok? && readErr == 0 && attributesOK;
-    assert Spec.DataOutcome(raw,source,target,meta,mode,before,io.fs(),io.props(),io.now(),io.credentials(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok,
+    assert Spec.DataOutcome(raw,source,target,meta,mode,before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok,
                             (data,readErr,readStage,targetMetadata,entryMetadata,
                              (written,write.Ok?,C.ResultErrno(write),C.WriteResultCommitted(write),C.WriteResultStage(write),removeFailed,attributesErr,attributesOK,attributeTargetMetadata,didRemove)));
   }
 
   method {:isolate_assertions} RelativeLinkAllowed(source: string, target: string, io: BenchIO.IO) returns (allowed: bool)
-    ensures Spec.RelativeLinkAllowed(io.fs(),io.trustedFilesystem(),source,target,allowed)
+    ensures Spec.RelativeLinkAllowed(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),source,target,allowed)
   {
     hide *;
     reveal Spec.RelativeLinkAllowed();
@@ -543,7 +550,7 @@ module CpCore {
   }
 
   method RecordDestination(target: string, io: BenchIO.IO) returns (record: Spec.DestinationRecord)
-    ensures Spec.DestinationRecordFields(io.fs(),io.trustedFilesystem(),target,record)
+    ensures Spec.DestinationRecordFields(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,record)
   {
     reveal Spec.DestinationRecordFields();
     var metadata := Metadata(target,false,io);
@@ -555,8 +562,8 @@ module CpCore {
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool, receipt: Spec.CopyReceipt)
     modifies io.fsRegion
     ensures Spec.LeafCopy(raw,source,target,sm,tm,(mode,linkTarget),old(io.fs()),io.fs(),io.props(),io.now(),
-                          io.credentials(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok)
-    ensures Spec.LeafResult(raw,source,target,sm,tm,(mode,linkTarget),old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.trustedFilesystem(),io.trustedStreams(),(out,err,ok,receipt))
+                          io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok)
+    ensures Spec.LeafResult(raw,source,target,sm,tm,(mode,linkTarget),old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(out,err,ok,receipt))
   {
     hide *;
     reveal Spec.LeafCopy(), Spec.LeafResult(), Spec.LeafOutcome();
@@ -571,7 +578,7 @@ module CpCore {
       removeOK,removeErr := result.Ok?,C.ResultErrno(result);
       if !removeOK && removeErr != 2 {
         var reason := Reason(removeErr,io);
-        assert Spec.LeafOutcome(raw,source,target,sm,tm,(mode,linkTarget),before,io.fs(),io.props(),io.now(),io.credentials(),io.trustedFilesystem(),io.trustedStreams(),
+        assert Spec.LeafOutcome(raw,source,target,sm,tm,(mode,linkTarget),before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                                 ([],Spec.CannotRemove(qt,reason),false,receipt),(io.fs(),removeOK,removeErr,true,0,true,io.fs(),[],true,[]));
         return [],Spec.CannotRemove(qt,reason),false,receipt;
       }
@@ -617,7 +624,7 @@ module CpCore {
         receipt := Spec.CopyReceipt(record,true,false);
       }
     }
-    assert Spec.LeafOutcome(raw,source,target,sm,tm,(mode,linkTarget),before,io.fs(),io.props(),io.now(),io.credentials(),io.trustedFilesystem(),io.trustedStreams(),
+    assert Spec.LeafOutcome(raw,source,target,sm,tm,(mode,linkTarget),before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                             (out,err,ok,receipt),(ready,removeOK,removeErr,linkOK,linkErr,relativeOK,linked,attributeErr,attributeOK,dataOut)) by {
       hide *;
       reveal Spec.LeafOutcome();
@@ -625,7 +632,7 @@ module CpCore {
   }
 
   method SameEntry(source: string, target: string, io: BenchIO.IO) returns (result: bool)
-    ensures Spec.SameEntryFields(io.fs(),io.trustedFilesystem(),source,target,result)
+    ensures Spec.SameEntryFields(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),source,target,result)
   {
     hide *;
     reveal Spec.SameEntryFields();
@@ -667,7 +674,7 @@ module CpCore {
 
   method SameFileEligibility(raw: S.CpCmdRaw, source: string, target: string, sm: Spec.Metadata, tm: Spec.Metadata, io: BenchIO.IO)
     returns (allowed: bool, returnNow: bool)
-    ensures Spec.SameFileEligibility(raw,source,target,sm,tm,io.fs(),io.trustedFilesystem(),allowed,returnNow)
+    ensures Spec.SameFileEligibility(raw,source,target,sm,tm,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),allowed,returnNow)
   {
     hide *;
     var sl,tl := sm,tm;
@@ -694,11 +701,11 @@ module CpCore {
     var observed := Spec.SameFileObservation(sl,tl,sf,tf,sameEntry);
     var result := SameFileValue(raw,sm,tm,observed);
     allowed,returnNow := result.0,result.1;
-    assert Spec.SameFileObservationFields(raw,io.fs(),io.trustedFilesystem(),source,target,sm,tm,observed) by {
+    assert Spec.SameFileObservationFields(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),source,target,sm,tm,observed) by {
       hide *;
       reveal Spec.SameFileObservationFields();
     }
-    assert Spec.SameFileEligibility(raw,source,target,sm,tm,io.fs(),io.trustedFilesystem(),allowed,returnNow) by {
+    assert Spec.SameFileEligibility(raw,source,target,sm,tm,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),allowed,returnNow) by {
       hide *;
       reveal Spec.SameFileEligibility();
     }
@@ -749,7 +756,7 @@ module CpCore {
   method BackupName(target: string, mode: string, suffix: string, io: BenchIO.IO) returns (path: string, err: int)
     modifies io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.BackupSelection(io.fs(),target,mode,suffix,path,err)
+    ensures Spec.BackupSelection(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,mode,suffix,path,err)
   {
     hide *;
     reveal Spec.BackupSelection();
@@ -808,7 +815,7 @@ module CpCore {
         err := 0;
       }
     }
-    assert Spec.BackupSelectionFields(io.fs(),target,mode,suffix,path,err,(parent,base,entries,scanErr,wasOpened,chosenMaximum)) by {
+    assert Spec.BackupSelectionFields(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,mode,suffix,path,err,(parent,base,entries,scanErr,wasOpened,chosenMaximum)) by {
       hide *;
       reveal Spec.BackupSelectionFields();
     }
@@ -818,7 +825,7 @@ module CpCore {
     returns (preparation: Spec.BackupPreparationResult)
     modifies io.fsRegion,io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.BackupPreparation(raw,source,target,sm,old(io.fs()),io.fs(),io.now(),io.trustedFilesystem(),preparation)
+    ensures Spec.BackupPreparation(raw,source,target,sm,old(io.fs()),io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),preparation)
   {
     hide *;
     reveal Spec.BackupPreparation();
@@ -852,7 +859,7 @@ module CpCore {
         } else { preparation := Spec.BackupReady(selected,renameOK); }
       }
     }
-    assert Spec.BackupPreparationFields(raw,source,target,sm,before,io.fs(),io.now(),io.trustedFilesystem(),preparation,
+    assert Spec.BackupPreparationFields(raw,source,target,sm,before,io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),preparation,
                                         Spec.BackupPreparationObservation(sourceBase,targetBase,candidate,selected,selectionErr,io.fs(),renameOK,renameErr)) by {
       hide *;
       reveal Spec.BackupPreparationFields();
@@ -861,7 +868,7 @@ module CpCore {
 
   method RestoreBackup(raw: S.CpCmdRaw, backup: string, target: string, needed: bool, io: BenchIO.IO) returns (out: BW.Bytes, err: BW.Bytes)
     modifies io.fsRegion
-    ensures Spec.BackupRestoration(raw,backup,target,needed,old(io.fs()),io.fs(),io.now(),out,err)
+    ensures Spec.BackupRestoration(raw,backup,target,needed,old(io.fs()),io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),out,err)
   {
     hide *;
     reveal Spec.BackupRestoration();
@@ -880,7 +887,7 @@ module CpCore {
         out := Spec.VerboseUnbackup(qb,qt);
       }
     }
-    assert Spec.BackupRestorationFields(raw,backup,target,needed,before,io.fs(),io.now(),out,err,(restoredOK,restoreErr)) by {
+    assert Spec.BackupRestorationFields(raw,backup,target,needed,before,io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),out,err,(restoredOK,restoreErr)) by {
       hide *;
       reveal Spec.BackupRestorationFields();
     }
@@ -890,7 +897,7 @@ module CpCore {
                         mode: bv32, linkTarget: string, io: BenchIO.IO) returns (out: BW.Bytes, err: BW.Bytes, ok: bool, receipt: Spec.CopyReceipt)
     modifies io.fsRegion,io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.BackupLeaf(raw,source,target,sm,tm,(mode,linkTarget),old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.trustedFilesystem(),io.trustedStreams(),(out,err,ok,receipt))
+    ensures Spec.BackupLeaf(raw,source,target,sm,tm,(mode,linkTarget),old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(out,err,ok,receipt))
   {
     hide *;
     reveal Spec.BackupLeaf();
@@ -923,16 +930,16 @@ module CpCore {
         err,ok := leafErr+restoreErr,leafOK;
       }
     }
-    assert Spec.BackupLeafFields(raw,source,target,sm,tm,(mode,linkTarget),before,io.fs(),io.props(),io.now(),io.credentials(),io.trustedFilesystem(),io.trustedStreams(),(out,err,ok,receipt),
+    assert Spec.BackupLeafFields(raw,source,target,sm,tm,(mode,linkTarget),before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(out,err,ok,receipt),
                                  Spec.BackupObservation(prepared,preparation,readyMetadata,copied,leafOut,leafErr,leafOK,receipt,restoreOut,restoreErr)) by {
       hide *;
       reveal Spec.BackupLeafFields();
       if Spec.BackupMode(raw) != "off" && tm.ok && !tm.value.isDir {
-        assert Spec.BackupPreparation(raw,source,target,sm,before,prepared,io.now(),io.trustedFilesystem(),preparation);
+        assert Spec.BackupPreparation(raw,source,target,sm,before,prepared,io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),preparation);
         if preparation.BackupReady? {
-          assert Spec.MetadataFields(prepared,io.trustedFilesystem(),target,!raw.policy.remove && !raw.policy.symbolic && !raw.policy.hard && !sm.value.isSymlink,readyMetadata);
-          assert Spec.LeafResult(raw.(policy := raw.policy.(verbose := false)),source,target,sm,readyMetadata,(mode,linkTarget),prepared,copied,io.props(),io.now(),io.credentials(),io.trustedFilesystem(),io.trustedStreams(),(leafOut,leafErr,leafOK,receipt));
-          assert Spec.BackupRestoration(raw,preparation.path,target,!leafOK && !receipt.retained && preparation.renamed,copied,io.fs(),io.now(),restoreOut,restoreErr);
+          assert Spec.MetadataFields(prepared,Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,!raw.policy.remove && !raw.policy.symbolic && !raw.policy.hard && !sm.value.isSymlink,readyMetadata);
+          assert Spec.LeafResult(raw.(policy := raw.policy.(verbose := false)),source,target,sm,readyMetadata,(mode,linkTarget),prepared,copied,io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(leafOut,leafErr,leafOK,receipt));
+          assert Spec.BackupRestoration(raw,preparation.path,target,!leafOK && !receipt.retained && preparation.renamed,copied,io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),restoreOut,restoreErr);
           assert out == (if raw.policy.verbose then (if preparation.renamed then Spec.VerboseBackup(Spec.Q(source),Spec.Q(target),Spec.Q(preparation.path)) else Spec.Verbose(Spec.Q(source),Spec.Q(target))) else [])+leafOut+restoreOut;
         }
       }
@@ -945,7 +952,7 @@ module CpCore {
     requires tree.FileSource?
     modifies io.fsRegion,io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.FileEffect(raw,tree,target,tm,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok,(known,links),record)
+    ensures Spec.FileEffect(raw,tree,target,tm,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok,(known,links),record)
   {
     hide *;
     reveal Spec.FileEffect();
@@ -964,7 +971,7 @@ module CpCore {
 
   lemma {:isolate_assertions} CompleteFileTree(raw: S.CpCmdRaw, tree: Spec.SourceTree, target: string, tm: Spec.Metadata,
                          before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                         credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                         credentials: BW.ProcessCredentials, mask: bv32, provider: Spec.FilesystemProvider,
                          streams: Spec.StreamProvider, out: BW.Bytes, err: BW.Bytes, ok: bool,
                          linkState: (Spec.LinkMap,Spec.LinkMap,bool), record: Spec.CopyReceipt, allowed: bool, returnNow: bool)
     requires tree.FileSource?
@@ -982,11 +989,9 @@ module CpCore {
   {
     hide *;
     reveal Spec.CopyTree();
-    // Split the finite Boolean witnesses before introducing the metadata witness.
-    if allowed {
-      if returnNow { } else { }
-    } else {
-      if returnNow { } else { }
+    assert Spec.FileTreeFields(raw,tree,target,before,after,props,now,credentials,provider,streams,
+      out,err,ok,linkState,record,Spec.FileTreeObservation(tm,allowed,returnNow)) by {
+      reveal Spec.FileTreeFields();
     }
   }
 
@@ -994,7 +999,7 @@ module CpCore {
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool, links: Spec.LinkMap, record: Spec.CopyReceipt)
     modifies io.fsRegion,io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.CopyTree(raw,tree,target,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok,(known,links,selfCheck),record)
+    ensures Spec.CopyTree(raw,tree,target,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok,(known,links,selfCheck),record)
     decreases Spec.TreeHeight(tree),2
   {
     links := known;
@@ -1005,6 +1010,8 @@ module CpCore {
     var qs := Quoted(tree.path,io);
     var qt := Quoted(target,io);
     if tree.MissingSource? { var reason := Reason(tree.metadata.err,io); return [],Spec.CannotStat(qs,reason),false,known,record; }
+    if tree.ModeFailureSource? { var reason := Reason(tree.modeErr,io); return [],Spec.CannotStat(qs,reason),false,known,record; }
+    if tree.LinkFailureSource? { var reason := Reason(C.IOErrorErrno(tree.linkError),io); return [],Spec.ReadSymlinkError(qs,reason),false,known,record; }
     if tree.OmittedSource? { return [],Spec.Omitting(qs),false,known,record; }
     if tree.CyclicSource? { return [],Spec.Cycle(qs),false,known,record; }
     var follow := if tree.DirectorySource? then raw.policy.keepDirectorySymlink else (!raw.policy.remove && !raw.policy.symbolic && !raw.policy.hard && !tree.metadata.value.isSymlink && Spec.BackupMode(raw) == "off");
@@ -1024,7 +1031,7 @@ module CpCore {
       else if returnNow { out,err,ok := [],[],true; }
       else if tm.ok && tm.value.isDir && Spec.BackupMode(raw) == "off" { out,err,ok := [],Spec.NonDirectory(qs,qt),false; }
       else { out,err,ok,links,record := CopyFile(raw,tree,target,tm,known,io); }
-      CompleteFileTree(raw,tree,target,tm,before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok,(known,links,selfCheck),record,allowed,returnNow);
+      CompleteFileTree(raw,tree,target,tm,before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok,(known,links,selfCheck),record,allowed,returnNow);
     } else {
       if tm.ok && Spec.Identity(tree.metadata) == Spec.Identity(tm) { return [],Spec.SameFile(qs,qt),false,known,record; }
       if tm.ok && !tm.value.isDir && Spec.BackupMode(raw) == "off" { return [],Spec.DirectoryOverFile(qs,qt),false,known,record; }
@@ -1037,7 +1044,7 @@ module CpCore {
   method {:isolate_assertions} ReadyDirectory(raw: S.CpCmdRaw, target: string, tm: Spec.Metadata, sourceMode: bv32, io: BenchIO.IO)
     returns (ok: bool, err: BW.Bytes, mode: bv32)
     modifies io.fsRegion
-    ensures Spec.DirectoryReady(raw,target,tm,sourceMode,old(io.fs()),io.fs(),io.now(),io.umask(),io.trustedFilesystem(),ok,err,mode)
+    ensures Spec.DirectoryReady(raw,target,tm,sourceMode,old(io.fs()),io.fs(),io.now(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ok,err,mode)
   {
     hide *;
     reveal Spec.DirectoryReady();
@@ -1078,18 +1085,18 @@ module CpCore {
         }
       }
     }
-    assert Spec.DirectoryReadyFields(raw,target,tm,sourceMode,before,io.fs(),io.now(),io.umask(),io.trustedFilesystem(),ok,err,
+    assert Spec.DirectoryReadyFields(raw,target,tm,sourceMode,before,io.fs(),io.now(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ok,err,
                                      Spec.DirectoryReadyObservation(created,createOK,createErr,metadata,modeOK,mode,modeErr,changeOK,changeErr)) by {
       hide *;
       reveal Spec.DirectoryReadyFields();
       if !tm.ok || !tm.value.isDir {
         assert C.CreateDirectorySpec(before,io.now(),io.trustedFilesystem(),io.umask(),created,target,Spec.DirectoryCreationMode(raw,sourceMode),createOK,createErr);
         if createOK {
-          assert Spec.MetadataFields(created,io.trustedFilesystem(),target,false,metadata);
+          assert Spec.MetadataFields(created,Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,false,metadata);
           if metadata.ok {
-            assert C.GetFileModeSpec(created,target,false,modeOK,mode,modeErr);
+            assert C.GetFileModeSpec(created,io.trustedNativeFailures(),target,false,modeOK,mode,modeErr);
             if modeOK && (mode & (448 as bv32)) != (448 as bv32) {
-              assert C.SetFileModeSpec(created,io.now(),io.fs(),target,false,mode | (448 as bv32),changeOK,changeErr);
+              assert C.SetFileModeSpec(created,io.now(),io.trustedNativeFailures(),io.fs(),target,false,mode | (448 as bv32),changeOK,changeErr);
             }
           }
         }
@@ -1103,7 +1110,7 @@ module CpCore {
     requires tree.DirectorySource?
     modifies io.fsRegion,io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.BackupDirectory(raw,tree,target,tm,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),(out,err,ok,receipt),(known,links,selfCheck))
+    ensures Spec.BackupDirectory(raw,tree,target,tm,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(out,err,ok,receipt),(known,links,selfCheck))
     decreases Spec.TreeHeight(tree),1
   {
     hide *;
@@ -1157,7 +1164,7 @@ module CpCore {
         }
       }
     }
-    assert Spec.BackupDirectoryFields(raw,tree,target,tm,before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),(out,err,ok,receipt),(known,links,selfCheck),
+    assert Spec.BackupDirectoryFields(raw,tree,target,tm,before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(out,err,ok,receipt),(known,links,selfCheck),
                                       Spec.DirectoryBackupObservation(prepared,preparation,readyMetadata,copied,copyOut,copyErr,copyOK,receipt,restoreOut,restoreErr,sourceBase,removeOK,removeErr)) by {
       hide *;
       reveal Spec.BackupDirectoryFields();
@@ -1201,22 +1208,28 @@ module CpCore {
   method LiveChild(raw: S.CpCmdRaw, original: seq<Spec.SourceTree>, path: string, io: BenchIO.IO)
     returns (value: Spec.SourceTree, stopped: bool)
     ensures value.path == path
-    ensures Spec.LiveChild(raw,io.fs(),io.trustedFilesystem(),original,path,value,stopped)
+    ensures Spec.LiveChild(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),original,path,value,stopped)
     ensures stopped || Spec.TreeHeight(value) <= Spec.ForestHeight(original)
   {
     reveal Spec.LiveChild();
     var index := OriginalChildIndex(original,path);
     var metadata := Metadata(path,raw.policy.dereference,io);
     var mode := 0 as bv32;
+    var modeOK := false;
+    var modeErr := 0;
     var linkTarget := path;
+    var linkResult: BW.IOResult<string> := Results.Ok(path);
     stopped := false;
     if !metadata.ok { value := Spec.MissingSource(path,metadata); }
     else {
       var result := io.GetFileMode(path,raw.policy.dereference);
-      assert result.Ok?;
-      mode := result.v;
-      assert C.GetFileModeSpec(io.fs(),path,raw.policy.dereference,true,mode,0);
-      if metadata.value.isDir {
+      modeOK := result.Ok?;
+      modeErr := C.ResultErrno(result);
+      mode := C.ResultValue(result,0 as bv32);
+      assert C.GetFileModeSpec(io.fs(),io.trustedNativeFailures(),path,raw.policy.dereference,modeOK,mode,modeErr);
+      if !modeOK {
+        value := Spec.ModeFailureSource(path,metadata,modeErr);
+      } else if metadata.value.isDir {
         reveal Spec.OriginalChildIndex();
         stopped := index < 0 || !original[index].DirectorySource? || Spec.Identity(original[index].metadata) != Spec.Identity(metadata);
         if stopped {
@@ -1235,18 +1248,18 @@ module CpCore {
           assert !raw.policy.dereference;
           assert C.ResolvePathForMetadataFields(io.fs(),path,false).Ok?;
           assert BW.FsNodeAt(io.fs(),C.ResolvePathForMetadataFields(io.fs(),path,false).v).Symlink?;
-          var link := io.ReadLink(path);
-          assert link.Ok?;
-          linkTarget := link.v;
+          linkResult := io.ReadLink(path);
+          if linkResult.Ok? { linkTarget := linkResult.v; }
         }
-        value := Spec.FileSource(path,metadata,mode,linkTarget);
+        value := if linkResult.Ok? then Spec.FileSource(path,metadata,mode,linkTarget)
+          else Spec.LinkFailureSource(path,metadata,mode,linkResult.e);
       }
     }
     assert stopped || Spec.TreeHeight(value) <= Spec.ForestHeight(original) by {
       reveal Spec.TreeHeight();
     }
-    assert Spec.LiveChildFields(raw,io.fs(),io.trustedFilesystem(),original,path,value,stopped,
-                                Spec.LiveChildObservation(index,metadata,mode,linkTarget)) by {
+    assert Spec.LiveChildFields(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),original,path,value,stopped,
+                                Spec.LiveChildObservation(index,metadata,mode,linkTarget,modeOK,modeErr,linkResult)) by {
       hide *;
       reveal Spec.LiveChildFields();
     }
@@ -1257,7 +1270,7 @@ module CpCore {
     requires tree.DirectorySource?
     modifies io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.LiveSelection(raw,tree,enabled,io.fs(),io.trustedFilesystem(),selected,stopped,scanErr)
+    ensures Spec.LiveSelection(raw,tree,enabled,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),selected,stopped,scanErr)
     ensures Spec.ForestHeight(selected) < Spec.TreeHeight(tree)
   {
     hide *;
@@ -1271,7 +1284,7 @@ module CpCore {
       entries := [];
       scanErr := err;
       if scanErr == 0 { entries := SortEntries(native); }
-      assert Spec.OrderedEnumeration(io.fs(),tree.path,entries,scanErr) by {
+      assert Spec.OrderedEnumeration(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),tree.path,entries,scanErr) by {
         reveal Spec.OrderedEnumeration();
       }
       selected := [];
@@ -1284,7 +1297,7 @@ module CpCore {
         invariant forall j | 0 <= j < |selected| :: !flags[j]
         invariant !stopped || (i > 0 && flags[i-1])
         invariant forall j | 0 <= j < i :: Spec.NameConcat(tree.path,entries[j].name,processed[j].path) &&
-                                           Spec.LiveChild(raw,io.fs(),io.trustedFilesystem(),tree.children,processed[j].path,processed[j],flags[j])
+                                           Spec.LiveChild(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),tree.children,processed[j].path,processed[j],flags[j])
         invariant forall j | 0 <= j < |selected| :: Spec.TreeHeight(selected[j]) <= Spec.ForestHeight(tree.children)
         modifies {}
         decreases |entries|-i
@@ -1297,11 +1310,11 @@ module CpCore {
         if !stop { selected := selected+[value]; }
         stopped := stop;
         assert forall j | 0 <= j < |processed| :: Spec.NameConcat(tree.path,entries[j].name,processed[j].path) &&
-                                                  Spec.LiveChild(raw,io.fs(),io.trustedFilesystem(),tree.children,processed[j].path,processed[j],flags[j]) by {
+                                                  Spec.LiveChild(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),tree.children,processed[j].path,processed[j],flags[j]) by {
           hide *;
           forall j | 0 <= j < |processed|
             ensures Spec.NameConcat(tree.path,entries[j].name,processed[j].path)
-            ensures Spec.LiveChild(raw,io.fs(),io.trustedFilesystem(),tree.children,processed[j].path,processed[j],flags[j])
+            ensures Spec.LiveChild(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),tree.children,processed[j].path,processed[j],flags[j])
           {
             if j < i { assert processed[j] == oldProcessed[j] && flags[j] == oldFlags[j]; }
             else { assert j == i; }
@@ -1319,7 +1332,7 @@ module CpCore {
       }
     }
     ForestBound(selected,Spec.TreeHeight(tree));
-    assert Spec.LiveSelectionFields(raw,tree,enabled,io.fs(),io.trustedFilesystem(),selected,stopped,scanErr,
+    assert Spec.LiveSelectionFields(raw,tree,enabled,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),selected,stopped,scanErr,
                                     (entries,processed,flags)) by {
       hide *;
       reveal Spec.LiveSelectionFields();
@@ -1328,7 +1341,7 @@ module CpCore {
 
   lemma CompleteDirectoryOutcome(raw: S.CpCmdRaw, tree: Spec.SourceTree, target: string, tm: Spec.Metadata,
                                  before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                                 credentials: BW.ProcessCredentials, mask: bv32, provider: C.ValidFilesystemObservations,
+                                 credentials: BW.ProcessCredentials, mask: bv32, provider: Spec.FilesystemProvider,
                                  streams: Spec.StreamProvider, reported: (BW.Bytes,BW.Bytes,bool,Spec.CopyReceipt),
                                  observed: (BW.FileSystem,bool,BW.Bytes,BW.FileSystem,BW.Bytes,BW.Bytes,bool,BW.Bytes,bool,bv32,seq<Spec.SourceTree>,bool,int,bool),
                                  linkState: (Spec.LinkMap,Spec.LinkMap,bool))
@@ -1355,7 +1368,7 @@ module CpCore {
     requires tree.DirectorySource?
     modifies io.fsRegion,io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.DirectoryEffect(raw,tree,target,tm,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),(out,err,ok,receipt),(known,links,selfCheck))
+    ensures Spec.DirectoryEffect(raw,tree,target,tm,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(out,err,ok,receipt),(known,links,selfCheck))
     decreases Spec.TreeHeight(tree),0
   {
     links := known;
@@ -1367,7 +1380,7 @@ module CpCore {
     ghost var before := io.fs();
     var createOK,createErr,createdMode := ReadyDirectory(raw,target,tm,tree.mode,io);
     if !createOK {
-      assert Spec.DirectoryOutcome(raw,tree,target,tm,before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),([],createErr,false,receipt),(io.fs(),createOK,createErr,io.fs(),[],[],true,[],true,createdMode,[],false,tree.scanErr,false),(known,links,selfCheck)) by {
+      assert Spec.DirectoryOutcome(raw,tree,target,tm,before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),([],createErr,false,receipt),(io.fs(),createOK,createErr,io.fs(),[],[],true,[],true,createdMode,[],false,tree.scanErr,false),(known,links,selfCheck)) by {
         hide *;
         reveal Spec.DirectoryOutcome();
       }
@@ -1387,7 +1400,7 @@ module CpCore {
     var mask := io.GetUmask();
     var finalMode := Spec.DirectoryFinalMode(raw,tree.mode,mask,createdMode);
     var attributeErr,attributeOK := Attributes(attributeCmd,tree.metadata,finalMode,target,true,io);
-    assert Spec.DirectoryAttributes(raw,tree,tm,createdMode,target,copied,io.fs(),io.now(),io.props(),io.trustedFilesystem(),attributeErr,attributeOK) by {
+    assert Spec.DirectoryAttributes(raw,tree,tm,createdMode,target,copied,io.fs(),io.now(),io.props(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),attributeErr,attributeOK) by {
       hide *;
       reveal Spec.DirectoryAttributes();
     }
@@ -1399,7 +1412,7 @@ module CpCore {
     }
     err := err + attributeErr;
     ok := childOK && scanErr == 0 && attributeOK && !selectionStopped;
-    CompleteDirectoryOutcome(raw,tree,target,tm,before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),(out,err,ok,receipt),
+    CompleteDirectoryOutcome(raw,tree,target,tm,before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(out,err,ok,receipt),
                              (created,createOK,createErr,copied,childOut,childErr,childOK,attributeErr,attributeOK,createdMode,selected,selectionStopped,scanErr,childStopped),(known,links,selfCheck));
   }
 
@@ -1449,7 +1462,7 @@ module CpCore {
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool, links: Spec.LinkMap, stopped: bool)
     modifies io.fsRegion,io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.Children(raw,trees,target,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok,(known,links,selfCheck,stopped))
+    ensures Spec.Children(raw,trees,target,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok,(known,links,selfCheck,stopped))
     decreases Spec.ForestHeight(trees),3
   {
     links := known;
@@ -1480,7 +1493,7 @@ module CpCore {
       invariant |outputs| == i && |errors| == i && |results| == i && |targets| == i
       invariant forall j | 0 <= j < i ::
                   Spec.TargetFields(target,trees[j].path,targets[j]) &&
-                  Spec.CopyTree(raw,trees[j],targets[j],states[j],states[j+1],io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),outputs[j],errors[j],results[j],(maps[j],maps[j+1],selfCheck),records[j])
+                  Spec.CopyTree(raw,trees[j],targets[j],states[j],states[j+1],io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),outputs[j],errors[j],results[j],(maps[j],maps[j+1],selfCheck),records[j])
       invariant |outputOffsets| == i+1 && outputOffsets[0] == 0 && outputOffsets[i] == |out|
       invariant |errorOffsets| == i+1 && errorOffsets[0] == 0 && errorOffsets[i] == |err|
       invariant Spec.BlockOffsets(outputs,out,outputOffsets)
@@ -1514,7 +1527,7 @@ module CpCore {
     }
     assert Spec.Concatenation(outputs,out) by { reveal Spec.Concatenation(); }
     assert Spec.Concatenation(errors,err) by { reveal Spec.Concatenation(); }
-    assert Spec.ChildrenFields(raw,trees,target,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok,(known,links,selfCheck,stopped),
+    assert Spec.ChildrenFields(raw,trees,target,old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok,(known,links,selfCheck,stopped),
                                (states,outputs,errors,results,targets,maps,records)) by {
       hide *;
       reveal Spec.ChildrenFields();
@@ -1522,7 +1535,7 @@ module CpCore {
   }
 
   method SelfDestination(source: string, target: string, io: BenchIO.IO) returns (result: bool)
-    ensures Spec.SelfDestination(io.fs(),io.cwd(),source,target,result)
+    ensures Spec.SelfDestination(io.fs(),io.cwd(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),source,target,result)
   {
     hide *;
     reveal Spec.SelfDestination(), C.ResultValue();
@@ -1538,12 +1551,13 @@ module CpCore {
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool, links: Spec.LinkMap, record: Spec.CopyReceipt)
     modifies io.fsRegion,io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.RootCopy(raw,tree,target,io.cwd(),old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),(out,err,ok,record),(known,links))
+    ensures Spec.RootCopy(raw,tree,target,io.cwd(),old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(out,err,ok,record),(known,links))
   {
     links := known;
     hide *;
     reveal Spec.RootCopy(), Spec.RootOutcome();
     ghost var before := io.fs();
+    ghost var provider := Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures());
     ghost var beforeTarget,afterTarget := tree.metadata,tree.metadata;
     var inside := false;
     var self := false;
@@ -1557,42 +1571,55 @@ module CpCore {
       }
     }
     ghost var candidateSelf := self;
+    assert (if tree.DirectorySource? && tree.scanErr == 0 then
+      Spec.SelfDestination(before,io.cwd(),provider,tree.path,target,inside) &&
+      (if inside then Spec.MetadataFields(before,provider,target,raw.policy.keepDirectorySymlink,beforeTarget) &&
+        candidateSelf == (!beforeTarget.ok || (if beforeTarget.value.isDir then
+          Spec.Identity(beforeTarget) != Spec.Identity(tree.metadata) else Spec.BackupMode(raw) != "off"))
+       else !candidateSelf)
+      else !candidateSelf);
     out,err,ok,links,record := CopyTree(raw,tree,target,known,self,io);
     ghost var childErr,childOK := err,ok;
+    assert Spec.CopyTree(raw,tree,target,before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),
+      provider,io.trustedStreams(),out,childErr,childOK,(known,links,candidateSelf),record);
     if self {
       var tm := Metadata(target,true,io);
       afterTarget := tm;
       self := record.selfCopy && tm.ok && tm.value.isDir;
     }
+    assert (if candidateSelf then Spec.MetadataFields(io.fs(),provider,target,true,afterTarget) &&
+      self == (record.selfCopy && afterTarget.ok && afterTarget.value.isDir) else !self);
     if self {
       var qs := Quoted(tree.path,io);
       var qt := Quoted(target,io);
       err := err + Spec.IntoSelf(qs,qt);
       ok := false;
     }
-    assert Spec.RootOutcome(raw,tree,target,io.cwd(),before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),(out,err,ok,record),(candidateSelf,self,childErr,childOK,inside,beforeTarget,afterTarget),(known,links)) by {
+    assert err == childErr + (if self then Spec.IntoSelf(Spec.Q(tree.path),Spec.Q(target)) else []) &&
+      ok == (childOK && !self);
+    assert Spec.RootOutcome(raw,tree,target,io.cwd(),before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),provider,io.trustedStreams(),(out,err,ok,record),(candidateSelf,self,childErr,childOK,inside,beforeTarget,afterTarget),(known,links)) by {
       hide *;
       reveal Spec.RootOutcome();
     }
   }
 
   lemma ParentStepWitness(raw: S.CpCmdRaw, source: string, target: string, before: BW.FileSystem, after: BW.FileSystem,
-                          now: int, mask: bv32, provider: C.ValidFilesystemObservations,
+                          now: int, mask: bv32, provider: Spec.FilesystemProvider,
                           reported: (BW.Bytes,BW.Bytes,bool,seq<Spec.ParentInfo>), observed: Spec.ParentStepObservation)
     requires Spec.MetadataFields(before,provider,target,true,observed.destination)
     requires !observed.destination.ok || raw.policy.preserveMode || raw.policy.preserveTimes ==>
                Spec.MetadataFields(before,provider,source,true,observed.source)
     requires (!observed.destination.ok || raw.policy.preserveMode || raw.policy.preserveTimes) && observed.source.ok && observed.source.value.isDir ==>
-               C.GetFileModeSpec(before,source,true,observed.sourceModeOK,observed.sourceMode,observed.sourceModeErr)
+               C.GetFileModeSpec(before,provider.failures,source,true,observed.sourceModeOK,observed.sourceMode,observed.sourceModeErr)
     requires !observed.destination.ok && observed.source.ok && observed.source.value.isDir && observed.sourceModeOK ==>
-               C.CreateDirectorySpec(before,now,provider,mask,observed.created,target,Spec.ParentCreationMode(raw,observed.sourceMode),observed.createOK,observed.createErr)
+               C.CreateDirectorySpec(before,now,provider.filesystem,mask,observed.created,target,Spec.ParentCreationMode(raw,observed.sourceMode),observed.createOK,observed.createErr)
     requires !observed.destination.ok && observed.source.ok && observed.source.value.isDir && observed.sourceModeOK && observed.createOK ==>
                Spec.MetadataFields(observed.created,provider,target,false,observed.createdMetadata)
     requires !observed.destination.ok && observed.source.ok && observed.source.value.isDir && observed.sourceModeOK && observed.createOK && observed.createdMetadata.ok ==>
-               C.GetFileModeSpec(observed.created,target,false,observed.createdModeOK,observed.createdMode,observed.createdModeErr)
+               C.GetFileModeSpec(observed.created,provider.failures,target,false,observed.createdModeOK,observed.createdMode,observed.createdModeErr)
     requires !observed.destination.ok && observed.source.ok && observed.source.value.isDir && observed.sourceModeOK && observed.createOK && observed.createdMetadata.ok && observed.createdModeOK &&
              (observed.createdMode | (448 as bv32)) != observed.createdMode ==>
-               C.SetFileModeSpec(observed.created,now,after,target,false,observed.createdMode | (448 as bv32),observed.changeOK,observed.changeErr)
+               C.SetFileModeSpec(observed.created,now,provider.failures,after,target,false,observed.createdMode | (448 as bv32),observed.changeOK,observed.changeErr)
     requires observed.destination.ok && !raw.policy.preserveMode && !raw.policy.preserveTimes ==>
                after == before && reported.0 == [] && reported.3 == [] &&
                reported.1 == (if observed.destination.value.isDir then [] else Spec.ParentNotDirectory(Spec.Q(target))) && reported.2 == observed.destination.value.isDir
@@ -1629,7 +1656,7 @@ module CpCore {
   method {:isolate_assertions} ParentStep(raw: S.CpCmdRaw, source: string, target: string, io: BenchIO.IO)
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool, records: seq<Spec.ParentInfo>)
     modifies io.fsRegion
-    ensures Spec.ParentStep(raw,source,target,old(io.fs()),io.fs(),io.now(),io.umask(),io.trustedFilesystem(),out,err,ok,records)
+    ensures Spec.ParentStep(raw,source,target,old(io.fs()),io.fs(),io.now(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),out,err,ok,records)
   {
     hide *;
     reveal Spec.ParentStep();
@@ -1710,7 +1737,7 @@ module CpCore {
     }
     ghost var observed := Spec.ParentStepObservation(dm,sm,sourceMode,sourceModeOK,sourceModeErr,created,createOK,createErr,
                                                      createdMetadata,createdMode,createdModeOK,createdModeErr,io.fs(),changeOK,changeErr);
-    ParentStepWitness(raw,source,target,before,io.fs(),io.now(),io.umask(),io.trustedFilesystem(),(out,err,ok,records),observed);
+    ParentStepWitness(raw,source,target,before,io.fs(),io.now(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),(out,err,ok,records),observed);
   }
 
   method ComputeParentOffsets(path: string) returns (offsets: seq<nat>)
@@ -1736,7 +1763,7 @@ module CpCore {
   method PrepareParents(raw: S.CpCmdRaw, source: string, directory: string, target: string, io: BenchIO.IO)
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool, records: seq<Spec.ParentInfo>)
     modifies io.fsRegion
-    ensures Spec.ParentPreparation(raw,source,directory,target,old(io.fs()),io.fs(),io.now(),io.umask(),io.trustedFilesystem(),out,err,ok,records)
+    ensures Spec.ParentPreparation(raw,source,directory,target,old(io.fs()),io.fs(),io.now(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),out,err,ok,records)
   {
     hide *;
     reveal Spec.ParentPreparation(), Spec.ParentGroups();
@@ -1776,7 +1803,7 @@ module CpCore {
           invariant |outputs| == i && |errors| == i && |results| == i && |groups| == i && |targets| == i
           invariant forall j | 0 <= j < i ::
                       Spec.ParentsTargetFields(directory,trimmed[..offsets[j]],targets[j]) &&
-                      Spec.ParentStep(raw,trimmed[..offsets[j]],targets[j],states[j],states[j+1],io.now(),io.umask(),io.trustedFilesystem(),outputs[j],errors[j],results[j],groups[j])
+                      Spec.ParentStep(raw,trimmed[..offsets[j]],targets[j],states[j],states[j+1],io.now(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),outputs[j],errors[j],results[j],groups[j])
           invariant forall j | 0 <= j < i-1 :: results[j]
           invariant i == 0 || ok == results[i-1]
           invariant ok == (forall j | 0 <= j < i :: results[j])
@@ -1803,7 +1830,7 @@ module CpCore {
         assert Spec.Concatenation(errors,err) by { reveal Spec.Concatenation(); }
       }
     }
-    assert Spec.ParentPreparationFields(raw,source,directory,target,before,io.fs(),io.now(),io.umask(),io.trustedFilesystem(),
+    assert Spec.ParentPreparationFields(raw,source,directory,target,before,io.fs(),io.now(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),
                                         (out,err,ok,records),(trimmed,parent,dm,states,outputs,errors,results,groups,targets,offsets)) by {
       hide *;
       reveal Spec.ParentPreparationFields();
@@ -1812,7 +1839,7 @@ module CpCore {
 
   method RestoreParent(raw: S.CpCmdRaw, parent: Spec.ParentInfo, io: BenchIO.IO) returns (err: BW.Bytes, ok: bool)
     modifies io.fsRegion
-    ensures Spec.ParentRestoreOne(raw,parent,old(io.fs()),io.fs(),io.now(),io.trustedFilesystem(),err,ok)
+    ensures Spec.ParentRestoreOne(raw,parent,old(io.fs()),io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),err,ok)
   {
     hide *;
     reveal Spec.ParentRestoreOne();
@@ -1839,7 +1866,7 @@ module CpCore {
         err := if raw.policy.preserveMode then Spec.ModeError(q,reason) else Spec.ParentModeError(q,reason);
       }
     }
-    assert Spec.ParentRestoreOneFields(raw,parent,before,io.fs(),io.now(),io.trustedFilesystem(),err,ok,(middle,timeOK,timeErr,modeOK,modeErr)) by {
+    assert Spec.ParentRestoreOneFields(raw,parent,before,io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),err,ok,(middle,timeOK,timeErr,modeOK,modeErr)) by {
       hide *;
       reveal Spec.ParentRestoreOneFields();
     }
@@ -1847,7 +1874,7 @@ module CpCore {
 
   method RestoreParents(raw: S.CpCmdRaw, records: seq<Spec.ParentInfo>, io: BenchIO.IO) returns (err: BW.Bytes, ok: bool)
     modifies io.fsRegion
-    ensures Spec.ParentRestoration(raw,records,old(io.fs()),io.fs(),io.now(),io.trustedFilesystem(),err,ok)
+    ensures Spec.ParentRestoration(raw,records,old(io.fs()),io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),err,ok)
   {
     hide *;
     reveal Spec.ParentRestoration();
@@ -1863,7 +1890,7 @@ module CpCore {
       invariant 0 <= i <= |records|
       invariant |states| == i+1 && states[0] == before && states[i] == io.fs()
       invariant |errors| == i && |results| == i
-      invariant forall j | 0 <= j < i :: Spec.ParentRestoreOne(raw,records[|records|-1-j],states[j],states[j+1],io.now(),io.trustedFilesystem(),errors[j],results[j])
+      invariant forall j | 0 <= j < i :: Spec.ParentRestoreOne(raw,records[|records|-1-j],states[j],states[j+1],io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),errors[j],results[j])
       invariant forall j | 0 <= j < i-1 :: results[j]
       invariant i == 0 || ok == results[i-1]
       invariant ok == (forall j | 0 <= j < i :: results[j])
@@ -1881,14 +1908,14 @@ module CpCore {
       i := i+1;
     }
     assert Spec.Concatenation(errors,err) by { reveal Spec.Concatenation(); }
-    assert Spec.ParentRestorationFields(raw,records,before,io.fs(),io.now(),io.trustedFilesystem(),err,ok,(states,errors,results)) by {
+    assert Spec.ParentRestorationFields(raw,records,before,io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),err,ok,(states,errors,results)) by {
       hide *;
       reveal Spec.ParentRestorationFields();
     }
   }
 
   method SeenDestination(target: string, meta: Spec.Metadata, seen: Spec.SeenDestinations, io: BenchIO.IO) returns (result: bool)
-    ensures Spec.SeenDestination(io.fs(),io.trustedFilesystem(),target,meta,seen,result)
+    ensures Spec.SeenDestination(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,meta,seen,result)
   {
     hide *;
     reveal Spec.SeenDestination();
@@ -1898,7 +1925,7 @@ module CpCore {
     while i < |seen|
       invariant 0 <= i <= |seen| && |matches| == i
       invariant forall j | 0 <= j < i ::
-                  if meta.ok && (meta.value.device,meta.value.inode) == (seen[j].1,seen[j].2) then Spec.SameEntryFields(io.fs(),io.trustedFilesystem(),target,seen[j].0,matches[j])
+                  if meta.ok && (meta.value.device,meta.value.inode) == (seen[j].1,seen[j].2) then Spec.SameEntryFields(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,seen[j].0,matches[j])
                   else !matches[j]
       invariant result == (exists j | 0 <= j < i :: matches[j])
       modifies {}
@@ -1910,7 +1937,7 @@ module CpCore {
       result := result || same;
       i := i+1;
     }
-    assert Spec.SeenDestinationFields(io.fs(),io.trustedFilesystem(),target,meta,seen,result,matches) by {
+    assert Spec.SeenDestinationFields(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,meta,seen,result,matches) by {
       hide *;
       reveal Spec.SeenDestinationFields();
     }
@@ -1918,7 +1945,7 @@ module CpCore {
 
   method RepeatedSource(raw: S.CpCmdRaw, tree: Spec.SourceTree, target: string, previous: seq<Spec.SourceTree>, known: Spec.LinkMap, io: BenchIO.IO)
     returns (repeated: bool)
-    ensures Spec.RepeatedSource(raw,io.fs(),io.trustedFilesystem(),tree,target,previous,known,repeated)
+    ensures Spec.RepeatedSource(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),tree,target,previous,known,repeated)
   {
     hide *;
     reveal Spec.RepeatedSource();
@@ -1932,7 +1959,7 @@ module CpCore {
         invariant 0 <= i <= |previous| && |matches| == i
         invariant forall j | 0 <= j < i ::
                     if previous[j].FileSource? && Spec.Identity(tree.metadata) == Spec.Identity(previous[j].metadata) then
-                      Spec.SameEntryFields(io.fs(),io.trustedFilesystem(),tree.path,previous[j].path,matches[j])
+                      Spec.SameEntryFields(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),tree.path,previous[j].path,matches[j])
                     else !matches[j]
         invariant repeated == (exists j | 0 <= j < i :: matches[j])
         modifies {}
@@ -1947,7 +1974,7 @@ module CpCore {
         i := i+1;
       }
     }
-    assert Spec.RepeatedSourceFields(raw,io.fs(),io.trustedFilesystem(),tree,target,previous,known,repeated,matches) by {
+    assert Spec.RepeatedSourceFields(raw,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),tree,target,previous,known,repeated,matches) by {
       hide *;
       reveal Spec.RepeatedSourceFields();
     }
@@ -1955,7 +1982,7 @@ module CpCore {
 
   method DestinationGuard(raw: S.CpCmdRaw, tree: Spec.SourceTree, target: string, seen: Spec.SeenDestinations, io: BenchIO.IO)
     returns (guard: Spec.DestinationGuardResult)
-    ensures Spec.DestinationGuard(raw,tree,target,io.fs(),io.trustedFilesystem(),seen,guard)
+    ensures Spec.DestinationGuard(raw,tree,target,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),seen,guard)
   {
     hide *;
     reveal Spec.DestinationGuard();
@@ -1972,7 +1999,7 @@ module CpCore {
           mayCopy := !same && !(tree.metadata.value.isSymlink && tm.value.isSymlink && Spec.BackupMode(raw) == "off");
         }
       } else { mayCopy := !(tm.ok && tree.FileSource? != !tm.value.isDir && Spec.BackupMode(raw) == "off"); }
-      assert Spec.MayCopyFields(raw,tree,target,tm,io.fs(),io.trustedFilesystem(),mayCopy,same) by {
+      assert Spec.MayCopyFields(raw,tree,target,tm,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),mayCopy,same) by {
         hide *;
         reveal Spec.MayCopyFields();
       }
@@ -1993,7 +2020,7 @@ module CpCore {
         }
       }
     }
-    assert Spec.DestinationGuardFields(raw,tree,target,io.fs(),io.trustedFilesystem(),seen,guard,
+    assert Spec.DestinationGuardFields(raw,tree,target,io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),seen,guard,
                                        Spec.DestinationGuardObservation(tm,entry,mayCopy,same,seenTarget,seenEntry)) by {
       hide *;
       reveal Spec.DestinationGuardFields();
@@ -2004,7 +2031,7 @@ module CpCore {
                      previous: seq<string>, previousTrees: seq<Spec.SourceTree>, known: Spec.LinkMap, previousSeen: Spec.SeenDestinations, io: BenchIO.IO)
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool, tree: Spec.SourceTree, links: Spec.LinkMap, seen: Spec.SeenDestinations)
     modifies io.fsRegion,io.dirHandlesRegion
-    ensures Spec.Operand(raw,source,target,directory,io.cwd(),(old(io.fs()),io.fs()),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),
+    ensures Spec.Operand(raw,source,target,directory,io.cwd(),(old(io.fs()),io.fs()),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                          (out,err,ok,tree),(previous,previousTrees,known,links,previousSeen,seen))
     ensures io.dirHandles() == old(io.dirHandles())
   {
@@ -2049,7 +2076,7 @@ module CpCore {
       restoreErr,restoreOK := RestoreParents(raw,parents,io);
       out,err,ok := parentOut+copyOut,parentErr+copyErr+restoreErr,copyOK && restoreOK;
     }
-    assert Spec.OperandFields(raw,source,target,directory,io.cwd(),(before,io.fs()),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),
+    assert Spec.OperandFields(raw,source,target,directory,io.cwd(),(before,io.fs()),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                               (out,err,ok,tree),(previous,previousTrees,known,links,previousSeen,seen),
                               Spec.OperandObservation(destination,prepared,parentOut,parentErr,parentOK,parents,copied,copyOut,copyErr,copyOK,restoreErr,restoreOK,record,repeated,guard,rootLinks)) by {
       hide *;
@@ -2061,7 +2088,7 @@ module CpCore {
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool)
     modifies io.fsRegion,io.dirHandlesRegion
     ensures Spec.Batch(raw,sources,target,directory,io.cwd(),old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),
-                       io.umask(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok)
+                       io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok)
     ensures io.dirHandles() == old(io.dirHandles())
   {
     hide *;
@@ -2090,7 +2117,7 @@ module CpCore {
       invariant |states| == i+1 && states[0] == old(io.fs()) && states[i] == io.fs()
       invariant |trees| == i && |outputs| == i && |errors| == i && |results| == i
       invariant (forall j {:trigger trees[j]} | 0 <= j < i ::
-                   Spec.Operand(raw,sources[j],target,directory,io.cwd(),(states[j],states[j+1]),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),
+                   Spec.Operand(raw,sources[j],target,directory,io.cwd(),(states[j],states[j+1]),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                                 (outputs[j],errors[j],results[j],trees[j]),(sources[..j],trees[..j],maps[j],maps[j+1],seens[j],seens[j+1])))
       invariant |outputOffsets| == i+1 && outputOffsets[0] == 0 && outputOffsets[i] == |out|
       invariant |errorOffsets| == i+1 && errorOffsets[0] == 0 && errorOffsets[i] == |err|
@@ -2124,11 +2151,11 @@ module CpCore {
       errorOffsets := errorOffsets + [|err|];
       i := i+1;
       assert forall j {:trigger trees[j]} | 0 <= j < i ::
-          Spec.Operand(raw,sources[j],target,directory,io.cwd(),(states[j],states[j+1]),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),
+          Spec.Operand(raw,sources[j],target,directory,io.cwd(),(states[j],states[j+1]),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                        (outputs[j],errors[j],results[j],trees[j]),(sources[..j],trees[..j],maps[j],maps[j+1],seens[j],seens[j+1])) by {
         hide *;
         forall j {:trigger trees[j]} | 0 <= j < i
-          ensures Spec.Operand(raw,sources[j],target,directory,io.cwd(),(states[j],states[j+1]),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),
+          ensures Spec.Operand(raw,sources[j],target,directory,io.cwd(),(states[j],states[j+1]),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                                (outputs[j],errors[j],results[j],trees[j]),(sources[..j],trees[..j],maps[j],maps[j+1],seens[j],seens[j+1]))
         {
           if j < previousI {
@@ -2147,7 +2174,7 @@ module CpCore {
     }
     assert Spec.Concatenation(outputs,out) by { reveal Spec.Concatenation(); }
     assert Spec.Concatenation(errors,err) by { reveal Spec.Concatenation(); }
-    assert Spec.BatchOutcome(raw,sources,target,directory,io.cwd(),before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),
+    assert Spec.BatchOutcome(raw,sources,target,directory,io.cwd(),before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                              (out,err,ok),(states,trees,outputs,errors,results,seq(|sources|, i => target),maps,seens)) by {
       hide *;
       reveal Spec.BatchOutcome();
@@ -2158,7 +2185,7 @@ module CpCore {
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool)
     modifies io.fsRegion,io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
-    ensures Spec.SingleTarget(raw,source,target,tm,io.cwd(),old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok)
+    ensures Spec.SingleTarget(raw,source,target,tm,io.cwd(),old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok)
   {
     hide *;
     reveal Spec.SingleTarget();
@@ -2169,7 +2196,7 @@ module CpCore {
       if selectionErr != 0 { out,err,ok := [],Spec.MemoryExhausted(),false; }
       else { out,err,ok := CopyBatch(Spec.WithoutBackup(raw),[source],selected,false,io); }
     } else { out,err,ok := CopyBatch(raw,[source],target,false,io); }
-    assert Spec.SingleTargetFields(raw,source,target,tm,io.cwd(),before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),
+    assert Spec.SingleTargetFields(raw,source,target,tm,io.cwd(),before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                                    (out,err,ok),(selected,selectionErr)) by {
       hide *;
       reveal Spec.SingleTargetFields();
@@ -2198,7 +2225,7 @@ module CpCore {
 
   method Command(raw: S.CpCmdRaw, io: BenchIO.IO) returns (out: BW.Bytes, err: BW.Bytes, ok: bool)
     modifies io.fsRegion,io.dirHandlesRegion
-    ensures Spec.Command(raw,old(io.fs()),io.fs(),io.cwd(),io.env(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok)
+    ensures Spec.Command(raw,old(io.fs()),io.fs(),io.cwd(),io.env(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok)
     ensures io.dirHandles() == old(io.dirHandles())
   {
     hide *;
@@ -2211,7 +2238,7 @@ module CpCore {
     returns (out: BW.Bytes, err: BW.Bytes, ok: bool)
     modifies io.fsRegion,io.dirHandlesRegion
     ensures Spec.NormalizedCommand(raw,old(io.fs()),io.fs(),io.cwd(),io.props(),io.now(),io.credentials(),io.umask(),
-                                   io.trustedFilesystem(),io.trustedStreams(),out,err,ok)
+                                   Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok)
     ensures io.dirHandles() == old(io.dirHandles())
   {
     hide *;
@@ -2236,14 +2263,14 @@ module CpCore {
       if !tm.ok || !tm.value.isDir {
         var q := Quoted(target,io);
         var reason := Reason(if tm.ok then 20 else tm.err,io);
-        assert Spec.CommandOutcome(raw,before,io.fs(),io.cwd(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),
+        assert Spec.CommandOutcome(raw,before,io.fs(),io.cwd(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),
                                    [],(if raw.target.Some? then Spec.DirectoryError(q,reason) else Spec.TargetError(q,reason)),false,tm);
         return [],(if raw.target.Some? then Spec.DirectoryError(q,reason) else Spec.TargetError(q,reason)),false;
       }
       out,err,ok := CopyBatch(raw,sources,target,true,io);
     } else {
       if raw.policy.creation.parents && (raw.noTarget || !tm.ok || !tm.value.isDir) {
-        assert Spec.CommandOutcome(raw,before,io.fs(),io.cwd(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),[],Spec.ParentsRequireDirectory(),false,tm);
+        assert Spec.CommandOutcome(raw,before,io.fs(),io.cwd(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),[],Spec.ParentsRequireDirectory(),false,tm);
         return [],Spec.ParentsRequireDirectory(),false;
       }
       if !raw.noTarget && tm.ok && tm.value.isDir { out,err,ok := CopyBatch(raw,sources,target,true,io); }
@@ -2252,12 +2279,12 @@ module CpCore {
         out,err,ok := CopySingle(raw,sources[0],target,tm,io);
       }
     }
-    assert Spec.CommandOutcome(raw,before,io.fs(),io.cwd(),io.props(),io.now(),io.credentials(),io.umask(),io.trustedFilesystem(),io.trustedStreams(),out,err,ok,tm);
+    assert Spec.CommandOutcome(raw,before,io.fs(),io.cwd(),io.props(),io.now(),io.credentials(),io.umask(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),out,err,ok,tm);
   }
 
   twostate predicate CoreSummary(raw: S.CpCmdRaw, io: BenchIO.IO, exit: int)
     reads io.fsRegion,io.dirHandlesRegion,io.propsRegion,io.nowRegion,io.credentialsRegion,
-          io.umaskRegion,io.cwdRegion,io.envRegion,io.trustedFilesystemRegion,io.trustedStreamsRegion,io.stdoutRegion,io.stderrRegion
+          io.umaskRegion,io.cwdRegion,io.envRegion,io.trustedFilesystemRegion,io.trustedNativeFailuresRegion,io.trustedStreamsRegion,io.stdoutRegion,io.stderrRegion
   { Spec.Spec(raw,io,exit) }
 
   method RunCore(raw: S.CpCmdRaw, io: BenchIO.IO) returns (exit: int)
@@ -2274,12 +2301,12 @@ module CpCore {
     var writeErr := 0;
     var committed: nat := 0;
     if |out| != 0 {
-      var result := io.WriteStdout(out,BW.ReturnError);
+      var result := io.WriteStdout(out);
       writeErr := C.ResultErrno(result);
       committed := C.WriteResultCommitted(result);
     }
     assert (if |out| == 0 then io.stdout() == beforeOut && committed == 0 && writeErr == 0
-            else C.WriteStdoutSpec(beforeOut,io.trustedStreams(),io.stdout(),out,BW.ReturnError,committed,writeErr));
+            else C.WriteStdoutSpec(beforeOut,io.trustedStreams(),io.stdout(),out,committed,writeErr));
     if writeErr != 0 {
       var reason := Reason(writeErr,io);
       err := err + Spec.StdoutError(reason);
@@ -2288,14 +2315,14 @@ module CpCore {
     var stderrErr := 0;
     var stderrCommitted: nat := 0;
     if |err| != 0 {
-      var result := io.WriteStderr(err,BW.ReturnError);
+      var result := io.WriteStderr(err);
       stderrErr := C.ResultErrno(result);
       stderrCommitted := C.WriteResultCommitted(result);
     }
     assert (if |err| == 0 then io.stderr() == beforeErr && stderrCommitted == 0 && stderrErr == 0
-            else C.WriteStderrSpec(beforeErr,io.trustedStreams(),io.stderr(),err,BW.ReturnError,stderrCommitted,stderrErr));
+            else C.WriteStderrSpec(beforeErr,io.trustedStreams(),io.stderr(),err,stderrCommitted,stderrErr));
     assert (if |out| == 0 then io.stdout() == beforeOut && committed == 0 && writeErr == 0
-            else C.WriteStdoutSpec(beforeOut,io.trustedStreams(),io.stdout(),out,BW.ReturnError,committed,writeErr));
+            else C.WriteStdoutSpec(beforeOut,io.trustedStreams(),io.stdout(),out,committed,writeErr));
     exit := if ok && writeErr == 0 && stderrErr == 0 then 0 else 1;
     assert Spec.PublishedOutcome(beforeOut,beforeErr,io.stdout(),io.stderr(),io.trustedStreams(),out,originalErr,ok,exit,
                                  (committed,writeErr,stderrCommitted,stderrErr)) by {

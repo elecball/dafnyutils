@@ -9,10 +9,10 @@ module StreamCopy {
     ensures readErr == 0 && writeErr == 0 ==>
       io.stdin() == [] && io.stdout() == old(io.stdout()) + old(io.stdin())
   {
-    var read := io.ReadStdin(BenchIO.BenchWorld.ReturnError);
+    var read := io.ReadStdin();
     var data := C.ReadResultData(read);
     readErr := C.ResultErrno(read);
-    var write := io.WriteStdout(data, BenchIO.BenchWorld.ReturnError);
+    var write := io.WriteStdout(data);
     writeErr := C.ResultErrno(write);
   }
 

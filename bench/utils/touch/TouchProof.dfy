@@ -4,6 +4,9 @@ include "TouchCore.dfy"
 include "TouchSpec.dfy"
 
 module TouchProof {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Utf8 = Utf8Semantics
   import BenchIO
   import BenchWorld
@@ -28,6 +31,7 @@ module TouchProof {
   }
 
   lemma RunStepSummaryFieldsImpliesSpec(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     path: BenchWorld.Path,
     noCreate: bool,
@@ -44,21 +48,23 @@ module TouchProof {
     hadError: bool,
     errOut: BenchWorld.Bytes
   )
-    requires Core.RunStepSummaryFields(
+    requires Core.RunStepSummaryFields(nativeFailures,
                observations, path, noCreate, followSymlink, selection, source,
                preFs, preNow, preStdout, preStdoutTarget,
                fs2, stdout2, stdoutTarget2, hadError, errOut
              )
-    ensures Spec.RunStepSpecFields(
+    ensures Spec.RunStepSpecFields(nativeFailures,
               observations, path, noCreate, followSymlink, selection, source,
               preFs, preNow, preStdout, preStdoutTarget,
               fs2, stdout2, stdoutTarget2, hadError, errOut
             )
   {
+    reveal Core.RunStepSummaryFields();
     reveal Spec.RunStepSpecFields();
   }
 
   lemma EmptyRunFilesSummary(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     noCreate: bool,
     followSymlink: bool,
@@ -74,7 +80,7 @@ module TouchProof {
     hadError: bool,
     errOut: BenchWorld.Bytes
   )
-    requires Core.RunFilesSummaryFields(
+    requires Core.RunFilesSummaryFields(nativeFailures,
                observations, [], noCreate, followSymlink, selection, source,
                preFs, preNow, preStdout, preStdoutTarget,
                fs2, stdout2, stdoutTarget2, hadError, errOut
@@ -89,6 +95,7 @@ module TouchProof {
   }
 
   lemma SplitRunFilesSummary(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     files: seq<BenchWorld.Path>,
     noCreate: bool,
@@ -114,18 +121,18 @@ module TouchProof {
       stepOut: BenchWorld.Bytes
     )
     requires 0 < |files|
-    requires Core.RunFilesSummaryFields(
+    requires Core.RunFilesSummaryFields(nativeFailures,
                observations, files, noCreate, followSymlink, selection, source,
                preFs, preNow, preStdout, preStdoutTarget,
                fs2, stdout2, stdoutTarget2, hadError, errOut
              )
-    ensures Core.RunFilesSummaryFields(
+    ensures Core.RunFilesSummaryFields(nativeFailures,
               observations, files[..|files| - 1], noCreate,
               followSymlink, selection, source,
               preFs, preNow, preStdout, preStdoutTarget,
               prefixFs, prefixStdout, prefixStdoutTarget, prefixError, prefixOut
             )
-    ensures Core.RunStepSummaryFields(
+    ensures Core.RunStepSummaryFields(nativeFailures,
               observations, files[|files| - 1], noCreate,
               followSymlink, selection, source,
               prefixFs, preNow, prefixStdout, prefixStdoutTarget,
@@ -137,13 +144,13 @@ module TouchProof {
     reveal Core.RunFilesSummaryFields();
     prefixFs, prefixStdout, prefixStdoutTarget,
       prefixError, stepError, prefixOut, stepOut :|
-      Core.RunFilesSummaryFields(
+      Core.RunFilesSummaryFields(nativeFailures,
         observations, files[..|files| - 1], noCreate,
         followSymlink, selection, source,
         preFs, preNow, preStdout, preStdoutTarget,
         prefixFs, prefixStdout, prefixStdoutTarget, prefixError, prefixOut
       ) &&
-      Core.RunStepSummaryFields(
+      Core.RunStepSummaryFields(nativeFailures,
         observations, files[|files| - 1], noCreate,
         followSymlink, selection, source,
         prefixFs, preNow, prefixStdout, prefixStdoutTarget,
@@ -154,6 +161,7 @@ module TouchProof {
   }
 
   lemma CoreStepImpliesTransition(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     path: BenchWorld.Path,
     noCreate: bool,
@@ -166,19 +174,19 @@ module TouchProof {
     stepError: bool,
     stepOut: BenchWorld.Bytes
   )
-    requires Core.RunStepSummaryFields(
+    requires Core.RunStepSummaryFields(nativeFailures,
                observations, path, noCreate, followSymlink, selection, source,
                before.fs, preNow, before.stdout, before.stdoutTarget,
                after.fs, after.stdout, after.stdoutTarget, stepError, stepOut
              )
     requires after.hadError == (before.hadError || stepError)
     requires after.errOut == before.errOut + stepOut
-    ensures Spec.FileTransitionRelation(
+    ensures Spec.FileTransitionRelation(nativeFailures,
               observations, path, noCreate, followSymlink,
               selection, source, preNow, before, after
             )
   {
-    RunStepSummaryFieldsImpliesSpec(
+    RunStepSummaryFieldsImpliesSpec(nativeFailures,
       observations, path, noCreate, followSymlink, selection, source,
       before.fs, preNow, before.stdout, before.stdoutTarget,
       after.fs, after.stdout, after.stdoutTarget, stepError, stepOut
@@ -187,6 +195,7 @@ module TouchProof {
   }
 
   lemma FileStatesWitnessImpliesSpec(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     files: seq<BenchWorld.Path>,
     noCreate: bool,
@@ -207,13 +216,13 @@ module TouchProof {
     requires |states| == |files| + 1
     requires states[0] == Spec.FileState(preFs, preStdout, preStdoutTarget, false, [])
     requires states[|files|] == Spec.FileState(fs2, stdout2, stdoutTarget2, hadError, errOut)
-    requires forall i {:trigger Spec.FileTransitionRelation(observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} ::
+    requires forall i {:trigger Spec.FileTransitionRelation(nativeFailures, observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} ::
                0 <= i < |files| ==>
-                 Spec.FileTransitionRelation(
+                 Spec.FileTransitionRelation(nativeFailures,
                    observations, files[i], noCreate, followSymlink, selection, source,
                    preNow, states[i], states[i + 1]
                  )
-    ensures Spec.RunFilesSpecFields(
+    ensures Spec.RunFilesSpecFields(nativeFailures,
               observations, files, noCreate, followSymlink, selection, source,
               preFs, preNow, preStdout, preStdoutTarget,
               fs2, stdout2, stdoutTarget2, hadError, errOut
@@ -223,6 +232,7 @@ module TouchProof {
   }
 
   lemma ExtendFileStates(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     files: seq<BenchWorld.Path>,
     noCreate: bool,
@@ -235,29 +245,29 @@ module TouchProof {
   ) returns (states: seq<Spec.FileState>)
     requires 0 < |files|
     requires |prefixStates| == |files|
-    requires forall i {:trigger Spec.FileTransitionRelation(observations, files[i], noCreate, followSymlink, selection, source, preNow, prefixStates[i], prefixStates[i + 1])} ::
+    requires forall i {:trigger Spec.FileTransitionRelation(nativeFailures, observations, files[i], noCreate, followSymlink, selection, source, preNow, prefixStates[i], prefixStates[i + 1])} ::
                0 <= i < |files| - 1 ==>
-                 Spec.FileTransitionRelation(
+                 Spec.FileTransitionRelation(nativeFailures,
                    observations, files[i], noCreate, followSymlink, selection, source,
                    preNow, prefixStates[i], prefixStates[i + 1]
                  )
-    requires Spec.FileTransitionRelation(
+    requires Spec.FileTransitionRelation(nativeFailures,
                observations, files[|files| - 1], noCreate,
                followSymlink, selection, source,
                preNow, prefixStates[|files| - 1], after
              )
     ensures states == prefixStates + [after]
-    ensures forall i {:trigger Spec.FileTransitionRelation(observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} ::
+    ensures forall i {:trigger Spec.FileTransitionRelation(nativeFailures, observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} ::
               0 <= i < |files| ==>
-                Spec.FileTransitionRelation(
+                Spec.FileTransitionRelation(nativeFailures,
                   observations, files[i], noCreate, followSymlink, selection, source,
                   preNow, states[i], states[i + 1]
                 )
   {
     states := prefixStates + [after];
-    forall i {:trigger Spec.FileTransitionRelation(observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} |
+    forall i {:trigger Spec.FileTransitionRelation(nativeFailures, observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} |
       0 <= i < |files|
-      ensures Spec.FileTransitionRelation(
+      ensures Spec.FileTransitionRelation(nativeFailures,
                 observations, files[i], noCreate, followSymlink, selection, source,
                 preNow, states[i], states[i + 1]
               )
@@ -273,6 +283,7 @@ module TouchProof {
   }
 
   lemma {:vcs_split_on_every_assert} RunFilesSummaryFieldsImpliesSpec(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     files: seq<BenchWorld.Path>,
     noCreate: bool,
@@ -289,7 +300,7 @@ module TouchProof {
     hadError: bool,
     errOut: BenchWorld.Bytes
   ) returns (states: seq<Spec.FileState>)
-    requires Core.RunFilesSummaryFields(
+    requires Core.RunFilesSummaryFields(nativeFailures,
                observations, files, noCreate, followSymlink, selection, source,
                preFs, preNow, preStdout, preStdoutTarget,
                fs2, stdout2, stdoutTarget2, hadError, errOut
@@ -297,13 +308,13 @@ module TouchProof {
     ensures |states| == |files| + 1
     ensures states[0] == Spec.FileState(preFs, preStdout, preStdoutTarget, false, [])
     ensures states[|files|] == Spec.FileState(fs2, stdout2, stdoutTarget2, hadError, errOut)
-    ensures forall i {:trigger Spec.FileTransitionRelation(observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} ::
+    ensures forall i {:trigger Spec.FileTransitionRelation(nativeFailures, observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} ::
               0 <= i < |files| ==>
-                Spec.FileTransitionRelation(
+                Spec.FileTransitionRelation(nativeFailures,
                   observations, files[i], noCreate, followSymlink, selection, source,
                   preNow, states[i], states[i + 1]
                 )
-    ensures Spec.RunFilesSpecFields(
+    ensures Spec.RunFilesSpecFields(nativeFailures,
               observations, files, noCreate, followSymlink, selection, source,
               preFs, preNow, preStdout, preStdoutTarget,
               fs2, stdout2, stdoutTarget2, hadError, errOut
@@ -311,13 +322,13 @@ module TouchProof {
     decreases |files|
   {
     if |files| == 0 {
-      EmptyRunFilesSummary(
+      EmptyRunFilesSummary(nativeFailures,
         observations, noCreate, followSymlink, selection, source,
         preFs, preNow, preStdout, preStdoutTarget,
         fs2, stdout2, stdoutTarget2, hadError, errOut
       );
       states := [Spec.FileState(preFs, preStdout, preStdoutTarget, false, [])];
-      FileStatesWitnessImpliesSpec(
+      FileStatesWitnessImpliesSpec(nativeFailures,
         observations, files, noCreate, followSymlink, selection, source,
         preFs, preNow, preStdout, preStdoutTarget,
         fs2, stdout2, stdoutTarget2, hadError, errOut, states
@@ -325,12 +336,12 @@ module TouchProof {
     } else {
       var prefixFs, prefixStdout, prefixStdoutTarget,
           prefixError, stepError, prefixOut, stepOut :=
-        SplitRunFilesSummary(
+        SplitRunFilesSummary(nativeFailures,
           observations, files, noCreate, followSymlink, selection, source,
           preFs, preNow, preStdout, preStdoutTarget,
           fs2, stdout2, stdoutTarget2, hadError, errOut
         );
-      var prefixStates := RunFilesSummaryFieldsImpliesSpec(
+      var prefixStates := RunFilesSummaryFieldsImpliesSpec(nativeFailures,
         observations, files[..|files| - 1], noCreate,
         followSymlink, selection, source,
         preFs, preNow, preStdout, preStdoutTarget,
@@ -343,16 +354,27 @@ module TouchProof {
         fs2, stdout2, stdoutTarget2, hadError, errOut
       );
       assert prefixStates[|files| - 1] == before;
-      CoreStepImpliesTransition(
+      CoreStepImpliesTransition(nativeFailures,
         observations, files[|files| - 1], noCreate,
         followSymlink, selection, source,
         preNow, before, after, stepError, stepOut
       );
-      states := ExtendFileStates(
+      hide *;
+      assert forall i: int | 0 <= i < |files| - 1 ::
+        Spec.FileTransitionRelation(nativeFailures, observations, files[i], noCreate,
+          followSymlink, selection, source, preNow, prefixStates[i], prefixStates[i+1]) by {
+        forall i: int | 0 <= i < |files| - 1
+          ensures Spec.FileTransitionRelation(nativeFailures, observations, files[i], noCreate,
+            followSymlink, selection, source, preNow, prefixStates[i], prefixStates[i+1])
+        {
+          assert files[..|files|-1][i] == files[i];
+        }
+      }
+      states := ExtendFileStates(nativeFailures,
         observations, files, noCreate, followSymlink, selection, source,
         preNow, prefixStates, after
       );
-      FileStatesWitnessImpliesSpec(
+      FileStatesWitnessImpliesSpec(nativeFailures,
         observations, files, noCreate, followSymlink, selection, source,
         preFs, preNow, preStdout, preStdoutTarget,
         fs2, stdout2, stdoutTarget2, hadError, errOut, states
@@ -364,9 +386,9 @@ module TouchProof {
     cmd: Schema.TouchCmd,
     io: BenchIO.IO,
     exit: int
-  )
-    requires Core.ResolvedRunSummaryFields(cmd, io, exit)
-    ensures Spec.ResolvedRunSpecFields(cmd, io, exit)
+  , plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    requires Core.ResolvedRunSummaryFields(cmd, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.ResolvedRunSpecFields(cmd, io, exit, plannedStdout, plannedStderr)
   {
     var selection: Schema.TimeSelection, source: Schema.TimeSource :|
       Spec.RequestedSelection(cmd, selection) &&
@@ -376,35 +398,60 @@ module TouchProof {
       ) &&
       (if |cmd.files| == 0 then
          io.fs() == old(io.fs()) &&
-         io.stdout() == old(io.stdout()) &&
-         io.stderr() == old(io.stderr()) + Spec.MissingOperandMessageSpec() &&
+         plannedStdout == old(io.stdout()) &&
+         plannedStderr == old(io.stderr()) + Spec.MissingOperandMessageSpec() &&
          exit == 1
        else
          exists hadError: bool, errOut: BenchWorld.Bytes ::
            exit == (if hadError then 1 else 0) &&
-           Core.RunFilesSummaryFields(
+           Core.RunFilesSummaryFields(old(io.trustedNativeFailures()),
              old(io.trustedFilesystem()), cmd.files, cmd.noCreate,
              cmd.followSymlink, selection, source,
              old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-             io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
+             io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
            ) &&
-           io.stderr() == old(io.stderr()) + errOut);
+           plannedStderr == old(io.stderr()) + errOut);
     if |cmd.files| > 0 {
       var hadError: bool, errOut: BenchWorld.Bytes :|
         exit == (if hadError then 1 else 0) &&
-        Core.RunFilesSummaryFields(
+        Core.RunFilesSummaryFields(old(io.trustedNativeFailures()),
           old(io.trustedFilesystem()), cmd.files, cmd.noCreate,
           cmd.followSymlink, selection, source,
           old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-          io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
+          io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
         ) &&
-        io.stderr() == old(io.stderr()) + errOut;
-      var states := RunFilesSummaryFieldsImpliesSpec(
+        plannedStderr == old(io.stderr()) + errOut;
+      var states := RunFilesSummaryFieldsImpliesSpec(old(io.trustedNativeFailures()),
         old(io.trustedFilesystem()), cmd.files, cmd.noCreate,
         cmd.followSymlink, selection, source,
         old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-        io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
+        io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
       );
+    }
+  }
+
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.TouchCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
+  {
+    hide *;
+    reveal Core.PreparedSummary(), Spec.PreparedSpec(), Schema.Command();
+    reveal StreamContract.ParseTimestampContractFields();
+    var cmd := Schema.Command(raw);
+    if cmd.mode == Schema.ModeRun &&
+       !(cmd.timeArg != "" && Schema.ClassifyTimeWord(cmd.timeArg) == Schema.TimeWordAmbiguous) &&
+       !(cmd.timeArg != "" && Schema.ClassifyTimeWord(cmd.timeArg) == Schema.TimeWordInvalid) {
+      if Core.ResolvedRunSummaryFields(cmd, io, exit, plannedStdout, plannedStderr) {
+        ResolvedRunSummaryFieldsImpliesSpec(cmd, io, exit, plannedStdout, plannedStderr);
+        if cmd.hasTimestamp {
+          assert StreamContract.TrustedTimeParseResultFields(old(io.trustedTimeParses()),
+            BenchWorld.TimestampParseRequest(cmd.timestampArg, old(io.now()), 0)).ok &&
+            !Spec.SourceConflict(cmd) by {
+            reveal Spec.ResolvedRunSpecFields(), Spec.RequestedSourceFields();
+            reveal StreamContract.ParseTimestampContractFields();
+          }
+        }
+      }
     }
   }
 
@@ -412,14 +459,11 @@ module TouchProof {
     requires Core.CoreSummary(raw, io, exit)
     ensures Spec.Spec(raw, io, exit)
   {
-    reveal Spec.Spec();
-    var cmd := Schema.Command(raw);
-    if cmd.mode == Schema.ModeRun &&
-       !(cmd.timeArg != "" && Schema.ClassifyTimeWord(cmd.timeArg) == Schema.TimeWordAmbiguous) &&
-       !(cmd.timeArg != "" && Schema.ClassifyTimeWord(cmd.timeArg) == Schema.TimeWordInvalid) {
-      if Core.ResolvedRunSummaryFields(cmd, io, exit) {
-        ResolvedRunSummaryFieldsImpliesSpec(cmd, io, exit);
-      }
-    }
+    var output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + output, old(io.stderr()) + diagnostics);
   }
 }

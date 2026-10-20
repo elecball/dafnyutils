@@ -11,7 +11,18 @@ This benchmark slice supports:
 Deferred GNU behavior:
 
 - Signal handling for `-i` is outside the current `World` model.
-- Pipe-error policy, `--output-error`, and special host devices such as `/dev/full`
-  require unmodeled descriptor/device effects.
-- Host write failures after a modeled path is accepted are not represented by
-  `WriteFileContract`; modeled diagnostics cover path and node-kind failures.
+- Signal delivery and the optional `--output-error` policies remain outside
+  this slice.
+
+The policy-free `ReadStdin()` result records a successfully read prefix and the
+remaining modeled input even when reading fails. Both ordinary and append file
+writes are bound to the exact `trustedFilesystem` request, including the
+committed prefix and open, write, or close failure stage. Creation, truncation,
+and append effects are retained on errors. Diagnostics use the C locale errno
+text supplied by the native boundary.
+
+Standard output and error writes are unbuffered. Their specifications retain
+exactly the committed prefix and include write failures in the exit status;
+the ordinary stdout diagnostic names `'standard output'`. A host device need
+not be represented as a filesystem node to exercise a standard descriptor
+write failure, for example by redirecting stdout to `/dev/full`.

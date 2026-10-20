@@ -534,6 +534,10 @@ module MvProof {
     requires Core.EntryNameEvidenceFor(fs, leftPath, left)
     requires Core.EntryNameEvidenceFor(fs, rightPath, right)
     requires Spec.SameDirectoryEntry(fs, leftPath, rightPath)
+    requires left.parentMetadata.ok ||
+      !Spec.StatusExistsOutcomeFields(fs, left.parent, false, true, 0)
+    requires right.parentMetadata.ok ||
+      !Spec.StatusExistsOutcomeFields(fs, right.parent, false, true, 0)
     ensures Core.EvidenceNamesSame(left, right)
   {
     EntryNameEvidenceImpliesPathRelations(fs, leftPath, left);
@@ -610,6 +614,15 @@ module MvProof {
     requires Core.SameFileEvidenceFor(
                cmd, fs, preCwd, source, target, evidence
              )
+    requires evidence.CheckedSameFile? && !evidence.decision.FailedParentStat?
+    requires evidence.sourceEntry.parentMetadata.ok ||
+      !Spec.StatusExistsOutcomeFields(fs, evidence.sourceEntry.parent, false, true, 0)
+    requires evidence.targetEntry.parentMetadata.ok ||
+      !Spec.StatusExistsOutcomeFields(fs, evidence.targetEntry.parent, false, true, 0)
+    requires evidence.source.isSymlink ==> evidence.sourceReferentEntry.SomeEntryNameEvidence?
+    requires evidence.sourceReferentEntry.SomeEntryNameEvidence? ==>
+      evidence.sourceReferentEntry.value.parentMetadata.ok ||
+      !Spec.StatusExistsOutcomeFields(fs, evidence.sourceReferentEntry.value.parent, false, true, 0)
     ensures
       var decision :=
         match evidence
@@ -800,9 +813,13 @@ module MvProof {
                targetEntry,
                collision
              )
+    requires collision.CheckedBackupCollision? ==>
+      collision.simpleCandidateFollowed.ok ||
+      !Spec.StatusExistsOutcomeFields(fs, Core.SimpleBackupPath(target, cmd.backupSuffix), true, true, 0)
     ensures Core.BackupCollisionDetected(collision) ==
             Spec.BackupWouldDestroySource(cmd, fs, source, target)
   {
+    hide Core.MetadataEvidenceFor(), Core.EntryNameEvidenceFor(), Core.StatusCallsFor(), Spec.StatusCallsFor();
     EntryNameEvidenceImpliesPathRelations(
       fs, source, sourceEntry
     );
@@ -872,11 +889,11 @@ module MvProof {
     DecimalNatSpecEqualsCore(index);
     assert path == Core.NumberedBackupPath(target, index);
     assert path == Spec.NumberedBackupPathSpec(target, index);
-    assert IOContract.PathExistsContractFields(
+    assert Spec.StatusExistsOutcomeFields(
         fs, path, false, false, checks[|checks| - 1].err
       );
     assert forall j: nat | start <= j < index ::
-        IOContract.PathExistsContractFields(
+        Spec.StatusExistsOutcomeFields(
           fs,
           Spec.NumberedBackupPathSpec(target, j),
           false,
@@ -884,7 +901,7 @@ module MvProof {
           0
         ) by {
       forall j: nat | start <= j < index
-        ensures IOContract.PathExistsContractFields(
+        ensures Spec.StatusExistsOutcomeFields(
                   fs,
                   Spec.NumberedBackupPathSpec(target, j),
                   false,
@@ -900,7 +917,7 @@ module MvProof {
                Core.NumberedBackupPath(target, j);
         assert Spec.NumberedBackupPathSpec(target, j) ==
                Core.NumberedBackupPath(target, j);
-        assert IOContract.PathExistsContractFields(
+        assert Spec.StatusExistsOutcomeFields(
             fs, checks[i].candidate, false, true, checks[i].err
           );
         assert checks[i].err == 0;
@@ -968,6 +985,7 @@ module MvProof {
     source: string,
     target: string,
     sourceIsDir: bool,
+    targetWasFound: bool,
     backupPath: string,
     verbose: bool,
     debug: bool,
@@ -979,9 +997,12 @@ module MvProof {
     backupFs: BW.FileSystem
   )
     requires Core.RenameEvidenceFor(
-               source, target, sourceIsDir, backupPath, verbose, debug,
+               source, target, sourceIsDir,
+          targetWasFound, backupPath, verbose, debug,
                beforeFs, preCwd, afterFs, outcome, calls, backupFs
              )
+    requires backupPath != "" || targetWasFound ==
+      Spec.StatusExistsOutcomeFields(beforeFs, target, false, true, 0)
     ensures Spec.RenameEffectRelation(
               source, target, backupPath, verbose, debug,
               beforeFs, preCwd, afterFs, outcome
@@ -1006,6 +1027,61 @@ module MvProof {
     }
   }
 
+  lemma RenameNativeEvidenceImpliesObservedRelation(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence, backupPath: string
+  )
+    requires Core.RenameEvidenceFor(source, target, step.sourceIsDir, step.targetFound,
+      backupPath, cmd.verbose, cmd.debug, step.beforeFs, cwd, step.afterFs,
+      step.outcome, step.renames, step.backupFs)
+    requires Core.RenameNativeObservationsFor(source, target, step)
+    requires if backupPath == "" then step.backup.NoBackupSelection?
+      else step.backup.SelectedBackup? && step.backup.backupPath == backupPath
+    ensures Spec.ObservedRenameEffectRelation(source, target, backupPath, cmd,
+      step.sourceIsDir, step.targetFound, step.inputs, step.beforeFs, step.afterFs, step.outcome)
+  {
+    assert Spec.ShowActionMessageSpec(cmd.verbose, cmd.debug) == Core.ShowActionMessage(cmd.verbose, cmd.debug);
+    assert Spec.StepSuccessStdoutSpec(source, target, backupPath, cmd.verbose, cmd.debug) ==
+      Core.StepSuccessStdout(source, target, backupPath, cmd.verbose, cmd.debug);
+    if |step.renames| > 0 {
+      SourceRenameDiagnosticErrCoreEqualsSpec(target, step.sourceIsDir, step.renames[0].err);
+    }
+    if |step.renames| > 1 {
+      SourceRenameDiagnosticErrCoreEqualsSpec(target, step.sourceIsDir, step.renames[1].err);
+    }
+    reveal Core.RenameEvidenceFor(), Core.RenameNativeObservationsFor();
+    if backupPath == "" {
+      assert |step.renames| == 1;
+      assert step.renames[0].ok ==> step.renames[0].err == 0;
+    } else {
+      assert step.renames[0].ok ==> step.renames[0].err == 0;
+      if |step.renames| == 2 {
+        assert step.renames[1].ok ==> step.renames[1].err == 0;
+      }
+    }
+    hide IOContract.RenamePathSpec(), IOContract.RenamePathContractFields();
+    reveal Spec.ObservedRenameEffectRelation();
+  }
+
+  lemma BackupSelectionCallsImpliesObservedPath(
+    cmd: Schema.MvCmd, fs: BW.FileSystem, target: string,
+    evidence: Core.BackupSelectionEvidence, calls: seq<Spec.StatusCallEvidence>
+  )
+    requires Core.BackupSelectionFromStatusCallsFor(cmd.backupMode, cmd.backupSuffix,
+      fs, target, evidence, calls)
+    ensures Spec.BackupPathFromObservations(cmd, fs, target, calls,
+      if evidence.SelectedBackup? then evidence.backupPath else "")
+  {
+    BackupStatusSuffixCoreImpliesSpec(cmd.backupMode, fs, target, calls);
+    assert Spec.SimpleBackupPathSpec(target, cmd.backupSuffix) ==
+      Core.SimpleBackupPath(target, cmd.backupSuffix);
+    if cmd.backupMode == Schema.BackupExisting && calls[0].ok {
+      DecimalNatSpecEqualsCore(|calls| - 1);
+    } else if cmd.backupMode == Schema.BackupNumbered {
+      DecimalNatSpecEqualsCore(|calls|);
+    }
+  }
+
   lemma ExistingTargetRenameEvidenceImpliesRelation(
     source: string,
     target: string,
@@ -1016,6 +1092,12 @@ module MvProof {
     requires Core.ExistingTargetRenameEvidenceFor(
                source, target, cmd, preCwd, evidence
              )
+    requires evidence.targetFound ==
+      Spec.StatusExistsOutcomeFields(evidence.beforeFs, target, false, true, 0)
+    requires evidence.sameFile.CheckedSameFile?
+    requires evidence.sameFile.backupCollision.CheckedBackupCollision? ==>
+      evidence.sameFile.backupCollision.simpleCandidateFollowed.ok ||
+      !Spec.StatusExistsOutcomeFields(evidence.beforeFs, Core.SimpleBackupPath(target, cmd.backupSuffix), true, true, 0)
     ensures Spec.ExistingTargetRenameEffectRelation(
               source,
               target,
@@ -1026,6 +1108,8 @@ module MvProof {
               evidence.outcome
             )
   {
+    hide Core.RenameEvidenceFor(), Core.MetadataEvidenceFor(), Core.EntryNameEvidenceFor();
+    hide Core.StatusCallsFor(), Spec.StatusCallsFor();
     reveal Core.SameFileEvidenceFor();
     match evidence.sameFile {
       case NoSameFileCheck =>
@@ -1055,6 +1139,7 @@ module MvProof {
               source,
               target,
               evidence.sourceIsDir,
+          evidence.targetFound,
               "",
               cmd.verbose,
               cmd.debug,
@@ -1080,6 +1165,7 @@ module MvProof {
                   source,
                   target,
                   evidence.sourceIsDir,
+          evidence.targetFound,
                   path,
                   cmd.verbose,
                   cmd.debug,
@@ -1096,7 +1182,184 @@ module MvProof {
     }
   }
 
-  lemma {:isolate_assertions} StepEvidenceImpliesMoveEffect(
+  lemma ParentMetadataFailureEvidenceImpliesEffect(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence
+  )
+    requires Core.StepEvidenceFor(source, target, cmd, cwd, step)
+    requires step.sameFile.CheckedSameFile? && step.sameFile.decision.FailedParentStat?
+    requires step.sameFile.sourceReferentEntry.NoEntryNameEvidence?
+    ensures Spec.ParentMetadataFailureEffect(source, target, cmd,
+      step.beforeFs, step.afterFs, step.outcome)
+  {
+    reveal Core.StepEvidenceFor();
+    reveal Core.SameFileEvidenceFor();
+    DirectParentDecisionFields(source,target,cmd,step.beforeFs,cwd,step.sameFile);
+    var sourceEntry := step.sameFile.sourceEntry;
+    var targetEntry := step.sameFile.targetEntry;
+    EntryNameEvidenceImpliesPathRelations(step.beforeFs, source, sourceEntry);
+    EntryNameEvidenceImpliesPathRelations(step.beforeFs, target, targetEntry);
+    assert cmd.overwriteMode != Schema.OverwriteSkip &&
+      cmd.updateMode != Schema.UpdateNone && cmd.updateMode != Schema.UpdateNoneFail;
+    assert sourceEntry.leaf == targetEntry.leaf;
+    assert !sourceEntry.parentMetadata.ok || !targetEntry.parentMetadata.ok;
+    assert step.afterFs == step.beforeFs;
+    assert step.outcome == Spec.MoveOutcome([], Spec.ParentStatFailureMessageSpec(
+      if !sourceEntry.parentMetadata.ok then sourceEntry.parent else targetEntry.parent,
+      if !sourceEntry.parentMetadata.ok then sourceEntry.parentMetadata.err else targetEntry.parentMetadata.err), true);
+    assert Core.MetadataEvidenceFor(step.beforeFs, sourceEntry.parent, false, sourceEntry.parentMetadata);
+    assert Core.MetadataEvidenceFor(step.beforeFs, targetEntry.parent, false, targetEntry.parentMetadata);
+    if !sourceEntry.parentMetadata.ok {
+      assert IOContract.FileStatusStructureContractFields(step.beforeFs, sourceEntry.parent,
+        false, false, sourceEntry.parentMetadata.rawStatus, sourceEntry.parentMetadata.err);
+      assert sourceEntry.parentMetadata.err > 0;
+      hide *;
+      reveal Spec.ParentMetadataFailureEffect();
+      assert exists sp: string, tp: string, failedPath: string,
+        status: BW.FileStatus, err: int, leaf: string ::
+        sp == sourceEntry.parent && tp == targetEntry.parent && leaf == sourceEntry.leaf &&
+        failedPath == sp && status == sourceEntry.parentMetadata.rawStatus &&
+        err == sourceEntry.parentMetadata.err &&
+        DirnameSpec.DirnameRelation(source, sp) && DirnameSpec.DirnameRelation(target, tp) &&
+        BasenameSpec.BasenameRelation(source, leaf) && BasenameSpec.BasenameRelation(target, leaf) &&
+        failedPath in {sp, tp} &&
+        IOContract.FileStatusStructureContractFields(step.beforeFs, failedPath, false, false, status, err) &&
+        err > 0 && step.afterFs == step.beforeFs &&
+        step.outcome == Spec.MoveOutcome([], Spec.ParentStatFailureMessageSpec(failedPath, err), true);
+    } else {
+      assert !targetEntry.parentMetadata.ok;
+      assert IOContract.FileStatusStructureContractFields(step.beforeFs, targetEntry.parent,
+        false, false, targetEntry.parentMetadata.rawStatus, targetEntry.parentMetadata.err);
+      assert targetEntry.parentMetadata.err > 0;
+      hide *;
+      reveal Spec.ParentMetadataFailureEffect();
+      assert exists sp: string, tp: string, failedPath: string,
+        status: BW.FileStatus, err: int, leaf: string ::
+        sp == sourceEntry.parent && tp == targetEntry.parent && leaf == sourceEntry.leaf &&
+        failedPath == tp && status == targetEntry.parentMetadata.rawStatus &&
+        err == targetEntry.parentMetadata.err &&
+        DirnameSpec.DirnameRelation(source, sp) && DirnameSpec.DirnameRelation(target, tp) &&
+        BasenameSpec.BasenameRelation(source, leaf) && BasenameSpec.BasenameRelation(target, leaf) &&
+        failedPath in {sp, tp} &&
+        IOContract.FileStatusStructureContractFields(step.beforeFs, failedPath, false, false, status, err) &&
+        err > 0 && step.afterFs == step.beforeFs &&
+        step.outcome == Spec.MoveOutcome([], Spec.ParentStatFailureMessageSpec(failedPath, err), true);
+    }
+  }
+
+  lemma ParentMetadataFailureStatusImpliesShape(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence
+  )
+    requires Core.StepEvidenceFor(source, target, cmd, cwd, step)
+    requires Core.StepStatusEvidenceFor(source, target, cmd, step)
+    requires step.sameFile.CheckedSameFile? && step.sameFile.decision.FailedParentStat?
+    requires step.sameFile.sourceReferentEntry.NoEntryNameEvidence?
+    ensures Spec.MoveStatusShape(cmd, step.beforeFs, cwd, source, target, step.statusCalls, step.inputs)
+  {
+    hide *;
+    StepStatusEvidenceImpliesMoveStatusShape(source, target, cmd, cwd, step);
+  }
+
+  lemma ParentMetadataFailureStatusImpliesOutcome(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence
+  )
+    requires Core.StepEvidenceFor(source, target, cmd, cwd, step)
+    requires Core.StepStatusEvidenceFor(source, target, cmd, step)
+    requires step.sameFile.CheckedSameFile? && step.sameFile.decision.FailedParentStat?
+    requires step.sameFile.sourceReferentEntry.NoEntryNameEvidence?
+    ensures Spec.ObservedParentFailureOutcome(source, target, cmd, step.beforeFs, cwd,
+      step.afterFs, step.outcome, step.statusCalls)
+    ensures Spec.ObservedMoveOutcome(source, target, cmd, step.beforeFs, cwd,
+      step.afterFs, step.outcome, step.statusCalls, step.inputs)
+  {
+    hide *;
+    StepEvidenceImpliesObservedOutcome(source, target, cmd, cwd, step);
+    reveal Core.StepEvidenceFor(), Core.StepStatusEvidenceFor(), Core.SameFileEvidenceFor();
+    reveal Core.MetadataStatusCall(), Spec.StatusRequest();
+    DirectParentDecisionFields(source, target, cmd, step.beforeFs, cwd, step.sameFile);
+    var sourceEntry := step.sameFile.sourceEntry;
+    var targetEntry := step.sameFile.targetEntry;
+    EntryNameEvidenceImpliesPathRelations(step.beforeFs, source, sourceEntry);
+    EntryNameEvidenceImpliesPathRelations(step.beforeFs, target, targetEntry);
+    assert sourceEntry.leaf == targetEntry.leaf;
+    assert |step.statusCalls| == 4;
+    assert step.statusCalls[0].ok && step.statusCalls[1].ok;
+    assert !step.statusCalls[2].ok || !step.statusCalls[3].ok;
+    assert exists leaf: string :: BasenameSpec.BasenameRelation(source, leaf) &&
+      BasenameSpec.BasenameRelation(target, leaf);
+    assert step.afterFs == step.beforeFs;
+    assert step.outcome == Spec.MoveOutcome([], Spec.ParentStatFailureMessageSpec(
+      if !step.statusCalls[2].ok then sourceEntry.parent else targetEntry.parent,
+      if !step.statusCalls[2].ok then step.statusCalls[2].err else step.statusCalls[3].err), true);
+    assert Spec.StatusRequest(step.statusCalls[2], step.beforeFs, sourceEntry.parent, false);
+    assert Spec.StatusRequest(step.statusCalls[3], step.beforeFs, targetEntry.parent, false);
+    hide *;
+    reveal Spec.ObservedParentFailureOutcome();
+  }
+
+  lemma ParentMetadataFailureEvidenceImpliesObservedStep(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence, observations: Spec.NativeStatusInputs
+  )
+    requires Core.StepEvidenceFor(source, target, cmd, cwd, step)
+    requires Core.StepStatusEvidenceFor(source, target, cmd, step)
+    requires Core.StatusCallsFor(observations, step.firstStatus, step.statusCalls)
+    requires step.inputs == observations
+    requires step.sameFile.CheckedSameFile? && step.sameFile.decision.FailedParentStat?
+    requires step.sameFile.sourceReferentEntry.NoEntryNameEvidence?
+    ensures Spec.ObservedStepRelation(source, target, cmd, step.beforeFs, cwd,
+      step.afterFs, step.outcome, observations, step.firstStatus,
+      step.firstStatus + |step.statusCalls|, step.statusCalls)
+  {
+    hide *;
+    StepStatusEvidenceImpliesObservedStep(source, target, cmd, cwd, step, observations);
+  }
+
+  lemma DirectParentDecisionFields(
+    source: string, target: string, cmd: Schema.MvCmd, fs: BW.FileSystem, cwd: BW.Path,
+    same: Core.SameFileEvidence
+  )
+    requires Core.SameFileEvidenceFor(cmd, fs, cwd, source, target, same)
+    requires same.CheckedSameFile?
+    ensures (same.sourceEntry.leaf == same.targetEntry.leaf &&
+      (!same.sourceEntry.parentMetadata.ok || !same.targetEntry.parentMetadata.ok)) ==
+      (same.decision.FailedParentStat? && same.sourceReferentEntry.NoEntryNameEvidence?)
+  {
+    hide *;
+    reveal Core.SameFileEvidenceFor();
+  }
+
+  lemma FailedParentDecisionImpliesObservedFault(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence
+  )
+    requires Core.StepEvidenceFor(source, target, cmd, cwd, step)
+    requires step.sameFile.CheckedSameFile? && step.sameFile.decision.FailedParentStat?
+    ensures Spec.ObservedMetadataFault(source, step.beforeFs, cwd, step.statusCalls, step.inputs)
+  {
+    hide *;
+    reveal Core.StepEvidenceFor(), Core.StepStatusEvidenceFor(), Core.SameFileEvidenceFor();
+    reveal Core.MetadataEvidenceFor(), Core.MetadataStatusCall();
+    var same := step.sameFile;
+    DirectParentDecisionFields(source, target, cmd, step.beforeFs, cwd, same);
+    if same.sourceReferentEntry.NoEntryNameEvidence? {
+      EntryNameEvidenceImpliesPathRelations(step.beforeFs, source, same.sourceEntry);
+      EntryNameEvidenceImpliesPathRelations(step.beforeFs, target, same.targetEntry);
+      assert same.sourceEntry.leaf == same.targetEntry.leaf;
+      assert step.statusCalls[1].path == target;
+      assert exists leaf: string :: leaf == same.sourceEntry.leaf &&
+        BasenameSpec.BasenameRelation(source, leaf) && BasenameSpec.BasenameRelation(target, leaf);
+    } else {
+      assert same.sourceReferentEntry.SomeEntryNameEvidence?;
+      assert |step.statusCalls| >= 6;
+      assert !step.statusCalls[3].ok || !step.statusCalls[5].ok;
+    }
+    reveal Spec.ObservedMetadataFault();
+  }
+
+  lemma {:isolate_assertions} StepEvidenceImpliesOriginalEffectWithoutFault(
     source: string,
     target: string,
     cmd: Schema.MvCmd,
@@ -1106,166 +1369,320 @@ module MvProof {
     requires Core.StepEvidenceFor(
                source, target, cmd, preCwd, evidence
              )
-    ensures Spec.MoveEffectRelation(
-              source,
-              target,
-              cmd,
-              evidence.beforeFs,
-              preCwd,
-              evidence.afterFs,
-              evidence.outcome
-            )
+    requires !Spec.ObservedMetadataFault(source, evidence.beforeFs, preCwd,
+      evidence.statusCalls, evidence.inputs)
+    ensures Spec.OriginalMoveEffectRelation(source, target, cmd,
+      evidence.beforeFs, preCwd, evidence.afterFs, evidence.outcome)
   {
-    reveal Core.StepEvidenceFor();
+    hide Spec.RenameEffectRelation(), Spec.ExistingTargetRenameEffectRelation(), Spec.SameFilePolicyRelation();
+    reveal Core.StepEvidenceFor(), Core.StepStatusEvidenceFor(), Core.SameFileEvidenceFor();
+    reveal Core.SourceResolutionObservationFor(), IOContract.ResolvePathIdentitySpec();
+    reveal IOContract.NativeFailureContractFields();
+    assert (forall i: nat | i < |evidence.statusCalls| :: evidence.statusCalls[i].ok ||
+      !Spec.StatusExistsOutcomeFields(evidence.statusCalls[i].fs, evidence.statusCalls[i].path,
+        evidence.statusCalls[i].followSymlink, true, 0));
+    assert IOContract.IsDirectoryStrictContractFields(evidence.beforeFs, source, false,
+      evidence.sourceOk, evidence.sourceIsDir, evidence.sourceErr);
+    assert Core.SkipStdout(target, cmd.debug) == Spec.SkipStdoutSpec(target, cmd.debug);
     if !evidence.sourceOk {
-      assert Spec.MoveEffectRelation(
-          source,
-          target,
-          cmd,
-          evidence.beforeFs,
-          preCwd,
-          evidence.afterFs,
-          evidence.outcome
-        );
+      assert evidence.afterFs == evidence.beforeFs && evidence.outcome == Spec.MoveOutcome([],
+        Spec.SourceStatFailureMessageSpec(source, evidence.sourceErr), true);
     } else {
-      assert Spec.SkipStdoutSpec(target, cmd.debug) ==
-             Core.SkipStdout(target, cmd.debug);
+      assert Spec.StatusExistsOutcomeFields(evidence.beforeFs, target, false,
+        evidence.targetFound, evidence.targetExistsErr);
       if !evidence.targetFound {
-        RenameEvidenceImpliesRelation(
-          source,
-          target,
-          evidence.sourceIsDir,
-          "",
-          cmd.verbose,
-          cmd.debug,
-          evidence.beforeFs,
-          preCwd,
-          evidence.afterFs,
-          evidence.outcome,
-          evidence.renames,
-          evidence.backupFs
-        );
-        assert Spec.MoveEffectRelation(
-            source,
-            target,
-            cmd,
-            evidence.beforeFs,
-            preCwd,
-            evidence.afterFs,
-            evidence.outcome
-          );
-      } else if cmd.overwriteMode == Schema.OverwriteSkip {
-        assert Spec.MoveEffectRelation(
-            source,
-            target,
-            cmd,
-            evidence.beforeFs,
-            preCwd,
-            evidence.afterFs,
-            evidence.outcome
-          );
-      } else if cmd.updateMode == Schema.UpdateNone {
-        assert Spec.MoveEffectRelation(
-            source,
-            target,
-            cmd,
-            evidence.beforeFs,
-            preCwd,
-            evidence.afterFs,
-            evidence.outcome
-          );
+        RenameEvidenceImpliesRelation(source, target, evidence.sourceIsDir, false, "",
+          cmd.verbose, cmd.debug, evidence.beforeFs, preCwd, evidence.afterFs,
+          evidence.outcome, evidence.renames, evidence.backupFs);
+      } else if cmd.overwriteMode == Schema.OverwriteSkip || cmd.updateMode == Schema.UpdateNone {
+        assert evidence.afterFs == evidence.beforeFs && evidence.outcome ==
+          Spec.MoveOutcome(Spec.SkipStdoutSpec(target, cmd.debug), [], false);
       } else if cmd.updateMode == Schema.UpdateNoneFail {
-        assert Spec.MoveEffectRelation(
-            source,
-            target,
-            cmd,
-            evidence.beforeFs,
-            preCwd,
-            evidence.afterFs,
-            evidence.outcome
-          );
+        assert evidence.afterFs == evidence.beforeFs && evidence.outcome ==
+          Spec.MoveOutcome([], Spec.NotReplacingMessageSpec(target), true);
       } else {
-        SameFileEvidenceImpliesPolicy(
-          cmd,
-          evidence.beforeFs,
-          preCwd,
-          source,
-          target,
-          evidence.sameFile
-        );
-        reveal Core.SameFileEvidenceFor();
-        match evidence.sameFile {
-          case NoSameFileCheck =>
-          case CheckedSameFile(
-            sourceMetadata,
-            targetMetadata,
-            _,
-            _,
-            _,
-            _,
-            _,
-            decision
-            ) =>
-            if decision == Spec.ContinueMove &&
-               cmd.updateMode == Schema.UpdateOlder
-            {
-              assert Spec.SourceNewerSpec(
-                  sourceMetadata.times.mtimeSec,
-                  sourceMetadata.times.mtimeNsec,
-                  targetMetadata.times.mtimeSec,
-                  targetMetadata.times.mtimeNsec
-                ) == Core.SourceNewer(
-                            sourceMetadata.times.mtimeSec,
-                            sourceMetadata.times.mtimeNsec,
-                            targetMetadata.times.mtimeSec,
-                            targetMetadata.times.mtimeNsec
-                          );
-              if Core.SourceNewer(
-                  sourceMetadata.times.mtimeSec,
-                  sourceMetadata.times.mtimeNsec,
-                  targetMetadata.times.mtimeSec,
-                  targetMetadata.times.mtimeNsec
-                ) {
-                ExistingTargetRenameEvidenceImpliesRelation(
-                  source, target, cmd, preCwd, evidence
-                );
-              }
-              assert Spec.MoveEffectRelation(
-                  source,
-                  target,
-                  cmd,
-                  evidence.beforeFs,
-                  preCwd,
-                  evidence.afterFs,
-                  evidence.outcome
-                );
-            } else if decision == Spec.ContinueMove {
-              ExistingTargetRenameEvidenceImpliesRelation(
-                source, target, cmd, preCwd, evidence
-              );
-              assert Spec.MoveEffectRelation(
-                  source,
-                  target,
-                  cmd,
-                  evidence.beforeFs,
-                  preCwd,
-                  evidence.afterFs,
-                  evidence.outcome
-                );
-            } else {
-              assert Spec.MoveEffectRelation(
-                  source,
-                  target,
-                  cmd,
-                  evidence.beforeFs,
-                  preCwd,
-                  evidence.afterFs,
-                  evidence.outcome
-                );
-            }
+        assert evidence.sameFile.CheckedSameFile?;
+        var same := evidence.sameFile;
+        if same.decision.FailedParentStat? {
+          FailedParentDecisionImpliesObservedFault(source, target, cmd, preCwd, evidence);
+          assert false;
+        }
+        assert same.source.isSymlink ==> same.sourceReferentEntry.SomeEntryNameEvidence?;
+        SameFileEvidenceImpliesPolicy(cmd, evidence.beforeFs, preCwd, source, target, same);
+        if same.decision == Spec.RejectSameFile {
+          assert evidence.afterFs == evidence.beforeFs && evidence.outcome ==
+            Spec.MoveOutcome([], Spec.SameFileMessageSpec(source, target), true);
+        } else if cmd.updateMode == Schema.UpdateOlder && !Core.SourceNewer(
+          same.source.times.mtimeSec, same.source.times.mtimeNsec,
+          same.target.times.mtimeSec, same.target.times.mtimeNsec) {
+          assert evidence.afterFs == evidence.beforeFs && evidence.outcome ==
+            Spec.MoveOutcome(Spec.SkipStdoutSpec(target, cmd.debug), [], false);
+          assert !Spec.SourceNewerSpec(same.source.times.mtimeSec, same.source.times.mtimeNsec,
+            same.target.times.mtimeSec, same.target.times.mtimeNsec);
+        } else {
+          ExistingTargetRenameEvidenceImpliesRelation(source, target, cmd, preCwd, evidence);
+          if cmd.updateMode == Schema.UpdateOlder {
+            assert Spec.SourceNewerSpec(same.source.times.mtimeSec, same.source.times.mtimeNsec,
+              same.target.times.mtimeSec, same.target.times.mtimeNsec);
+          }
         }
       }
     }
+    hide *;
+    reveal Spec.OriginalMoveEffectRelation();
+    assert Spec.OriginalMoveEffectRelation(source, target, cmd,
+      evidence.beforeFs, preCwd, evidence.afterFs, evidence.outcome);
+  }
+
+  lemma StepEvidenceImpliesMoveEffect(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence
+  )
+    requires Core.StepEvidenceFor(source, target, cmd, cwd, step)
+    ensures Spec.MoveEffectRelation(source, target, cmd,
+      step.beforeFs, cwd, step.afterFs, step.outcome)
+    ensures !Spec.ObservedMetadataFault(source, step.beforeFs, cwd, step.statusCalls, step.inputs) ==>
+      Spec.OriginalMoveEffectRelation(source, target, cmd, step.beforeFs, cwd, step.afterFs, step.outcome)
+  {
+    reveal Core.StepEvidenceFor();
+    if Spec.ObservedMetadataFault(source, step.beforeFs, cwd, step.statusCalls, step.inputs) {
+      StepEvidenceImpliesObservedOutcome(source, target, cmd, cwd, step);
+      StepStatusEvidenceImpliesMoveStatusShape(source, target, cmd, cwd, step);
+      reveal Core.StepEvidenceFor();
+      assert exists inputs: Spec.NativeStatusInputs, first: nat, calls: seq<Spec.StatusCallEvidence> ::
+        inputs == step.inputs && first == step.firstStatus && calls == step.statusCalls &&
+        Spec.StatusCallsFor(inputs, first, calls) &&
+        Spec.MoveStatusShape(cmd, step.beforeFs, cwd, source, target, calls, inputs) &&
+        Spec.ObservedMoveOutcome(source, target, cmd, step.beforeFs, cwd, step.afterFs, step.outcome, calls, inputs) &&
+        Spec.ObservedMetadataFault(source, step.beforeFs, cwd, calls, inputs);
+    } else {
+      StepEvidenceImpliesOriginalEffectWithoutFault(source, target, cmd, cwd, step);
+    }
+  }
+
+  lemma CapturedSameFileDecisionScalarFields(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    fs: BW.FileSystem, same: Core.SameFileEvidence
+  )
+    requires Core.SameFileEvidenceFor(cmd,fs,cwd,source,target,same)
+    requires same.CheckedSameFile?
+    requires !same.decision.FailedParentStat? || same.sourceReferentEntry.SomeEntryNameEvidence?
+    ensures same.decision.FailedParentStat? ==
+      (same.sourceReferentEntry.SomeEntryNameEvidence? &&
+       same.sourceReferentEntry.value.leaf == same.targetEntry.leaf &&
+       (!same.sourceReferentEntry.value.parentMetadata.ok || !same.targetEntry.parentMetadata.ok))
+    ensures !same.decision.FailedParentStat? ==>
+      (same.decision == Spec.RejectSameFile) ==
+      (Core.EvidenceNamesSame(same.sourceEntry,same.targetEntry) ||
+       (cmd.backupMode == Schema.BackupOff &&
+        (same.source.key == same.target.key ||
+         Core.ReferentEvidenceNamesTarget(same.sourceReferentEntry,same.targetEntry))))
+  {
+    hide *;
+    DirectParentDecisionFields(source,target,cmd,fs,cwd,same);
+    reveal Core.SameFileEvidenceFor();
+  }
+
+  lemma CapturedSameFileDecisionMatchesObservations(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence
+  )
+    requires Core.StepEvidenceFor(source, target, cmd, cwd, step)
+    requires step.sameFile.CheckedSameFile?
+    requires !step.sameFile.decision.FailedParentStat? ||
+      step.sameFile.sourceReferentEntry.SomeEntryNameEvidence?
+    ensures
+      var referent := step.sameFile.sourceReferentEntry;
+      var resolved := if referent.SomeEntryNameEvidence? then referent.resolvedPath else "";
+      Spec.ObservedReferentParentFailure(step.statusCalls, step.sameFile.targetEntry.leaf,
+        referent.SomeEntryNameEvidence?, resolved) == step.sameFile.decision.FailedParentStat?
+    ensures !step.sameFile.decision.FailedParentStat? ==>
+      var referent := step.sameFile.sourceReferentEntry;
+      var resolved := if referent.SomeEntryNameEvidence? then referent.resolvedPath else "";
+      Spec.ObservedSameFileRejection(cmd, step.statusCalls, step.sameFile.sourceEntry.leaf,
+        step.sameFile.targetEntry.leaf, referent.SomeEntryNameEvidence?, resolved) ==
+        (step.sameFile.decision == Spec.RejectSameFile)
+  {
+    hide IOContract.GetFileStatusResultFields(), IOContract.FileStatusStructureContractFields();
+    hide Core.StatusCallsFor(), Spec.StatusCallsFor();
+    hide Core.SourceResolutionObservationFor(), Core.RenameNativeObservationsFor();
+    reveal Core.StepEvidenceFor(), Core.StepStatusEvidenceFor(), Core.SameFileEvidenceFor();
+    CapturedSameFileDecisionScalarFields(source,target,cmd,cwd,step.beforeFs,step.sameFile);
+    var sourceEntry := step.sameFile.sourceEntry;
+    var targetEntry := step.sameFile.targetEntry;
+    EntryNameEvidenceImpliesPathRelations(step.beforeFs, source, sourceEntry);
+    EntryNameEvidenceImpliesPathRelations(step.beforeFs, target, targetEntry);
+    assert |step.statusCalls| >= 4;
+    assert step.sameFile.source.key == step.statusCalls[0].status.hostKey;
+    assert step.sameFile.target.key == step.statusCalls[1].status.hostKey;
+    assert Core.EvidenceNamesSame(sourceEntry, targetEntry) ==
+      (sourceEntry.leaf == targetEntry.leaf && step.statusCalls[2].ok && step.statusCalls[3].ok &&
+       step.statusCalls[2].status.hostKey == step.statusCalls[3].status.hostKey);
+    assert targetEntry.parentMetadata.ok == step.statusCalls[3].ok;
+    if step.sameFile.sourceReferentEntry.SomeEntryNameEvidence? {
+      var referent := step.sameFile.sourceReferentEntry;
+      EntryNameEvidenceImpliesPathRelations(step.beforeFs, referent.resolvedPath, referent.value);
+      assert |step.statusCalls| >= 6;
+      assert referent.value.parentMetadata.ok == step.statusCalls[5].ok;
+      assert BasenameSpec.BasenameRelation(referent.resolvedPath,referent.value.leaf);
+      assert forall leaf: string | BasenameSpec.BasenameRelation(referent.resolvedPath, leaf) ::
+        leaf == referent.value.leaf by {
+        forall leaf: string | BasenameSpec.BasenameRelation(referent.resolvedPath, leaf)
+          ensures leaf == referent.value.leaf
+        {
+          BasenameRelationFunctional(referent.resolvedPath, referent.value.leaf, leaf);
+        }
+      }
+    }
+    if step.sameFile.sourceReferentEntry.SomeEntryNameEvidence? {
+      var referent := step.sameFile.sourceReferentEntry;
+      assert (exists leaf: string :: BasenameSpec.BasenameRelation(referent.resolvedPath,leaf) &&
+        leaf == targetEntry.leaf) == (referent.value.leaf == targetEntry.leaf) by {
+        hide *;
+      }
+    }
+    var referent := step.sameFile.sourceReferentEntry;
+    var resolved := if referent.SomeEntryNameEvidence? then referent.resolvedPath else "";
+    assert Core.ReferentEvidenceNamesTarget(referent, targetEntry) ==
+      (referent.SomeEntryNameEvidence? && |step.statusCalls| >= 6 &&
+       step.statusCalls[3].ok && step.statusCalls[5].ok &&
+       step.statusCalls[3].status.hostKey == step.statusCalls[5].status.hostKey &&
+       (exists leaf: string :: BasenameSpec.BasenameRelation(resolved, leaf) && leaf == targetEntry.leaf));
+    assert Spec.ObservedReferentParentFailure(step.statusCalls, targetEntry.leaf,
+      referent.SomeEntryNameEvidence?, resolved) == step.sameFile.decision.FailedParentStat? by {
+      hide *;
+      reveal Spec.ObservedReferentParentFailure();
+    }
+    if !step.sameFile.decision.FailedParentStat? {
+      assert Spec.ObservedSameFileRejection(cmd, step.statusCalls, sourceEntry.leaf,
+        targetEntry.leaf, referent.SomeEntryNameEvidence?, resolved) ==
+        (step.sameFile.decision == Spec.RejectSameFile) by {
+        hide *;
+        reveal Spec.ObservedSameFileRejection();
+      }
+    }
+    hide *;
+
+  }
+
+  lemma ContinuingStepStatusTail(
+    source: string, target: string, cmd: Schema.MvCmd, step: Core.StepEvidence
+  )
+    requires Core.StepStatusEvidenceFor(source, target, cmd, step)
+    requires step.sourceOk && step.targetFound
+    requires cmd.overwriteMode != Schema.OverwriteSkip && cmd.updateMode != Schema.UpdateNone &&
+      cmd.updateMode != Schema.UpdateNoneFail
+    requires step.sameFile.CheckedSameFile? && step.sameFile.decision == Spec.ContinueMove
+    requires cmd.updateMode != Schema.UpdateOlder || Core.SourceNewer(
+      step.sameFile.source.times.mtimeSec, step.sameFile.source.times.mtimeNsec,
+      step.sameFile.target.times.mtimeSec, step.sameFile.target.times.mtimeNsec)
+    ensures
+      var same := step.sameFile;
+      var afterEntries := if same.source.isSymlink then
+        (if same.sourceReferentEntry.SomeEntryNameEvidence? then 6 else 5) else 4;
+      var collisionNeeded :=
+        (cmd.backupMode == Schema.BackupSimple || cmd.backupMode == Schema.BackupExisting) &&
+        same.sourceEntry.leaf == same.targetEntry.leaf + cmd.backupSuffix;
+      var afterCollision := afterEntries + (if collisionNeeded then 1 else 0);
+      afterCollision <= |step.statusCalls| &&
+      (collisionNeeded ==>
+        same.backupCollision.CheckedBackupCollision? &&
+        step.statusCalls[afterEntries] == Core.MetadataStatusCall(step.beforeFs,
+          Core.SimpleBackupPath(target, cmd.backupSuffix), true,
+          same.backupCollision.simpleCandidateFollowed)) &&
+      (!Core.BackupCollisionDetected(same.backupCollision) ==>
+        Core.BackupSelectionFromStatusCallsFor(cmd.backupMode, cmd.backupSuffix,
+          step.beforeFs, target, step.backup, step.statusCalls[afterCollision..]))
+  {
+    hide *;
+    reveal Core.StepStatusEvidenceFor();
+  }
+
+  lemma DirectParentEvidenceImpliesStatusWitness(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence
+  )
+    requires Core.StepStatusEvidenceFor(source, target, cmd, step)
+    requires Core.SameFileEvidenceFor(cmd, step.beforeFs, cwd, source, target, step.sameFile)
+    requires step.sourceOk && step.targetFound && step.sameFile.CheckedSameFile?
+    requires cmd.overwriteMode != Schema.OverwriteSkip && cmd.updateMode != Schema.UpdateNone &&
+      cmd.updateMode != Schema.UpdateNoneFail
+    requires step.sameFile.decision.FailedParentStat? &&
+      step.sameFile.sourceReferentEntry.NoEntryNameEvidence?
+    ensures Spec.MoveStatusShapeWitness(cmd, step.beforeFs, cwd, source, target,
+      step.statusCalls, step.sameFile.sourceEntry.parent, step.sameFile.targetEntry.parent,
+      step.sameFile.sourceEntry.leaf, step.sameFile.targetEntry.leaf,
+      false, "", 0, 4, step.inputs)
+  {
+    hide *;
+    reveal Core.StepStatusEvidenceFor(), Core.SameFileEvidenceFor();
+    reveal Core.MetadataStatusCall(), Spec.StatusRequest();
+    var same := step.sameFile;
+    var sourceEntry := same.sourceEntry;
+    var targetEntry := same.targetEntry;
+    DirectParentDecisionFields(source, target, cmd, step.beforeFs, cwd, same);
+    EntryNameEvidenceImpliesPathRelations(step.beforeFs, source, sourceEntry);
+    EntryNameEvidenceImpliesPathRelations(step.beforeFs, target, targetEntry);
+    assert |step.statusCalls| == 4;
+    assert step.statusCalls[0].ok && step.statusCalls[1].ok;
+    assert sourceEntry.leaf == targetEntry.leaf;
+    assert !step.statusCalls[2].ok || !step.statusCalls[3].ok;
+    assert Spec.StatusRequest(step.statusCalls[2], step.beforeFs, sourceEntry.parent, false);
+    assert Spec.StatusRequest(step.statusCalls[3], step.beforeFs, targetEntry.parent, false);
+    reveal Spec.MoveComparisonObservations(), Spec.MoveContinuationObservations();
+    reveal Spec.MoveStatusShapeWitness();
+  }
+
+  lemma ComparisonEvidenceImpliesStatusObservations(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence
+  )
+    requires Core.StepStatusEvidenceFor(source, target, cmd, step)
+    requires Core.SameFileEvidenceFor(cmd, step.beforeFs, cwd, source, target, step.sameFile)
+    requires Core.SourceResolutionObservationFor(source, cwd, step)
+    requires step.sourceOk && step.targetFound && step.sameFile.CheckedSameFile?
+    requires cmd.overwriteMode != Schema.OverwriteSkip && cmd.updateMode != Schema.UpdateNone &&
+      cmd.updateMode != Schema.UpdateNoneFail
+    requires !step.sameFile.decision.FailedParentStat? ||
+      !step.sameFile.sourceReferentEntry.NoEntryNameEvidence?
+    requires |step.statusCalls| >= 4
+    requires step.sameFile.source.isSymlink ==
+      (step.statusCalls[0].status.kind == BW.SymlinkKind)
+    ensures
+      var same := step.sameFile;
+      var referent := same.sourceReferentEntry;
+      var resolveOk := referent.SomeEntryNameEvidence?;
+      var resolved := if resolveOk then referent.resolvedPath else "";
+      var resolveErr := if referent.FailedEntryNameEvidence? then referent.err else 0;
+      var afterEntries := if same.source.isSymlink then (if resolveOk then 6 else 5) else 4;
+      Spec.MoveComparisonObservations(cmd, step.beforeFs, cwd, source, target, step.statusCalls,
+        same.sourceEntry.parent, same.targetEntry.parent, same.sourceEntry.leaf, same.targetEntry.leaf,
+        resolveOk, resolved, resolveErr, afterEntries, step.inputs)
+  {
+    hide *;
+    reveal Core.StepStatusEvidenceFor(), Core.SameFileEvidenceFor();
+    reveal Core.SourceResolutionObservationFor(), Core.MetadataStatusCall();
+    reveal Spec.StatusRequest();
+    var same := step.sameFile;
+    var sourceEntry := same.sourceEntry;
+    var targetEntry := same.targetEntry;
+    DirectParentDecisionFields(source, target, cmd, step.beforeFs, cwd, same);
+    EntryNameEvidenceImpliesPathRelations(step.beforeFs, source, sourceEntry);
+    EntryNameEvidenceImpliesPathRelations(step.beforeFs, target, targetEntry);
+    assert sourceEntry.leaf != targetEntry.leaf ||
+      (sourceEntry.parentMetadata.ok && targetEntry.parentMetadata.ok);
+    if same.source.isSymlink {
+      match same.sourceReferentEntry {
+        case SomeEntryNameEvidence(resolved, referentEntry) =>
+          EntryNameEvidenceImpliesPathRelations(step.beforeFs, resolved, referentEntry);
+          assert exists parent: string :: parent == referentEntry.parent &&
+            DirnameSpec.DirnameRelation(resolved, parent) &&
+            Spec.StatusRequest(step.statusCalls[5], step.beforeFs, parent, false);
+        case FailedEntryNameEvidence(_) =>
+        case NoEntryNameEvidence =>
+      }
+    }
+    reveal Spec.MoveComparisonObservations();
   }
 
   lemma {:isolate_assertions} StepStatusEvidenceImpliesMoveStatusShape(
@@ -1278,30 +1695,43 @@ module MvProof {
     requires Core.StepEvidenceFor(source, target, cmd, preCwd, step)
     requires Core.StepStatusEvidenceFor(source, target, cmd, step)
     ensures Spec.MoveStatusShape(
-      cmd, step.beforeFs, preCwd, source, target, step.statusCalls
+      cmd, step.beforeFs, preCwd, source, target, step.statusCalls, step.inputs
     )
+    ensures step.sameFile.CheckedSameFile? ==>
+      var same := step.sameFile;
+      var referent := same.sourceReferentEntry;
+      var resolveOk := referent.SomeEntryNameEvidence?;
+      var resolved := if resolveOk then referent.resolvedPath else "";
+      var resolveErr := if referent.FailedEntryNameEvidence? then referent.err else 0;
+      var afterEntries := if same.decision.FailedParentStat? && referent.NoEntryNameEvidence? then 4
+        else if same.source.isSymlink then (if resolveOk then 6 else 5) else 4;
+      Spec.MoveStatusShapeWitness(cmd, step.beforeFs, preCwd, source, target, step.statusCalls,
+        same.sourceEntry.parent, same.targetEntry.parent, same.sourceEntry.leaf, same.targetEntry.leaf,
+        resolveOk, resolved, resolveErr, afterEntries, step.inputs)
   {
+    hide IOContract.GetFileStatusResultFields(), IOContract.FileStatusStructureContractFields();
+    hide Core.StatusCallsFor(), Spec.StatusCallsFor(), Core.RenameNativeObservationsFor();
+    hide Core.RenameEvidenceFor(), Core.ExistingTargetRenameEvidenceFor();
+    hide Core.BackupSelectionFromStatusCallsFor(), Core.BackupStatusSuffixFor(), Spec.BackupStatusSuffix();
     reveal Core.StepEvidenceFor();
     reveal Core.StepStatusEvidenceFor();
     reveal Core.SameFileEvidenceFor();
-    if !step.sourceOk {
+    reveal Spec.MoveStatusShape(), Spec.MoveStatusShapeWitness();
+    if step.sameFile.CheckedSameFile? && step.sameFile.decision.FailedParentStat? &&
+       step.sameFile.sourceReferentEntry.NoEntryNameEvidence? {
+      DirectParentEvidenceImpliesStatusWitness(source, target, cmd, preCwd, step);
+    } else if !step.sourceOk {
       assert Spec.MoveStatusShape(
-        cmd, step.beforeFs, preCwd, source, target, step.statusCalls
+        cmd, step.beforeFs, preCwd, source, target, step.statusCalls, step.inputs
       );
-      return;
-    }
-    if !step.targetFound || cmd.overwriteMode == Schema.OverwriteSkip ||
+    } else if !step.targetFound || cmd.overwriteMode == Schema.OverwriteSkip ||
        cmd.updateMode == Schema.UpdateNone ||
        cmd.updateMode == Schema.UpdateNoneFail {
       assert Spec.MoveStatusShape(
-        cmd, step.beforeFs, preCwd, source, target, step.statusCalls
+        cmd, step.beforeFs, preCwd, source, target, step.statusCalls, step.inputs
       );
-      return;
-    }
-    {
-      SameFileEvidenceImpliesPolicy(
-        cmd, step.beforeFs, preCwd, source, target, step.sameFile
-      );
+    } else {
+      CapturedSameFileDecisionMatchesObservations(source, target, cmd, preCwd, step);
       match step.sameFile {
         case NoSameFileCheck =>
         case CheckedSameFile(
@@ -1309,73 +1739,28 @@ module MvProof {
           sourceEntry, targetEntry, sourceReferentEntry,
           collision, decision
         ) =>
-          assert Spec.SameFileMustBeRejected(
-            cmd, step.beforeFs, preCwd, source, target
-          ) == (decision == Spec.RejectSameFile);
-          assert step.statusCalls[2].ok && step.statusCalls[3].ok;
-          assert sourceMetadata.isSymlink ==
-            (step.statusCalls[2].status.kind == BW.SymlinkKind);
-          assert Spec.SourceNewerSpec(
-            step.statusCalls[2].status.times.mtimeSec,
-            step.statusCalls[2].status.times.mtimeNsec,
-            step.statusCalls[3].status.times.mtimeSec,
-            step.statusCalls[3].status.times.mtimeNsec
-          ) == Core.SourceNewer(
-            sourceMetadata.times.mtimeSec,
-            sourceMetadata.times.mtimeNsec,
-            targetMetadata.times.mtimeSec,
-            targetMetadata.times.mtimeNsec
-          );
-          assert Spec.StatusRequest(
-            step.statusCalls[2], step.beforeFs, source, false
-          );
-          assert Spec.StatusRequest(
-            step.statusCalls[3], step.beforeFs, target, false
-          );
-          assert Spec.StatusRequest(
-            step.statusCalls[4], step.beforeFs,
-            sourceEntry.parent, false
-          );
-          assert Spec.StatusRequest(
-            step.statusCalls[5], step.beforeFs,
-            targetEntry.parent, false
-          );
-          EntryNameEvidenceImpliesPathRelations(
-            step.beforeFs, source, sourceEntry
-          );
-          EntryNameEvidenceImpliesPathRelations(
-            step.beforeFs, target, targetEntry
-          );
-          if sourceMetadata.isSymlink {
-            match sourceReferentEntry {
-              case SomeEntryNameEvidence(resolvedSource, referentEntry) =>
-                EntryNameEvidenceImpliesPathRelations(
-                  step.beforeFs, resolvedSource, referentEntry
-                );
-                assert IOContract.ResolvePathIdentityContractFields(
-                  step.beforeFs, preCwd, source, true,
-                  resolvedSource, 0
-                );
-                assert Spec.StatusRequest(
-                  step.statusCalls[7], step.beforeFs,
-                  referentEntry.parent, false
-                );
-              case FailedEntryNameEvidence(resolveErr) =>
-                assert IOContract.ResolvePathIdentityContractFields(
-                  step.beforeFs, preCwd, source, false,
-                  "", resolveErr
-                );
-              case _ =>
-            }
-            assert Spec.StatusRequest(
-              step.statusCalls[6], step.beforeFs, source, true
-            );
-          }
+          DirectParentDecisionFields(source, target, cmd, step.beforeFs, preCwd, step.sameFile);
+          assert sourceEntry.leaf != targetEntry.leaf ||
+            (sourceEntry.parentMetadata.ok && targetEntry.parentMetadata.ok);
+          assert sourceMetadata.isSymlink == (step.statusCalls[0].status.kind == BW.SymlinkKind);
+          assert Spec.SourceNewerSpec(step.statusCalls[0].status.times.mtimeSec,
+            step.statusCalls[0].status.times.mtimeNsec, step.statusCalls[1].status.times.mtimeSec,
+            step.statusCalls[1].status.times.mtimeNsec) == Core.SourceNewer(
+            sourceMetadata.times.mtimeSec, sourceMetadata.times.mtimeNsec,
+            targetMetadata.times.mtimeSec, targetMetadata.times.mtimeNsec);
           var afterEntries: nat :=
             if sourceMetadata.isSymlink then
-              (if sourceReferentEntry.SomeEntryNameEvidence? then 8 else 7)
-            else 6;
-          if decision != Spec.RejectSameFile &&
+              (if sourceReferentEntry.SomeEntryNameEvidence? then 6 else 5)
+            else 4;
+          assert sourceEntry.leaf != targetEntry.leaf ||
+            (step.statusCalls[2].ok && step.statusCalls[3].ok);
+          if decision.FailedParentStat? || decision == Spec.RejectSameFile ||
+             (cmd.updateMode == Schema.UpdateOlder && !Core.SourceNewer(
+               sourceMetadata.times.mtimeSec, sourceMetadata.times.mtimeNsec,
+               targetMetadata.times.mtimeSec, targetMetadata.times.mtimeNsec)) {
+            assert |step.statusCalls| == afterEntries;
+          }
+          if decision == Spec.ContinueMove &&
              (cmd.updateMode != Schema.UpdateOlder ||
               Core.SourceNewer(
                 sourceMetadata.times.mtimeSec,
@@ -1383,6 +1768,9 @@ module MvProof {
                 targetMetadata.times.mtimeSec,
                 targetMetadata.times.mtimeNsec
               )) {
+            ContinuingStepStatusTail(source, target, cmd, step);
+            reveal Core.ExistingTargetRenameEvidenceFor();
+            hide Core.BackupSelectionEvidenceFor();
             var collisionNeeded :=
               (cmd.backupMode == Schema.BackupSimple ||
                cmd.backupMode == Schema.BackupExisting) &&
@@ -1392,21 +1780,27 @@ module MvProof {
             assert Spec.SimpleBackupPathSpec(
               target, cmd.backupSuffix
             ) == Core.SimpleBackupPath(target, cmd.backupSuffix);
+            if !collisionNeeded {
+              assert !Core.BackupCollisionDetected(collision);
+            }
             if collisionNeeded {
-              assert Spec.StatusRequest(
-                step.statusCalls[afterEntries], step.beforeFs,
-                Spec.SimpleBackupPathSpec(target, cmd.backupSuffix), true
-              );
+              assert Spec.StatusRequest(step.statusCalls[afterEntries], step.beforeFs,
+                Spec.SimpleBackupPathSpec(target, cmd.backupSuffix), true);
               assert Core.BackupCollisionDetected(collision) ==
                 (step.statusCalls[afterEntries].ok &&
                  step.statusCalls[afterEntries].status.hostKey ==
-                   step.statusCalls[2].status.hostKey);
+                   step.statusCalls[0].status.hostKey);
             }
-            if !Core.BackupCollisionDetected(collision) {
-              assert Core.BackupStatusSuffixFor(
-                cmd.backupMode, step.beforeFs, target,
-                step.statusCalls[afterCollision..]
-              );
+            if Core.BackupCollisionDetected(collision) {
+              assert |step.statusCalls| == afterCollision;
+            } else {
+              assert Core.BackupSelectionFromStatusCallsFor(
+                cmd.backupMode, cmd.backupSuffix, step.beforeFs, target,
+                step.backup, step.statusCalls[afterCollision..]);
+              reveal Core.BackupSelectionFromStatusCallsFor();
+              assert Core.BackupStatusSuffixFor(cmd.backupMode, step.beforeFs, target,
+                step.statusCalls[afterCollision..]);
+              hide Core.BackupSelectionFromStatusCallsFor();
               BackupStatusSuffixCoreImpliesSpec(
                 cmd.backupMode, step.beforeFs, target,
                 step.statusCalls[afterCollision..]
@@ -1420,17 +1814,106 @@ module MvProof {
           var resolveErr := match sourceReferentEntry
             case FailedEntryNameEvidence(error) => error
             case _ => 0;
+          assert Spec.MoveComparisonObservations(
+            cmd, step.beforeFs, preCwd, source, target, step.statusCalls,
+            sourceEntry.parent, targetEntry.parent, sourceEntry.leaf, targetEntry.leaf,
+            resolveOk, resolvedSource, resolveErr, afterEntries, step.inputs) by {
+            ComparisonEvidenceImpliesStatusObservations(source, target, cmd, preCwd, step);
+          }
+          assert Spec.MoveContinuationObservations(
+            cmd, step.beforeFs, preCwd, source, target, step.statusCalls,
+            sourceEntry.parent, targetEntry.parent, sourceEntry.leaf, targetEntry.leaf,
+            resolveOk, resolvedSource, resolveErr, afterEntries, step.inputs) by {
+            hide *;
+            reveal Spec.MoveContinuationObservations();
+          }
           assert Spec.MoveStatusShapeWitness(
             cmd, step.beforeFs, preCwd, source, target,
             step.statusCalls, sourceEntry.parent, targetEntry.parent,
             sourceEntry.leaf, targetEntry.leaf,
-            resolveOk, resolvedSource, resolveErr, afterEntries
+            resolveOk, resolvedSource, resolveErr, afterEntries, step.inputs
           );
       }
     }
     assert Spec.MoveStatusShape(
-      cmd, step.beforeFs, preCwd, source, target, step.statusCalls
+      cmd, step.beforeFs, preCwd, source, target, step.statusCalls, step.inputs
     );
+  }
+
+  lemma CheckedStepImpliesObservedClassification(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence
+  )
+    requires Core.StepEvidenceFor(source, target, cmd, cwd, step)
+    requires step.sameFile.CheckedSameFile?
+    ensures
+      var same := step.sameFile;
+      var referent := same.sourceReferentEntry;
+      var resolveOk := referent.SomeEntryNameEvidence?;
+      var resolved := if resolveOk then referent.resolvedPath else "";
+      var resolveErr := if referent.FailedEntryNameEvidence? then referent.err else 0;
+      var afterEntries := if same.decision.FailedParentStat? && referent.NoEntryNameEvidence? then 4
+        else if same.source.isSymlink then (if resolveOk then 6 else 5) else 4;
+      Spec.ObservedClassificationOutcome(source, target, cmd, step.beforeFs, cwd,
+        step.afterFs, step.outcome, step.statusCalls, step.inputs,
+        (same.sourceEntry.parent, same.targetEntry.parent, same.sourceEntry.leaf, same.targetEntry.leaf),
+        resolveOk, resolved, resolveErr, afterEntries)
+  {
+    hide IOContract.GetFileStatusResultFields(), IOContract.FileStatusStructureContractFields();
+    hide Core.StatusCallsFor(), Spec.StatusCallsFor(), Core.RenameNativeObservationsFor();
+    hide Core.RenameEvidenceFor(), Core.BackupSelectionFromStatusCallsFor();
+    reveal Core.StepEvidenceFor();
+    StepStatusEvidenceImpliesMoveStatusShape(source, target, cmd, cwd, step);
+    reveal Core.StepEvidenceFor(), Core.StepStatusEvidenceFor(), Core.SameFileEvidenceFor();
+    assert |step.statusCalls| >= 4;
+    var same := step.sameFile;
+    var referent := same.sourceReferentEntry;
+    var resolveOk := referent.SomeEntryNameEvidence?;
+    var resolved := if resolveOk then referent.resolvedPath else "";
+    var resolveErr := if referent.FailedEntryNameEvidence? then referent.err else 0;
+    var afterEntries: nat := if same.decision.FailedParentStat? && referent.NoEntryNameEvidence? then 4
+      else if same.source.isSymlink then (if resolveOk then 6 else 5) else 4;
+    if !(same.decision.FailedParentStat? && referent.NoEntryNameEvidence?) {
+      CapturedSameFileDecisionMatchesObservations(source, target, cmd, cwd, step);
+    }
+    if same.decision.FailedParentStat? {
+      if referent.SomeEntryNameEvidence? {
+        EntryNameEvidenceImpliesPathRelations(step.beforeFs, referent.resolvedPath, referent.value);
+      }
+    } else if same.decision == Spec.ContinueMove &&
+      (cmd.updateMode != Schema.UpdateOlder || Core.SourceNewer(
+        same.source.times.mtimeSec, same.source.times.mtimeNsec,
+        same.target.times.mtimeSec, same.target.times.mtimeNsec)) {
+      reveal Core.ExistingTargetRenameEvidenceFor();
+      if !Core.BackupCollisionDetected(same.backupCollision) {
+        var collisionNeeded :=
+          (cmd.backupMode == Schema.BackupSimple || cmd.backupMode == Schema.BackupExisting) &&
+          same.sourceEntry.leaf == same.targetEntry.leaf + cmd.backupSuffix;
+        var afterCollision := afterEntries + (if collisionNeeded then 1 else 0);
+        BackupSelectionCallsImpliesObservedPath(cmd, step.beforeFs, target,
+          step.backup, step.statusCalls[afterCollision..]);
+        var backupPath := if step.backup.SelectedBackup? then step.backup.backupPath else "";
+        RenameNativeEvidenceImpliesObservedRelation(source, target, cmd, cwd, step, backupPath);
+      }
+    }
+  }
+
+  lemma StepEvidenceImpliesObservedOutcome(
+    source: string, target: string, cmd: Schema.MvCmd, cwd: BW.Path,
+    step: Core.StepEvidence
+  )
+    requires Core.StepEvidenceFor(source, target, cmd, cwd, step)
+    ensures Spec.ObservedMoveOutcome(source, target, cmd, step.beforeFs, cwd,
+      step.afterFs, step.outcome, step.statusCalls, step.inputs)
+  {
+    reveal Core.StepEvidenceFor(), Core.StepStatusEvidenceFor();
+    if step.sourceOk && !step.targetFound {
+      RenameNativeEvidenceImpliesObservedRelation(source, target, cmd, cwd, step, "");
+    } else if step.sourceOk && step.targetFound &&
+      cmd.overwriteMode != Schema.OverwriteSkip && cmd.updateMode != Schema.UpdateNone &&
+      cmd.updateMode != Schema.UpdateNoneFail {
+      CheckedStepImpliesObservedClassification(source, target, cmd, cwd, step);
+    }
   }
 
   lemma {:isolate_assertions} StepStatusEvidenceImpliesObservedStep(
@@ -1439,12 +1922,13 @@ module MvProof {
     cmd: Schema.MvCmd,
     preCwd: BW.Path,
     step: Core.StepEvidence,
-    observations: BW.StatusTimeObservations
+    observations: Spec.NativeStatusInputs
   )
     requires Core.StepEvidenceFor(source, target, cmd, preCwd, step)
     requires Core.StepStatusEvidenceFor(source, target, cmd, step)
     requires Core.StatusCallsFor(
                observations, step.firstStatus, step.statusCalls)
+    requires step.inputs == observations
     ensures Spec.ObservedStepRelation(
               source, target, cmd, step.beforeFs, preCwd,
               step.afterFs, step.outcome, observations,
@@ -1454,84 +1938,8 @@ module MvProof {
             )
   {
     StepEvidenceImpliesMoveEffect(source, target, cmd, preCwd, step);
-    reveal Core.StepEvidenceFor();
-    reveal Core.StepStatusEvidenceFor();
-    reveal Core.SameFileEvidenceFor();
-    if step.sourceOk && step.targetFound &&
-       cmd.overwriteMode != Schema.OverwriteSkip &&
-       cmd.updateMode != Schema.UpdateNone &&
-       cmd.updateMode != Schema.UpdateNoneFail {
-      SameFileEvidenceImpliesPolicy(
-        cmd, step.beforeFs, preCwd, source, target, step.sameFile
-      );
-      match step.sameFile {
-        case NoSameFileCheck =>
-        case CheckedSameFile(
-          sourceMetadata, targetMetadata, sourceFollowed,
-          sourceEntry, targetEntry, sourceReferentEntry,
-          collision, decision
-        ) =>
-          EntryNameEvidenceImpliesPathRelations(
-            step.beforeFs, source, sourceEntry
-          );
-          EntryNameEvidenceImpliesPathRelations(
-            step.beforeFs, target, targetEntry
-          );
-          if sourceMetadata.isSymlink {
-            match sourceReferentEntry {
-              case SomeEntryNameEvidence(resolvedSource, referentEntry) =>
-                EntryNameEvidenceImpliesPathRelations(
-                  step.beforeFs, resolvedSource, referentEntry
-                );
-              case _ =>
-            }
-          }
-          if decision == Spec.ContinueMove &&
-             (cmd.updateMode != Schema.UpdateOlder ||
-              Core.SourceNewer(
-                sourceMetadata.times.mtimeSec,
-                sourceMetadata.times.mtimeNsec,
-                targetMetadata.times.mtimeSec,
-                targetMetadata.times.mtimeNsec
-              )) && !Core.BackupCollisionDetected(collision) {
-            match step.backup {
-              case NoBackupSelection =>
-              case SelectedBackup(_, _, _, _, _) =>
-            }
-          }
-          if cmd.updateMode == Schema.UpdateOlder &&
-             decision == Spec.ContinueMove {
-            assert Spec.SourceNewerSpec(
-                sourceMetadata.times.mtimeSec,
-                sourceMetadata.times.mtimeNsec,
-                targetMetadata.times.mtimeSec,
-                targetMetadata.times.mtimeNsec
-              ) == Core.SourceNewer(
-                sourceMetadata.times.mtimeSec,
-                sourceMetadata.times.mtimeNsec,
-                targetMetadata.times.mtimeSec,
-                targetMetadata.times.mtimeNsec
-              );
-            if Core.SourceNewer(
-              sourceMetadata.times.mtimeSec,
-              sourceMetadata.times.mtimeNsec,
-              targetMetadata.times.mtimeSec,
-              targetMetadata.times.mtimeNsec
-            ) {
-              ExistingTargetRenameEvidenceImpliesRelation(
-                source, target, cmd, preCwd, step
-              );
-            }
-          }
-      }
-    }
-    StepStatusEvidenceImpliesMoveStatusShape(
-      source, target, cmd, preCwd, step
-    );
-    assert Spec.ObservedUpdateDecision(
-      cmd, step.beforeFs, preCwd, source, target,
-      step.afterFs, step.outcome, step.statusCalls
-    );
+    StepEvidenceImpliesObservedOutcome(source, target, cmd, preCwd, step);
+    StepStatusEvidenceImpliesMoveStatusShape(source, target, cmd, preCwd, step);
   }
 
   lemma BatchStepEvidenceImpliesMoveEffect(
@@ -1798,7 +2206,9 @@ module MvProof {
       assert evidence.stderrFragments[i] ==
              evidence.outcomes[i].stderrFragment;
     }
-    BatchMoveComponentsImplyWitnessRelation(
+    {
+      hide *;
+      BatchMoveComponentsImplyWitnessRelation(
       sources,
       directory,
       cmd,
@@ -1812,7 +2222,8 @@ module MvProof {
       evidence.outcomes,
       evidence.stdoutFragments,
       evidence.stderrFragments
-    );
+      );
+    }
     reveal Spec.BatchMoveRelation();
     assert Spec.BatchMoveRelation(
         sources, directory, cmd, beforeFs, preCwd, afterFs,
@@ -1821,7 +2232,7 @@ module MvProof {
   }
 
   lemma {:induction false} BatchStatusStepInterval(
-    observations: BW.StatusTimeObservations,
+    observations: Spec.NativeStatusInputs,
     batch: Core.BatchEvidence,
     i: nat
   )
@@ -1832,6 +2243,7 @@ module MvProof {
     ensures i + 1 < |batch.statusBounds|
     ensures batch.firstStatus <= batch.statusBounds[i] <= batch.statusBounds[i + 1] <=
       batch.firstStatus + |batch.statusCalls|
+    ensures batch.steps[i].inputs == observations
     ensures batch.steps[i].firstStatus == batch.statusBounds[i]
     ensures batch.statusBounds[i + 1] ==
       batch.steps[i].firstStatus + |batch.steps[i].statusCalls|
@@ -1839,6 +2251,7 @@ module MvProof {
       batch.statusBounds[i] - batch.firstStatus ..
       batch.statusBounds[i + 1] - batch.firstStatus] == batch.steps[i].statusCalls
   {
+    hide *;
     reveal Core.BatchStatusEvidenceFor();
   }
 
@@ -1847,7 +2260,7 @@ module MvProof {
     directory: string,
     cmd: Schema.MvCmd,
     preCwd: BW.Path,
-    observations: BW.StatusTimeObservations,
+    observations: Spec.NativeStatusInputs,
     batch: Core.BatchEvidence,
     i: nat
   )
@@ -1877,6 +2290,7 @@ module MvProof {
         batch.statusBounds[i] - batch.firstStatus ..
         batch.statusBounds[i + 1] - batch.firstStatus])
   {
+    hide *;
     hide Spec.ObservedStepRelation();
     hide Core.BatchStatusEvidenceFor();
     BatchStatusStepInterval(observations, batch, i);
@@ -1896,15 +2310,16 @@ module MvProof {
       Core.TargetInDirectory(directory, normalizedSource);
     var lo := batch.statusBounds[i] - batch.firstStatus;
     var hi := batch.statusBounds[i + 1] - batch.firstStatus;
-    Core.StatusCallsSlice(
-      observations, batch.firstStatus, batch.statusCalls, lo, hi);
     assert batch.statusCalls[lo..hi] == batch.steps[i].statusCalls;
     assert batch.steps[i].firstStatus == batch.statusBounds[i];
     assert batch.statusBounds[i + 1] ==
       batch.steps[i].firstStatus + |batch.steps[i].statusCalls|;
     assert Core.StatusCallsFor(
       observations, batch.steps[i].firstStatus,
-      batch.steps[i].statusCalls);
+      batch.steps[i].statusCalls) by {
+      hide *;
+      reveal Core.StepEvidenceFor();
+    }
     StepStatusEvidenceImpliesObservedStep(
       normalizedSource, Core.TargetInDirectory(directory, normalizedSource),
       cmd, preCwd, batch.steps[i], observations);
@@ -1931,7 +2346,7 @@ module MvProof {
     hadError: bool,
     out: BW.Bytes,
     err: BW.Bytes,
-    observations: BW.StatusTimeObservations,
+    observations: Spec.NativeStatusInputs,
     firstStatus: nat,
     afterStatus: nat,
     calls: seq<Spec.StatusCallEvidence>,
@@ -1980,7 +2395,7 @@ module MvProof {
     hadError: bool,
     out: BW.Bytes,
     err: BW.Bytes,
-    observations: BW.StatusTimeObservations,
+    observations: Spec.NativeStatusInputs,
     batch: Core.BatchEvidence
   )
     requires Core.BatchEvidenceFor(
@@ -1995,12 +2410,8 @@ module MvProof {
       batch.firstStatus + |batch.statusCalls|,
       batch.statusCalls)
   {
-    hide Spec.ObservedBatchRelation();
-    hide Spec.ObservedStepRelation();
-    hide Spec.BatchMoveWitnessRelation();
-    hide Spec.StatusCallsFor();
-    hide Core.BatchStepEvidenceFor();
-    hide Core.StepStatusEvidenceFor();
+    hide *;
+    reveal Core.StatusCallsFor();
     BatchEvidenceImpliesMoveRelation(
       sources, directory, cmd, beforeFs, preCwd, afterFs,
       hadError, out, err, batch
@@ -2224,23 +2635,25 @@ module MvProof {
         Spec.TargetDirectoryErrSpec(statOk, isDir, statErr) == Core.TargetDirectoryErr(statOk, isDir, statErr);
   }
 
-  lemma CoreSummaryIOImpliesCandidateSpecFields(
+  lemma PreparedSummaryIOImpliesCandidateSpecFields(
     raw: Schema.MvCmdRaw,
     preFs: BW.FileSystem,
     preCwd: BW.Path,
     preStdout: BW.Bytes,
     preStderr: BW.Bytes,
     io: BenchIO.IO,
-    exit: int
+    exit: int,
+    plannedStdout: BW.Bytes,
+    plannedStderr: BW.Bytes
   )
-    requires Core.CoreSummaryIO(
+    requires Core.PreparedSummaryIO(
                raw,
                preFs,
                preCwd,
                preStdout,
                preStderr,
                io,
-               exit
+               exit, plannedStdout, plannedStderr
              )
     ensures Spec.CandidateSpecFields(
               raw,
@@ -2248,7 +2661,7 @@ module MvProof {
               preCwd,
               preStdout,
               preStderr,
-              io,
+              io.fs(), plannedStdout, plannedStderr,
               exit
             )
   {
@@ -2271,8 +2684,8 @@ module MvProof {
         io.fs(),
         preStdout,
         preStderr,
-        io.stdout(),
-        io.stderr(),
+        plannedStdout,
+        plannedStderr,
         exit
       );
     } else if |cmd.operands| == 1 {
@@ -2285,8 +2698,8 @@ module MvProof {
         io.fs(),
         preStdout,
         preStderr,
-        io.stdout(),
-        io.stderr(),
+        plannedStdout,
+        plannedStderr,
         exit
       );
     } else {
@@ -2300,8 +2713,8 @@ module MvProof {
         io.fs(),
         preStdout,
         preStderr,
-        io.stdout(),
-        io.stderr(),
+        plannedStdout,
+        plannedStderr,
         exit
       );
     }
@@ -2317,7 +2730,7 @@ module MvProof {
     hadError: bool,
     out: BW.Bytes,
     err: BW.Bytes,
-    observations: BW.StatusTimeObservations,
+    observations: Spec.NativeStatusInputs,
     batch: Core.BatchEvidence,
     firstStatus: nat,
     afterStatus: nat,
@@ -2353,7 +2766,7 @@ module MvProof {
     beforeStderr: BW.Bytes,
     afterStderr: BW.Bytes,
     exit: int,
-    observations: BW.StatusTimeObservations,
+    observations: Spec.NativeStatusInputs,
     firstStatus: nat,
     afterStatus: nat,
     calls: seq<Spec.StatusCallEvidence>,
@@ -2418,7 +2831,7 @@ module MvProof {
     beforeStderr: BW.Bytes,
     afterStderr: BW.Bytes,
     exit: int,
-    observations: BW.StatusTimeObservations,
+    observations: Spec.NativeStatusInputs,
     firstStatus: nat,
     afterStatus: nat,
     calls: seq<Spec.StatusCallEvidence>,
@@ -2433,6 +2846,9 @@ module MvProof {
       beforeStdout, afterStdout, beforeStderr, afterStderr,
       exit, observations, firstStatus, afterStatus, calls)
   {
+    hide *;
+    reveal Core.StatusCallsFor();
+    reveal Spec.ObservedStatusSpec();
     var cmd := Schema.Command(raw);
     reveal Core.RunStatusEvidenceFor();
     if cmd.mode != Schema.ModeRun ||
@@ -2471,17 +2887,17 @@ module MvProof {
             if call.ok && call.status.kind == BW.DirectoryKind then
               Core.TargetInDirectory(cmd.operands[1], source)
             else cmd.operands[1];
-          if target != cmd.operands[1] {
+          if call.ok && call.status.kind == BW.DirectoryKind {
             TargetInDirectorySpecEqualsCore(cmd.operands[1], source);
           }
+          assert !cmd.noTargetDirectory;
+          assert step.firstStatus == firstStatus + 1;
           assert |calls| == 1 + |step.statusCalls|;
-          Core.StatusCallsSlice(
-            observations, firstStatus, calls, 1, |calls|
-          );
           assert calls[1..] == step.statusCalls;
-          assert Core.StatusCallsFor(
-            observations, step.firstStatus, step.statusCalls
-          );
+          assert Core.StatusCallsFor(observations, step.firstStatus, step.statusCalls) by {
+            hide *;
+            reveal Core.RunStatusEvidenceFor(), Core.StepEvidenceFor();
+          }
           StepStatusEvidenceImpliesObservedStep(
             source, target, cmd, preCwd, step, observations
           );
@@ -2503,34 +2919,26 @@ module MvProof {
   }
 
   twostate lemma CoreSummaryImpliesSpec(
-    raw: Schema.MvCmdRaw,
-    io: BenchIO.IO,
-    exit: int,
-    calls: seq<Spec.StatusCallEvidence>,
-    evidence: Core.RunStatusEvidence
+    raw: Schema.MvCmdRaw, io: BenchIO.IO, exit: int,
+    calls: seq<Spec.StatusCallEvidence>, evidence: Core.RunStatusEvidence,
+    plan: Core.PlannedOutput
   )
-    requires Core.CoreSummary(raw, io, exit)
-    requires Core.RunStatusEvidenceFor(
-      raw, old(io.fs()), old(io.cwd()), io.fs(),
-      old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-      exit, io.statusObservations(), old(io.statusCursor()),
-      io.statusCursor(), calls, evidence)
+    requires Core.CoreSummary(raw, io, exit, plan)
+    requires Core.RunStatusEvidenceFor(raw, old(io.fs()), old(io.cwd()), io.fs(),
+      [], plan.stdout, [], plan.stderr, plan.normalExit, Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
+      old(io.statusCursor()), io.statusCursor(), calls, evidence)
     ensures Spec.Spec(raw, io, exit)
   {
-    CoreSummaryIOImpliesCandidateSpecFields(
-      raw,
-      old(io.fs()),
-      old(io.cwd()),
-      old(io.stdout()),
-      old(io.stderr()),
-      io,
-      exit
-    );
-    RunStatusEvidenceImpliesObservedStatusSpec(
-      raw, old(io.fs()), old(io.cwd()), io.fs(),
-      old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-      exit, io.statusObservations(), old(io.statusCursor()),
-      io.statusCursor(), calls, evidence
-    );
+    reveal Core.PreparedSummary();
+    hide Core.PreparedSummaryIO;
+    hide Core.RunStatusEvidenceFor;
+    hide Spec.CandidateSpecFields;
+    hide Spec.ObservedStatusSpec;
+    PreparedSummaryIOImpliesCandidateSpecFields(raw, old(io.fs()), old(io.cwd()),
+      [], [], io, plan.normalExit, plan.stdout, plan.stderr);
+    RunStatusEvidenceImpliesObservedStatusSpec(raw, old(io.fs()), old(io.cwd()), io.fs(),
+      [], plan.stdout, [], plan.stderr, plan.normalExit, Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
+      old(io.statusCursor()), io.statusCursor(), calls, evidence);
+    reveal Spec.Spec();
   }
 }

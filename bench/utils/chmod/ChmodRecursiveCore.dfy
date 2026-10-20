@@ -10,6 +10,7 @@ module ChmodRecursiveCore {
   import BenchWorld
   import WorldProof = WorldFileSystemProof
   import BenchIO
+  import ChmodSpec
   import IOContract
   import Schema = ChmodSchema
   import Base = ChmodCore
@@ -1316,6 +1317,8 @@ module ChmodRecursiveCore {
               parent.ok && descendants.allOk && terminal.RecursiveEof?
             )
   {
+    hide *;
+    reveal EvalVisitCore();
   }
 
   lemma DirectoryStreamTraceCore(

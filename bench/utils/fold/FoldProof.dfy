@@ -214,17 +214,17 @@ module FoldProof {
     }
   }
 
-  twostate lemma CoreSummaryImpliesSpec(
+  twostate lemma PreparedSummaryImpliesPreparedSpec(
     raw: Schema.FoldCmdRaw,
     io: BenchIO.IO,
     exit: int
-  )
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  , new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     CommandSatisfies(raw);
-    reveal Core.CoreSummary();
-    reveal Spec.Spec();
+    reveal Core.PreparedSummary();
+    reveal Spec.PreparedSpec();
     var cmd := Core.Command(raw);
     if cmd.mode == Schema.ModeHelp {
     } else if cmd.mode == Schema.ModeVersion {
@@ -243,9 +243,21 @@ module FoldProof {
             hadError,
             old(io.trustedStreams())
           ) &&
-          io.stdout() == old(io.stdout()) + stdoutPart &&
-          io.stderr() == old(io.stderr()) + stderrPart &&
+          plannedStdout == stdoutPart &&
+          plannedStderr == stderrPart &&
           exit == (if hadError then 1 else 0);
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.FoldCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      out, diagnostics);
   }
 }

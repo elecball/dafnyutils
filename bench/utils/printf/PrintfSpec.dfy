@@ -1,9 +1,13 @@
+include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/StringEscaping.dfy"
 include "PrintfSchema.dfy"
 
 module PrintfSpec {
+  import StreamContract = IOContract
+  import StreamUtf8 = Utf8Semantics
+
   import BenchIO
   import Utf8 = Utf8Semantics
   import BenchWorld
@@ -392,12 +396,67 @@ module PrintfSpec {
       )
   }
 
-  twostate predicate Spec(raw: Schema.PrintfCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.stdoutRegion, io.stderrRegion
+  twostate predicate PreparedSpec(raw: Schema.PrintfCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+
   {
     exists stdout: BenchWorld.Bytes, stderr: BenchWorld.Bytes ::
       EvaluationRelation(raw, stdout, stderr, exit) &&
-      io.stdout() == old(io.stdout()) + stdout &&
-      io.stderr() == old(io.stderr()) + stderr
+      plannedStdout == old(io.stdout()) + stdout &&
+      plannedStderr == old(io.stderr()) + stderr
+  }
+
+  function Emits(raw: Schema.PrintfCmdRaw): bool
+  {
+    true
+  }
+
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode("printf: write error: " + message + "\n")
+  }
+
+  ghost predicate EmitFields(
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    beforeStdout: BenchWorld.Bytes, beforeStderr: BenchWorld.Bytes,
+    afterStdout: BenchWorld.Bytes, afterStderr: BenchWorld.Bytes,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
+      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+    stdoutResult.StreamWriteResult? &&
+    var errors := diagnostics + (if stdoutResult.err == 0 then [] else
+      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+    var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
+      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+    stderrResult.StreamWriteResult? &&
+    (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
+      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+    (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
+      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+    exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
+  }
+
+  twostate predicate Emission(raw: Schema.PrintfCmdRaw, io: BenchIO.IO,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    if Emits(raw) then
+      EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+    else
+      io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
+      exit == normalExit
+  }
+
+  twostate predicate Spec(raw: Schema.PrintfCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

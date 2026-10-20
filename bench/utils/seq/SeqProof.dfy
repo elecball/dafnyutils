@@ -4,6 +4,8 @@ include "SeqCore.dfy"
 include "SeqSpec.dfy"
 
 module SeqProof {
+  import BenchWorld
+
   import Result = Results
   import BenchIO
   import BW = BenchWorld
@@ -914,8 +916,20 @@ module SeqProof {
               Core.RenderFixed(values[i], scale, i == 0 && firstNegativeZero)
     decreases |values|
   {
+    hide *;
+    reveal Core.RenderValues();
     if |values| > 0 {
       RenderValuesAt(values[1..], scale, false);
+      forall i: nat | i < |values|
+        ensures Core.RenderValues(values, scale, firstNegativeZero)[i] ==
+          Core.RenderFixed(values[i], scale, i == 0 && firstNegativeZero)
+      {
+        if i != 0 {
+          assert values[1..][i - 1] == values[i];
+          assert Core.RenderValues(values, scale, firstNegativeZero)[i] ==
+            Core.RenderValues(values[1..], scale, false)[i - 1];
+        }
+      }
     }
   }
 
@@ -1211,9 +1225,9 @@ module SeqProof {
       );
   }
 
-  twostate lemma CoreSummaryImpliesSpec(raw: Schema.SeqCmdRaw, io: BenchIO.IO, exit: int)
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.SeqCmdRaw, io: BenchIO.IO, exit: int, new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     NumberPlanRelation(raw.operands);
     if !Core.HelpSelected(raw) && !Core.VersionSelected(raw) {
@@ -1228,5 +1242,17 @@ module SeqProof {
           Core.Separator(raw)
         );
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.SeqCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

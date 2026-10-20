@@ -30,6 +30,14 @@ Supported behavior:
 - `-v` and `--verbose` always print file headers.
 - `--help`, `--version`, invalid decimal counts, missing files, and directory
   read errors follow the benchmark's coreutils-style diagnostic model.
+- A file close failure after reading preserves the selected bytes and header,
+  reports `tail: error reading`, and returns status 1. Output failures retain
+  the committed prefix and return nonzero; a stderr failure can truncate its
+  diagnostic.
+
+The current whole-read API does not represent every ordered native phase.
+Required scope decisions and concrete limitations remain recorded in
+[the failure audit](../../../docs/trustbase-failures.md).
 
 Deferred GNU behavior:
 

@@ -1,3 +1,4 @@
+include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/Utf8.dfy"
@@ -5,6 +6,8 @@ include "BasenameSchema.dfy"
 include "BasenameSpec.dfy"
 
 module BasenameCore {
+  import StreamContract = IOContract
+
   import Utf8 = Utf8Semantics
   import BenchIO
   import Schema = BasenameSchema
@@ -87,32 +90,32 @@ module BasenameCore {
         out == piece + sep
   }
 
-  twostate predicate CoreSummary(raw: Schema.BasenameCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSummary(raw: Schema.BasenameCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+
   {
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeHelp then
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.HelpTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.VersionTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if |cmd.operands| == 0 then
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.MissingOperandMessageSpec() &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + Spec.MissingOperandMessageSpec() &&
       exit == 1
     else if !cmd.multiple && |cmd.operands| > 2 then
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.ExtraOperandMessageSpec(cmd.operands[2]) &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + Spec.ExtraOperandMessageSpec(cmd.operands[2]) &&
       exit == 1
     else
-      io.stderr() == old(io.stderr()) &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0 &&
       exists out: string ::
         RunOutputSummary(cmd, out) &&
-        io.stdout() == old(io.stdout()) + Utf8.Encode(out)
+        plannedStdout == old(io.stdout()) + Utf8.Encode(out)
   }
 
   method ComputeBasenameValue(path: string) returns (value: string)
@@ -246,36 +249,41 @@ module BasenameCore {
     assert RunOutputSummary(cmd, out);
   }
 
-  method RunCore(raw: Schema.BasenameCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  method Prepare(raw: Schema.BasenameCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr)
     decreases *
   {
+    plannedOut := [];
+    plannedErr := [];
+    ghost var initialStdout := io.stdout();
+    ghost var initialStderr := io.stderr();
+
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeHelp {
       var out := Spec.HelpTextSpec();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + out;
       exit := 0;
       return;
     }
 
     if cmd.mode == Schema.ModeVersion {
       var out := Spec.VersionTextSpec();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + out;
       exit := 0;
       return;
     }
 
     if |cmd.operands| == 0 {
       var err := Spec.MissingOperandMessageSpec();
-      var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
+      plannedErr := plannedErr + err;
       exit := 1;
       return;
     }
 
     if !cmd.multiple && |cmd.operands| > 2 {
       var err := Spec.ExtraOperandMessageSpec(cmd.operands[2]);
-      var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
+      plannedErr := plannedErr + err;
       exit := 1;
       return;
     }
@@ -289,7 +297,61 @@ module BasenameCore {
     }
 
     var out := BuildRunOutput(cmd);
-    var _ := io.WriteStdout(Utf8.Encode(out), BenchWorld.ThrowOnError);
+    plannedOut := plannedOut + Utf8.Encode(out);
     exit := 0;
+  }
+
+  twostate predicate CoreSummary(raw: Schema.BasenameCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: Schema.BasenameCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

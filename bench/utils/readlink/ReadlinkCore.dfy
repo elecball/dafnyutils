@@ -3,8 +3,12 @@ include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "ReadlinkSchema.dfy"
 include "ReadlinkSpec.dfy"
+include "ReadlinkContextProof.dfy"
 
 module ReadlinkCore {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Errno = Errnos
   import Result = Results
   import BenchIO
@@ -13,72 +17,23 @@ module ReadlinkCore {
   import BenchWorld
   import Schema = ReadlinkSchema
   import Spec = ReadlinkSpec
+  import Context = ReadlinkContextProof
 
-  function IOErrorFromErrno(errno: int): BenchWorld.IOError
-  {
-    if errno == Errno.ENOENT then
-      BenchWorld.NoSuchFile
-    else if errno == Errno.EACCES then
-      BenchWorld.PermissionDenied
-    else if errno == Errno.ENOTDIR then
-      BenchWorld.NotDirectory
-    else
-      BenchWorld.InvalidPath
-  }
 
-  function ReadlinkTrailingSlashProbeResult(
-    ok: bool,
-    isDir: bool,
-    dirErr: int
-  ): BenchWorld.IOResult<BenchWorld.Path>
-  {
-    if ok then
-      if isDir then
-        Result.Err(BenchWorld.InvalidPath)
-      else
-        Result.Err(BenchWorld.NotDirectory)
-    else
-      Result.Err(IOErrorFromErrno(dirErr))
-  }
+
+
 
   ghost function ReadlinkResultFields(
+    cmd: Schema.ReadlinkCmd,
     fs: BenchWorld.FileSystem,
     cwd: BenchWorld.Path,
     path: BenchWorld.Path
   ): BenchWorld.IOResult<BenchWorld.Path>
   {
-    Spec.ReadlinkResultFieldsSpec(fs, cwd, path)
+    Spec.ReadlinkResultFieldsSpec(cmd, fs, cwd, path)
   }
 
-  lemma ReadlinkTrailingSlashProbeMatchesResult(
-    fs: BenchWorld.FileSystem,
-    actualPath: BenchWorld.Path,
-    ok: bool,
-    isDir: bool,
-    dirErr: int
-  )
-    requires IOContract.IsDirectoryContractFields(fs, actualPath, true, ok, isDir, dirErr)
-    ensures ReadlinkTrailingSlashProbeResult(ok, isDir, dirErr) ==
-            Spec.ReadlinkTrailingSlashResultFieldsSpec(fs, actualPath)
-  {
-    match IOContract.ResolvePathForMetadataFields(fs, actualPath, true)
-    case Err(err) =>
-    case Ok(resolved) =>
-      if BenchWorld.FsContainsPath(fs, resolved) {
-        assert ok;
-        match BenchWorld.FsNodeAt(fs, resolved)
-        case Regular(_, _, _, _) =>
-          assert !isDir;
-        case Directory(_, _, _) =>
-          assert isDir;
-        case Symlink(_, _, _, _) =>
-          assert !isDir;
-        case Inaccessible(_) =>
-          assert !isDir;
-      } else {
-        assert !ok;
-      }
-  }
+
 
   method GetErrnoText(err: BenchWorld.IOError) returns (out: string)
     ensures out == Spec.ErrnoTextSpec(err)
@@ -175,9 +130,9 @@ module ReadlinkCore {
     ensures out == Spec.MakeAbsoluteSpec(cwd, path)
   {
     if BenchWorld.IsAbsolutePath(path) {
-      out := BenchWorld.NormalizePath(path);
+      out := path;
     } else {
-      out := BenchWorld.NormalizePath(BenchWorld.AppendPath(cwd, path));
+      out := BenchWorld.AppendPath(cwd, path);
     }
   }
 
@@ -197,7 +152,8 @@ module ReadlinkCore {
     errOut: BenchWorld.Bytes
   )
   {
-    match ReadlinkResultFields(fs, cwd, path)
+    Spec.ReadObservationRelation(cmd, fs, cwd, path, ReadlinkResultFields(cmd, fs, cwd, path)) &&
+    match ReadlinkResultFields(cmd, fs, cwd, path)
     case Ok(target) =>
       !hadError &&
       out == Utf8.Encode(target) + Spec.OutputDelimiterSpec(cmd) &&
@@ -226,8 +182,8 @@ module ReadlinkCore {
         {:trigger RunFilesSummaryFields(cmd, files[..|files| - 1], fs, cwd, prefixError, prefixOut, prefixErrOut)} ::
         RunFilesSummaryFields(cmd, files[..|files| - 1], fs, cwd, prefixError, prefixOut, prefixErrOut) &&
         exists stepError: bool, stepOut: BenchWorld.Bytes, stepErrOut: BenchWorld.Bytes
-          {:trigger ReadOneSummaryFields(cmd, files[|files| - 1], fs, cwd, stepError, stepOut, stepErrOut)} ::
-          ReadOneSummaryFields(cmd, files[|files| - 1], fs, cwd, stepError, stepOut, stepErrOut) &&
+          {:trigger ReadOneSummaryFields(Schema.WithNativeReadOffset(cmd,files[..|files|-1]), files[|files| - 1], fs, cwd, stepError, stepOut, stepErrOut)} ::
+          ReadOneSummaryFields(Schema.WithNativeReadOffset(cmd,files[..|files|-1]), files[|files| - 1], fs, cwd, stepError, stepOut, stepErrOut) &&
           hadError == (prefixError || stepError) &&
           out == prefixOut + stepOut &&
           errOut == prefixErrOut + stepErrOut
@@ -247,7 +203,7 @@ module ReadlinkCore {
     stepErrOut: BenchWorld.Bytes
   )
     requires RunFilesSummaryFields(cmd, files, fs, cwd, prefixError, prefixOut, prefixErrOut)
-    requires ReadOneSummaryFields(cmd, path, fs, cwd, stepError, stepOut, stepErrOut)
+    requires ReadOneSummaryFields(Schema.WithNativeReadOffset(cmd,files), path, fs, cwd, stepError, stepOut, stepErrOut)
     ensures RunFilesSummaryFields(
               cmd,
               files + [path],
@@ -263,25 +219,27 @@ module ReadlinkCore {
     assert (files + [path])[|files + [path]| - 1] == path;
   }
 
-  twostate predicate CoreSummary(raw: Schema.ReadlinkCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  opaque twostate predicate PreparedSummary(raw: Schema.ReadlinkCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    reads io.directoryStateRegion,io.fsRegion,io.cwdRegion
   {
-    var cmd := Schema.Command(raw);
+    var cmd := Schema.WithNativeFailures(Schema.Command(raw), old(io.trustedNativeFailures()),old(io.cwdContext()));
+    io.directoryModel() == old(io.directoryModel()) &&
+    io.cwdContext() == Schema.FinalNativeContext(cmd,old(io.cwdContext())) &&
     if cmd.mode == Schema.ModeHelp then
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + Spec.HelpTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + Spec.VersionTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if |cmd.operands| == 0 then
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.MissingOperandMessageSpec() &&
+      plannedStdout == [] &&
+      plannedStderr == [] + Spec.MissingOperandMessageSpec() &&
       exit == 1
     else if cmd.mode == Schema.ModeUnsupportedCanonicalize then
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.UnsupportedCanonicalizeMessageSpec() &&
+      plannedStdout == [] &&
+      plannedStderr == [] + Spec.UnsupportedCanonicalizeMessageSpec() &&
       exit == 1
     else
       exists hadError: bool, out: BenchWorld.Bytes, errOut: BenchWorld.Bytes ::
@@ -294,98 +252,114 @@ module ReadlinkCore {
           out,
           errOut
         ) &&
-        io.stdout() == old(io.stdout()) + out &&
-        io.stderr() == old(io.stderr()) + Spec.InitialWarningSpec(cmd) + errOut &&
+        plannedStdout == [] + out &&
+        plannedStderr == [] + Spec.InitialWarningSpec(cmd) + errOut &&
         exit == (if hadError then 1 else 0)
   }
 
-  method {:vcs_split_on_every_assert} RunCore(raw: Schema.ReadlinkCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion
-    ensures CoreSummary(raw, io, exit)
+  twostate predicate CoreSummary(raw: Schema.ReadlinkCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit, output, diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit)
+  }
+
+  method {:vcs_split_on_every_assert} Prepare(raw: Schema.ReadlinkCmdRaw, io: BenchIO.IO) returns (exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    modifies io.directoryStateRegion
+    ensures PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
     decreases *
   {
+
+    hide *;
+    reveal PreparedSummary(),Schema.Command(),Schema.WithNativeFailures(),Schema.WithNativeReadOffset();
+    reveal Schema.FinalNativeContext(),Spec.OutputDelimiterSpec();
+    ghost var emissionBeforeOut: StreamWorld.Bytes := [];
+    ghost var emissionBeforeErr: StreamWorld.Bytes := [];
+    plannedStdout := [];
+    plannedStderr := [];
     ghost var preFs := io.fs();
     ghost var preCwd := io.cwd();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
-    var cmd := Schema.Command(raw);
+    ghost var preContext := io.cwdContext();
+    ghost var preModel := io.directoryModel();
+    ghost var preStdout := (emissionBeforeOut + plannedStdout);
+    ghost var preStderr := (emissionBeforeErr + plannedStderr);
+    var cmd := Schema.WithNativeFailures(Schema.Command(raw), io.trustedNativeFailures(),preContext);
+    assert Schema.NativeReadCount([]) == 0 by { reveal Schema.NativeReadCount(); }
     if cmd.mode == Schema.ModeHelp {
       var out := GetHelpText();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedStdout := plannedStdout + (out);
       exit := 0;
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
       return;
     }
 
     if cmd.mode == Schema.ModeVersion {
       var out := GetVersionText();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedStdout := plannedStdout + (out);
       exit := 0;
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
       return;
     }
 
     if |cmd.operands| == 0 {
       var err := GetMissingOperandMessage();
-      var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
+      plannedStderr := plannedStderr + (err);
       exit := 1;
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
       return;
     }
 
     if cmd.mode == Schema.ModeUnsupportedCanonicalize {
       var err := GetUnsupportedCanonicalizeMessage();
-      var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
+      plannedStderr := plannedStderr + (err);
       exit := 1;
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
       return;
     }
 
     var hadError := false;
     var out: BenchWorld.Bytes := "";
     var errOut: BenchWorld.Bytes := "";
-    var cwd := io.GetCwd();
-    assert cwd == preCwd;
     var i := 0;
+    assert RunFilesSummaryFields(cmd, [], preFs, preCwd, false, "", "") by {
+      reveal RunFilesSummaryFields();
+    }
     while i < |cmd.operands|
       invariant 0 <= i <= |cmd.operands|
-      invariant io.stdout() == preStdout
-      invariant io.stderr() == preStderr
-      invariant cwd == preCwd
+      invariant (emissionBeforeOut + plannedStdout) == preStdout
+      invariant (emissionBeforeErr + plannedStderr) == preStderr
       invariant RunFilesSummaryFields(cmd, cmd.operands[..i], preFs, preCwd, hadError, out, errOut)
-      modifies io.statusObservationsRegion
-      decreases *
+      invariant io.cwdContext() == preContext.(ordinal := preContext.ordinal+Schema.NativeReadCount(cmd.operands[..i]))
+      invariant io.directoryModel() == preModel
+        decreases *
     {
       var oldI := i;
       assert oldI < |cmd.operands|;
       var path := cmd.operands[i];
+      ghost var stepCmd := Schema.WithNativeReadOffset(cmd,cmd.operands[..i]);
+      ghost var beforeRead := io.cwdContext();
+      assert beforeRead == stepCmd.nativeReads.context;
       var prefixError := hadError;
       var prefixOut := out;
       var prefixErrOut := errOut;
       var stepError := false;
       var stepOut: BenchWorld.Bytes := "";
       var stepErrOut: BenchWorld.Bytes := "";
-      var actualPath := ComputeMakeAbsolute(cwd, path);
-      var hasTrailingSlash := ComputeEndsInSlash(path);
       var r: BenchWorld.IOResult<BenchWorld.Path>;
       if path == "" {
         r := Result.Err(BenchWorld.NoSuchFile);
-      } else if hasTrailingSlash {
-        var getFileStatusResult := io.GetFileStatus(actualPath, true);
-        var rawMetadataOk1 := getFileStatusResult.Ok?;
-        var rawMetadataStatus1 := IOContract.ResultValue(getFileStatusResult, BenchWorld.DEFAULT_FILE_STATUS);
-        var rawMetadataErr1 := IOContract.ResultErrno(getFileStatusResult);
-        IOContract.FileStatusStructureImpliesMetadata(io.fs(), actualPath, true, rawMetadataOk1, rawMetadataStatus1, rawMetadataErr1);
-        var ok := rawMetadataOk1;
-        var isDir := rawMetadataStatus1.kind == BenchWorld.DirectoryKind;
-        var dirErr := rawMetadataErr1;
-        r := ReadlinkTrailingSlashProbeResult(ok, isDir, dirErr);
-        ReadlinkTrailingSlashProbeMatchesResult(preFs, actualPath, ok, isDir, dirErr);
       } else {
-        r := io.ReadLink(actualPath);
-        assert r == IOContract.ReadLinkResultFields(preFs, actualPath);
+        r := io.ReadLinkAtCwd(path);
+        assert IOContract.ReadLinkAtCwdSpec(preFs, beforeRead, io.trustedNativeFailures(), path, r);
       }
-      assert r == ReadlinkResultFields(preFs, preCwd, path);
+      assert r == ReadlinkResultFields(stepCmd, preFs, preCwd, path) by {
+        reveal ReadlinkResultFields(),Spec.ReadlinkResultFieldsSpec(),IOContract.ReadLinkAtCwdSpec();
+      }
+      assert Spec.ReadObservationRelation(stepCmd, preFs, preCwd, path, r) by {
+        reveal Spec.ReadObservationRelation();
+      }
       match r {
         case Ok(target) =>
           stepError := false;
@@ -401,7 +375,9 @@ module ReadlinkCore {
             stepErrOut := "";
           }
       }
-      assert ReadOneSummaryFields(cmd, path, preFs, preCwd, stepError, stepOut, stepErrOut);
+      assert ReadOneSummaryFields(stepCmd, path, preFs, preCwd, stepError, stepOut, stepErrOut) by {
+        reveal ReadOneSummaryFields(),Spec.ErrorMessageMatchesSpec();
+      }
       hadError := prefixError || stepError;
       out := prefixOut + stepOut;
       errOut := prefixErrOut + stepErrOut;
@@ -419,15 +395,68 @@ module ReadlinkCore {
         stepErrOut
       );
       i := oldI + 1;
+      Context.ReadCountSnoc(cmd.operands[..oldI],path);
+      assert cmd.operands[..i] == cmd.operands[..oldI]+[path];
+      assert io.cwdContext() == preContext.(ordinal := preContext.ordinal+
+        Schema.NativeReadCount(cmd.operands[..i])) by {
+        if path != "" { reveal IOContract.CwdContextReadStepFields(); }
+      }
       assert |cmd.operands| - i < |cmd.operands| - oldI;
       assert cmd.operands[..i] == cmd.operands[..i - 1] + [cmd.operands[i - 1]];
       assert RunFilesSummaryFields(cmd, cmd.operands[..i], preFs, preCwd, hadError, out, errOut);
     }
     assert cmd.operands[..i] == cmd.operands;
-    var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+    plannedStdout := plannedStdout + (out);
     var warning := GetInitialWarning(cmd);
-    var _ := io.WriteStderr(warning + errOut, BenchWorld.ThrowOnError);
+    plannedStderr := plannedStderr + (warning + errOut);
     exit := if hadError then 1 else 0;
-    assert CoreSummary(raw, io, exit);
+    assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
+      hide *;
+      reveal PreparedSummary(),Schema.FinalNativeContext();
+    }
+  }
+
+
+  method Flush(output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+               normalExit: int, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit)
+  {
+    var committed: nat := 0;
+    var outErr := 0;
+    if |output| != 0 {
+      var result := io.WriteStdout(output);
+      committed := StreamContract.WriteResultCommitted(result);
+      outErr := StreamContract.ResultErrno(result);
+    }
+    var finalDiagnostics := diagnostics;
+    if outErr != 0 {
+      var reason := io.GetCLocaleErrnoText(outErr);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+    }
+    assert finalDiagnostics == diagnostics + (if outErr == 0 then []
+      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errCommitted: nat := 0;
+    var errErr := 0;
+    if |finalDiagnostics| != 0 {
+      var result := io.WriteStderr(finalDiagnostics);
+      errCommitted := StreamContract.WriteResultCommitted(result);
+      errErr := StreamContract.ResultErrno(result);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        finalDiagnostics, errCommitted, errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+    assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+  }
+
+  method RunCore(raw: Schema.ReadlinkCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion,io.directoryStateRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, output, diagnostics := Prepare(raw, io);
+    exit := Flush(output, diagnostics, normalExit, io);
   }
 }

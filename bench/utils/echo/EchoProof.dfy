@@ -4,6 +4,8 @@ include "EchoCore.dfy"
 include "EchoSpec.dfy"
 
 module EchoProof {
+  import BenchWorld
+
   import BenchIO
   import Utf8 = Utf8Semantics
   import BW = BenchWorld
@@ -441,7 +443,9 @@ module EchoProof {
             piece, rest, tailOutputCuts[j], tailOutputCuts[j + 1]
           );
           assert out[outputCuts[i]..outputCuts[i + 1]] ==
-                 rest[tailOutputCuts[j]..tailOutputCuts[j + 1]];
+                 rest[tailOutputCuts[j]..tailOutputCuts[j + 1]] by {
+            hide *;
+          }
           assert (i + 2 == |inputCuts|) ==
                  (j + 2 == |tailInputCuts|);
           assert Core.RenderEscaped(text, start).stopped ==
@@ -456,6 +460,11 @@ module EchoProof {
             );
         }
       }
+      assert 0 < |inputCuts|;
+      assert inputCuts[|inputCuts| - 1] <= |text|;
+      assert !Core.RenderEscaped(text, start).stopped ==>
+        inputCuts[|inputCuts| - 1] == |text|;
+      assert Core.RenderEscaped(text, start).stopped ==> 1 < |inputCuts|;
       assert Spec.EscapedPartition(
           text,
           start,
@@ -463,7 +472,10 @@ module EchoProof {
           Core.RenderEscaped(text, start).stopped,
           inputCuts,
           outputCuts
-        );
+        ) by {
+        hide *;
+        reveal Spec.EscapedPartition();
+      }
     }
   }
 
@@ -900,11 +912,11 @@ module EchoProof {
     }
   }
 
-  twostate lemma CoreSummaryImpliesSpec(
+  twostate lemma PreparedSummaryImpliesPreparedSpec(
     raw: Schema.EchoCmdRaw, io: BenchIO.IO, exit: int
-  )
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  , new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     OutputSatisfiesRelation(
       raw, Spec.PosixlyCorrect(old(io.env()))
@@ -923,4 +935,16 @@ module EchoProof {
   {
   }
 
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.EchoCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+  }
 }

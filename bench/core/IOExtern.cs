@@ -12,6 +12,241 @@ using Dafny;
 using Errno = Errnos.__default;
 
 public static partial class IOExtern {
+
+  // Independent capability namespace: legacy CloseDir cannot consume these DIR*.
+  private sealed class LiveDirectoryCapability {
+    internal readonly IntPtr Pointer;
+    internal int? Descriptor;
+    internal readonly bool IncludeDots;
+    internal LiveDirectoryCapability(IntPtr pointer, bool includeDots = false) {
+      Pointer = pointer;
+      IncludeDots = includeDots;
+    }
+  }
+  private static readonly Dictionary<BigInteger, LiveDirectoryCapability> LiveDirectories = new();
+  private static readonly object liveDirectoryGate = new();
+  private static BigInteger nextLiveDirectoryHandle = -BigInteger.One;
+
+  [DllImport("libc", SetLastError = true)]
+  private static extern int fchdir(int fd);
+  [DllImport("libc", SetLastError = true)]
+  private static extern int chdir(string path);
+
+  private static BenchWorld._IDirectoryResponse DirectoryResponse(
+      int err = 0, ISequence<Dafny.Rune> path = null,
+      BenchWorld._IFileStatus status = null, BigInteger? handle = null,
+      int fd = 0, BenchWorld._IDirectoryRead read = null) {
+    return BenchWorld.DirectoryResponse.create_DirectoryResponse(
+      new BigInteger(err), path ?? Sequence<Dafny.Rune>.Empty,
+      status ?? BenchWorld.FileStatus.Default(), handle ?? BigInteger.Zero,
+      new BigInteger(fd), read ?? BenchWorld.DirectoryRead.create_DirectoryEnd());
+  }
+
+  private static bool LiveDirectoryForHandle(BigInteger handle, out LiveDirectoryCapability capability) {
+    lock (liveDirectoryGate) { return LiveDirectories.TryGetValue(handle, out capability); }
+  }
+
+  private static bool LiveDirectoryOwnsDescriptor(BigInteger descriptor, out int fd) {
+    fd = -1;
+    if (descriptor < int.MinValue || descriptor > int.MaxValue) return false;
+    var candidate = (int)descriptor;
+    lock (liveDirectoryGate) {
+      foreach (var capability in LiveDirectories.Values) {
+        if (capability.Descriptor == candidate) { fd = candidate; return true; }
+      }
+    }
+    return false;
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryGetCwd() {
+    GetCurrentDirectory(out var path, out var err);
+    return DirectoryResponse((int)err, path: path);
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryCurrentStatus() {
+    GetFileStatus(Sequence<Dafny.Rune>.UnicodeFromString("."), true,
+      out var ok, out var status, out var err);
+    return DirectoryResponse((int)err, status: status);
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryOpenParent() {
+    var pointer = opendir("..");
+    var err = pointer == IntPtr.Zero ? Marshal.GetLastPInvokeError() : 0;
+    if (err != 0) return DirectoryResponse(err);
+    lock (liveDirectoryGate) {
+      var handle = nextLiveDirectoryHandle--;
+      LiveDirectories.Add(handle, new LiveDirectoryCapability(pointer));
+      return DirectoryResponse(handle: handle);
+    }
+  }
+
+  // Absolute operands do not consult the parent capability, as with fstatat/openat.
+  // Relative operands borrow an owned DIR* without reconstructing its pathname.
+  private static bool TryDirectoryCapabilityFd(BigInteger parent, string path,
+      out int fd, out int err) {
+    fd = AT_FDCWD;
+    err = 0;
+    if (path.StartsWith("/", StringComparison.Ordinal)) return true;
+    IntPtr pointer;
+    if (LiveDirectories.TryGetValue(parent, out var capability)) {
+      pointer = capability.Pointer;
+    } else if (Dirs.TryGetValue(parent, out var legacy) && legacy.DirPtr != IntPtr.Zero) {
+      pointer = legacy.DirPtr;
+    } else {
+      err = parent < 0 ? EBADF : EINVAL;
+      return false;
+    }
+    fd = dirfd(pointer);
+    if (fd >= 0) return true;
+    err = Marshal.GetLastPInvokeError();
+    return false;
+  }
+
+  private static BenchWorld._IDirectoryResponse DirectoryOpenAt(int parentFd,
+      string path, bool includeDots) {
+    var descriptor = openat(parentFd, path,
+      O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC, 0);
+    if (descriptor < 0) return DirectoryResponse(Marshal.GetLastPInvokeError());
+    var pointer = fdopendir(descriptor);
+    if (pointer == IntPtr.Zero) {
+      var err = Marshal.GetLastPInvokeError();
+      close(descriptor);
+      return DirectoryResponse(err);
+    }
+    var handle = nextLiveDirectoryHandle--;
+    LiveDirectories.Add(handle, new LiveDirectoryCapability(pointer, includeDots));
+    return DirectoryResponse(handle: handle);
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryOpenAtCwd(
+      ISequence<Dafny.Rune> path, bool includeDots) {
+    if (!TryPublicPath(path, out var raw, out var err, allowEmpty: true))
+      return DirectoryResponse((int)err);
+    if (raw.Length == 0) return DirectoryResponse(ENOENT);
+    lock (liveDirectoryGate) {
+      return DirectoryOpenAt(AT_FDCWD, raw, includeDots);
+    }
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryOpenAtDir(BigInteger parent,
+      ISequence<Dafny.Rune> path, bool includeDots) {
+    if (!TryPublicPath(path, out var raw, out var err, allowEmpty: true))
+      return DirectoryResponse((int)err);
+    if (raw.Length == 0) return DirectoryResponse(ENOENT);
+    lock (liveDirectoryGate) {
+      lock (dirLock) {
+        if (!TryDirectoryCapabilityFd(parent, raw, out var fd, out var fdErr))
+          return DirectoryResponse(fdErr);
+        return DirectoryOpenAt(fd, raw, includeDots);
+      }
+    }
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryStatusAtDir(BigInteger parent,
+      ISequence<Dafny.Rune> path, bool followSymlink) {
+    if (!TryPublicPath(path, out var raw, out var err, allowEmpty: true))
+      return DirectoryResponse((int)err);
+    if (raw.Length == 0) return DirectoryResponse(ENOENT);
+    lock (liveDirectoryGate) {
+      lock (dirLock) {
+        if (!TryDirectoryCapabilityFd(parent, raw, out var fd, out var fdErr))
+          return DirectoryResponse(fdErr);
+        var result = fstatat(fd, raw, out var status, followSymlink ? 0 : AT_SYMLINK_NOFOLLOW);
+        var statErr = result < 0 ? Marshal.GetLastPInvokeError() : 0;
+        return DirectoryResponse(statErr, status: result < 0 ? null : FileStatusFromStat(status));
+      }
+    }
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectorySetModeAtDir(BigInteger parent,
+      ISequence<Dafny.Rune> path, bool followSymlink, uint mode) {
+    if (!TryPublicPath(path, out var raw, out var err, allowEmpty: true))
+      return DirectoryResponse((int)err);
+    if (raw.Length == 0) return DirectoryResponse(ENOENT);
+    lock (liveDirectoryGate) {
+      lock (dirLock) {
+        if (!TryDirectoryCapabilityFd(parent, raw, out var fd, out var fdErr))
+          return DirectoryResponse(fdErr);
+        var result = fchmodat(fd, raw, mode & PermissionModeMask,
+          followSymlink ? 0 : AT_SYMLINK_NOFOLLOW);
+        return DirectoryResponse(result < 0 ? Marshal.GetLastPInvokeError() : 0);
+      }
+    }
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryOpenedStatus(BigInteger handle) {
+    lock (liveDirectoryGate) {
+      if (!LiveDirectories.TryGetValue(handle, out var capability)) return DirectoryResponse(EBADF);
+      var fd = dirfd(capability.Pointer);
+      if (fd < 0) return DirectoryResponse(Marshal.GetLastPInvokeError());
+      GetDirectoryStatusForDescriptor(fd, out var ok, out var status, out var err);
+      return DirectoryResponse((int)err, status: ok ? status : null);
+    }
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryGetDescriptor(BigInteger handle) {
+    if (!LiveDirectoryForHandle(handle, out var capability)) return DirectoryResponse(EBADF);
+    var fd = dirfd(capability.Pointer);
+    var err = fd < 0 ? Marshal.GetLastPInvokeError() : 0;
+    if (err != 0) return DirectoryResponse(err);
+    lock (liveDirectoryGate) { capability.Descriptor = fd; }
+    return DirectoryResponse(fd: fd);
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryFchdir(BigInteger descriptor) {
+    if (!LiveDirectoryOwnsDescriptor(descriptor, out var fd)) return DirectoryResponse(EBADF);
+    var result = fchdir(fd);
+    var err = result < 0 ? Marshal.GetLastPInvokeError() : 0;
+    return DirectoryResponse(err);
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryChdirParent() {
+    var result = chdir("..");
+    var err = result < 0 ? Marshal.GetLastPInvokeError() : 0;
+    return DirectoryResponse(err);
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryFstat(BigInteger descriptor) {
+    if (!LiveDirectoryOwnsDescriptor(descriptor, out var fd)) return DirectoryResponse(EBADF);
+    var result = fstat(fd, out var nativeStatus);
+    var err = result < 0 ? Marshal.GetLastPInvokeError() : 0;
+    return DirectoryResponse(err, status: err == 0 ? FileStatusFromStat(nativeStatus) : null);
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryReadNext(BigInteger handle) {
+    if (!LiveDirectoryForHandle(handle, out var capability)) return DirectoryResponse(EBADF);
+    while (true) {
+      Marshal.SetLastPInvokeError(0);
+      var pointer = readdir(capability.Pointer);
+      var err = pointer == IntPtr.Zero ? Marshal.GetLastPInvokeError() : 0;
+      if (pointer == IntPtr.Zero) return DirectoryResponse(err);
+      var entry = Marshal.PtrToStructure<Dirent>(pointer);
+      var nameLength = 0;
+      while (nameLength < entry.d_name.Length && entry.d_name[nameLength] != 0) nameLength++;
+      var name = Encoding.UTF8.GetString(entry.d_name, 0, nameLength);
+      var dot = name == "." || name == "..";
+      if (dot && !capability.IncludeDots) continue;
+      return DirectoryResponse(read: BenchWorld.DirectoryRead.create_DirectoryItem(
+        Sequence<Dafny.Rune>.UnicodeFromString(name),
+        DirectoryEntryKindFromNative(dot ? DT_DIR : entry.d_type), new BigInteger(entry.d_ino)));
+    }
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryEntryLstat(ISequence<Dafny.Rune> name) {
+    GetFileStatus(name, false, out var ok, out var status, out var err);
+    return DirectoryResponse((int)err, status: status);
+  }
+
+  public static BenchWorld._IDirectoryResponse DirectoryClose(BigInteger handle) {
+    LiveDirectoryCapability capability;
+    lock (liveDirectoryGate) {
+      if (!LiveDirectories.Remove(handle, out capability)) return DirectoryResponse(EBADF);
+    }
+    var result = closedir(capability.Pointer);
+    var err = result < 0 ? Marshal.GetLastPInvokeError() : 0;
+    return DirectoryResponse(err);
+  }
+
   private enum NativeStartupFailure {
     None,
     LateCapabilityUse,
@@ -215,8 +450,8 @@ public static partial class IOExtern {
     }
   }
 
-  private static readonly Dictionary<int, DirEntry> Dirs = new Dictionary<int, DirEntry>();
-  private static int nextDirHandle = 1;
+  private static readonly Dictionary<BigInteger, DirEntry> Dirs = new Dictionary<BigInteger, DirEntry>();
+  private static BigInteger nextDirHandle = BigInteger.One;
   private static readonly object dirLock = new object();
   private const int MaxLinkPath = 4096;
 
@@ -231,6 +466,9 @@ public static partial class IOExtern {
 
   [DllImport("libc", SetLastError = true)]
   private static extern int open(string path, int flags, uint mode);
+
+  [DllImport("libc", SetLastError = true)]
+  private static extern int openat(int dirfd, string path, int flags, uint mode);
 
   [DllImport("libc", SetLastError = true)]
   private static extern long write(int fd, byte[] buf, UIntPtr count);
@@ -302,6 +540,9 @@ public static partial class IOExtern {
   private static extern int fstat(int fd, out Stat buf);
 
   [DllImport("libc", SetLastError = true)]
+  private static extern int fstatat(int dirfd, string path, out Stat buf, int flags);
+
+  [DllImport("libc", SetLastError = true)]
   private static extern int statx(int dirfd, string pathname, int flags, uint mask, out Statx buf);
 
   [DllImport("libc", SetLastError = true)]
@@ -329,6 +570,9 @@ public static partial class IOExtern {
   private static extern IntPtr opendir(string path);
 
   [DllImport("libc", SetLastError = true)]
+  private static extern IntPtr fdopendir(int fd);
+
+  [DllImport("libc", SetLastError = true)]
   private static extern int dirfd(IntPtr dirp);
 
   [DllImport("libc", SetLastError = true)]
@@ -339,6 +583,9 @@ public static partial class IOExtern {
 
   [DllImport("libc", SetLastError = true)]
   private static extern IntPtr realpath(string path, IntPtr resolvedPath);
+
+  [DllImport("libc", SetLastError = true)]
+  private static extern IntPtr getcwd(IntPtr buffer, UIntPtr size);
 
   [DllImport("libc")]
   private static extern void free(IntPtr pointer);
@@ -356,6 +603,8 @@ public static partial class IOExtern {
   private const int O_TRUNC = 0x200;
   private const int O_NONBLOCK = 0x800;
   private const int O_NOCTTY = 0x100;
+  private const int O_DIRECTORY = 0x10000;
+  private const int O_CLOEXEC = 0x80000;
   private const int AT_FDCWD = -100;
   private const int AT_SYMLINK_NOFOLLOW = 0x100;
   private const int AT_NO_AUTOMOUNT = 0x800;
@@ -988,24 +1237,14 @@ public static partial class IOExtern {
     }
   }
 
-  private static void ThrowOnStreamError(
-      BenchWorld._IStreamErrorPolicy policy,
-      BigInteger err,
-      string operation) {
-    if (policy.is_ThrowOnError && err != BigInteger.Zero) {
-      throw new IOException($"{operation} failed (errno {err})");
-    }
-  }
-
   public static void ReadStdin(
-      BenchWorld._IStreamErrorPolicy policy,
       out ISequence<Dafny.Rune> content,
       out BigInteger err) {
     content = Sequence<Dafny.Rune>.Empty;
     err = BigInteger.Zero;
     if (!FindCapability(BigInteger.Zero, out var capability)) {
       err = new BigInteger(EBADF);
-      ThrowOnStreamError(policy, err, "stdin read");
+
       return;
     }
     byte[] bytes;
@@ -1013,14 +1252,14 @@ public static partial class IOExtern {
     lock (capability.Gate) {
       if (capability.Closed) {
         err = new BigInteger(EBADF);
-        ThrowOnStreamError(policy, err, "stdin read");
+
         return;
       }
       ReadAllFromFdWithOutcome(capability.NativeFd, out bytes, out readErr);
     }
     content = Sequence<Dafny.Rune>.UnicodeFromString(Encoding.Latin1.GetString(bytes));
     err = new BigInteger(readErr);
-    ThrowOnStreamError(policy, err, "stdin read");
+
   }
 
   private static void WriteStandardWithOutcome(
@@ -1051,27 +1290,25 @@ public static partial class IOExtern {
 
   public static void WriteStdout(
       ISequence<Dafny.Rune> content,
-      BenchWorld._IStreamErrorPolicy policy,
       out BigInteger committed,
       out BigInteger err) {
     WriteStandardWithOutcome(BigInteger.One, content, out committed, out err);
-    ThrowOnStreamError(policy, err, "stdout write");
+
   }
 
   public static void WriteStderr(
       ISequence<Dafny.Rune> content,
-      BenchWorld._IStreamErrorPolicy policy,
       out BigInteger committed,
       out BigInteger err) {
     WriteStandardWithOutcome(new BigInteger(2), content, out committed, out err);
-    ThrowOnStreamError(policy, err, "stderr write");
+
   }
 
   public static void GetEnv(ISequence<Dafny.Rune> name, out bool ok, out ISequence<Dafny.Rune> value) {
     ok = false;
     value = Sequence<Dafny.Rune>.Empty;
     var nameStr = name?.ToVerbatimString(false) ?? string.Empty;
-    if (string.IsNullOrEmpty(nameStr)) {
+    if (string.IsNullOrEmpty(nameStr) || nameStr.IndexOf('\0') >= 0 || nameStr.IndexOf('=') >= 0) {
       return;
     }
     var env = Environment.GetEnvironmentVariable(nameStr);
@@ -1113,17 +1350,21 @@ public static partial class IOExtern {
     }
   }
 
-  public static void GetCurrentDirectory(out bool ok, out ISequence<Dafny.Rune> value) {
-    ok = false;
+  public static void GetCurrentDirectory(
+      out ISequence<Dafny.Rune> value,
+      out BigInteger err) {
     value = Sequence<Dafny.Rune>.Empty;
+    err = BigInteger.Zero;
+    var pointer = getcwd(IntPtr.Zero, UIntPtr.Zero);
+    if (pointer == IntPtr.Zero) {
+      var savedErrno = Marshal.GetLastPInvokeError();
+      err = new BigInteger(savedErrno);
+      return;
+    }
     try {
-      var cwd = Directory.GetCurrentDirectory();
-      if (string.IsNullOrEmpty(cwd)) {
-        return;
-      }
-      ok = true;
-      value = Sequence<Dafny.Rune>.UnicodeFromString(cwd);
-    } catch {
+      value = Sequence<Dafny.Rune>.UnicodeFromString(Marshal.PtrToStringUTF8(pointer)!);
+    } finally {
+      free(pointer);
     }
   }
 
@@ -1186,12 +1427,11 @@ public static partial class IOExtern {
   }
 
   public static ISequence<Dafny.Rune> ErrnoMessage(BigInteger err) {
-    int errValue;
-    try {
-      errValue = (int)err;
-    } catch {
-      errValue = 0;
+    if (err < int.MinValue || err > int.MaxValue) {
+      return Sequence<Dafny.Rune>.UnicodeFromString(
+        "Unknown error " + err.ToString(CultureInfo.InvariantCulture));
     }
+    var errValue = (int)err;
     var pointer = strerror(errValue);
     if (pointer == IntPtr.Zero) {
       return Sequence<Dafny.Rune>.Empty;
@@ -1327,20 +1567,16 @@ public static partial class IOExtern {
     ok = false;
     target = Sequence<Dafny.Rune>.Empty;
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
     }
     var buffer = new byte[MaxLinkPath];
-    long length;
-    try {
-      length = readlink(pathStr, buffer, buffer.Length);
-    } catch {
-      length = -1;
-    }
+    var length = readlink(pathStr, buffer, buffer.Length);
     if (length < 0) {
-      err = new BigInteger(Marshal.GetLastWin32Error());
+      var nativeErr = Marshal.GetLastPInvokeError();
+      err = new BigInteger(nativeErr);
       return;
     }
     ok = true;
@@ -1350,7 +1586,7 @@ public static partial class IOExtern {
   public static void PathExists(ISequence<Dafny.Rune> path, bool followSymlink, out bool exists, out BigInteger err) {
     exists = false;
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
@@ -1375,15 +1611,13 @@ public static partial class IOExtern {
     device = new BigInteger(0);
     inode = new BigInteger(0);
     linkCount = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
     }
     if (!TryStatPath(pathStr, followSymlink, out var statResult, out var statErr)) {
-      // The symbolic path model has no component-length failure constructor;
-      // an overlong component is therefore observed as an unresolved path.
-      err = new BigInteger(statErr == ENAMETOOLONG ? ENOENT : statErr);
+      err = new BigInteger(statErr);
       return;
     }
     ok = true;
@@ -1408,23 +1642,19 @@ public static partial class IOExtern {
   ) {
     ok = false;
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
     }
     int flags = followSymlink ? 0 : AT_SYMLINK_NOFOLLOW;
-    int rc;
-    try {
-      rc = utimensatPath(AT_FDCWD, pathStr, times, flags);
-    } catch {
-      rc = -1;
-    }
+    var rc = utimensatPath(AT_FDCWD, pathStr, times, flags);
     if (rc == 0) {
       ok = true;
       return;
     }
-    err = new BigInteger(Marshal.GetLastWin32Error());
+    var nativeErr = Marshal.GetLastPInvokeError();
+    err = new BigInteger(nativeErr);
   }
 
   public static void SetFileTimes(
@@ -1499,7 +1729,7 @@ public static partial class IOExtern {
     ok = false;
     mode = 0;
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
@@ -1517,7 +1747,7 @@ public static partial class IOExtern {
     ok = false;
     isSymlink = false;
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
@@ -1599,19 +1829,15 @@ public static partial class IOExtern {
   public static void CreateSymlink(ISequence<Dafny.Rune> path, ISequence<Dafny.Rune> target, out bool ok, out BigInteger err) {
     ok = false;
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
-    var targetStr = target?.ToVerbatimString(false) ?? string.Empty;
-    int rc;
-    try {
-      rc = symlink(targetStr, pathStr);
-    } catch {
-      rc = -1;
-    }
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
+    if (!TryPublicPath(target, out var targetStr, out err, allowEmpty: true)) return;
+    var rc = symlink(targetStr, pathStr);
     if (rc == 0) {
       ok = true;
       return;
     }
-    err = new BigInteger(Marshal.GetLastWin32Error());
+    var nativeErr = Marshal.GetLastPInvokeError();
+    err = new BigInteger(nativeErr);
   }
 
   public static void GetFileStatus(
@@ -1623,15 +1849,13 @@ public static partial class IOExtern {
     ok = false;
     status = BenchWorld.FileStatus.Default();
     err = BigInteger.Zero;
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
     }
     if (!TryStatPath(pathStr, followSymlink, out var statResult, out var statErr)) {
-      // Match the symbolic path model, which represents an overlong unresolved
-      // component as a missing path rather than a separate host errno.
-      err = new BigInteger(statErr == ENAMETOOLONG ? ENOENT : statErr);
+      err = new BigInteger(statErr);
       return;
     }
 
@@ -1752,22 +1976,18 @@ public static partial class IOExtern {
   public static void DeletePath(ISequence<Dafny.Rune> path, out bool ok, out BigInteger err) {
     ok = false;
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
     }
-    int rc;
-    try {
-      rc = unlink(pathStr);
-    } catch {
-      rc = -1;
-    }
+    var rc = unlink(pathStr);
     if (rc == 0) {
       ok = true;
       return;
     }
-    err = new BigInteger(Marshal.GetLastWin32Error());
+    var nativeErr = Marshal.GetLastPInvokeError();
+    err = new BigInteger(nativeErr);
   }
 
   private static bool TryPublicPath(
@@ -1937,14 +2157,19 @@ public static partial class IOExtern {
     int rc;
     try {
       rc = futimens(1, times);
-    } catch {
-      rc = -1;
+    } catch (DllNotFoundException) {
+      err = new BigInteger(EIO);
+      return;
+    } catch (EntryPointNotFoundException) {
+      err = new BigInteger(EIO);
+      return;
     }
+    var nativeErr = rc == 0 ? 0 : Marshal.GetLastPInvokeError();
     if (rc == 0) {
       ok = true;
       return;
     }
-    err = new BigInteger(Marshal.GetLastWin32Error());
+    err = new BigInteger(nativeErr);
   }
 
   private static bool TryBuildTimestampUpdate(BenchWorld._ITimestampUpdate update, out Timespec value) {
@@ -2028,63 +2253,120 @@ public static partial class IOExtern {
   public static void SetFileMode(ISequence<Dafny.Rune> path, bool followSymlink, uint mode, out bool ok, out BigInteger err) {
     ok = false;
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
     }
     uint modeValue = mode & PermissionModeMask;
-    int rc;
-    if (!followSymlink) {
-      // Use fchmodat with AT_SYMLINK_NOFOLLOW for symlink control
-      try {
-        rc = fchmodat(AT_FDCWD, pathStr, modeValue, AT_SYMLINK_NOFOLLOW);
-      } catch {
-        rc = -1;
+    var rc = followSymlink
+      ? chmod(pathStr, modeValue)
+      : fchmodat(AT_FDCWD, pathStr, modeValue, AT_SYMLINK_NOFOLLOW);
+    BoolResultFromNative(rc, out ok, out err);
+  }
+
+  public static uint GetUmask() {
+    // POSIX umask has no error result; observe and restore the process value.
+    var previousMask = umask(0);
+    umask(previousMask);
+    return previousMask;
+  }
+
+  private static bool TryAtDirectoryFd(BigInteger parent, string path, out int fd, out BigInteger err) {
+    fd = AT_FDCWD;
+    err = BigInteger.Zero;
+    if (path.StartsWith("/", StringComparison.Ordinal)) return true;
+    lock (dirLock) {
+      if (!Dirs.TryGetValue(parent, out var entry) || entry == null || entry.DirPtr == IntPtr.Zero) {
+        err = new BigInteger(EINVAL);
+        return false;
       }
-      // If fchmodat with AT_SYMLINK_NOFOLLOW fails with ENOTSUP/EOPNOTSUPP on symlinks, that's expected
-      if (rc < 0) {
-        var errno = Marshal.GetLastWin32Error();
-        // For symlinks, EOPNOTSUPP is expected when trying to chmod without following
-        if (errno == EOPNOTSUPP) {
-          // Check if it's actually a symlink
-          if (TryStatPath(pathStr, false, out var statResult, out _)) {
-            if ((statResult.st_mode & S_IFMT) == S_IFLNK) {
-              // It's a symlink and we can't chmod it - this is OK, just return success
-              ok = true;
-              return;
-            }
-          }
-        }
-        err = new BigInteger(errno);
-        return;
-      }
-    } else {
-      // Follow symlinks - use regular chmod
-      try {
-        rc = chmod(pathStr, modeValue);
-      } catch {
-        rc = -1;
-      }
-      if (rc < 0) {
+      fd = dirfd(entry.DirPtr);
+      if (fd < 0) {
         err = new BigInteger(Marshal.GetLastWin32Error());
-        return;
+        return false;
       }
+    }
+    return true;
+  }
+
+  private static BigInteger RegisterDirectory(IntPtr dirPtr, string path, bool includeDots) {
+    lock (dirLock) {
+      var id = nextDirHandle++;
+      Dirs[id] = new DirEntry(dirPtr, path, includeDots);
+      return id;
+    }
+  }
+
+  public static void GetFileStatusAtDir(
+    BigInteger parent, ISequence<Dafny.Rune> path, bool followSymlink,
+    out bool ok, out BenchWorld._IFileStatus status, out BigInteger err
+  ) {
+    ok = false;
+    status = BenchWorld.FileStatus.Default();
+    err = BigInteger.Zero;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
+    if (pathStr.Length == 0) {
+      err = new BigInteger(ENOENT);
+      return;
+    }
+    if (!TryAtDirectoryFd(parent, pathStr, out var fd, out err)) return;
+    var rc = fstatat(fd, pathStr, out var nativeStatus, followSymlink ? 0 : AT_SYMLINK_NOFOLLOW);
+    if (rc != 0) {
+      err = new BigInteger(Marshal.GetLastWin32Error());
+      return;
+    }
+    status = FileStatusFromStat(nativeStatus);
+    ok = true;
+  }
+
+  public static void SetFileModeAtDir(
+    BigInteger parent, ISequence<Dafny.Rune> path, bool followSymlink, uint mode,
+    out bool ok, out BigInteger err
+  ) {
+    ok = false;
+    err = BigInteger.Zero;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
+    if (pathStr.Length == 0) {
+      err = new BigInteger(ENOENT);
+      return;
+    }
+    if (!TryAtDirectoryFd(parent, pathStr, out var fd, out err)) return;
+    var rc = fchmodat(fd, pathStr, mode & PermissionModeMask, followSymlink ? 0 : AT_SYMLINK_NOFOLLOW);
+    if (rc != 0) {
+      err = new BigInteger(Marshal.GetLastWin32Error());
+      return;
     }
     ok = true;
   }
 
-  public static uint GetUmask() {
-    uint oldMask;
-    try {
-      // Get current umask by setting to 0, then restore it immediately
-      oldMask = umask(0);
-      umask(oldMask);
-    } catch {
-      // Default umask if we can't read it
-      oldMask = 0x12; // 022 octal
+  public static void OpenDirAtDir(
+    BigInteger parent, ISequence<Dafny.Rune> path, bool includeDots,
+    out bool ok, out BigInteger handle, out BigInteger err
+  ) {
+    ok = false;
+    handle = BigInteger.Zero;
+    err = BigInteger.Zero;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
+    if (pathStr.Length == 0) {
+      err = new BigInteger(ENOENT);
+      return;
     }
-    return oldMask;
+    if (!TryAtDirectoryFd(parent, pathStr, out var fd, out err)) return;
+    var openedFd = openat(fd, pathStr, O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC, 0);
+    if (openedFd < 0) {
+      err = new BigInteger(Marshal.GetLastWin32Error());
+      return;
+    }
+    var dirPtr = fdopendir(openedFd);
+    if (dirPtr == IntPtr.Zero) {
+      var openErr = Marshal.GetLastWin32Error();
+      close(openedFd);
+      err = new BigInteger(openErr);
+      return;
+    }
+    handle = RegisterDirectory(dirPtr, pathStr, includeDots);
+    ok = true;
   }
 
   public static void OpenDir(
@@ -2097,7 +2379,7 @@ public static partial class IOExtern {
     ok = false;
     handle = new BigInteger(0);
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
@@ -2116,12 +2398,8 @@ public static partial class IOExtern {
       return;
     }
 
-    lock (dirLock) {
-      var id = nextDirHandle++;
-      Dirs[id] = new DirEntry(dirPtr, pathStr, includeDots);
-      handle = new BigInteger(id);
-      ok = true;
-    }
+    handle = RegisterDirectory(dirPtr, pathStr, includeDots);
+    ok = true;
   }
 
   public static void GetOpenDirectoryStatus(
@@ -2133,13 +2411,7 @@ public static partial class IOExtern {
     ok = false;
     status = BenchWorld.FileStatus.Default();
     err = BigInteger.Zero;
-    int id;
-    try {
-      id = (int)handle;
-    } catch (OverflowException) {
-      err = new BigInteger(EINVAL);
-      return;
-    }
+    var id = handle;
     DirEntry entry;
     lock (dirLock) {
       if (!Dirs.TryGetValue(id, out entry) || entry == null || entry.DirPtr == IntPtr.Zero) {
@@ -2162,6 +2434,14 @@ public static partial class IOExtern {
       err = new BigInteger(fdErr == 0 ? EIO : fdErr);
       return;
     }
+    GetDirectoryStatusForDescriptor(fd, out ok, out status, out err);
+  }
+
+  private static void GetDirectoryStatusForDescriptor(int fd,
+      out bool ok, out BenchWorld._IFileStatus status, out BigInteger err) {
+    ok = false;
+    status = BenchWorld.FileStatus.Default();
+    err = BigInteger.Zero;
     int rc;
     Statx nativeStatus;
     try {
@@ -2205,22 +2485,15 @@ public static partial class IOExtern {
     ok = false;
     resolvedPath = Sequence<Dafny.Rune>.Empty;
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
     }
 
-    IntPtr canonicalPointer;
-    var canonicalErr = 0;
-    try {
-      canonicalPointer = realpath(pathStr, IntPtr.Zero);
-    } catch {
-      canonicalPointer = IntPtr.Zero;
-      canonicalErr = EIO;
-    }
+    var canonicalPointer = realpath(pathStr, IntPtr.Zero);
     if (canonicalPointer == IntPtr.Zero) {
-      var errno = canonicalErr != 0 ? canonicalErr : Marshal.GetLastWin32Error();
+      var errno = Marshal.GetLastPInvokeError();
       err = new BigInteger(errno == 0 ? EIO : errno);
       return;
     }
@@ -2240,13 +2513,7 @@ public static partial class IOExtern {
     dType = DT_UNKNOWN;
     inode = BigInteger.Zero;
     err = new BigInteger(0);
-    int id;
-    try {
-      id = (int)handle;
-    } catch {
-      err = new BigInteger(EINVAL);
-      return;
-    }
+    var id = handle;
     DirEntry entry;
     lock (dirLock) {
       if (!Dirs.TryGetValue(id, out entry) || entry == null) {
@@ -2329,32 +2596,28 @@ public static partial class IOExtern {
     kind = DirectoryEntryKindFromNative(dType);
   }
 
-  public static void CloseDir(BigInteger handle) {
-    int id;
-    try {
-      id = (int)handle;
-    } catch {
-      return;
-    }
-    DirEntry entry = null;
+  public static void CloseDir(BigInteger handle, out bool ok, out BigInteger err) {
+    ok = false;
+    err = new BigInteger(EINVAL);
+    var id = handle;
+    DirEntry entry;
     lock (dirLock) {
-      if (Dirs.TryGetValue(id, out entry)) {
-        Dirs.Remove(id);
-      }
+      if (!Dirs.TryGetValue(id, out entry) || entry == null || entry.DirPtr == IntPtr.Zero) return;
+      Dirs.Remove(id);
     }
-    if (entry != null && entry.DirPtr != IntPtr.Zero) {
-      try {
-        closedir(entry.DirPtr);
-      } catch {
-      }
-    }
+    // glibc frees the DIR allocation before closing its fd; ownership ends even
+    // when that final close reports an error.
+    var rc = closedir(entry.DirPtr);
+    var closeErr = rc == 0 ? 0 : Marshal.GetLastPInvokeError();
+    ok = rc == 0;
+    err = new BigInteger(closeErr);
   }
 
   public static void IsDirectory(ISequence<Dafny.Rune> path, bool followSymlink, out bool ok, out bool isDir, out BigInteger err) {
     ok = false;
     isDir = false;
     err = new BigInteger(0);
-    var pathStr = path?.ToVerbatimString(false) ?? string.Empty;
+    if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     if (string.IsNullOrEmpty(pathStr)) {
       err = new BigInteger(ENOENT);
       return;
@@ -2405,44 +2668,29 @@ namespace BenchIO {
       if (ok) {
         return Results.Result<Dafny.ISequence<Dafny.Rune>, BenchWorld._IIOError>.create_Ok(target);
       }
-      if (errCode == Errno.ENOENT) {
-        return Results.Result<Dafny.ISequence<Dafny.Rune>, BenchWorld._IIOError>.create_Err(BenchWorld.IOError.create_NoSuchFile());
-      }
-      if (errCode == Errno.EACCES) {
-        return Results.Result<Dafny.ISequence<Dafny.Rune>, BenchWorld._IIOError>.create_Err(BenchWorld.IOError.create_PermissionDenied());
-      }
-      if (errCode == Errno.ENOTDIR) {
-        return Results.Result<Dafny.ISequence<Dafny.Rune>, BenchWorld._IIOError>.create_Err(BenchWorld.IOError.create_NotDirectory());
-      }
-      if (errCode == Errno.EINVAL || errCode == Errno.ELOOP) {
-        return Results.Result<Dafny.ISequence<Dafny.Rune>, BenchWorld._IIOError>.create_Err(BenchWorld.IOError.create_InvalidPath());
-      }
       return Results.Result<Dafny.ISequence<Dafny.Rune>, BenchWorld._IIOError>.create_Err(
-        BenchWorld.IOError.create_Other(IOExtern.ErrnoMessage(errCode))
+        BenchWorld.IOError.create_NativeFailure(errCode, IOExtern.GetCLocaleErrnoText(errCode))
       );
     }
 
     private void NativeReadStdin(
-        BenchWorld._IStreamErrorPolicy policy,
-        out ISequence<Dafny.Rune> data,
+          out ISequence<Dafny.Rune> data,
         out BigInteger err) {
-      IOExtern.ReadStdin(policy, out data, out err);
+      IOExtern.ReadStdin(out data, out err);
     }
 
     private void NativeWriteStdout(
         Dafny.ISequence<Dafny.Rune> b,
-        BenchWorld._IStreamErrorPolicy policy,
-        out BigInteger committed,
+          out BigInteger committed,
         out BigInteger err) {
-      IOExtern.WriteStdout(b, policy, out committed, out err);
+      IOExtern.WriteStdout(b, out committed, out err);
     }
 
     private void NativeWriteStderr(
         Dafny.ISequence<Dafny.Rune> b,
-        BenchWorld._IStreamErrorPolicy policy,
-        out BigInteger committed,
+          out BigInteger committed,
         out BigInteger err) {
-      IOExtern.WriteStderr(b, policy, out committed, out err);
+      IOExtern.WriteStderr(b, out committed, out err);
     }
 
     public Dafny.ISequence<Dafny.Rune> GetCLocaleErrnoText(BigInteger err) {
@@ -2457,13 +2705,6 @@ namespace BenchIO {
       return IOExtern.QuoteArgument(value);
     }
 
-    public Dafny.ISequence<Dafny.Rune> GetCwd() {
-      IOExtern.GetCurrentDirectory(out var ok, out var value);
-      if (ok) {
-        return value;
-      }
-      return Sequence<Dafny.Rune>.UnicodeFromString(".");
-    }
 
     public Results._IResult<Dafny.ISequence<Dafny.Rune>, BenchWorld._IIOError> GetEnv(Dafny.ISequence<Dafny.Rune> key) {
       IOExtern.GetEnv(key, out var ok, out var value);
@@ -2629,6 +2870,45 @@ namespace BenchIO {
       IOExtern.Sync(target, mode, out ok, out err);
     }
 
+    public Results._IResult<Dafny.ISequence<Dafny.Rune>, BenchWorld._IIOError> ReadLinkAtCwd(Dafny.ISequence<Dafny.Rune> path) {
+      return ReadLink(path);
+    }
+
+    private void NativeGetFileStatusAtDir(BigInteger parent, Dafny.ISequence<Dafny.Rune> path, bool followSymlink, out bool ok, out BenchWorld._IFileStatus status, out BigInteger err) {
+      var response = IOExtern.DirectoryStatusAtDir(parent, path, followSymlink);
+      err = response.dtor_err;
+      ok = err == BigInteger.Zero;
+      status = response.dtor_status;
+    }
+
+    private void NativeSetFileModeAtDir(BigInteger parent, Dafny.ISequence<Dafny.Rune> path, bool followSymlink, uint mode, out bool ok, out BigInteger err) {
+      var response = IOExtern.DirectorySetModeAtDir(parent, path, followSymlink, mode);
+      err = response.dtor_err;
+      ok = err == BigInteger.Zero;
+    }
+
+    private void NativeOpenDirAtDir(BigInteger parent, Dafny.ISequence<Dafny.Rune> path, bool includeDots, out bool ok, out BigInteger handle, out BigInteger err) {
+      var response = IOExtern.DirectoryOpenAtDir(parent, path, includeDots);
+      err = response.dtor_err;
+      ok = err == BigInteger.Zero;
+      handle = response.dtor_handle;
+    }
+
+    private void NativeGetFileStatusAtCwd(Dafny.ISequence<Dafny.Rune> path, bool followSymlink, out bool ok, out BenchWorld._IFileStatus status, out BigInteger err) {
+      IOExtern.GetFileStatus(path, followSymlink, out ok, out status, out err);
+    }
+
+    private void NativeSetFileModeAtCwd(Dafny.ISequence<Dafny.Rune> path, bool followSymlink, uint mode, out bool ok, out BigInteger err) {
+      IOExtern.SetFileMode(path, followSymlink, mode, out ok, out err);
+    }
+
+    private void NativeOpenDirAtCwd(Dafny.ISequence<Dafny.Rune> path, bool includeDots, out bool ok, out BigInteger handle, out BigInteger err) {
+      var response = IOExtern.DirectoryOpenAtCwd(path, includeDots);
+      err = response.dtor_err;
+      ok = err == BigInteger.Zero;
+      handle = response.dtor_handle;
+    }
+
     private void NativeGetFileStatus(Dafny.ISequence<Dafny.Rune> path, bool followSymlink, out bool ok, out BenchWorld._IFileStatus status, out BigInteger err) {
       IOExtern.GetFileStatus(path, followSymlink, out ok, out status, out err);
     }
@@ -2667,6 +2947,14 @@ namespace BenchIO {
       IOExtern.OpenDir(path, includeDots, out ok, out handle, out err);
     }
 
+    private void NativeGetOpenDirectoryCapabilityStatus(BigInteger handle,
+        out bool ok, out BenchWorld._IFileStatus status, out BigInteger err) {
+      var response = IOExtern.DirectoryOpenedStatus(handle);
+      err = response.dtor_err;
+      ok = err == BigInteger.Zero;
+      status = response.dtor_status;
+    }
+
     private void NativeGetOpenDirectoryStatus(BigInteger handle, out bool ok, out BenchWorld._IFileStatus status, out BigInteger err) {
       IOExtern.GetOpenDirectoryStatus(handle, out ok, out status, out err);
     }
@@ -2684,12 +2972,53 @@ namespace BenchIO {
       IOExtern.ReadDir(handle, out hasMore, out name, out kind, out inode, out err);
     }
 
-    public void CloseDir(BigInteger handle) {
-      IOExtern.CloseDir(handle);
+    private void NativeCloseDir(BigInteger handle, out bool ok, out BigInteger err) {
+      IOExtern.CloseDir(handle, out ok, out err);
     }
 
     private void NativeRenamePath(Dafny.ISequence<Dafny.Rune> source, Dafny.ISequence<Dafny.Rune> target, out bool ok, out BigInteger err) {
       IOExtern.RenamePath(source, target, out ok, out err);
     }
+    private BenchWorld._IDirectoryResponse NativeGetCwd() {
+      return IOExtern.DirectoryGetCwd();
+    }
+
+    private BenchWorld._IDirectoryResponse NativeGetCwdDirectoryIdentity() {
+      return IOExtern.DirectoryCurrentStatus();
+    }
+
+    private BenchWorld._IDirectoryResponse NativeOpenParentDirectory() {
+      return IOExtern.DirectoryOpenParent();
+    }
+
+    private BenchWorld._IDirectoryResponse NativeGetDirectoryDescriptor(BigInteger handle) {
+      return IOExtern.DirectoryGetDescriptor(handle);
+    }
+
+    private BenchWorld._IDirectoryResponse NativeFchdirDirectory(BigInteger fd) {
+      return IOExtern.DirectoryFchdir(fd);
+    }
+
+    private BenchWorld._IDirectoryResponse NativeChdirParent() {
+      return IOExtern.DirectoryChdirParent();
+    }
+
+    private BenchWorld._IDirectoryResponse NativeFstatDirectory(BigInteger fd) {
+      return IOExtern.DirectoryFstat(fd);
+    }
+
+    private BenchWorld._IDirectoryResponse NativeReadDirectoryCapability(BigInteger handle) {
+      return IOExtern.DirectoryReadNext(handle);
+    }
+
+    private BenchWorld._IDirectoryResponse NativeLstatCwdEntry(Dafny.ISequence<Dafny.Rune> name) {
+      return IOExtern.DirectoryEntryLstat(name);
+    }
+
+    private BenchWorld._IDirectoryResponse NativeCloseDirectoryCapability(BigInteger handle) {
+      return IOExtern.DirectoryClose(handle);
+    }
+
+
   }
 }

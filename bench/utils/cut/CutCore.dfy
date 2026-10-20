@@ -5,6 +5,8 @@ include "CutSchema.dfy"
 include "CutSpec.dfy"
 
 module CutCore {
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -232,19 +234,19 @@ module CutCore {
   {
     match result
     case Ok(data) => CutData(cmd.selection, cmd.outputDelimiter, cmd.zeroTerminated, data)
-    case Err(_) => []
+    case Err(error) => if error.StreamFailure? then CutData(cmd.selection, cmd.outputDelimiter, cmd.zeroTerminated, error.partial) else []
   } by method {
     match result
     case Ok(data) =>
       return CutData(cmd.selection, cmd.outputDelimiter, cmd.zeroTerminated, data);
-    case Err(_) =>
-      return [];
+    case Err(error) =>
+      return if error.StreamFailure? then CutData(cmd.selection, cmd.outputDelimiter, cmd.zeroTerminated, error.partial) else [];
   }
 
   function ErrorPiece(input: CutSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
-    case Stdin => []
+    case Stdin => if result.Err? then Spec.ErrorMessage("-", result.e) else []
     case File(path) =>
       match result
       case Ok(_) => []
@@ -252,7 +254,7 @@ module CutCore {
   } by method {
     match input
     case Stdin =>
-      return [];
+      return if result.Err? then Spec.ErrorMessage("-", result.e) else [];
     case File(path) =>
       match result
       case Ok(_) =>
@@ -264,7 +266,7 @@ module CutCore {
   function HadErrorPiece(input: CutSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
   {
     match input
-    case Stdin => false
+    case Stdin => result.Err?
     case File(_) =>
       match result
       case Ok(_) => false
@@ -272,7 +274,7 @@ module CutCore {
   } by method {
     match input
     case Stdin =>
-      return false;
+      return result.Err?;
     case File(_) =>
       return result.Err?;
   }
@@ -821,6 +823,25 @@ module CutCore {
     }
   }
 
+  lemma SelectionFragmentMatches(
+    command: CutSchema.CutCmdRaw, record: BenchWorld.Bytes, k: nat
+  )
+    requires k < |SelectionScanIndices(command.selection, record, 1)|
+    requires k < |SelectionScanFragments(command, record, 1, false)|
+    requires SelectionScanIndices(command.selection, record, 1)[k] < |record|
+    ensures SelectionScanFragments(command, record, 1, false)[k] ==
+      (if k > 0 && Spec.DelimiterBeforeSelected(command,
+        SelectionScanIndices(command.selection, record, 1)[k] + 1)
+       then Spec.OutputDelimiterBytes(command.outputDelimiter) else []) +
+      [record[SelectionScanIndices(command.selection, record, 1)[k]]]
+  {
+    SelectionScanSelectedIndexSequence(command.selection, record);
+    SelectionScanFragmentsCorrespond(command, record, 1, false);
+    reveal Spec.SelectedIndexSequence();
+    assert SelectionScanIndices(command.selection, record, 1)[k] < |record|;
+    SelectionScanFragmentAt(command, record, 1, false, k);
+  }
+
   lemma SelectRecordSatisfiesRelation(
     command: CutSchema.CutCmdRaw,
     record: BenchWorld.Bytes
@@ -867,12 +888,8 @@ module CutCore {
                    else []) +
                   [record[indices[k]]]
         {
-          assert k < |fragments|;
-          reveal Spec.SelectedIndexSequence();
           assert indices[k] < |record|;
-          SelectionScanFragmentAt(
-            command, record, 1, false, k
-          );
+          SelectionFragmentMatches(command, record, k);
         }
       }
       assert exists witnessFragments: seq<BenchWorld.Bytes> ::
@@ -1243,6 +1260,27 @@ module CutCore {
     }
   }
 
+  ghost function PrefixStdinCore(command: CutSchema.CutCmdRaw, before: BenchWorld.Bytes,
+    count: nat, observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
+    requires count <= |command.inputs|
+    decreases count
+  {
+    if count == 0 then before else
+      var previous := PrefixStdinCore(command, before, count - 1, observations);
+      if command.inputs[count - 1].Stdin? then IOContract.ObservedReadStdinRemainingFields(previous, observations)
+      else previous
+  }
+
+  lemma PrefixStdinStep(command: CutSchema.CutCmdRaw, before: BenchWorld.Bytes,
+    count: nat, observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
+    requires count < |command.inputs|
+    ensures PrefixStdinCore(command, before, count + 1, observations) ==
+      (if command.inputs[count].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+        PrefixStdinCore(command, before, count, observations), observations)
+       else PrefixStdinCore(command, before, count, observations))
+  {
+  }
+
   ghost predicate InputReadCore(
     command: CutSchema.CutCmdRaw,
     preFs: BenchWorld.FileSystem,
@@ -1255,11 +1293,7 @@ module CutCore {
   {
     match command.inputs[index]
     case Stdin =>
-      result == Result.Ok(
-        if exists j :: 0 <= j < index && command.inputs[j].Stdin?
-        then []
-        else preStdin
-      )
+      result == IOContract.ObservedReadStdinResultFields(PrefixStdinCore(command, preStdin, index, preStreams), preStreams)
     case File(path) =>
       result == IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
   }
@@ -1285,22 +1319,22 @@ module CutCore {
                        stderrFragments[i] == ErrorPiece(command.inputs[i], readResults[i])
   }
 
-  twostate predicate CoreSummary(
+  twostate predicate PreparedSummary(
     raw: CutSchema.CutCmdRaw,
     io: BenchIO.IO,
     exit: int
-  )
-    reads io.Footprint()
+  , plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     if raw.mode == CutSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == Spec.HelpText() &&
+      plannedStderr == [] &&
       exit == 0
     else if raw.mode == CutSchema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == Spec.VersionText() &&
+      plannedStderr == [] &&
       exit == 0
     else
       exists readResults: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
@@ -1312,49 +1346,48 @@ module CutCore {
           old(io.trustedStreams())
         ) &&
         io.stdin() ==
-        (if exists i :: 0 <= i < |raw.inputs| && raw.inputs[i].Stdin?
-         then []
-         else old(io.stdin())) &&
-        io.stdout() == old(io.stdout()) + JoinFragments(stdoutFragments) &&
-        io.stderr() == old(io.stderr()) + JoinFragments(stderrFragments) &&
+        PrefixStdinCore(raw, old(io.stdin()), |raw.inputs|, old(io.trustedStreams())) &&
+        plannedStdout == JoinFragments(stdoutFragments) &&
+        plannedStderr == JoinFragments(stderrFragments) &&
         exit ==
-        (if (exists i: nat | i < |raw.inputs| :: raw.inputs[i].File? && readResults[i].Err?)
+        (if (exists i: nat | i < |raw.inputs| :: readResults[i].Err?)
          then 1
          else 0)
   }
 
-  method {:isolate_assertions} RunCore(
+  method {:isolate_assertions} Prepare(
     raw: CutSchema.CutCmdRaw, io: BenchIO.IO
-  ) returns (exit: int)
-    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  ) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, plannedOut, plannedErr)
     decreases *
   {
+    plannedOut := [];
+    plannedErr := [];
+
     ghost var preFs := io.fs();
     ghost var preStdin := io.stdin();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
 
     if raw.mode == CutSchema.ModeHelp {
       var help := Spec.HelpText();
-      var _ := io.WriteStdout(help, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + help;
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stderr() == preStderr;
-      assert CoreSummary(raw, io, exit) by {
-        reveal CoreSummary();
+      assert plannedErr == [];
+      assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by {
+        reveal PreparedSummary();
       }
       return;
     }
 
     if raw.mode == CutSchema.ModeVersion {
       var version := Spec.VersionText();
-      var _ := io.WriteStdout(version, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + version;
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stderr() == preStderr;
-      assert CoreSummary(raw, io, exit) by {
-        reveal CoreSummary();
+      assert plannedErr == [];
+      assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by {
+        reveal PreparedSummary();
       }
       return;
     }
@@ -1371,17 +1404,15 @@ module CutCore {
     var i := 0;
     while i < |raw.inputs|
       invariant 0 <= i <= |raw.inputs|
-      invariant io.stdout() == preStdout
-      invariant io.stderr() == preStderr
+      invariant plannedOut == []
+      invariant plannedErr == []
       invariant |readResults| == i
       invariant |stdoutFragments| == i
       invariant |stderrFragments| == i
       invariant out == JoinFragments(stdoutFragments)
       invariant err == JoinFragments(stderrFragments)
       invariant io.stdin() ==
-                (if exists j :: 0 <= j < i && raw.inputs[j].Stdin?
-                 then []
-                 else preStdin)
+                PrefixStdinCore(raw, preStdin, i, old(io.trustedStreams()))
       invariant InputTraceCore(
                   raw, preFs, preStdin, i,
                   readResults, stdoutFragments, stderrFragments,
@@ -1389,7 +1420,7 @@ module CutCore {
                 )
       invariant hadError ==
                 (exists j: nat :: j < i &&
-                                  raw.inputs[j].File? && readResults[j].Err?)
+                                  readResults[j].Err?)
       decreases |raw.inputs| - i
     {
       var input := raw.inputs[i];
@@ -1398,9 +1429,7 @@ module CutCore {
       match input {
         case Stdin =>
           ghost var beforeStdin := io.stdin();
-          var data :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-          readResult := Result.Ok(data);
-          assert IOContract.ReadStdinAllFields(beforeStdin, io.stdin(), data);
+          readResult := io.ReadStdin();
           reveal InputReadCore();
         case File(path) =>
           readResult := io.ReadFile(path);
@@ -1428,6 +1457,7 @@ module CutCore {
           readResults, stdoutFragments, stderrFragments,
           old(io.trustedStreams())
         ) by {
+        hide *;
         reveal InputTraceCore();
         assert forall j: nat :: j < i + 1 ==>
                                   InputReadCore(raw, preFs, preStdin, j, readResults[j], old(io.trustedStreams())) &&
@@ -1441,55 +1471,102 @@ module CutCore {
               stderrFragments[j] ==
               ErrorPiece(raw.inputs[j], readResults[j])
           {
+            if j == i {
+              assert readResults[j] == readResult;
+              assert stdoutFragments[j] == outPiece;
+              assert stderrFragments[j] == errPiece;
+            } else {
+              assert j < i;
+            }
           }
         }
       }
-      assert io.stdin() ==
-             (if exists j :: 0 <= j < i + 1 && raw.inputs[j].Stdin?
-              then []
-              else preStdin) by {
-        if input.Stdin? {
-          assert raw.inputs[i].Stdin?;
-          assert exists j :: 0 <= j < i + 1 && raw.inputs[j].Stdin?;
-          assert io.stdin() == [];
-        } else if exists j ::
-            0 <= j < i + 1 && raw.inputs[j].Stdin? {
-          var j :| 0 <= j < i + 1 && raw.inputs[j].Stdin?;
-          assert j != i;
-          assert j < i;
-        }
-      }
+      PrefixStdinStep(raw, preStdin, i, old(io.trustedStreams()));
+      assert io.stdin() == PrefixStdinCore(raw, preStdin, i + 1, old(io.trustedStreams()));
       i := i + 1;
     }
 
-    var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
-    assert io.stdout() == preStdout + out;
-    var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
-    assert io.stderr() == preStderr + err;
+    plannedOut := out;
+    assert plannedOut == out by { hide *; }
+    plannedErr := err;
+    assert plannedErr == err by { hide *; }
     exit := if hadError then 1 else 0;
-    assert CoreSummary(raw, io, exit) by {
-      reveal CoreSummary();
+    assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by {
+      hide *;
+      reveal PreparedSummary();
       assert preFs == old(io.fs());
       assert preStdin == old(io.stdin());
       assert exists witnessReads: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
           outFragments: seq<BenchWorld.Bytes>,
           errFragments: seq<BenchWorld.Bytes> ::
+          |witnessReads| == |raw.inputs| &&
           InputTraceCore(
             raw, old(io.fs()), old(io.stdin()), |raw.inputs|,
             witnessReads, outFragments, errFragments,
             old(io.trustedStreams())
           ) &&
           io.stdin() ==
-          (if exists j ::
-                0 <= j < |raw.inputs| && raw.inputs[j].Stdin?
-           then []
-           else old(io.stdin())) &&
-          io.stdout() == old(io.stdout()) + JoinFragments(outFragments) &&
-          io.stderr() == old(io.stderr()) + JoinFragments(errFragments) &&
+          PrefixStdinCore(raw, old(io.stdin()), |raw.inputs|, old(io.trustedStreams())) &&
+          plannedOut == JoinFragments(outFragments) &&
+          plannedErr == JoinFragments(errFragments) &&
           exit ==
-          (if (exists j: nat | j < |raw.inputs| :: raw.inputs[j].File? && witnessReads[j].Err?)
+          (if (exists j: nat | j < |raw.inputs| :: witnessReads[j].Err?)
            then 1
            else 0);
     }
+  }
+
+  twostate predicate CoreSummary(raw: CutSchema.CutCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: CutSchema.CutCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, out, diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, out, diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

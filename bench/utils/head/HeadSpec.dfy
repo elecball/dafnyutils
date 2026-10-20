@@ -6,6 +6,9 @@ include "HeadSchema.dfy"
 include "HeadRecordSpec.dfy"
 
 module HeadSpec {
+  import StreamContract = IOContract
+  import StreamUtf8 = Utf8Semantics
+
   import Result = Results
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -72,7 +75,9 @@ module HeadSpec {
 
   function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
-    if IOContract.IOErrorIsReadFailure(err) then
+    if err.ReadFailure? && err.readStage == BenchWorld.CloseFailed then
+      Utf8.Encode("head: failed to close " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " + ErrnoText(err) + "\n")
+    else if IOContract.IOErrorIsReadFailure(err) then
       Utf8.Encode("head: error reading " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " + ErrnoText(err) + "\n")
     else
       Utf8.Encode("head: cannot open " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) + " for reading: " + ErrnoText(err) + "\n")
@@ -158,11 +163,7 @@ module HeadSpec {
   {
     match cmd.inputs[i]
     case Stdin(_) =>
-      result == Result.Ok(
-        if exists j: nat :: j < i && IsStdinInput(cmd.inputs[j])
-        then []
-        else preStdin
-      )
+      result == IOContract.ObservedReadStdinResultFields(preStdin, preStreams)
     case File(path) =>
       result == IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
   }
@@ -218,6 +219,23 @@ module HeadSpec {
       []
   }
 
+  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  {
+    "head: error reading 'standard input': " + Utf8.Encode(ErrnoText(error)) + "\n"
+  }
+
+  ghost predicate StdinTraceRelation(
+    cmd: HeadSchema.HeadCmd, before: BenchWorld.Bytes, after: BenchWorld.Bytes,
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    states: seq<BenchWorld.Bytes>
+  )
+  {
+    |states| == |cmd.inputs| + 1 && states[0] == before && states[|cmd.inputs|] == after &&
+    forall i: nat | i < |cmd.inputs| ::
+      states[i + 1] == (if cmd.inputs[i].Stdin? then
+        IOContract.ObservedReadStdinRemainingFields(states[i], observations) else states[i])
+  }
+
   ghost predicate InputObservationRelation(
     cmd: HeadSchema.HeadCmd,
     preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
@@ -243,7 +261,13 @@ module HeadSpec {
             errorOutput == [] &&
             successful &&
             !failed
-        case Err(_) => false)
+        case Err(error) =>
+          if error.StreamFailure? then
+            exists selected: BenchWorld.Bytes ::
+              DataSelectionRelation(cmd, error.partial, selected) &&
+              output == HeaderForInput(cmd, cmd.inputs[i], printedHeaders) + selected &&
+              errorOutput == StdinReadErrorMessage(error) && successful && failed
+          else output == [] && errorOutput == StdinReadErrorMessage(error) && !successful && failed)
      case File(path) =>
        (match result
         case Ok(data) =>
@@ -254,10 +278,16 @@ module HeadSpec {
             successful &&
             !failed
         case Err(err) =>
-          output == [] &&
-          errorOutput == ErrorMessage(path, err) &&
-          !successful &&
-          failed))
+          if err.ReadFailure? && err.readStage == BenchWorld.CloseFailed then
+            exists selected: BenchWorld.Bytes ::
+              DataSelectionRelation(cmd, err.partial, selected) &&
+              output == HeaderForInput(cmd, cmd.inputs[i], printedHeaders) + selected &&
+              errorOutput == ErrorMessage(path, err) && successful && failed
+          else
+            output == [] &&
+            errorOutput == ErrorMessage(path, err) &&
+            !successful &&
+            failed))
   }
 
   ghost predicate FragmentsConcatenate(
@@ -293,6 +323,8 @@ module HeadSpec {
     errorCuts: seq<nat>
   )
   {
+    exists stdinStates: seq<BenchWorld.Bytes> ::
+    StdinTraceRelation(cmd, preStdin, postStdin, preStreams, stdinStates) &&
     |results| == |cmd.inputs| &&
     |outputFragments| == |cmd.inputs| &&
     |errorFragments| == |cmd.inputs| &&
@@ -300,17 +332,13 @@ module HeadSpec {
     |failed| == |cmd.inputs| &&
     (forall i: nat | i < |cmd.inputs| ::
        InputObservationRelation(
-         cmd, preFs, preStreams, preStdin, i, results[i],
+         cmd, preFs, preStreams, stdinStates[i], i, results[i],
          |set j: nat | j < i && successful[j]|,
          outputFragments[i], errorFragments[i], successful[i], failed[i]
        )) &&
     FragmentsConcatenate(outputFragments, output, outputCuts) &&
     FragmentsConcatenate(errorFragments, errorOutput, errorCuts) &&
-    hadError == (true in failed) &&
-    postStdin ==
-    (if exists i: nat :: i < |cmd.inputs| && IsStdinInput(cmd.inputs[i])
-     then []
-     else preStdin)
+    hadError == (true in failed)
   }
 
   opaque ghost predicate InputTraceRelation(
@@ -337,24 +365,24 @@ module HeadSpec {
       )
   }
 
-  twostate predicate Spec(raw: HeadSchema.HeadCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSpec(raw: HeadSchema.HeadCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := Command(raw);
     if cmd.mode == HeadSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + HelpText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + HelpText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == HeadSchema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + VersionText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + VersionText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == HeadSchema.ModeInvalidCount then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue) &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue) &&
       exit == 1
     else
       exists output: BenchWorld.Bytes,
@@ -364,8 +392,63 @@ module HeadSpec {
           cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()), io.stdin(),
           output, errorOutput, hadError
         ) &&
-        io.stdout() == old(io.stdout()) + output &&
-        io.stderr() == old(io.stderr()) + errorOutput &&
+        plannedStdout == old(io.stdout()) + output &&
+        plannedStderr == old(io.stderr()) + errorOutput &&
         exit == (if hadError then 1 else 0)
+  }
+
+  function Emits(raw: HeadSchema.HeadCmdRaw): bool
+  {
+    true
+  }
+
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode("head: write error: " + message + "\n")
+  }
+
+  ghost predicate EmitFields(
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    beforeStdout: BenchWorld.Bytes, beforeStderr: BenchWorld.Bytes,
+    afterStdout: BenchWorld.Bytes, afterStderr: BenchWorld.Bytes,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
+      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+    stdoutResult.StreamWriteResult? &&
+    var errors := diagnostics + (if stdoutResult.err == 0 then [] else
+      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+    var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
+      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+    stderrResult.StreamWriteResult? &&
+    (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
+      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+    (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
+      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+    exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
+  }
+
+  twostate predicate Emission(raw: HeadSchema.HeadCmdRaw, io: BenchIO.IO,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    if Emits(raw) then
+      EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+    else
+      io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
+      exit == normalExit
+  }
+
+  twostate predicate Spec(raw: HeadSchema.HeadCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

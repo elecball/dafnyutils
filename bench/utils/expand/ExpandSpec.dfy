@@ -5,6 +5,9 @@ include "../../core/StringEscaping.dfy"
 include "ExpandSchema.dfy"
 
 module ExpandSpec {
+  import StreamContract = IOContract
+  import StreamUtf8 = Utf8Semantics
+
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -745,7 +748,8 @@ module ExpandSpec {
   {
     match input
     case Stdin =>
-      result == Result.Ok(stdinBefore) && stdinAfter == []
+      result == IOContract.ObservedReadStdinResultFields(stdinBefore, preStreams) &&
+      stdinAfter == IOContract.ObservedReadStdinRemainingFields(stdinBefore, preStreams)
     case File(path) =>
       result == IOContract.ObservedReadFileResultFields(preFs, preStreams, path) &&
       stdinAfter == stdinBefore
@@ -767,8 +771,13 @@ module ExpandSpec {
         cmd.tabs, cmd.initialOnly, data, column, leading,
         output, nextColumn, nextLeading
       )
-    case Err(_) =>
-      output == [] && nextColumn == column && nextLeading == leading
+    case Err(error) =>
+      if error.StreamFailure? then
+      DataExpansionRelation(
+        cmd.tabs, cmd.initialOnly, error.partial, column, leading,
+        output, nextColumn, nextLeading
+      )
+      else output == [] && nextColumn == column && nextLeading == leading
   }
 
   ghost predicate ErrorPieceRelation(
@@ -780,7 +789,8 @@ module ExpandSpec {
   {
     match input
     case Stdin =>
-      output == [] && !hadError
+      output == (if result.Err? then ErrorMessage("-", result.e) else []) &&
+      hadError == result.Err?
     case File(path) =>
       match result
       case Ok(_) => output == [] && !hadError
@@ -889,26 +899,25 @@ module ExpandSpec {
       )
   }
 
-  twostate predicate Spec(raw: Schema.ExpandCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSpec(raw: Schema.ExpandCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     exists cmd: Schema.ExpandCmd ::
       CommandRelation(raw, cmd) &&
       if cmd.mode == Schema.ModeHelp then
         io.stdin() == old(io.stdin()) &&
-        io.stdout() == old(io.stdout()) + HelpText() &&
-        io.stderr() == old(io.stderr()) &&
+        plannedStdout == HelpText() &&
+        plannedStderr == [] &&
         exit == 0
       else if cmd.mode == Schema.ModeVersion then
         io.stdin() == old(io.stdin()) &&
-        io.stdout() == old(io.stdout()) + VersionText() &&
-        io.stderr() == old(io.stderr()) &&
+        plannedStdout == VersionText() &&
+        plannedStderr == [] &&
         exit == 0
       else if cmd.mode == Schema.ModeInvalidTabs then
         io.stdin() == old(io.stdin()) &&
-        io.stdout() == old(io.stdout()) &&
-        io.stderr() == old(io.stderr()) +
-        InvalidTabsMessage(cmd.invalidTabsValue) &&
+        plannedStdout == [] &&
+        plannedStderr == InvalidTabsMessage(cmd.invalidTabsValue) &&
         exit == 1
       else
         exists output: BenchWorld.Bytes,
@@ -918,8 +927,63 @@ module ExpandSpec {
             output, errorOutput, hadError,
             old(io.trustedStreams())
           ) &&
-          io.stdout() == old(io.stdout()) + output &&
-          io.stderr() == old(io.stderr()) + errorOutput &&
+          plannedStdout == output &&
+          plannedStderr == errorOutput &&
           exit == (if hadError then 1 else 0)
+  }
+
+  function Emits(raw: Schema.ExpandCmdRaw): bool
+  {
+    true
+  }
+
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode("expand: write error: " + message + "\n")
+  }
+
+  ghost predicate EmitFields(
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    beforeStdout: BenchWorld.Bytes, beforeStderr: BenchWorld.Bytes,
+    afterStdout: BenchWorld.Bytes, afterStderr: BenchWorld.Bytes,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
+      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+    stdoutResult.StreamWriteResult? &&
+    var errors := diagnostics + (if stdoutResult.err == 0 then [] else
+      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+    var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
+      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+    stderrResult.StreamWriteResult? &&
+    (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
+      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+    (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
+      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+    exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
+  }
+
+  twostate predicate Emission(raw: Schema.ExpandCmdRaw, io: BenchIO.IO,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    if Emits(raw) then
+      EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+    else
+      io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
+      exit == normalExit
+  }
+
+  twostate predicate Spec(raw: Schema.ExpandCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit,
+        out, diagnostics) &&
+      Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

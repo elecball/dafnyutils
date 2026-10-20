@@ -60,7 +60,7 @@ module False {
     }
 
     method RunCore(raw: FalseSchema.FalseCmdRaw, io: BenchIO.IO) returns (exit: int)
-      modifies io.stdoutRegion
+      modifies io.stdoutRegion, io.stderrRegion
       ensures FS.Spec(raw, io, exit)
       decreases *
     {

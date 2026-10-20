@@ -5,6 +5,8 @@ include "PrintenvSchema.dfy"
 include "PrintenvSpec.dfy"
 
 module PrintenvCore {
+  import StreamContract = IOContract
+
   import BenchIO
   import Schema = PrintenvSchema
   import BenchWorld
@@ -165,48 +167,53 @@ module PrintenvCore {
       else 0;
   }
 
-  twostate predicate CoreSummary(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.envRegion, io.stdoutRegion, io.stderrRegion
+  twostate predicate PreparedSummary(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+
   {
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeHelp then
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.HelpTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.VersionTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else
       exists entries: seq<string> ::
         IOContract.GetEnvironmentContractFields(old(io.env()), entries) &&
-        io.stdout() == old(io.stdout()) + Output(cmd, entries) &&
-        io.stderr() == old(io.stderr()) &&
+        plannedStdout == old(io.stdout()) + Output(cmd, entries) &&
+        plannedStderr == old(io.stderr()) &&
         exit == ExitStatus(cmd, entries)
   }
 
-  method RunCore(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.stdoutRegion
-    ensures CoreSummary(raw, io, exit)
+  method Prepare(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr)
     decreases *
   {
+    plannedOut := [];
+    plannedErr := [];
+    ghost var initialStdout := io.stdout();
+    ghost var initialStderr := io.stderr();
+
     ghost var preEnv := io.env();
-    ghost var preStdout := io.stdout();
+    ghost var preStdout := (initialStdout + plannedOut);
     var cmd := Schema.Command(raw);
 
     if cmd.mode == Schema.ModeHelp {
       var out := Spec.HelpTextSpec();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + out;
       exit := 0;
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
       return;
     }
 
     if cmd.mode == Schema.ModeVersion {
       var out := Spec.VersionTextSpec();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + out;
       exit := 0;
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
       return;
     }
 
@@ -214,9 +221,63 @@ module PrintenvCore {
     assert IOContract.GetEnvironmentContractFields(preEnv, entries);
     var out := Output(cmd, entries);
     var status := ExitStatus(cmd, entries);
-    var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+    plannedOut := plannedOut + out;
     exit := status;
-    assert io.stdout() == preStdout + out;
-    assert CoreSummary(raw, io, exit);
+    assert (initialStdout + plannedOut) == preStdout + out;
+    assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
+  }
+
+  twostate predicate CoreSummary(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then Spec.StreamFailureExit() else normalExit;
+  }
+
+  method RunCore(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

@@ -1,9 +1,12 @@
+include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "ExprSchema.dfy"
 include "ExprSpec.dfy"
 
 module ExprCore {
+  import StreamContract = IOContract
+
   import BenchIO
   import BenchWorld
   import Utf8 = Utf8Semantics
@@ -506,13 +509,66 @@ module ExprCore {
           (Utf8.Encode(parsed.1) + ['\n'], [], if ValueIsTrue(parsed.1) then 0 else 1)
   }
 
-  twostate predicate CoreSummary(raw: ExprSchema.ExprCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSummary(raw: ExprSchema.ExprCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+
   {
     var result := EvaluateArgs(raw.args);
-    io.stdout() == old(io.stdout()) + result.0 &&
-    io.stderr() == old(io.stderr()) + result.1 &&
+    plannedStdout == old(io.stdout()) + result.0 &&
+    plannedStderr == old(io.stderr()) + result.1 &&
     exit == result.2
+  }
+
+  method Prepare(raw: ExprSchema.ExprCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr)
+    decreases *
+  {
+    plannedOut := [];
+    plannedErr := [];
+    ghost var initialStdout := io.stdout();
+    ghost var initialStderr := io.stderr();
+
+    var result := EvaluateArgs(raw.args);
+    plannedOut := plannedOut + result.0;
+    plannedErr := plannedErr + result.1;
+    exit := result.2;
+  }
+
+  twostate predicate CoreSummary(raw: ExprSchema.ExprCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then Spec.StreamFailureExit() else normalExit;
   }
 
   method RunCore(raw: ExprSchema.ExprCmdRaw, io: BenchIO.IO) returns (exit: int)
@@ -520,9 +576,15 @@ module ExprCore {
     ensures CoreSummary(raw, io, exit)
     decreases *
   {
-    var result := EvaluateArgs(raw.args);
-    var _ := io.WriteStdout(result.0, BenchWorld.ThrowOnError);
-    var _ := io.WriteStderr(result.1, BenchWorld.ThrowOnError);
-    exit := result.2;
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

@@ -5,6 +5,7 @@ include "ChmodCore.dfy"
 include "ChmodProof.dfy"
 include "ChmodRecursiveSpec.dfy"
 include "ChmodRecursiveCore.dfy"
+include "ChmodRecursiveRuntimeProof.dfy"
 
 module ChmodRecursiveProof {
   import BW = BenchWorld
@@ -454,6 +455,12 @@ module ChmodRecursiveProof {
       )
     decreases Core.VisitSizeCore(visit), 0
   {
+    hide *;
+    reveal Core.EvalVisitCore(), Core.VisitIdentityCore(), Core.VisitSizeCore(), Core.VisitsSizeCore();
+    reveal SpecVisitOfCore(), SpecIdentityOfCore(), SpecTerminalOfCore(), Spec.VisitIdentitySpec();
+    reveal Spec.VisitOutcomeBodySpec(), BaseProof.SpecPathResultOfCore();
+    reveal Core.RecursiveReadStdoutCore(), Core.RecursiveReadStderrCore();
+    reveal Spec.RecursiveReadStdoutSpec(), Spec.RecursiveReadStderrSpec();
     reveal Core.ValidVisitCore;
     var identity := Core.VisitIdentityCore(visit);
     BridgeVisitIdentity(visit);
@@ -569,6 +576,7 @@ module ChmodRecursiveProof {
       ghost var specChildren := SpecVisitsOfCore(children);
       ghost var specTerminal := SpecTerminalOfCore(terminal);
       ghost var specPlan := BaseProof.SpecModePlanOfCore(plan);
+      SpecVisitsShape(children);
       assert exists candidate: BaseSpec.SpecPathResult ::
           Spec.ApplyResolvedSpecRelation(
             cmd,
@@ -623,7 +631,6 @@ module ChmodRecursiveProof {
             entries,
             terminal
           );
-          SpecVisitsShape(children);
           forall j | 0 <= j < |children|
             ensures Spec.VisitMatchesEntrySpec(
                       SpecIdentityOfCore(identity),

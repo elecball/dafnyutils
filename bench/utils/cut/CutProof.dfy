@@ -4,6 +4,7 @@ include "CutCore.dfy"
 include "CutSpec.dfy"
 
 module CutProof {
+  import IOContract
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -25,7 +26,7 @@ module CutProof {
                preStreams
              )
     ensures Spec.InputReadRelation(
-              command, preFs, preStdin, index, result,
+              command, preFs, Core.PrefixStdinCore(command, preStdin, index, preStreams), index, result,
               preStreams
             )
   {
@@ -42,13 +43,15 @@ module CutProof {
               Spec.DataSelectionRelation(
                 command, data, Core.OutputPiece(command, result)
               )
-            case Err(_) =>
-              Core.OutputPiece(command, result) == []
+            case Err(error) =>
+              if error.StreamFailure? then Spec.DataSelectionRelation(command, error.partial, Core.OutputPiece(command, result))
+              else Core.OutputPiece(command, result) == []
   {
     match result
     case Ok(data) =>
       Core.DataSelectionSatisfiesRelation(command, data);
-    case Err(_) =>
+    case Err(error) =>
+      if error.StreamFailure? { Core.DataSelectionSatisfiesRelation(command, error.partial); }
   }
 
   twostate lemma {:isolate_assertions} InputTraceCoreRefines(
@@ -63,6 +66,7 @@ module CutProof {
                readResults, stdoutFragments, stderrFragments,
                old(io.trustedStreams())
              )
+    requires io.stdin() == Core.PrefixStdinCore(command, old(io.stdin()), |command.inputs|, old(io.trustedStreams()))
     ensures Spec.InputTraceRelation(
               command,
               io,
@@ -70,13 +74,21 @@ module CutProof {
               Core.JoinFragments(stdoutFragments),
               Core.JoinFragments(stderrFragments),
               exists i: nat | i < |command.inputs| ::
-                command.inputs[i].File? && readResults[i].Err?
+                readResults[i].Err?
             )
   {
     reveal Core.InputTraceCore();
+    var states := seq(|command.inputs| + 1, i requires 0 <= i <= |command.inputs| => Core.PrefixStdinCore(command, old(io.stdin()), i, old(io.trustedStreams())));
+    forall i: nat | i < |command.inputs|
+      ensures states[i + 1] == (if command.inputs[i].Stdin? then
+        IOContract.ObservedReadStdinRemainingFields(states[i], old(io.trustedStreams())) else states[i])
+    {
+      Core.PrefixStdinStep(command, old(io.stdin()), i, old(io.trustedStreams()));
+    }
+    assert Spec.StdinTraceRelation(command, old(io.stdin()), io.stdin(), old(io.trustedStreams()), states);
     assert forall i: nat :: i < |command.inputs| ==>
                               Spec.InputReadRelation(
-                                command, old(io.fs()), old(io.stdin()), i, readResults[i],
+                                command, old(io.fs()), states[i], i, readResults[i],
                                 old(io.trustedStreams())
                               ) &&
                               match command.inputs[i]
@@ -87,7 +99,9 @@ module CutProof {
                                      command, data, stdoutFragments[i]
                                    ) &&
                                    stderrFragments[i] == []
-                                 case Err(_) => false)
+                                 case Err(error) =>
+               (if error.StreamFailure? then Spec.DataSelectionRelation(command, error.partial, stdoutFragments[i]) else stdoutFragments[i] == []) &&
+               stderrFragments[i] == Spec.ErrorMessage("-", error))
                               case File(path) =>
                                 (match readResults[i]
                                  case Ok(data) =>
@@ -102,7 +116,7 @@ module CutProof {
       forall i: nat | i < |command.inputs|
         ensures
           Spec.InputReadRelation(
-            command, old(io.fs()), old(io.stdin()), i, readResults[i],
+            command, old(io.fs()), states[i], i, readResults[i],
             old(io.trustedStreams())
           ) &&
           match command.inputs[i]
@@ -113,7 +127,9 @@ module CutProof {
                  command, data, stdoutFragments[i]
                ) &&
                stderrFragments[i] == []
-             case Err(_) => false)
+             case Err(error) =>
+               (if error.StreamFailure? then Spec.DataSelectionRelation(command, error.partial, stdoutFragments[i]) else stdoutFragments[i] == []) &&
+               stderrFragments[i] == Spec.ErrorMessage("-", error))
           case File(path) =>
             (match readResults[i]
              case Ok(data) =>
@@ -140,19 +156,32 @@ module CutProof {
 
     Core.FragmentCutsSatisfyRelation(stdoutFragments);
     Core.FragmentCutsSatisfyRelation(stderrFragments);
-    reveal Spec.InputTraceRelation();
+    assert |readResults| == |command.inputs|;
+    assert |stdoutFragments| == |command.inputs|;
+    assert |stderrFragments| == |command.inputs|;
+    assert Spec.FragmentsConcatenate(stdoutFragments, Core.JoinFragments(stdoutFragments), Core.FragmentCuts(stdoutFragments));
+    assert Spec.FragmentsConcatenate(stderrFragments, Core.JoinFragments(stderrFragments), Core.FragmentCuts(stderrFragments));
+    assert Spec.InputTraceWitnessRelation(command, old(io.fs()), old(io.stdin()), io.stdin(), old(io.trustedStreams()), readResults, Core.JoinFragments(stdoutFragments), Core.JoinFragments(stderrFragments), (exists i: nat | i < |command.inputs| :: readResults[i].Err?), states, stdoutFragments, stderrFragments, Core.FragmentCuts(stdoutFragments), Core.FragmentCuts(stderrFragments)) by {
+      hide *;
+      reveal Spec.InputTraceWitnessRelation();
+    }
+    assert Spec.InputTraceRelation(command, io, readResults, Core.JoinFragments(stdoutFragments),
+      Core.JoinFragments(stderrFragments), exists i: nat | i < |command.inputs| :: readResults[i].Err?) by {
+      hide *;
+      reveal Spec.InputTraceRelation();
+    }
   }
 
-  twostate lemma {:isolate_assertions} CoreSummaryImpliesSpec(
+  twostate lemma {:isolate_assertions} PreparedSummaryImpliesPreparedSpec(
     raw: Schema.CutCmdRaw,
     io: BenchIO.IO,
     exit: int
-  )
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  , new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    reveal Core.CoreSummary();
-    reveal Spec.Spec();
+    reveal Core.PreparedSummary();
+    reveal Spec.PreparedSpec();
 
     if raw.mode == Schema.ModeRun {
       ghost var readResults: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
@@ -164,21 +193,30 @@ module CutProof {
           old(io.trustedStreams())
         ) &&
         io.stdin() ==
-        (if exists i ::
-              0 <= i < |raw.inputs| && raw.inputs[i].Stdin?
-         then []
-         else old(io.stdin())) &&
-        io.stdout() ==
-        old(io.stdout()) + Core.JoinFragments(stdoutFragments) &&
-        io.stderr() ==
-        old(io.stderr()) + Core.JoinFragments(stderrFragments) &&
+        Core.PrefixStdinCore(raw, old(io.stdin()), |raw.inputs|, old(io.trustedStreams())) &&
+        plannedStdout ==
+        Core.JoinFragments(stdoutFragments) &&
+        plannedStderr ==
+        Core.JoinFragments(stderrFragments) &&
         exit ==
-        (if (exists i: nat | i < |raw.inputs| :: raw.inputs[i].File? && readResults[i].Err?)
+        (if (exists i: nat | i < |raw.inputs| :: readResults[i].Err?)
          then 1
          else 0);
       InputTraceCoreRefines(
         raw, io, readResults, stdoutFragments, stderrFragments
       );
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.CutCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      out, diagnostics);
   }
 }

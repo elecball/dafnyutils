@@ -51,10 +51,11 @@ module StatSchema {
   function WithStatusObservations(
     cmd: StatCmd,
     ghost observations: BenchWorld.StatusTimeObservations,
-    ghost firstStatus: nat
+    ghost firstStatus: nat,
+    ghost failures: (BenchWorld.NativeFailureRequest) -> int
   ): StatCmd
   {
-    cmd.(statusContext := BenchWorld.BoundStatusObservations(observations, firstStatus))
+    cmd.(statusContext := BenchWorld.BoundStatusObservations(observations, firstStatus, failures))
   }
 
   method Schema() returns (s: CliTypes.CliSchema)

@@ -38,7 +38,7 @@ module MkdirCore {
     ghost var observations := io.trustedStreams();
     ghost var beforeOut := io.stdout();
     ghost var beforeErr := io.stderr();
-    var outResult := io.WriteStdout(output, BW.ReturnError);
+    var outResult := io.WriteStdout(output);
     var outErr := C.ResultErrno(outResult);
     ghost var outObservation := observations(BW.StreamWriteStdout(beforeOut, output));
     assert outObservation.StreamWriteResult? && outObservation.err == outErr;
@@ -49,7 +49,7 @@ module MkdirCore {
     }
     assert finalDiagnostic == diagnostics + (if outObservation.err == 0 then []
       else Spec.WriteErrorText(C.CLocaleErrnoTextResult(outObservation.err)));
-    var errResult := io.WriteStderr(finalDiagnostic, BW.ReturnError);
+    var errResult := io.WriteStderr(finalDiagnostic);
     ghost var errObservation := observations(BW.StreamWriteStderr(beforeErr, finalDiagnostic));
     assert errObservation.StreamWriteResult? && errObservation.err == C.ResultErrno(errResult);
     exit := if creationExit == 0 && outErr == 0 && C.ResultErrno(errResult) == 0 then 0 else 1;

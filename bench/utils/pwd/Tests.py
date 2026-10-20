@@ -27,8 +27,21 @@ BENCH_PWD_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "pwd_bench.dll"
 COREUTILS_PWD = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "pwd")
 PWD_VERIFY_TARGETS = [
     ROOT / "bench" / "utils" / "pwd" / "PwdSchema.dfy",
-    ROOT / "bench" / "utils" / "pwd" / "PwdCore.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdRecoverySpec.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdRecoveryIOProof.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdRecoveryTraceProof.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdRecoveryParentSpec.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdRecoveryCore.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdPhysicalSpec.dfy",
     ROOT / "bench" / "utils" / "pwd" / "PwdProof.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdRuntimeModel.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdLogicalSpec.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdLogicalCore.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdEmissionSpec.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdEmissionCore.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdTextSpec.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdSpec.dfy",
+    ROOT / "bench" / "utils" / "pwd" / "PwdCore.dfy",
     ROOT / "bench" / "utils" / "pwd" / "Pwd.dfy",
 ]
 

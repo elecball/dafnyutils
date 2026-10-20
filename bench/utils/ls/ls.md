@@ -48,6 +48,20 @@ This benchmark implements a deterministic, verification-oriented subset of GNU
 The time zone is fixed to UTC and the locale is fixed to C so results do not
 depend on host settings.
 
+## Native observations and failures
+
+Relative metadata, readlink and directory operations start from the authenticated
+current-directory context. Directory handles retain their actual opening
+position and entry set. The implementation uses these relative operations
+directly, including when the current directory has no usable absolute pathname.
+
+The principal relation binds each actual open, status, read, link and close
+result to its request and occurrence. Successful scans cover every visible
+entry. A failed scan retains its observed entries, collected output and earlier
+recursive sections, with the actual errno and display operand in diagnostics.
+Closing consumes the owned handle on either result. Stdout and stderr writes
+retain their committed prefix and report failures through the final exit status.
+
 ## Outside this benchmark
 
 Terminal-width columns, color, quoting styles, ACL and security-context marks,
@@ -57,7 +71,10 @@ rendering, and arbitrary date-format strings are outside this benchmark.
 
 ## Exit status
 
-The exit status is 0 when every requested listing succeeds and 2 when an
-operand, directory read, followed metadata lookup, recursion cycle, block-size
-argument, or a time-style argument used with `-n` fails. A time style is ignored
-without long output. An invalid `--time` selector exits 1, matching GNU `ls`.
+The exit status is 0 when every requested listing and stream write succeeds.
+Minor entry metadata or rendering errors produce status 1. Operand access
+failures, unavailable directory sections, recursion cycles, directory operation
+failures and stream-write failures produce status 2. Invalid block-size arguments
+and time-style arguments used with `-n` also produce status 2. A time style is
+ignored without long output. An invalid `--time` selector exits 1, matching GNU
+`ls`.

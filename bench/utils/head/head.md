@@ -51,6 +51,8 @@ This benchmark implements the deterministic line and byte selection behavior:
 - `-v` and `--verbose`: always print file name headers
 - missing, unreadable, or directory operands: write a GNU-style diagnostic,
   continue processing later operands, and exit with status 1
+- a file close failure after reading: preserve the selected bytes and header,
+  report `head: failed to close`, and exit with status 1
 - invalid decimal count arguments: write a GNU-style count diagnostic and exit
   with status 1
 - `--help` and `--version`: print requested metadata and exit with status 0
@@ -96,9 +98,14 @@ outside this benchmark slice:
 
 ### Exit Status
 
-The supported slice exits with status 0 on successful output, help, and version
-requests. It exits with status 1 for invalid counts or if any file operand
-cannot be read.
+The supported slice exits with status 0 when selection or a metadata request
+completes with successful I/O. It exits with status 1 for invalid counts and
+modeled input, file-close, or output failures. Output failures preserve the
+committed prefix; a failed stderr write can truncate its diagnostic.
+
+The current whole-read API does not represent GNU's bounded reads or all
+ordered read/write/close phases. The pending required scope and concrete
+limitations are recorded in [the failure audit](../../../docs/trustbase-failures.md).
 
 Examples:
 

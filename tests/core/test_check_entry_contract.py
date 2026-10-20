@@ -30,7 +30,9 @@ def test_chmod_entry_contract_records_split_specification_sources() -> None:
         ),
     )
 
-    assert tuple(entry.symbol for entry in manifest.spec_entries) == ("ChmodRecursiveSpec.Spec",)
+    assert tuple(entry.symbol for entry in manifest.spec_entries) == (
+        "ChmodDescriptorPrincipalSpec.Spec",
+    )
     definition = BenchmarkRepository.open(root).load_definition("chmod")
     generated = generate_task_profile(definition, repository_root=root).profile
     assert tuple(
@@ -53,6 +55,9 @@ def test_chmod_entry_contract_records_split_specification_sources() -> None:
         "bench/core/Utf8.dfy",
         "bench/core/World.dfy",
         "bench/core/WorldLookupProof.dfy",
+        "bench/utils/chmod/ChmodDescriptorPrincipalSpec.dfy",
+        "bench/utils/chmod/ChmodDescriptorSpec.dfy",
+        "bench/utils/chmod/ChmodOperandSpec.dfy",
         "bench/utils/chmod/ChmodQuoteSpec.dfy",
         "bench/utils/chmod/ChmodRecursiveSpec.dfy",
         "bench/utils/chmod/ChmodSchema.dfy",

@@ -5,6 +5,9 @@ include "../../core/StringEscaping.dfy"
 include "DuSchema.dfy"
 
 module DuSpec {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -185,26 +188,71 @@ module DuSpec {
        else 0)
   }
 
-  twostate predicate Spec(raw: Schema.DuCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+
+  function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    "du: write error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost predicate EmissionOutcomeFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int,
+    committed: nat, outErr: int, errCommitted: nat, errErr: int
+  )
+  {
+    (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
+     else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
+    var finalDiagnostics := diagnostics +
+      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
+     else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
+    exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
+  }
+
+  ghost predicate EmissionFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
+      EmissionOutcomeFields(beforeOut, beforeErr, afterOut, afterErr, observations,
+                            output, diagnostics, normalExit, exit,
+                            committed, outErr, errCommitted, errErr)
+  }
+  twostate predicate PreparedSpec(raw: Schema.DuCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
   {
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeHelp then
-      io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + HelpTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
-      io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + VersionTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeUnsupportedAccounting then
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + UnsupportedAccountingMessageSpec() &&
+      plannedStdout == [] &&
+      plannedStderr == [] + UnsupportedAccountingMessageSpec() &&
       exit == 1
     else
       exists output: BenchWorld.Bytes, errors: BenchWorld.Bytes ::
         RunRelation(cmd, old(io.fs()), old(io.trustedStreams()), output, errors, exit) &&
-        io.stdout() == old(io.stdout()) + output &&
-        io.stderr() == old(io.stderr()) + errors
+        plannedStdout == [] + output &&
+        plannedStderr == [] + errors
+  }
+
+  twostate predicate Spec(raw: Schema.DuCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit, output, diagnostics) &&
+      EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                     io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 }

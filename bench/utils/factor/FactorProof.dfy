@@ -4,11 +4,15 @@ include "FactorCore.dfy"
 include "FactorSpec.dfy"
 
 module FactorProof {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import BenchIO
   import BW = BenchWorld
   import Schema = FactorSchema
   import Core = FactorCore
   import Spec = FactorSpec
+  import IOContract
 
   lemma IsWhitespaceEq(ch: char)
     ensures Core.IsWhitespace(ch) == Spec.IsWhitespace(ch)
@@ -615,7 +619,18 @@ module FactorProof {
         assert value == Spec.Product(factors[..i]) *
                         (factors[i] * Spec.Product(factors[i + 1..]));
         assert value == factors[i] *
-                        (Spec.Product(factors[..i]) * Spec.Product(factors[i + 1..]));
+                        (Spec.Product(factors[..i]) * Spec.Product(factors[i + 1..])) by {
+          hide *;
+          var left := Spec.Product(factors[..i]);
+          var right := Spec.Product(factors[i + 1..]);
+          calc {
+            value;
+          == left * (factors[i] * right);
+          == (left * factors[i]) * right;
+          == (factors[i] * left) * right;
+          == factors[i] * (left * right);
+          }
+        }
         assert 0 <= Spec.Product(factors[..i]) *
                     Spec.Product(factors[i + 1..]);
         assert exists quotient: nat ::
@@ -1547,19 +1562,21 @@ module FactorProof {
     reveal Spec.InputTokensRelation();
   }
 
-  twostate lemma CoreSummaryImpliesSpec(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int)
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     HelpSelectedEq(raw);
     VersionSelectedEq(raw);
     if Core.HelpSelected(raw) {
     } else if Core.VersionSelected(raw) {
     } else {
-      var tokens := if |raw.operands| > 0 then raw.operands else Core.SplitWords(old(io.stdin()));
+      var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+      var input := IOContract.ReadResultData(read);
+      var tokens := if |raw.operands| > 0 then raw.operands else Core.SplitWords(input);
       var fromArgv := |raw.operands| > 0;
       if |raw.operands| == 0 {
-        SplitWordsSatisfiesRelation(old(io.stdin()));
+        SplitWordsSatisfiesRelation(input);
       }
       RunTokensSatisfiesRelation(tokens, raw.seenExponents, fromArgv);
       var run := Core.RunTokens(tokens, raw.seenExponents, fromArgv);
@@ -1579,9 +1596,22 @@ module FactorProof {
             tokens, raw.seenExponents, fromArgv,
             output, errorOutput, hadError
           ) &&
-          io.stdout() == old(io.stdout()) + output &&
-          io.stderr() == old(io.stderr()) + errorOutput &&
-          exit == (if hadError then 1 else 0);
+          plannedStdout == old(io.stdout()) + output &&
+          plannedStderr == old(io.stderr()) + errorOutput +
+            (if fromArgv || read.Ok? then [] else Spec.ReadError(IOContract.ResultErrno(read))) &&
+          exit == (if hadError || (!fromArgv && read.Err?) then 1 else 0);
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + output, old(io.stderr()) + diagnostics);
   }
 }

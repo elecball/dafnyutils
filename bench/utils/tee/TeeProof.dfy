@@ -5,6 +5,9 @@ include "TeeCore.dfy"
 include "TeeSpec.dfy"
 
 module TeeProof {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import BenchIO
   import BenchWorld
   import IOContract
@@ -182,6 +185,7 @@ module TeeProof {
               0 <= i < |outputs| ==>
                 Spec.WriteStepRelation(append, outputs[i], input, preProps, preNow, preCredentials, preTrustedFilesystem, states[i], states[i + 1])
   {
+    hide *;
     states := prefixStates + [after];
     forall i {:trigger Spec.WriteStepRelation(append, outputs[i], input, preProps, preNow, preCredentials, preTrustedFilesystem, states[i], states[i + 1])} |
       0 <= i < |outputs|
@@ -252,20 +256,37 @@ module TeeProof {
     }
   }
 
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.TeeCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
+  {
+    reveal Core.PreparedSummary(), Spec.PreparedSpec();
+    CommandMatchesSpec(raw);
+    var cmd := Core.Command(raw);
+    if cmd.mode == Schema.ModeRun {
+      var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+      var input := IOContract.ReadResultData(read);
+      var errOut: BenchWorld.Bytes, writeExit: int :|
+        Core.WriteOutputsSummaryFields(cmd.append, cmd.outputs, input, old(io.fs()), old(io.props()), old(io.now()), old(io.credentials()), old(io.trustedFilesystem()), io.fs(), errOut, writeExit) &&
+        io.stdin() == IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) &&
+        plannedStdout == old(io.stdout()) + input &&
+        plannedStderr == old(io.stderr()) + errOut +
+          (if read.Ok? then [] else Spec.StdinReadError(IOContract.ResultErrno(read))) &&
+        exit == (if read.Ok? then writeExit else 1);
+      var states := WriteOutputsSummaryFieldsImpliesSpec(cmd.append, cmd.outputs, input, old(io.fs()), old(io.props()), old(io.now()), old(io.credentials()), old(io.trustedFilesystem()), io.fs(), errOut, writeExit);
+    }
+  }
+
   twostate lemma CoreSummaryImpliesSpec(raw: Schema.TeeCmdRaw, io: BenchIO.IO, exit: int)
     requires Core.CoreSummary(raw, io, exit)
     ensures Spec.Spec(raw, io, exit)
   {
-    CommandMatchesSpec(raw);
-    var cmd := Core.Command(raw);
-    if cmd.mode == Schema.ModeRun {
-      var errOut: BenchWorld.Bytes, writeExit: int :|
-        Core.WriteOutputsSummaryFields(cmd.append, cmd.outputs, old(io.stdin()), old(io.fs()), old(io.props()), old(io.now()), old(io.credentials()), old(io.trustedFilesystem()), io.fs(), errOut, writeExit) &&
-        io.stdin() == IOContract.AfterReadStdinFields(old(io.stdin())) &&
-        io.stdout() == old(io.stdout()) + old(io.stdin()) &&
-        io.stderr() == old(io.stderr()) + errOut &&
-        exit == writeExit;
-      var states := WriteOutputsSummaryFieldsImpliesSpec(cmd.append, cmd.outputs, old(io.stdin()), old(io.fs()), old(io.props()), old(io.now()), old(io.credentials()), old(io.trustedFilesystem()), io.fs(), errOut, writeExit);
-    }
+    reveal Core.CoreSummary();
+    var output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      Spec.EmissionFields(raw, old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + output, old(io.stderr()) + diagnostics);
   }
 }

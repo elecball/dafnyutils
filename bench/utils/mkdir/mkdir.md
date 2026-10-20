@@ -28,10 +28,10 @@ An existing directory is an error without `--parents`.
 - Observation: exact stdout/stderr bytes and exit status, resulting directory
   namespace, inode metadata and partial filesystem effects, under the supplied
   contracts. Standard input is not consumed. Stream-write
-  committed prefixes and their terminal errno are modeled with `ReturnError`.
+  committed prefixes and their terminal errno are modeled through explicit `IOResult` values.
   Stdout failure appends GNU's `write error` diagnostic after operand errors;
   either stream failure yields exit 1. Help/version and parse-error early exits
-  retain the shared runner's separate `ThrowOnError` boundary.
+  use the shared runner's explicit stream-result checks.
 - TrustedOperations: single `CreateDirectory` calls with mode `0777`, GNU path
   quoting, C-locale errno formatting, and stream writes. Operand iteration,
   diagnostic selection, output order, committed stream prefixes and the overall

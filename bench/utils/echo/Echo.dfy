@@ -54,7 +54,7 @@ module Echo {
     }
 
     method RunCore(raw: EchoSchema.EchoCmdRaw, io: BenchIO.IO) returns (exit: int)
-      modifies io.stdoutRegion
+      modifies io.stdoutRegion, io.stderrRegion
       ensures ES.Spec(raw, io, exit)
       decreases *
     {

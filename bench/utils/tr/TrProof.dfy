@@ -4,6 +4,9 @@ include "TrCore.dfy"
 include "TrSpec.dfy"
 
 module TrProof {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import BW = BenchWorld
@@ -11,6 +14,7 @@ module TrProof {
   import Core = TrCore
   import Spec = TrSpec
   import Utf8 = Utf8Semantics
+  import IOContract
 
   ghost function ShiftIndices(indices: seq<nat>, delta: nat): seq<nat>
     ensures |ShiftIndices(indices, delta)| == |indices|
@@ -427,7 +431,8 @@ module TrProof {
               [0] + ShiftIndices(tailOutputCuts, |piece|)
             )
   {
-    reveal Spec.SetPartitionFrom();
+    hide *;
+    reveal Spec.SetPartitionFrom(), ShiftIndices();
     var inputCuts := [start] + tailInputCuts;
     var outputCuts := [0] + ShiftIndices(tailOutputCuts, |piece|);
     assert tailInputCuts[0] == next;
@@ -437,6 +442,36 @@ module TrProof {
       tailOutputCuts, |piece|, |tailOutputCuts| - 1
     );
     assert outputCuts[|outputCuts| - 1] == |piece + rest|;
+    forall i
+      {:trigger inputCuts[i], inputCuts[i + 1]}
+      {:trigger (piece + rest)[outputCuts[i]..outputCuts[i + 1]]} |
+      0 <= i && i + 1 < |inputCuts|
+      ensures inputCuts[i] < inputCuts[i + 1] <= |text| &&
+              outputCuts[i] <= outputCuts[i + 1] <= |piece + rest| &&
+              Spec.SetUnitRelation(
+                text,
+                inputCuts[i],
+                inputCuts[i + 1],
+                (piece + rest)[outputCuts[i]..outputCuts[i + 1]]
+              )
+    {
+      if i == 0 {
+        ShiftIndicesIndex(tailOutputCuts, |piece|, 0);
+        assert outputCuts[1] == |piece|;
+        assert (piece + rest)[0..|piece|] == piece;
+      } else {
+        var j := i - 1;
+        ShiftIndicesIndex(tailOutputCuts, |piece|, j);
+        ShiftIndicesIndex(tailOutputCuts, |piece|, j + 1);
+        SetPartitionFromElement(
+          text, next, rest, tailInputCuts, tailOutputCuts, j
+        );
+        AppendShiftedSlice(
+          piece, rest, tailOutputCuts[j], tailOutputCuts[j + 1]
+        );
+      }
+    }
+    assert Spec.SetPartitionFrom(text, start, piece + rest, inputCuts, outputCuts);
     assert forall i
         {:trigger inputCuts[i], inputCuts[i + 1]}
         {:trigger (piece + rest)[outputCuts[i]..outputCuts[i + 1]]} ::
@@ -448,35 +483,7 @@ module TrProof {
             inputCuts[i],
             inputCuts[i + 1],
             (piece + rest)[outputCuts[i]..outputCuts[i + 1]]
-          ) by {
-      forall i {:trigger inputCuts[i]} |
-    0 <= i && i + 1 < |inputCuts|
-        ensures inputCuts[i] < inputCuts[i + 1] <= |text| &&
-                outputCuts[i] <= outputCuts[i + 1] <= |piece + rest| &&
-                Spec.SetUnitRelation(
-                  text,
-                  inputCuts[i],
-                  inputCuts[i + 1],
-                  (piece + rest)[outputCuts[i]..outputCuts[i + 1]]
-                )
-      {
-        if i == 0 {
-          ShiftIndicesIndex(tailOutputCuts, |piece|, 0);
-          assert outputCuts[1] == |piece|;
-          assert (piece + rest)[0..|piece|] == piece;
-        } else {
-          var j := i - 1;
-          ShiftIndicesIndex(tailOutputCuts, |piece|, j);
-          ShiftIndicesIndex(tailOutputCuts, |piece|, j + 1);
-          SetPartitionFromElement(
-            text, next, rest, tailInputCuts, tailOutputCuts, j
           );
-          AppendShiftedSlice(
-            piece, rest, tailOutputCuts[j], tailOutputCuts[j + 1]
-          );
-        }
-      }
-    }
   }
 
   lemma SetPartitionFromMatchesCore(
@@ -1449,9 +1456,9 @@ module TrProof {
       );
   }
 
-  twostate lemma CoreSummaryImpliesSpec(raw: Schema.TrCmdRaw, io: BenchIO.IO, exit: int)
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.TrCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     CoreCommandSatisfiesRelation(raw);
     match Core.Command(raw).mode
@@ -1463,7 +1470,20 @@ module TrProof {
     case ModeEmptySet2 =>
     case ModeRun =>
       CoreOutputSatisfiesRelation(
-        Core.Command(raw), old(io.stdin())
+        Core.Command(raw), IOContract.ReadResultData(
+          IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams())))
       );
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.TrCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + output, old(io.stderr()) + diagnostics);
   }
 }

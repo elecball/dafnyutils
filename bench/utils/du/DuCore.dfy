@@ -5,6 +5,9 @@ include "DuSchema.dfy"
 include "DuSpec.dfy"
 
 module DuCore {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -115,57 +118,78 @@ module DuCore {
      ReadResultCore(cmd, preFs, preStreams, i - 1).Err?)
   }
 
-  twostate predicate CoreSummary(raw: Schema.DuCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  opaque twostate predicate PreparedSummary(raw: Schema.DuCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
   {
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeHelp then
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + Spec.HelpTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + Spec.VersionTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeUnsupportedAccounting then
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.UnsupportedAccountingMessageSpec() &&
+      plannedStdout == [] &&
+      plannedStderr == [] + Spec.UnsupportedAccountingMessageSpec() &&
       exit == 1
     else
-      io.stdout() == old(io.stdout()) + PrefixOutputCore(cmd, old(io.fs()), old(io.trustedStreams()), |cmd.operands|) &&
-      io.stderr() == old(io.stderr()) + PrefixErrorsCore(cmd, old(io.fs()), old(io.trustedStreams()), |cmd.operands|) &&
+      plannedStdout == [] + PrefixOutputCore(cmd, old(io.fs()), old(io.trustedStreams()), |cmd.operands|) &&
+      plannedStderr == [] + PrefixErrorsCore(cmd, old(io.fs()), old(io.trustedStreams()), |cmd.operands|) &&
       exit == (if PrefixHadErrorCore(cmd, old(io.fs()), old(io.trustedStreams()), |cmd.operands|) then 1 else 0)
   }
 
-  method RunCore(raw: Schema.DuCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  twostate predicate CoreSummary(raw: Schema.DuCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit, output, diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit)
+  }
+
+  method Prepare(raw: Schema.DuCmdRaw, io: BenchIO.IO) returns (exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    ensures PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
     decreases *
   {
+
+    reveal PreparedSummary();    ghost var emissionBeforeOut: StreamWorld.Bytes := [];
+    ghost var emissionBeforeErr: StreamWorld.Bytes := [];
+    plannedStdout := [];
+    plannedStderr := [];
     ghost var preFs := io.fs();
     ghost var preStreams := io.trustedStreams();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
+    ghost var preStdout := (emissionBeforeOut + plannedStdout);
+    ghost var preStderr := (emissionBeforeErr + plannedStderr);
     var cmd := Schema.Command(raw);
 
     if cmd.mode == Schema.ModeHelp {
-      var _ := io.WriteStdout(Spec.HelpTextSpec(), BenchWorld.ThrowOnError);
+      plannedStdout := plannedStdout + (Spec.HelpTextSpec());
       exit := 0;
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
+      hide *;
+      reveal PreparedSummary();
+    }
       return;
     }
 
     if cmd.mode == Schema.ModeVersion {
-      var _ := io.WriteStdout(Spec.VersionTextSpec(), BenchWorld.ThrowOnError);
+      plannedStdout := plannedStdout + (Spec.VersionTextSpec());
       exit := 0;
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
+      hide *;
+      reveal PreparedSummary();
+    }
       return;
     }
 
     if cmd.mode == Schema.ModeUnsupportedAccounting {
-      var _ := io.WriteStderr(Spec.UnsupportedAccountingMessageSpec(), BenchWorld.ThrowOnError);
+      plannedStderr := plannedStderr + (Spec.UnsupportedAccountingMessageSpec());
       exit := 1;
-      assert CoreSummary(raw, io, exit);
+      assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
+      hide *;
+      reveal PreparedSummary();
+    }
       return;
     }
 
@@ -176,8 +200,8 @@ module DuCore {
     var i := 0;
     while i < |cmd.operands|
       invariant 0 <= i <= |cmd.operands|
-      invariant io.stdout() == preStdout
-      invariant io.stderr() == preStderr
+      invariant (emissionBeforeOut + plannedStdout) == preStdout
+      invariant (emissionBeforeErr + plannedStderr) == preStderr
       invariant output == PrefixOutputCore(cmd, preFs, preStreams, i)
       invariant err == PrefixErrorsCore(cmd, preFs, preStreams, i)
       invariant hadError == PrefixHadErrorCore(cmd, preFs, preStreams, i)
@@ -195,20 +219,71 @@ module DuCore {
           hadError := true;
       }
       i := i + 1;
+      assert hadError == PrefixHadErrorCore(cmd, preFs, preStreams, i) by {
+        hide *;
+        reveal PrefixHadErrorCore();
+      }
     }
 
-    assert io.stdout() == preStdout;
-    assert io.stderr() == preStderr;
-    var _ := io.WriteStdout(output, BenchWorld.ThrowOnError);
-    assert io.stdout() == preStdout + output;
-    assert io.stderr() == preStderr;
-    var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
-    assert io.stdout() == preStdout + output;
-    assert io.stderr() == preStderr + err;
+    assert (emissionBeforeOut + plannedStdout) == preStdout;
+    assert (emissionBeforeErr + plannedStderr) == preStderr;
+    plannedStdout := plannedStdout + (output);
+    assert (emissionBeforeOut + plannedStdout) == preStdout + output by { hide *; }
+    assert (emissionBeforeErr + plannedStderr) == preStderr;
+    plannedStderr := plannedStderr + (err);
+    assert (emissionBeforeOut + plannedStdout) == preStdout + output by { hide *; }
+    assert (emissionBeforeErr + plannedStderr) == preStderr + err by { hide *; }
     exit := if hadError then 1 else 0;
     assert output == PrefixOutputCore(cmd, preFs, preStreams, |cmd.operands|);
     assert err == PrefixErrorsCore(cmd, preFs, preStreams, |cmd.operands|);
     assert hadError == PrefixHadErrorCore(cmd, preFs, preStreams, |cmd.operands|);
-    assert CoreSummary(raw, io, exit);
+    assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
+      hide *;
+      reveal PreparedSummary();
+    }
+  }
+
+
+  method Flush(output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+               normalExit: int, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit)
+  {
+    var committed: nat := 0;
+    var outErr := 0;
+    if |output| != 0 {
+      var result := io.WriteStdout(output);
+      committed := StreamContract.WriteResultCommitted(result);
+      outErr := StreamContract.ResultErrno(result);
+    }
+    var finalDiagnostics := diagnostics;
+    if outErr != 0 {
+      var reason := io.GetCLocaleErrnoText(outErr);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+    }
+    assert finalDiagnostics == diagnostics + (if outErr == 0 then []
+      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errCommitted: nat := 0;
+    var errErr := 0;
+    if |finalDiagnostics| != 0 {
+      var result := io.WriteStderr(finalDiagnostics);
+      errCommitted := StreamContract.WriteResultCommitted(result);
+      errErr := StreamContract.ResultErrno(result);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        finalDiagnostics, errCommitted, errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+    assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+  }
+
+  method RunCore(raw: Schema.DuCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, output, diagnostics := Prepare(raw, io);
+    exit := Flush(output, diagnostics, normalExit, io);
   }
 }

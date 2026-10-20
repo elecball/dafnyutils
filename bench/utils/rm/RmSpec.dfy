@@ -304,7 +304,61 @@ module RmSpec {
 
   datatype Listing = Listing(order: seq<string>, ghost entries: set<DirEntry>, openError: int, readError: int)
 
-  ghost predicate Listed(fs: FileSystem, path: Path, listing: Listing) {
+  datatype ObservationContext = ObservationContext(
+    ghost failures: (NativeFailureRequest) -> int,
+    ghost handles: map<int, DirHandleState>)
+
+  ghost function ObservationContextFor(io: BenchIO.IO): ObservationContext
+    reads io.trustedNativeFailuresRegion, io.dirHandlesRegion
+  {
+    ObservationContext(io.trustedNativeFailures(), io.dirHandles())
+  }
+
+  datatype DirectoryObservation = DirectoryObservation(
+    before: map<int, DirHandleState>, after: map<int, DirHandleState>,
+    more: bool, name: string, kind: DirectoryEntryKind, err: int)
+
+  ghost predicate ReadPrefix(fs: FileSystem, context: ObservationContext,
+    handle: int, initialHandles: map<int, DirHandleState>,
+    names: seq<string>, steps: seq<DirectoryObservation>, after: map<int, DirHandleState>)
+  {
+    |steps| == |names| &&
+    (if |steps| == 0 then after == initialHandles else
+      steps[0].before == initialHandles && steps[|steps|-1].after == after) &&
+    (forall i: nat | i < |steps| ::
+      C.ReadDirSpec(fs, steps[i].before, context.failures, steps[i].after,
+                    handle, steps[i].more, steps[i].name, steps[i].kind, steps[i].err) &&
+      steps[i].more && steps[i].err == 0 && steps[i].name == names[i] &&
+      (i > 0 ==> steps[i-1].after == steps[i].before))
+  }
+
+  ghost predicate ListingObservation(fs: FileSystem, context: ObservationContext,
+    path: Path, listing: Listing)
+  {
+    exists openState: map<int, DirHandleState>, handle: int, openOk: bool
+      {:trigger C.OpenDirSpec(fs, context.handles, context.failures, openState,
+        path, false, openOk, handle, listing.openError)} ::
+      openOk == (listing.openError == 0) &&
+      C.OpenDirSpec(fs, context.handles, context.failures, openState,
+                    path, false, openOk, handle, listing.openError) &&
+      if listing.openError != 0 then true else
+        exists steps: seq<DirectoryObservation>, beforeEnd: map<int, DirHandleState>,
+               afterEnd: map<int, DirHandleState>, endKind: DirectoryEntryKind,
+               closeOk: bool, closeErr: int
+          {:trigger ReadPrefix(fs, context, handle, openState, listing.order, steps, beforeEnd),
+            C.ReadDirSpec(fs, beforeEnd, context.failures, afterEnd,
+              handle, false, "", endKind, listing.readError),
+            C.CloseDirSpec(afterEnd, context.failures, context.handles, handle, closeOk, closeErr)} ::
+          ReadPrefix(fs, context, handle, openState, listing.order, steps, beforeEnd) &&
+          C.ReadDirSpec(fs, beforeEnd, context.failures, afterEnd,
+                        handle, false, "", endKind, listing.readError) &&
+          C.CloseDirSpec(afterEnd, context.failures, context.handles,
+                         handle, closeOk, closeErr)
+  }
+
+  ghost predicate Listed(context: ObservationContext,
+    fs: FileSystem, path: Path, listing: Listing) {
+    ListingObservation(fs, context, path, listing) &&
     if listing.openError != 0 then
       C.OpenDirOutcomeFields(fs,path,false,listing.openError) && listing.order == [] &&
       listing.entries == {} && listing.readError == 0
@@ -349,8 +403,10 @@ module RmSpec {
     exists i: int :: 0 <= i < |failures| && failures[i]
   }
 
-  ghost predicate RemoveJudgment(raw: Schema.RmCmdRaw, path: Path, top: bool,
-    rootKey: HostInodeKey, rootDevice: int, seen: set<HostInodeKey>, now: int,
+  datatype RemovalScope = RemovalScope(rootKey: HostInodeKey, rootDevice: int, seen: set<HostInodeKey>)
+
+  ghost predicate RemoveJudgment(context: ObservationContext, raw: Schema.RmCmdRaw, path: Path, top: bool,
+    scope: RemovalScope, now: int,
     trusted: C.ValidFilesystemObservations, before: FileSystem, after: FileSystem,
     out0: Bytes, out1: Bytes, err0: Bytes, err1: Bytes, failed: bool, proof: Removal)
     decreases proof
@@ -360,9 +416,9 @@ module RmSpec {
     case Atomic(status,directory,listing,ok,err) =>
       (if directory then
         status.Ok? && status.v.isDir &&
-        BasicRefusal(raw,path,top,rootKey,rootDevice,seen,status.v) == NoRefusal &&
+        BasicRefusal(raw,path,top,scope.rootKey,scope.rootDevice,scope.seen,status.v) == NoRefusal &&
         ParentAllowed(raw,path,top,status.v,before,trusted) &&
-        (!raw.recursive || (Listed(before,path,listing) &&
+        (!raw.recursive || (Listed(context, before,path,listing) &&
           (listing.openError != 0 || (listing.readError != 0 && listing.order == []))))
        else status.Err? || !status.v.isDir) &&
       Attempt(raw,path,directory,now,trusted,before,after,out0,out1,err0,err1,
@@ -370,8 +426,8 @@ module RmSpec {
           (if listing.openError != 0 then listing.openError else listing.readError) else 0,failed)
     case Refused(status,why,parent) =>
       status.Ok? && status.v.isDir && why != NoRefusal &&
-      (why == BasicRefusal(raw,path,top,rootKey,rootDevice,seen,status.v) ||
-        (BasicRefusal(raw,path,top,rootKey,rootDevice,seen,status.v) == NoRefusal &&
+      (why == BasicRefusal(raw,path,top,scope.rootKey,scope.rootDevice,scope.seen,status.v) ||
+        (BasicRefusal(raw,path,top,scope.rootKey,scope.rootDevice,scope.seen,status.v) == NoRefusal &&
         raw.recursive && raw.preserveAll && top &&
         StatusResult(before,trusted,ChildPath(path,".."),parent) &&
         (if parent.Err? then why == ParentRefusal
@@ -379,18 +435,18 @@ module RmSpec {
       after == before && out1 == out0 && err1 == err0 + RefusalText(path,why) && failed
     case Hierarchy(status,listing,children,states,outputs,errors,failures,ok,err) =>
       status.Ok? && status.v.isDir && raw.recursive &&
-      BasicRefusal(raw,path,top,rootKey,rootDevice,seen,status.v) == NoRefusal &&
+      BasicRefusal(raw,path,top,scope.rootKey,scope.rootDevice,scope.seen,status.v) == NoRefusal &&
       ParentAllowed(raw,path,top,status.v,before,trusted) &&
-      Listed(before,path,listing) && listing.openError == 0 &&
+      Listed(context, before,path,listing) && listing.openError == 0 &&
       (listing.readError == 0 || |listing.order| > 0) &&
       var n := |listing.order|;
       |children| == n && |failures| == n &&
       |states| == n+1 && |outputs| == n+1 && |errors| == n+1 &&
       states[0] == before && outputs[0] == out0 && errors[0] == err0 &&
       (forall i: int :: 0 <= i < n ==>
-        RemoveJudgment(raw,ChildPath(path,listing.order[i]),false,rootKey,
-          if top then status.v.device else rootDevice,
-          seen + {HostInodeKey(status.v.device,status.v.inode)},now,trusted,
+        RemoveJudgment(context, raw,ChildPath(path,listing.order[i]),false,RemovalScope(scope.rootKey,
+          if top then status.v.device else scope.rootDevice,
+          scope.seen + {HostInodeKey(status.v.device,status.v.inode)}),now,trusted,
           states[i],states[i+1],outputs[i],outputs[i+1],errors[i],errors[i+1],failures[i],children[i])) &&
       (if listing.readError != 0 then
         after == states[n] && out1 == outputs[n] &&
@@ -400,7 +456,7 @@ module RmSpec {
        else Attempt(raw,path,true,now,trusted,states[n],after,outputs[n],out1,errors[n],err1,ok,err,0,failed))
   }
 
-  ghost predicate OperandsJudgment(raw: Schema.RmCmdRaw, now: int,
+  ghost predicate OperandsJudgment(context: ObservationContext, raw: Schema.RmCmdRaw, now: int,
     trusted: C.ValidFilesystemObservations, rootKey: HostInodeKey,
     before: FileSystem, after: FileSystem, out0: Bytes, out1: Bytes, err0: Bytes, err1: Bytes, exit: int)
   {
@@ -413,7 +469,7 @@ module RmSpec {
       outputs[0] == out0 && outputs[n] == out1 && errors[0] == err0 && errors[n] == err1 &&
       (forall i: int :: 0 <= i < n ==>
         exists path: Path :: CommandPath(raw.operands[i],path) &&
-          RemoveJudgment(raw,path,true,rootKey,0,{},now,trusted,
+          RemoveJudgment(context, raw,path,true,RemovalScope(rootKey,0,{}),now,trusted,
             states[i],states[i+1],outputs[i],outputs[i+1],errors[i],errors[i+1],failures[i],proofs[i])) &&
       exit == (if HasFailure(failures) then 1 else 0)
   }
@@ -433,14 +489,14 @@ module RmSpec {
       else WriteErrorText(C.CLocaleErrnoTextResult(outObservation.err)));
     var errObservation := observations(StreamWriteStderr(beforeErr,finalDiagnostic));
     errObservation.StreamWriteResult? &&
-    C.WriteStdoutSpec(beforeOut,observations,afterOut,output,ReturnError,
+    C.WriteStdoutSpec(beforeOut,observations,afterOut,output,
       outObservation.committed,outObservation.err) &&
-    C.WriteStderrSpec(beforeErr,observations,afterErr,finalDiagnostic,ReturnError,
+    C.WriteStderrSpec(beforeErr,observations,afterErr,finalDiagnostic,
       errObservation.committed,errObservation.err) &&
     exit == (if removalExit == 0 && outObservation.err == 0 && errObservation.err == 0 then 0 else 1)
   }
 
-  ghost predicate Prepared(raw: Schema.RmCmdRaw, now: int, trusted: C.ValidFilesystemObservations,
+  ghost predicate Prepared(context: ObservationContext, raw: Schema.RmCmdRaw, now: int, trusted: C.ValidFilesystemObservations,
     before: FileSystem, after: FileSystem, output: Bytes, diagnostics: Bytes, removalExit: int)
   {
     if raw.mode == Schema.ModeHelp then
@@ -456,18 +512,18 @@ module RmSpec {
       exists root: IOResult<FileTimeStatus> :: StatusResult(before,trusted,"/",root) &&
         (if root.Err? then
           after == before && output == [] && diagnostics == RootAttributesText(C.ResultErrno(root)) && removalExit == 1
-         else OperandsJudgment(raw,now,trusted,HostInodeKey(root.v.device,root.v.inode),
+         else OperandsJudgment(context, raw,now,trusted,HostInodeKey(root.v.device,root.v.inode),
            before,after,[],output,[],diagnostics,removalExit))
-    else OperandsJudgment(raw,now,trusted,HostInodeKey(0,0),before,after,[],output,[],diagnostics,removalExit)
+    else OperandsJudgment(context, raw,now,trusted,HostInodeKey(0,0),before,after,[],output,[],diagnostics,removalExit)
   }
 
   twostate predicate Spec(raw: Schema.RmCmdRaw, io: BenchIO.IO, exit: int)
     reads io.fsRegion, io.stdoutRegion, io.stderrRegion, io.dirHandlesRegion,
-      io.nowRegion, io.trustedFilesystemRegion, io.trustedStreamsRegion
+      io.nowRegion, io.trustedFilesystemRegion, io.trustedStreamsRegion, io.trustedNativeFailuresRegion
   {
     io.dirHandles() == old(io.dirHandles()) &&
     exists output: Bytes, diagnostics: Bytes, removalExit: int ::
-      Prepared(raw,io.now(),io.trustedFilesystem(),old(io.fs()),io.fs(),output,diagnostics,removalExit) &&
+      Prepared(old(ObservationContextFor(io)), raw,io.now(),io.trustedFilesystem(),old(io.fs()),io.fs(),output,diagnostics,removalExit) &&
       StreamResults(old(io.stdout()),io.stdout(),old(io.stderr()),io.stderr(),io.trustedStreams(),
         output,diagnostics,removalExit,exit)
   }

@@ -7,6 +7,9 @@ include "../../core/StringEscaping.dfy"
 include "TouchSchema.dfy"
 
 module TouchSpec {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Errno = Errnos
   import Utf8 = Utf8Semantics
   import BenchIO
@@ -233,6 +236,7 @@ module TouchSpec {
   }
 
   ghost predicate SetStdoutTimesSpecFields(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     selection: Schema.TimeSelection,
     source: Schema.TimeSource,
     preNow: int,
@@ -244,237 +248,24 @@ module TouchSpec {
   {
     match source
     case TimeSourceCurrent =>
-        IOContract.SetStdoutTimesContractFields(
-          beforeTarget, afterTarget, preNow,
+        IOContract.SetStdoutTimesSpec(
+          preNow, beforeTarget, nativeFailures, afterTarget,
           if selection == Schema.TimeModify then BenchWorld.Keep else BenchWorld.Current,
           if selection == Schema.TimeAccess then BenchWorld.Keep else BenchWorld.Current,
           ok, err
         )
     case TimeSourceFixed(atimeSec, atimeNsec, mtimeSec, mtimeNsec) =>
-        IOContract.SetStdoutTimesContractFields(
-          beforeTarget, afterTarget, preNow,
+        IOContract.SetStdoutTimesSpec(
+          preNow, beforeTarget, nativeFailures, afterTarget,
           if selection == Schema.TimeModify then BenchWorld.Keep else BenchWorld.Exact(atimeSec, atimeNsec),
           if selection == Schema.TimeAccess then BenchWorld.Keep else BenchWorld.Exact(mtimeSec, mtimeNsec),
           ok, err
         )
   }
 
-  predicate ProjectedTimestampUpdateFields(
-    selection: Schema.TimeSelection,
-    source: Schema.TimeSource,
-    preNow: int,
-    before: BenchWorld.FileTimes,
-    after: BenchWorld.FileTimes
-  )
-  {
-    match source
-    case TimeSourceCurrent =>
-      (selection != Schema.TimeModify ==> after.atimeSec == preNow) &&
-      (selection != Schema.TimeAccess ==> after.mtimeSec == preNow) &&
-      (selection == Schema.TimeModify ==>
-         after.atimeSec == before.atimeSec &&
-         after.atimeNsec == before.atimeNsec) &&
-      (selection == Schema.TimeAccess ==>
-         after.mtimeSec == before.mtimeSec &&
-         after.mtimeNsec == before.mtimeNsec) &&
-      IOContract.ValidTimestampNanoseconds(after.atimeNsec) &&
-      IOContract.ValidTimestampNanoseconds(after.mtimeNsec) &&
-      after.ctimeSec == preNow &&
-      IOContract.ValidTimestampNanoseconds(after.ctimeNsec)
-    case TimeSourceFixed(atimeSec, atimeNsec, mtimeSec, mtimeNsec) =>
-      (selection != Schema.TimeModify ==>
-         after.atimeSec == atimeSec && after.atimeNsec == atimeNsec) &&
-      (selection != Schema.TimeAccess ==>
-         after.mtimeSec == mtimeSec && after.mtimeNsec == mtimeNsec) &&
-      (selection == Schema.TimeModify ==>
-         after.atimeSec == before.atimeSec &&
-         after.atimeNsec == before.atimeNsec) &&
-      (selection == Schema.TimeAccess ==>
-         after.mtimeSec == before.mtimeSec &&
-         after.mtimeNsec == before.mtimeNsec) &&
-      after.ctimeSec == preNow &&
-      IOContract.ValidTimestampNanoseconds(after.ctimeNsec)
-  }
-
-  predicate ProjectedCreatedTimestampFields(
-    selection: Schema.TimeSelection,
-    source: Schema.TimeSource,
-    preNow: int,
-    after: BenchWorld.FileTimes
-  )
-  {
-    match source
-    case TimeSourceCurrent =>
-      after.atimeSec == preNow &&
-      after.mtimeSec == preNow &&
-      after.ctimeSec == preNow &&
-      IOContract.ValidTimestampNanoseconds(after.atimeNsec) &&
-      IOContract.ValidTimestampNanoseconds(after.mtimeNsec) &&
-      IOContract.ValidTimestampNanoseconds(after.ctimeNsec)
-    case TimeSourceFixed(atimeSec, atimeNsec, mtimeSec, mtimeNsec) =>
-      (selection != Schema.TimeModify ==>
-         after.atimeSec == atimeSec && after.atimeNsec == atimeNsec) &&
-      (selection != Schema.TimeAccess ==>
-         after.mtimeSec == mtimeSec && after.mtimeNsec == mtimeNsec) &&
-      after.ctimeSec == preNow &&
-      IOContract.ValidTimestampNanoseconds(after.atimeNsec) &&
-      IOContract.ValidTimestampNanoseconds(after.mtimeNsec) &&
-      IOContract.ValidTimestampNanoseconds(after.ctimeNsec)
-  }
-
-  ghost predicate ProjectedDirectTargetIdFields(
-    fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path,
-    followSymlink: bool,
-    id: BenchWorld.InodeId
-  )
-  {
-    BenchWorld.FsContainsPath(fs, path) &&
-    if followSymlink && BenchWorld.FsNodeAt(fs, path).Symlink? then
-      var target := BenchWorld.ResolveSymlinkTarget(
-        path, BenchWorld.FsNodeAt(fs, path).target
-      );
-      BenchWorld.FsContainsPath(fs, target) &&
-      !BenchWorld.FsNodeAt(fs, target).Symlink? &&
-      BenchWorld.FsIdAt(fs, target) == id
-    else
-      BenchWorld.FsIdAt(fs, path) == id
-  }
-
-  ghost predicate ProjectedCreationFields(
-    cmd: Schema.TouchCmd,
-    preFs: BenchWorld.FileSystem,
-    fs2: BenchWorld.FileSystem,
-    i: int,
-    id: BenchWorld.InodeId
-  )
-  {
-    0 <= i < |cmd.files| &&
-    cmd.files[i] != "-" &&
-    !cmd.noCreate && cmd.followSymlink &&
-    !BenchWorld.FsContainsPath(preFs, cmd.files[i]) &&
-    BenchWorld.FsContainsPath(fs2, cmd.files[i]) &&
-    BenchWorld.FsIdAt(fs2, cmd.files[i]) == id
-  }
-
-  ghost predicate ProjectedCreationParentFields(
-    cmd: Schema.TouchCmd,
-    preFs: BenchWorld.FileSystem,
-    fs2: BenchWorld.FileSystem,
-    i: int,
-    id: BenchWorld.InodeId
-  )
-  {
-    0 <= i < |cmd.files| &&
-    cmd.files[i] != "-" &&
-    !cmd.noCreate && cmd.followSymlink &&
-    !BenchWorld.FsContainsPath(preFs, cmd.files[i]) &&
-    BenchWorld.FsContainsPath(fs2, cmd.files[i]) &&
-    BenchWorld.FsContainsPath(preFs, BenchWorld.ParentPath(cmd.files[i])) &&
-    BenchWorld.FsIdAt(preFs, BenchWorld.ParentPath(cmd.files[i])) == id
-  }
-
-  ghost predicate ProjectedOperandSuccessFields(
-    path: BenchWorld.Path,
-    noCreate: bool,
-    followSymlink: bool,
-    selection: Schema.TimeSelection,
-    source: Schema.TimeSource,
-    preFs: BenchWorld.FileSystem,
-    preNow: int,
-    beforeStdoutTarget: BenchWorld.StdoutTimestampState,
-    afterStdoutTarget: BenchWorld.StdoutTimestampState,
-    fs2: BenchWorld.FileSystem
-  )
-  {
-    if path == "-" then
-      IOContract.SetStdoutTimesContractFields(
-        beforeStdoutTarget, afterStdoutTarget, preNow,
-        if selection == Schema.TimeModify then BenchWorld.Keep else
-          match source case TimeSourceCurrent => BenchWorld.Current
-                       case TimeSourceFixed(aSec, aNsec, _, _) => BenchWorld.Exact(aSec, aNsec),
-        if selection == Schema.TimeAccess then BenchWorld.Keep else
-          match source case TimeSourceCurrent => BenchWorld.Current
-                       case TimeSourceFixed(_, _, mSec, mNsec) => BenchWorld.Exact(mSec, mNsec),
-        true, 0
-      )
-    else
-      if exists id :: ProjectedDirectTargetIdFields(preFs, path, followSymlink, id) then
-        var id :| ProjectedDirectTargetIdFields(preFs, path, followSymlink, id);
-        id in fs2.inodes &&
-        BenchWorld.NodeShapeUnchangedExceptTimes(
-          preFs.inodes[id].node, fs2.inodes[id].node
-        ) &&
-        ProjectedTimestampUpdateFields(
-          selection, source, preNow,
-          BenchWorld.NodeTimes(preFs.inodes[id].node),
-          BenchWorld.NodeTimes(fs2.inodes[id].node)
-        )
-      else
-        if noCreate then
-          !BenchWorld.FsContainsPath(fs2, path)
-        else if !followSymlink then
-          false
-        else
-          BenchWorld.FsContainsPath(fs2, path) &&
-            BenchWorld.FsNodeAt(fs2, path).Regular? &&
-            BenchWorld.FsNodeAt(fs2, path).data == [] &&
-            ProjectedCreatedTimestampFields(
-              selection, source, preNow,
-              BenchWorld.NodeTimes(BenchWorld.FsNodeAt(fs2, path))
-            )
-  }
-
-  ghost predicate ProjectedFilesystemFrameFields(
-    cmd: Schema.TouchCmd,
-    preFs: BenchWorld.FileSystem,
-    fs2: BenchWorld.FileSystem
-  )
-  {
-    preFs.inodes.Keys <= fs2.inodes.Keys &&
-    (forall id :: id in preFs.inodes && id in fs2.inodes ==>
-       BenchWorld.InodeNamespaceIdPaths(preFs.namespace, id) ==
-         BenchWorld.InodeNamespaceIdPaths(fs2.namespace, id) &&
-       BenchWorld.NodeShapeUnchangedExceptTimes(
-         preFs.inodes[id].node, fs2.inodes[id].node
-       ) &&
-       (preFs.inodes[id].node != fs2.inodes[id].node ==>
-          exists i :: 0 <= i < |cmd.files| && cmd.files[i] != "-" &&
-            (ProjectedDirectTargetIdFields(
-               preFs, cmd.files[i], cmd.followSymlink, id
-             ) ||
-             ProjectedCreationParentFields(cmd, preFs, fs2, i, id)))) &&
-    (forall id :: id in fs2.inodes && id !in preFs.inodes ==>
-       (exists i :: ProjectedCreationFields(cmd, preFs, fs2, i, id)) &&
-       fs2.inodes[id].node.Regular? &&
-       fs2.inodes[id].node.data == [])
-  }
-
-  ghost predicate ProjectedSuccessfulRunSpecFields(
-    cmd: Schema.TouchCmd,
-    selection: Schema.TimeSelection,
-    source: Schema.TimeSource,
-    preFs: BenchWorld.FileSystem,
-    preNow: int,
-    preStdout: BenchWorld.Bytes,
-    beforeStdoutTarget: BenchWorld.StdoutTimestampState,
-    fs2: BenchWorld.FileSystem,
-    stdout2: BenchWorld.Bytes,
-    afterStdoutTarget: BenchWorld.StdoutTimestampState
-  )
-  {
-    |cmd.files| > 0 &&
-    stdout2 == preStdout &&
-    ProjectedFilesystemFrameFields(cmd, preFs, fs2) &&
-    forall i :: 0 <= i < |cmd.files| ==>
-      ProjectedOperandSuccessFields(
-        cmd.files[i], cmd.noCreate, cmd.followSymlink,
-        selection, source, preFs, preNow,
-        beforeStdoutTarget, afterStdoutTarget, fs2
-      )
-  }
 
   ghost predicate RunStepSpecFields(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     path: BenchWorld.Path,
     noCreate: bool,
@@ -496,7 +287,7 @@ module TouchSpec {
       fs2 == preFs &&
       stdout2 == preStdout &&
       exists okStdout: bool, stdoutErr: int ::
-        SetStdoutTimesSpecFields(
+        SetStdoutTimesSpecFields(nativeFailures,
           selection, source, preNow, preStdoutTarget, stdoutTarget2,
           okStdout, stdoutErr
         ) &&
@@ -559,6 +350,7 @@ module TouchSpec {
   )
 
   opaque ghost predicate FileTransitionRelation(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     path: BenchWorld.Path,
     noCreate: bool,
@@ -571,7 +363,7 @@ module TouchSpec {
   )
   {
     exists stepError: bool, stepOut: BenchWorld.Bytes ::
-      RunStepSpecFields(
+      RunStepSpecFields(nativeFailures,
         observations, path, noCreate, followSymlink, selection, source,
         before.fs, preNow, before.stdout, before.stdoutTarget,
         after.fs, after.stdout, after.stdoutTarget, stepError, stepOut
@@ -581,6 +373,7 @@ module TouchSpec {
   }
 
   opaque ghost predicate RunFilesSpecFields(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     files: seq<BenchWorld.Path>,
     noCreate: bool,
@@ -602,15 +395,16 @@ module TouchSpec {
       |states| == |files| + 1 &&
       states[0] == FileState(preFs, preStdout, preStdoutTarget, false, []) &&
       states[|files|] == FileState(fs2, stdout2, stdoutTarget2, hadError, errOut) &&
-      forall i {:trigger FileTransitionRelation(observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} ::
+      forall i {:trigger FileTransitionRelation(nativeFailures, observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} ::
         0 <= i < |files| ==>
-          FileTransitionRelation(
+          FileTransitionRelation(nativeFailures,
             observations, files[i], noCreate, followSymlink, selection, source,
             preNow, states[i], states[i + 1]
           )
   }
 
   lemma RunStepSpecFieldsImpliesSingletonRun(
+    nativeFailures: (BenchWorld.NativeFailureRequest) -> int,
     observations: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
     path: BenchWorld.Path,
     noCreate: bool,
@@ -627,12 +421,12 @@ module TouchSpec {
     hadError: bool,
     errOut: BenchWorld.Bytes
   )
-    requires RunStepSpecFields(
+    requires RunStepSpecFields(nativeFailures,
                observations, path, noCreate, followSymlink, selection, source,
                preFs, preNow, preStdout, preStdoutTarget,
                fs2, stdout2, stdoutTarget2, hadError, errOut
              )
-    ensures RunFilesSpecFields(
+    ensures RunFilesSpecFields(nativeFailures,
               observations, [path], noCreate, followSymlink, selection, source,
               preFs, preNow, preStdout, preStdoutTarget,
               fs2, stdout2, stdoutTarget2, hadError, errOut
@@ -640,7 +434,7 @@ module TouchSpec {
   {
     var before := FileState(preFs, preStdout, preStdoutTarget, false, []);
     var after := FileState(fs2, stdout2, stdoutTarget2, hadError, errOut);
-    assert FileTransitionRelation(
+    assert FileTransitionRelation(nativeFailures,
              observations, path, noCreate, followSymlink, selection, source,
              preNow, before, after
            ) by {
@@ -648,7 +442,7 @@ module TouchSpec {
       var stepError := hadError;
       var stepOut := errOut;
     }
-    assert RunFilesSpecFields(
+    assert RunFilesSpecFields(nativeFailures,
              observations, [path], noCreate, followSymlink, selection, source,
              preFs, preNow, preStdout, preStdoutTarget,
              fs2, stdout2, stdoutTarget2, hadError, errOut
@@ -800,8 +594,8 @@ module TouchSpec {
     cmd: Schema.TouchCmd,
     io: BenchIO.IO,
     exit: int
-  )
-    reads io.Footprint()
+  , plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    reads io.fsRegion, io.stdoutTimestampRegion
   {
     var selection := RequestedSelectionValue(cmd);
     exists source: Schema.TimeSource ::
@@ -811,63 +605,93 @@ module TouchSpec {
       ) &&
       if |cmd.files| == 0 then
         io.fs() == old(io.fs()) &&
-        io.stdout() == old(io.stdout()) &&
-        io.stderr() == old(io.stderr()) + MissingOperandMessageSpec() &&
+        plannedStdout == old(io.stdout()) &&
+        plannedStderr == old(io.stderr()) + MissingOperandMessageSpec() &&
         exit == 1
       else
-        (exit == 0 &&
-         io.stderr() == old(io.stderr()) &&
-         ProjectedSuccessfulRunSpecFields(
-           cmd, selection, source,
-           old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-           io.fs(), io.stdout(), io.stdoutTimestamp()
-         )) ||
         (exists hadError: bool, errOut: BenchWorld.Bytes
-          {:trigger RunFilesSpecFields(old(io.trustedFilesystem()), cmd.files, cmd.noCreate, cmd.followSymlink, selection, source, old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()), io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut)} ::
+          {:trigger RunFilesSpecFields(old(io.trustedNativeFailures()), old(io.trustedFilesystem()), cmd.files, cmd.noCreate, cmd.followSymlink, selection, source, old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()), io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut)} ::
           exit == (if hadError then 1 else 0) &&
-          RunFilesSpecFields(
+          RunFilesSpecFields(old(io.trustedNativeFailures()),
             old(io.trustedFilesystem()), cmd.files, cmd.noCreate,
             cmd.followSymlink, selection, source,
             old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-            io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
+            io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
           ) &&
-          io.stderr() == old(io.stderr()) + errOut)
+          plannedStderr == old(io.stderr()) + errOut)
   }
 
-  opaque twostate predicate Spec(raw: Schema.TouchCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+
+  function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    "touch: write error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost predicate EmissionOutcomeFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int,
+    committed: nat, outErr: int, errCommitted: nat, errErr: int
+  )
+  {
+    (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
+     else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
+    var finalDiagnostics := diagnostics +
+      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
+     else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
+    exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
+  }
+
+  ghost predicate EmissionFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
+      EmissionOutcomeFields(beforeOut, beforeErr, afterOut, afterErr, observations,
+                            output, diagnostics, normalExit, exit,
+                            committed, outErr, errCommitted, errErr)
+  }
+  opaque twostate predicate PreparedSpec(raw: Schema.TouchCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    reads io.fsRegion, io.stdoutTimestampRegion
   {
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeInvalidTime then
       io.fs() == old(io.fs()) &&
       exit == 1 &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + InvalidTimeMessageSpec(cmd.timeArg)
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + InvalidTimeMessageSpec(cmd.timeArg)
     else if cmd.mode == Schema.ModeAmbiguousTime then
       io.fs() == old(io.fs()) &&
       exit == 1 &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + AmbiguousTimeMessageSpec(cmd.timeArg)
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + AmbiguousTimeMessageSpec(cmd.timeArg)
     else if cmd.mode == Schema.ModeHelp then
       io.fs() == old(io.fs()) &&
       exit == 0 &&
-      io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-      io.stderr() == old(io.stderr())
+      plannedStdout == old(io.stdout()) + HelpTextSpec() &&
+      plannedStderr == old(io.stderr())
     else if cmd.mode == Schema.ModeVersion then
       io.fs() == old(io.fs()) &&
       exit == 0 &&
-      io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-      io.stderr() == old(io.stderr())
+      plannedStdout == old(io.stdout()) + VersionTextSpec() &&
+      plannedStderr == old(io.stderr())
     else if cmd.timeArg != "" && Schema.ClassifyTimeWord(cmd.timeArg) == Schema.TimeWordAmbiguous then
       io.fs() == old(io.fs()) &&
       exit == 1 &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + AmbiguousTimeMessageSpec(cmd.timeArg)
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + AmbiguousTimeMessageSpec(cmd.timeArg)
     else if cmd.timeArg != "" && Schema.ClassifyTimeWord(cmd.timeArg) == Schema.TimeWordInvalid then
       io.fs() == old(io.fs()) &&
       exit == 1 &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + InvalidTimeMessageSpec(cmd.timeArg)
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + InvalidTimeMessageSpec(cmd.timeArg)
     else if cmd.hasTimestamp then
       var parsed := IOContract.TrustedTimeParseResultFields(
         old(io.trustedTimeParses()),
@@ -875,24 +699,24 @@ module TouchSpec {
       );
       if !parsed.ok then
         io.fs() == old(io.fs()) &&
-        io.stdout() == old(io.stdout()) &&
-        io.stderr() == old(io.stderr()) + InvalidDateMessageSpec(cmd.timestampArg) &&
+        plannedStdout == old(io.stdout()) &&
+        plannedStderr == old(io.stderr()) + InvalidDateMessageSpec(cmd.timestampArg) &&
         exit == 1
       else if SourceConflict(cmd) then
         io.fs() == old(io.fs()) &&
-        io.stdout() == old(io.stdout()) &&
-        io.stderr() == old(io.stderr()) + SourceConflictMessageSpec() &&
+        plannedStdout == old(io.stdout()) &&
+        plannedStderr == old(io.stderr()) + SourceConflictMessageSpec() &&
         exit == 1
       else
-        ResolvedRunSpecFields(cmd, io, exit)
+        ResolvedRunSpecFields(cmd, io, exit, plannedStdout, plannedStderr)
     else if cmd.hasDate then
-      ResolvedRunSpecFields(cmd, io, exit) ||
+      ResolvedRunSpecFields(cmd, io, exit, plannedStdout, plannedStderr) ||
       (DateParseFailureFields(
          old(io.trustedFilesystem()), cmd, old(io.fs()), old(io.now()),
          old(io.trustedTimeParses())) &&
        io.fs() == old(io.fs()) &&
-       io.stdout() == old(io.stdout()) &&
-       io.stderr() == old(io.stderr()) + InvalidDateMessageSpec(cmd.dateArg) &&
+       plannedStdout == old(io.stdout()) &&
+       plannedStderr == old(io.stderr()) + InvalidDateMessageSpec(cmd.dateArg) &&
        exit == 1) ||
       (cmd.hasReference &&
        var observed := old(io.trustedFilesystem())(
@@ -902,12 +726,12 @@ module TouchSpec {
        );
        observed.postFs == old(io.fs()) && !observed.ok &&
          io.fs() == old(io.fs()) &&
-         io.stdout() == old(io.stdout()) &&
-         io.stderr() == old(io.stderr()) +
+         plannedStdout == old(io.stdout()) &&
+         plannedStderr == old(io.stderr()) +
            ReferenceErrorMessageSpec(cmd.referenceArg, observed.err) &&
          exit == 1)
     else if cmd.hasReference then
-      ResolvedRunSpecFields(cmd, io, exit) ||
+      ResolvedRunSpecFields(cmd, io, exit, plannedStdout, plannedStderr) ||
       (var observed := old(io.trustedFilesystem())(
          BenchWorld.FilesystemQuery(
            old(io.fs()), cmd.referenceArg, cmd.followSymlink
@@ -915,90 +739,23 @@ module TouchSpec {
        );
        observed.postFs == old(io.fs()) && !observed.ok &&
          io.fs() == old(io.fs()) &&
-         io.stdout() == old(io.stdout()) &&
-         io.stderr() == old(io.stderr()) +
+         plannedStdout == old(io.stdout()) &&
+         plannedStderr == old(io.stderr()) +
            ReferenceErrorMessageSpec(cmd.referenceArg, observed.err) &&
          exit == 1)
     else
-      ResolvedRunSpecFields(cmd, io, exit)
+      ResolvedRunSpecFields(cmd, io, exit, plannedStdout, plannedStderr)
   }
 
-  twostate lemma ProjectedSuccessfulRunImpliesSpec(
-    raw: Schema.TouchCmdRaw,
-    io: BenchIO.IO,
-    exit: int,
-    source: Schema.TimeSource
-  )
-    requires Schema.Command(raw).mode == Schema.ModeRun
-    requires !(Schema.Command(raw).timeArg != "" &&
-               Schema.ClassifyTimeWord(Schema.Command(raw).timeArg) == Schema.TimeWordAmbiguous)
-    requires !(Schema.Command(raw).timeArg != "" &&
-               Schema.ClassifyTimeWord(Schema.Command(raw).timeArg) == Schema.TimeWordInvalid)
-    requires RequestedSourceFields(
-               old(io.trustedFilesystem()), Schema.Command(raw),
-               old(io.fs()), old(io.now()),
-               old(io.trustedTimeParses()), source
-             )
-    requires exit == 0
-    requires io.stderr() == old(io.stderr())
-    requires ProjectedSuccessfulRunSpecFields(
-               Schema.Command(raw), RequestedSelectionValue(Schema.Command(raw)), source,
-               old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-               io.fs(), io.stdout(), io.stdoutTimestamp()
-             )
-    ensures Spec(raw, io, exit)
+  twostate predicate Spec(raw: Schema.TouchCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
   {
-    var cmd := Schema.Command(raw);
-    assert ResolvedRunSpecFields(cmd, io, exit);
-    reveal Spec();
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                     io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 
-  twostate lemma ProjectedSuccessfulReferenceRunImpliesSpec(
-    raw: Schema.TouchCmdRaw,
-    io: BenchIO.IO,
-    exit: int,
-    source: Schema.TimeSource
-  )
-    requires Schema.Command(raw).mode == Schema.ModeRun
-    requires !Schema.Command(raw).hasTimestamp
-    requires !Schema.Command(raw).hasDate
-    requires Schema.Command(raw).hasReference
-    requires !(Schema.Command(raw).timeArg != "" &&
-               Schema.ClassifyTimeWord(Schema.Command(raw).timeArg) == Schema.TimeWordAmbiguous)
-    requires !(Schema.Command(raw).timeArg != "" &&
-               Schema.ClassifyTimeWord(Schema.Command(raw).timeArg) == Schema.TimeWordInvalid)
-    requires var observed := old(io.trustedFilesystem())(
-               BenchWorld.FilesystemQuery(
-                 old(io.fs()), Schema.Command(raw).referenceArg,
-                 Schema.Command(raw).followSymlink
-               )
-             );
-             observed.postFs == old(io.fs()) && observed.ok &&
-             source == Schema.TimeSourceFixed(
-                         observed.atimeSec, observed.atimeNsec,
-                         observed.mtimeSec, observed.mtimeNsec
-                       )
-    requires exit == 0
-    requires io.stderr() == old(io.stderr())
-    requires ProjectedSuccessfulRunSpecFields(
-               Schema.Command(raw), RequestedSelectionValue(Schema.Command(raw)), source,
-               old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-               io.fs(), io.stdout(), io.stdoutTimestamp()
-             )
-    ensures Spec(raw, io, exit)
-  {
-    var cmd := Schema.Command(raw);
-    reveal SuccessfulReferenceSourceFields();
-    assert SuccessfulReferenceSourceFields(
-             old(io.trustedFilesystem()), old(io.fs()),
-             cmd.referenceArg, cmd.followSymlink, source
-           );
-    assert RequestedSourceFields(
-             old(io.trustedFilesystem()), cmd, old(io.fs()), old(io.now()),
-             old(io.trustedTimeParses()), source
-           );
-    ProjectedSuccessfulRunImpliesSpec(raw, io, exit, source);
-  }
 
   twostate lemma ResolvedSingletonRunImpliesSpec(
     raw: Schema.TouchCmdRaw,
@@ -1007,7 +764,7 @@ module TouchSpec {
     source: Schema.TimeSource,
     hadError: bool,
     errOut: BenchWorld.Bytes
-  )
+  , plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     requires Schema.Command(raw).mode == Schema.ModeRun
     requires !(Schema.Command(raw).timeArg != "" &&
                Schema.ClassifyTimeWord(Schema.Command(raw).timeArg) == Schema.TimeWordAmbiguous)
@@ -1020,7 +777,7 @@ module TouchSpec {
                old(io.trustedTimeParses()), source
              )
     requires exit == (if hadError then 1 else 0)
-    requires RunStepSpecFields(
+    requires RunStepSpecFields(old(io.trustedNativeFailures()),
                old(io.trustedFilesystem()), Schema.Command(raw).files[0],
                Schema.Command(raw).noCreate,
                Schema.Command(raw).followSymlink,
@@ -1030,15 +787,15 @@ module TouchSpec {
                io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
              )
     requires io.stderr() == old(io.stderr()) + errOut
-    ensures Spec(raw, io, exit)
+    ensures PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    reveal Spec();
+    reveal PreparedSpec();
     var cmd := Schema.Command(raw);
-    RunStepSpecFieldsImpliesSingletonRun(
+    RunStepSpecFieldsImpliesSingletonRun(old(io.trustedNativeFailures()),
       old(io.trustedFilesystem()), cmd.files[0], cmd.noCreate, cmd.followSymlink,
       RequestedSelectionValue(cmd), source,
       old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-      io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
+      io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
     );
     assert exists source0: Schema.TimeSource ::
       RequestedSourceFields(
@@ -1047,18 +804,18 @@ module TouchSpec {
       ) &&
       exists hadError0: bool, errOut0: BenchWorld.Bytes ::
         exit == (if hadError0 then 1 else 0) &&
-        RunFilesSpecFields(
+        RunFilesSpecFields(old(io.trustedNativeFailures()),
           old(io.trustedFilesystem()), cmd.files, cmd.noCreate, cmd.followSymlink,
           RequestedSelectionValue(cmd), source0,
           old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-          io.fs(), io.stdout(), io.stdoutTimestamp(), hadError0, errOut0
+          io.fs(), plannedStdout, io.stdoutTimestamp(), hadError0, errOut0
         ) &&
-        io.stderr() == old(io.stderr()) + errOut0 by {
+        plannedStderr == old(io.stderr()) + errOut0 by {
       var source0 := source;
       var hadError0 := hadError;
       var errOut0 := errOut;
       assert cmd.files == [cmd.files[0]];
     }
-    assert ResolvedRunSpecFields(cmd, io, exit);
+    assert ResolvedRunSpecFields(cmd, io, exit, plannedStdout, plannedStderr);
   }
 }

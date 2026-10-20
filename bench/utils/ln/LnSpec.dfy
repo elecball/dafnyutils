@@ -6,6 +6,9 @@ include "../../core/StringEscaping.dfy"
 include "LnSchema.dfy"
 
 module LnSpec {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Errno = Errnos
   import BenchIO
   import IOContract
@@ -13,6 +16,63 @@ module LnSpec {
   import Schema = LnSchema
   import SE = StringEscaping
   import Utf8 = Utf8Semantics
+
+  datatype ObservationContext = ObservationContext(
+    filesystem: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
+    failures: (BenchWorld.NativeFailureRequest) -> int,
+    times: BenchWorld.StatusTimeObservations,
+    cursor: nat,
+    credentials: BenchWorld.ProcessCredentials)
+
+  ghost function Context(io: BenchIO.IO): (context: ObservationContext)
+    reads io.trustedFilesystemRegion, io.trustedNativeFailuresRegion,
+      io.credentialsRegion, io.statusObservationsRegion
+    ensures context == ObservationContext(io.trustedFilesystem(), io.trustedNativeFailures(),
+      io.statusObservations(), io.statusCursor(), io.credentials())
+  {
+    ObservationContext(io.trustedFilesystem(), io.trustedNativeFailures(),
+      io.statusObservations(), io.statusCursor(), io.credentials())
+  }
+
+  ghost function AtCursor(observations: ObservationContext, cursor: nat): (context: ObservationContext)
+    ensures context == ObservationContext(observations.filesystem, observations.failures,
+      observations.times, cursor, observations.credentials)
+  {
+    observations.(cursor := cursor)
+  }
+
+  ghost function ObservedDirectory(fs: BenchWorld.FileSystem, observations: ObservationContext,
+    path: string, follow: bool): bool
+  {
+    var result := IOContract.ObservedNativeStatusResultFields(
+      observations.times, observations.failures, observations.cursor, fs, path, follow);
+    result.Ok? && result.v.kind == BenchWorld.DirectoryKind
+  }
+
+  ghost predicate DirectoryObservation(fs: BenchWorld.FileSystem, observations: ObservationContext,
+    path: string, follow: bool, ok: bool, isDir: bool, err: int)
+  {
+    var result := IOContract.ObservedNativeStatusResultFields(
+      observations.times, observations.failures, observations.cursor, fs, path, follow);
+    ok == result.Ok? && isDir == ObservedDirectory(fs, observations, path, follow) &&
+    err == IOContract.ResultErrno(result)
+  }
+
+  ghost function DestinationReadCount(operands: seq<string>): nat
+    requires 1 <= |operands| <= 2
+  {
+    if |operands| == 2 && operands[0] != "" then 1 else 0
+  }
+
+  ghost function StatusReadCount(cmd: Schema.LnCmd, fs: BenchWorld.FileSystem,
+    observations: ObservationContext): nat
+  {
+    if cmd.mode != Schema.ModeRun || |cmd.operands| == 0 then 0
+    else if |cmd.operands| > 2 then
+      1 + (if ObservedDirectory(fs, observations, cmd.operands[|cmd.operands| - 1], true)
+        then (if cmd.symbolic then 0 else |cmd.operands| - 1) else 0)
+    else DestinationReadCount(cmd.operands) + (if cmd.symbolic then 0 else 1)
+  }
 
 
 
@@ -82,10 +142,15 @@ module LnSpec {
     "ln: hard links are outside this benchmark; use -s/--symbolic\n"
   }
 
-  function FailedAccessMessageSpec(source: BenchWorld.Path, err: int): BenchWorld.Bytes
+  function FailedAccessMessageText(source: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
   {
     "ln: failed to access " + SE.SpecQuoteAfBytes(Utf8.Encode(source)) +
-    ": " + ErrnoTextSpec(err) + "\n"
+    ": " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost function FailedAccessMessageSpec(source: BenchWorld.Path, err: int): BenchWorld.Bytes
+  {
+    FailedAccessMessageText(source, err, IOContract.CLocaleErrnoTextResult(err))
   }
 
   function HardDirectoryMessageSpec(source: BenchWorld.Path): BenchWorld.Bytes
@@ -94,9 +159,7 @@ module LnSpec {
     ": hard link not allowed for directory\n"
   }
 
-  function CreateHardLinkErrorMessageSpec(
-    source: BenchWorld.Path, linkName: BenchWorld.Path, err: int
-  ): BenchWorld.Bytes
+  function CreateHardLinkErrorMessageText(source: BenchWorld.Path, linkName: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
   {
     "ln: " +
     (if err == Errno.EMLINK then
@@ -106,7 +169,12 @@ module LnSpec {
      else
        "failed to create hard link " + SE.SpecQuoteAfBytes(Utf8.Encode(linkName)) +
        " => " + SE.SpecQuoteAfBytes(Utf8.Encode(source))) +
-    ": " + ErrnoTextSpec(err) + "\n"
+    ": " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost function CreateHardLinkErrorMessageSpec(source: BenchWorld.Path, linkName: BenchWorld.Path, err: int): BenchWorld.Bytes
+  {
+    CreateHardLinkErrorMessageText(source, linkName, err, IOContract.CLocaleErrnoTextResult(err))
   }
 
   function TrimTrailingSlashes(path: string): string
@@ -140,14 +208,14 @@ module LnSpec {
     BaseName(source)
   }
 
-  function LinkDestination(
-    fs: BenchWorld.FileSystem, operands: seq<string>
+  ghost function LinkDestination(
+    fs: BenchWorld.FileSystem, observations: ObservationContext, operands: seq<string>
   ): string
     requires 1 <= |operands| <= 2
   {
     if |operands| == 1 then InDirectory(".", operands[0])
     else if operands[0] == "" then operands[1]
-    else if LinkNameIsDirectoryFs(fs, operands[1]) then InDirectory(operands[1], operands[0])
+    else if ObservedDirectory(fs, observations, operands[1], true) then InDirectory(operands[1], operands[0])
     else operands[1]
   }
 
@@ -156,26 +224,34 @@ module LnSpec {
     "ln: target-directory link modes are outside this benchmark; use explicit SOURCE LINK_NAME\n"
   }
 
-  function CreateSymlinkErrorMessageSpec(
-    linkName: BenchWorld.Path, source: BenchWorld.Path, err: int
-  ): BenchWorld.Bytes
+  function CreateSymlinkErrorMessageText(linkName: BenchWorld.Path, source: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
   {
     "ln: failed to create symbolic link " + SE.SpecQuoteAfBytes(Utf8.Encode(linkName)) +
     (if source == "" then " -> " + SE.SpecQuoteAfBytes(Utf8.Encode(source)) else "") +
-    ": " + ErrnoTextSpec(err) + "\n"
+    ": " + Utf8.Encode(reason) + "\n"
   }
 
-  function TargetDirectoryErrorMessageSpec(target: BenchWorld.Path, err: int): BenchWorld.Bytes
+  ghost function CreateSymlinkErrorMessageSpec(linkName: BenchWorld.Path, source: BenchWorld.Path, err: int): BenchWorld.Bytes
+  {
+    CreateSymlinkErrorMessageText(linkName, source, err, IOContract.CLocaleErrnoTextResult(err))
+  }
+
+  function TargetDirectoryErrorMessageText(target: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
   {
     "ln: target " + SE.SpecQuoteAfBytes(Utf8.Encode(target)) +
-    ": " + ErrnoTextSpec(err) + "\n"
+    ": " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost function TargetDirectoryErrorMessageSpec(target: BenchWorld.Path, err: int): BenchWorld.Bytes
+  {
+    TargetDirectoryErrorMessageText(target, err, IOContract.CLocaleErrnoTextResult(err))
   }
 
   opaque ghost predicate LinkStepRelation(
     beforeFs: BenchWorld.FileSystem,
     afterFs: BenchWorld.FileSystem,
     now: int,
-    trustedFilesystem: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
+    trustedFilesystem: ObservationContext,
     source: BenchWorld.Path,
     destination: BenchWorld.Path,
     symbolic: bool,
@@ -185,14 +261,14 @@ module LnSpec {
   {
     if symbolic then
       exists ok: bool, err: int ::
-        IOContract.CreateSymlinkContractFields(
-          beforeFs, now, destination, source, ok, err, afterFs) &&
+        IOContract.CreateSymlinkSpec(
+          beforeFs, now, trustedFilesystem.credentials, trustedFilesystem.failures, afterFs, destination, source, ok, err) &&
         diagnostic == (if ok then [] else CreateSymlinkErrorMessageSpec(destination, source, err)) &&
         success == ok
     else
       exists sourceOk: bool, sourceIsDir: bool, sourceErr: int ::
-        IOContract.IsDirectoryStrictContractFields(
-          beforeFs, source, false, sourceOk, sourceIsDir, sourceErr) &&
+        DirectoryObservation(
+          beforeFs, trustedFilesystem, source, false, sourceOk, sourceIsDir, sourceErr) &&
         (if !sourceOk then
            afterFs == beforeFs &&
            diagnostic == FailedAccessMessageSpec(source, sourceErr) &&
@@ -204,7 +280,7 @@ module LnSpec {
          else
            exists ok: bool, err: int ::
              IOContract.CreateHardLinkSpec(
-               beforeFs, now, trustedFilesystem, afterFs,
+               beforeFs, now, trustedFilesystem.filesystem, afterFs,
                source, destination, ok, err) &&
              diagnostic == (if ok then [] else
                CreateHardLinkErrorMessageSpec(source, destination, err)) &&
@@ -215,7 +291,7 @@ module LnSpec {
     beforeFs: BenchWorld.FileSystem,
     afterFs: BenchWorld.FileSystem,
     now: int,
-    trustedFilesystem: (BenchWorld.TrustedFilesystemRequest) -> BenchWorld.TrustedFilesystemResult,
+    trustedFilesystem: ObservationContext,
     sources: seq<BenchWorld.Path>,
     directory: BenchWorld.Path,
     symbolic: bool,
@@ -241,7 +317,7 @@ module LnSpec {
       results[|sources|] == success &&
       (forall i: nat :: i < |sources| ==>
           LinkStepRelation(
-            states[i], states[i + 1], now, trustedFilesystem,
+            states[i], states[i + 1], now, AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
             sources[i], InDirectory(directory, sources[i]), symbolic,
             pieces[i], stepResults[i]) &&
           diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
@@ -259,77 +335,104 @@ module LnSpec {
     case Err(_) => false
   }
 
-  twostate predicate Spec(raw: Schema.LnCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+
+  function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    "ln: write error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost predicate EmissionOutcomeFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int,
+    committed: nat, outErr: int, errCommitted: nat, errErr: int
+  )
+  {
+    (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
+     else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
+    var finalDiagnostics := diagnostics +
+      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
+     else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
+    exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
+  }
+
+  ghost predicate EmissionFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
+      EmissionOutcomeFields(beforeOut, beforeErr, afterOut, afterErr, observations,
+                            output, diagnostics, normalExit, exit,
+                            committed, outErr, errCommitted, errErr)
+  }
+  twostate predicate PreparedSpec(raw: Schema.LnCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    reads io.fsRegion, io.nowRegion, io.trustedFilesystemRegion, io.statusObservationsRegion, io.trustedNativeFailuresRegion, io.credentialsRegion
   {
     var cmd := Schema.Command(raw);
-    if cmd.mode == Schema.ModeHelp then
+    io.statusCursor() == old(io.statusCursor()) + StatusReadCount(cmd, old(io.fs()), old(Context(io))) &&
+    (if cmd.mode == Schema.ModeHelp then
       io.fs() == old(io.fs()) &&
-      io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + HelpTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
       io.fs() == old(io.fs()) &&
-      io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + VersionTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if |cmd.operands| == 0 then
       io.fs() == old(io.fs()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + MissingOperandMessageSpec() &&
+      plannedStdout == [] &&
+      plannedStderr == [] + MissingOperandMessageSpec() &&
       exit == 1
     else if |cmd.operands| > 2 then
       var target := cmd.operands[|cmd.operands| - 1];
-      io.stdout() == old(io.stdout()) &&
+      plannedStdout == [] &&
       (exists targetOk: bool, targetIsDir: bool, targetErr: int ::
-        IOContract.IsDirectoryStrictContractFields(
-          old(io.fs()), target, true, targetOk, targetIsDir, targetErr) &&
+        DirectoryObservation(
+          old(io.fs()), old(Context(io)), target, true, targetOk, targetIsDir, targetErr) &&
         (if !(targetOk && targetIsDir) then
            io.fs() == old(io.fs()) &&
-           io.stderr() == old(io.stderr()) +
+           plannedStderr == [] +
              TargetDirectoryErrorMessageSpec(target, if targetOk then 20 else targetErr) &&
            exit == 1
          else
            exists diagnostic: BenchWorld.Bytes, success: bool
-             {:trigger LinkBatchRelation(old(io.fs()), io.fs(), old(io.now()),
-               old(io.trustedFilesystem()), cmd.operands[..|cmd.operands| - 1],
+             {:trigger LinkBatchRelation(old(io.fs()), io.fs(), old(io.now()), AtCursor(old(Context(io)), old(io.statusCursor()) + 1), cmd.operands[..|cmd.operands| - 1],
                target, cmd.symbolic, diagnostic, success)} ::
              LinkBatchRelation(
-               old(io.fs()), io.fs(), old(io.now()), old(io.trustedFilesystem()),
+               old(io.fs()), io.fs(), old(io.now()), AtCursor(old(Context(io)), old(io.statusCursor()) + 1),
                cmd.operands[..|cmd.operands| - 1], target, cmd.symbolic,
                diagnostic, success) &&
-             io.stderr() == old(io.stderr()) + diagnostic &&
+             plannedStderr == [] + diagnostic &&
              exit == (if success then 0 else 1)))
     else
       var source := cmd.operands[0];
-      var destination := LinkDestination(old(io.fs()), cmd.operands);
-      io.stdout() == old(io.stdout()) &&
-      (if cmd.symbolic then
-         exists ok: bool, err: int ::
-           IOContract.CreateSymlinkContractFields(
-             old(io.fs()), old(io.now()), destination, source, ok, err, io.fs()) &&
-           io.stderr() == old(io.stderr()) +
-             (if ok then [] else CreateSymlinkErrorMessageSpec(destination, source, err)) &&
-           exit == (if ok then 0 else 1)
-       else
-         exists sourceOk: bool, sourceIsDir: bool, sourceErr: int ::
-           IOContract.IsDirectoryStrictContractFields(
-             old(io.fs()), source, false, sourceOk, sourceIsDir, sourceErr) &&
-           (if !sourceOk then
-              io.fs() == old(io.fs()) &&
-              io.stderr() == old(io.stderr()) + FailedAccessMessageSpec(source, sourceErr) &&
-              exit == 1
-            else if sourceIsDir then
-              io.fs() == old(io.fs()) &&
-              io.stderr() == old(io.stderr()) + HardDirectoryMessageSpec(source) &&
-              exit == 1
-            else
-              exists ok: bool, err: int ::
-                IOContract.CreateHardLinkSpec(
-                  old(io.fs()), old(io.now()), old(io.trustedFilesystem()),
-                  io.fs(), source, destination, ok, err) &&
-                io.stderr() == old(io.stderr()) +
-                  (if ok then [] else CreateHardLinkErrorMessageSpec(source, destination, err)) &&
-                exit == (if ok then 0 else 1)))
+      var destination := LinkDestination(old(io.fs()), old(Context(io)), cmd.operands);
+      plannedStdout == [] &&
+      (exists diagnostic: BenchWorld.Bytes, success: bool
+        {:trigger LinkStepRelation(old(io.fs()), io.fs(), old(io.now()),
+          AtCursor(old(Context(io)), old(io.statusCursor()) + DestinationReadCount(cmd.operands)),
+          source, destination, cmd.symbolic, diagnostic, success)} ::
+        LinkStepRelation(old(io.fs()), io.fs(), old(io.now()),
+          AtCursor(old(Context(io)), old(io.statusCursor()) + DestinationReadCount(cmd.operands)),
+          source, destination, cmd.symbolic, diagnostic, success) &&
+        plannedStderr == diagnostic && exit == (if success then 0 else 1)))
+  }
+
+  twostate predicate Spec(raw: Schema.LnCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.fsRegion, io.nowRegion, io.trustedFilesystemRegion, io.statusObservationsRegion, io.trustedNativeFailuresRegion, io.credentialsRegion, io.stdoutRegion, io.stderrRegion, io.trustedStreamsRegion
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit, output, diagnostics) &&
+      EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                     io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 }

@@ -5,6 +5,9 @@ include "StatSchema.dfy"
 include "StatSpec.dfy"
 
 module StatCore {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import BenchWorld
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -255,62 +258,85 @@ module StatCore {
     assert (prefix + [path])[|prefix|] == path;
   }
 
-  twostate predicate CoreSummary(raw: Schema.StatCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.fsRegion, io.statusObservationsRegion, io.stdoutRegion, io.stderrRegion
+  opaque twostate predicate PreparedSummary(raw: Schema.StatCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    reads io.statusObservationsRegion
   {
     var cmd := Schema.WithStatusObservations(
-      Schema.Command(raw), io.statusObservations(), old(io.statusCursor())
+      Schema.Command(raw), io.statusObservations(), old(io.statusCursor()), old(io.trustedNativeFailures())
     );
     io.statusCursor() == old(io.statusCursor()) +
       (if cmd.mode == Schema.ModeRun then |cmd.files| else 0) &&
     if cmd.mode == Schema.ModeHelp then
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() && io.stderr() == old(io.stderr()) && exit == 0
+      plannedStdout == [] + Spec.HelpTextSpec() && plannedStderr == [] && exit == 0
     else if cmd.mode == Schema.ModeVersion then
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() && io.stderr() == old(io.stderr()) && exit == 0
+      plannedStdout == [] + Spec.VersionTextSpec() && plannedStderr == [] && exit == 0
     else if cmd.mode == Schema.ModeMissingFormat then
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.MissingFormatMessageSpec() && exit == 1
+      plannedStdout == [] &&
+      plannedStderr == [] + Spec.MissingFormatMessageSpec() && exit == 1
     else if cmd.mode == Schema.ModeMissingOperand then
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.MissingOperandMessageSpec() && exit == 1
+      plannedStdout == [] &&
+      plannedStderr == [] + Spec.MissingOperandMessageSpec() && exit == 1
     else
       Spec.FormatValidSpec(cmd.format) &&
       exists hadError: bool, out: BenchWorld.Bytes, errOut: BenchWorld.Bytes ::
         RunFilesSummaryFields(cmd, cmd.files, old(io.fs()), hadError, out, errOut) &&
-        io.stdout() == old(io.stdout()) + out && io.stderr() == old(io.stderr()) + errOut &&
+        plannedStdout == [] + out && plannedStderr == [] + errOut &&
         exit == (if hadError then 1 else 0)
   }
 
-  method RunCore(raw: Schema.StatCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.statusObservationsRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  twostate predicate CoreSummary(raw: Schema.StatCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit, output, diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit)
+  }
+
+  method Prepare(raw: Schema.StatCmdRaw, io: BenchIO.IO) returns (exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    modifies io.statusObservationsRegion
+    ensures PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
     decreases *
   {
+
+    ghost var emissionBeforeOut: StreamWorld.Bytes := [];
+    ghost var emissionBeforeErr: StreamWorld.Bytes := [];
+    plannedStdout := [];
+    plannedStderr := [];
     ghost var preFs := io.fs();
     ghost var preObservations := io.statusObservations();
+    ghost var preFailures := io.trustedNativeFailures();
     ghost var preStatus := io.statusCursor();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
+    ghost var preStdout := (emissionBeforeOut + plannedStdout);
+    ghost var preStderr := (emissionBeforeErr + plannedStderr);
     var cmd := Schema.Command(raw);
     ghost var summaryCmd := Schema.WithStatusObservations(
-      cmd, preObservations, preStatus
+      cmd, preObservations, preStatus, preFailures
     );
 
     if cmd.mode == Schema.ModeHelp {
-      var _ := io.WriteStdout(Spec.HelpTextSpec(), BenchWorld.ThrowOnError);
-      return 0;
+      plannedStdout := plannedStdout + (Spec.HelpTextSpec());
+      exit := 0;
+      assert PreparedSummary(raw, io, exit, plannedStdout, plannedStderr) by { hide *; reveal PreparedSummary(), Schema.WithStatusObservations(), Schema.Command(); }
+      return;
     }
     if cmd.mode == Schema.ModeVersion {
-      var _ := io.WriteStdout(Spec.VersionTextSpec(), BenchWorld.ThrowOnError);
-      return 0;
+      plannedStdout := plannedStdout + (Spec.VersionTextSpec());
+      exit := 0;
+      assert PreparedSummary(raw, io, exit, plannedStdout, plannedStderr) by { hide *; reveal PreparedSummary(), Schema.WithStatusObservations(), Schema.Command(); }
+      return;
     }
     if cmd.mode == Schema.ModeMissingFormat {
-      var _ := io.WriteStderr(Spec.MissingFormatMessageSpec(), BenchWorld.ThrowOnError);
-      return 1;
+      plannedStderr := plannedStderr + (Spec.MissingFormatMessageSpec());
+      exit := 1;
+      assert PreparedSummary(raw, io, exit, plannedStdout, plannedStderr) by { hide *; reveal PreparedSummary(), Schema.WithStatusObservations(), Schema.Command(); }
+      return;
     }
     if cmd.mode == Schema.ModeMissingOperand {
-      var _ := io.WriteStderr(Spec.MissingOperandMessageSpec(), BenchWorld.ThrowOnError);
-      return 1;
+      plannedStderr := plannedStderr + (Spec.MissingOperandMessageSpec());
+      exit := 1;
+      assert PreparedSummary(raw, io, exit, plannedStdout, plannedStderr) by { hide *; reveal PreparedSummary(), Schema.WithStatusObservations(), Schema.Command(); }
+      return;
     }
 
     var templateText, validCuts, templatePieces := RenderFormat(
@@ -324,8 +350,7 @@ module StatCore {
     var index := 0;
     while index < |cmd.files|
       invariant 0 <= index <= |cmd.files|
-      invariant io.stdout() == preStdout && io.stderr() == preStderr
-      invariant io.statusObservations() == preObservations
+      invariant (emissionBeforeOut + plannedStdout) == preStdout && (emissionBeforeErr + plannedStderr) == preStderr
       invariant io.statusCursor() == preStatus + index
       invariant RunFilesSummaryFields(
                   summaryCmd, cmd.files[..index], preFs,
@@ -335,10 +360,31 @@ module StatCore {
     {
       var path := cmd.files[index];
       ghost var statusIndex := index;
+      ghost var beforeStatus := io.statusCursor();
       var getFileStatusResult := io.GetFileStatus(path, cmd.followSymlink);
+      assert io.statusCursor() == beforeStatus + 1 by {
+        hide *;
+        reveal IOContract.GetFileStatusSpec();
+      }
       var ok := getFileStatusResult.Ok?;
       var status := IOContract.ResultValue(getFileStatusResult, BenchWorld.DEFAULT_FILE_STATUS);
       var errno := IOContract.ResultErrno(getFileStatusResult);
+      ghost var expected := Spec.StatusResultSpec(summaryCmd, preFs, statusIndex, path);
+      assert expected.Ok? <==> ok by {
+        hide *;
+        reveal IOContract.GetFileStatusSpec(), IOContract.ObservedNativeFileStatusContractFields();
+        reveal Spec.StatusResultSpec(), Schema.WithStatusObservations();
+      }
+      assert ok ==> expected.v == status by {
+        hide *;
+        reveal IOContract.GetFileStatusSpec(), IOContract.ObservedNativeFileStatusContractFields();
+        reveal Spec.StatusResultSpec(), Schema.WithStatusObservations();
+      }
+      assert !ok ==> IOContract.IOErrorErrno(expected.e) == errno by {
+        hide *;
+        reveal IOContract.GetFileStatusSpec(), IOContract.ObservedNativeFileStatusContractFields();
+        reveal Spec.StatusResultSpec(), Schema.WithStatusObservations();
+      }
       var stepError := false;
       var stepOut: BenchWorld.Bytes := "";
       var stepErrOut: BenchWorld.Bytes := "";
@@ -346,22 +392,29 @@ module StatCore {
         var text := RenderUsingTemplate(
           cmd.format, status, templateText, validCuts, templatePieces
         );
-        ghost var expected := Spec.StatusResultSpec(
-          summaryCmd, preFs, statusIndex, path
-        );
-        RenderingIgnoresRawMetadata(cmd.format, status, expected.v, text);
         stepOut := text + "\n";
         assert FileStepSummaryFields(
           summaryCmd, statusIndex, path, preFs,
           stepError, stepOut, stepErrOut
-        );
+        ) by {
+          hide *;
+          reveal FileStepSummaryFields(), Spec.ErrorMessageSpec(), Spec.ErrnoTextSpec();
+          reveal Schema.WithStatusObservations();
+          reveal IOContract.GetCLocaleErrnoTextSpec();
+        }
       } else {
         stepError := true;
-        stepErrOut := Spec.ErrorMessageSpec(path, errno);
+        var reason := io.GetCLocaleErrnoText(errno);
+        stepErrOut := Spec.ErrorMessageWithReasonSpec(path, reason);
         assert FileStepSummaryFields(
           summaryCmd, statusIndex, path, preFs,
           stepError, stepOut, stepErrOut
-        );
+        ) by {
+          hide *;
+          reveal FileStepSummaryFields(), Spec.ErrorMessageSpec(), Spec.ErrnoTextSpec();
+          reveal Schema.WithStatusObservations();
+          reveal IOContract.GetCLocaleErrnoTextSpec();
+        }
       }
       ghost var prefixError := hadError;
       ghost var prefixOut := output;
@@ -371,7 +424,7 @@ module StatCore {
       output := output + stepOut;
       errors := errors + stepErrOut;
       index := index + 1;
-      assert cmd.files[..index] == prefixFiles + [path];
+      assert cmd.files[..index] == prefixFiles + [path] by { hide *; }
       RunFilesSummarySnoc(summaryCmd, prefixFiles, path, preFs,
         prefixError, prefixOut, prefixErrOut, stepError, stepOut, stepErrOut);
     }
@@ -380,12 +433,12 @@ module StatCore {
     assert RunFilesSummaryFields(
       summaryCmd, cmd.files, preFs, hadError, output, errors
     );
-    var _ := io.WriteStdout(output, BenchWorld.ThrowOnError);
-    assert io.stdout() == preStdout + output;
-    assert io.stderr() == preStderr;
-    var _ := io.WriteStderr(errors, BenchWorld.ThrowOnError);
-    assert io.stdout() == preStdout + output;
-    assert io.stderr() == preStderr + errors;
+    plannedStdout := plannedStdout + (output);
+    assert (emissionBeforeOut + plannedStdout) == preStdout + output by { hide *; }
+    assert (emissionBeforeErr + plannedStderr) == preStderr;
+    plannedStderr := plannedStderr + (errors);
+    assert (emissionBeforeOut + plannedStdout) == preStdout + output by { hide *; }
+    assert (emissionBeforeErr + plannedStderr) == preStderr + errors by { hide *; }
     exit := if hadError then 1 else 0;
     assert exists finalHadError: bool,
         finalOut: BenchWorld.Bytes,
@@ -396,9 +449,56 @@ module StatCore {
         RunFilesSummaryFields(
           summaryCmd, cmd.files, preFs, finalHadError, finalOut, finalErrOut
         ) &&
-        io.stdout() == preStdout + finalOut &&
-        io.stderr() == preStderr + finalErrOut &&
+        (emissionBeforeOut + plannedStdout) == preStdout + finalOut &&
+        (emissionBeforeErr + plannedStderr) == preStderr + finalErrOut &&
         exit == (if finalHadError then 1 else 0);
-    assert CoreSummary(raw, io, exit);
+    assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
+      hide *;
+      reveal PreparedSummary(), Schema.WithStatusObservations(), Schema.Command();
+    }
+  }
+
+
+  method Flush(output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+               normalExit: int, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit)
+  {
+    var committed: nat := 0;
+    var outErr := 0;
+    if |output| != 0 {
+      var result := io.WriteStdout(output);
+      committed := StreamContract.WriteResultCommitted(result);
+      outErr := StreamContract.ResultErrno(result);
+    }
+    var finalDiagnostics := diagnostics;
+    if outErr != 0 {
+      var reason := io.GetCLocaleErrnoText(outErr);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+    }
+    assert finalDiagnostics == diagnostics + (if outErr == 0 then []
+      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errCommitted: nat := 0;
+    var errErr := 0;
+    if |finalDiagnostics| != 0 {
+      var result := io.WriteStderr(finalDiagnostics);
+      errCommitted := StreamContract.WriteResultCommitted(result);
+      errErr := StreamContract.ResultErrno(result);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        finalDiagnostics, errCommitted, errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+    assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+  }
+
+  method RunCore(raw: Schema.StatCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.statusObservationsRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, output, diagnostics := Prepare(raw, io);
+    exit := Flush(output, diagnostics, normalExit, io);
   }
 }

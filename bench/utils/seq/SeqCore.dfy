@@ -1,9 +1,12 @@
+include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "SeqSchema.dfy"
 include "SeqSpec.dfy"
 
 module SeqCore {
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -686,12 +689,12 @@ module SeqCore {
         );
   }
 
-  twostate predicate CoreSummary(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSummary(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+
   {
     var result := Evaluate(raw);
-    io.stdout() == old(io.stdout()) + result.stdout &&
-    io.stderr() == old(io.stderr()) + result.stderr &&
+    plannedStdout == old(io.stdout()) + result.stdout &&
+    plannedStderr == old(io.stderr()) + result.stderr &&
     exit == result.exit
   }
 
@@ -731,15 +734,74 @@ module SeqCore {
     message := Spec.ZeroIncrementMessage(token);
   }
 
+  method Prepare(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr)
+    decreases *
+  {
+    plannedOut := [];
+    plannedErr := [];
+    ghost var initialStdout := io.stdout();
+    ghost var initialStderr := io.stderr();
+
+    var result := Evaluate(raw);
+    plannedOut := plannedOut + result.stdout;
+    plannedErr := plannedErr + result.stderr;
+    exit := result.exit;
+    assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
+  }
+
+  twostate predicate CoreSummary(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
   method RunCore(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures CoreSummary(raw, io, exit)
     decreases *
   {
-    var result := Evaluate(raw);
-    var _ := io.WriteStdout(result.stdout, BenchWorld.ThrowOnError);
-    var _ := io.WriteStderr(result.stderr, BenchWorld.ThrowOnError);
-    exit := result.exit;
-    assert CoreSummary(raw, io, exit);
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

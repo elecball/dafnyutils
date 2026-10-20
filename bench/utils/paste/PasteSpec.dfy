@@ -5,6 +5,9 @@ include "PasteSchema.dfy"
 include "../../core/StringEscaping.dfy"
 
 module PasteSpec {
+  import StreamContract = IOContract
+  import StreamUtf8 = Utf8Semantics
+
   import Result = Results
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -145,12 +148,15 @@ module PasteSpec {
   {
     match cmd.inputs[i]
     case Stdin =>
-      result == Result.Ok(
-        if PasteSchema.Stdin in cmd.inputs[..i]
-        then []
-        else preStdin)
+      result == IOContract.ObservedReadStdinResultFields(preStdin, preStreams)
     case File(path) =>
       result == IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
+  }
+
+  function BlockingReadFailure(err: BenchWorld.IOError): bool
+  {
+    !IOContract.IOErrorIsDirectory(err) && !err.StreamFailure? &&
+    !(err.ReadFailure? && err.readStage != BenchWorld.OpenFailed)
   }
 
   ghost predicate EntryRelation(
@@ -159,16 +165,12 @@ module PasteSpec {
                               entry: Entry
   )
   {
-    match result
-    case Ok(data) =>
+    entry.readOk == (result.Ok? || !BlockingReadFailure(result.e)) &&
       exists terminated: seq<bool>,
         fragments: seq<BenchWorld.Bytes>,
         cuts: seq<nat> ::
-        entry.readOk &&
         LinePartitionRelation(
-          data, recordDelimiter, entry.lines, terminated, fragments, cuts)
-    case Err(err) =>
-      entry == Entry([], IOContract.IOErrorIsDirectory(err))
+          IOContract.ReadResultData(result), recordDelimiter, entry.lines, terminated, fragments, cuts)
   }
 
   ghost predicate InputObservationRelation(
@@ -188,8 +190,9 @@ module PasteSpec {
       observation.entry) &&
     match cmd.inputs[i]
     case Stdin =>
-      observation.errorPiece == [] &&
-      !observation.failed &&
+      observation.errorPiece == (if observation.result.Ok? then []
+        else ErrorMessage("-", observation.result.e)) &&
+      observation.failed == observation.result.Err? &&
       !observation.blocking
     case File(path) =>
       match observation.result
@@ -200,7 +203,7 @@ module PasteSpec {
       case Err(err) =>
         observation.errorPiece == ErrorMessage(path, err) &&
         observation.failed &&
-        observation.blocking == (!IOContract.IOErrorIsDirectory(err))
+        observation.blocking == BlockingReadFailure(err)
   }
 
   ghost function ObservationEntries(
@@ -361,22 +364,51 @@ module PasteSpec {
     hadBlockingError: bool
   )
   {
-    exists observations: seq<InputObservation> ::
+    exists observations: seq<InputObservation>, states: seq<BenchWorld.Bytes>,
+      stdinData: BenchWorld.Bytes, cuts: seq<nat> ::
       |observations| == |cmd.inputs| &&
+      StdinStatesRelation(cmd, preStreams, preStdin, postStdin, states) &&
+      StdinDataRelation(cmd, observations, stdinData, cuts) &&
       (forall i: nat | i < |observations| ::
          InputObservationRelation(
-           cmd, preFs, preStreams, preStdin, i, observations[i])) &&
+           cmd, preFs, preStreams, states[i], i, observations[i])) &&
       EntriesForOutputRelation(
-        cmd, preStdin, ObservationEntries(observations), entries) &&
+        cmd, stdinData, ObservationEntries(observations), entries) &&
       VisibleErrorRelation(cmd.serial, observations, errorOutput) &&
       hadError ==
       (exists i: nat ::
          i < |observations| && observations[i].failed) &&
       hadBlockingError ==
       (exists i: nat ::
-         i < |observations| && observations[i].blocking) &&
-      postStdin ==
-      (if HasStdinInput(cmd.inputs) then [] else preStdin)
+         i < |observations| && observations[i].blocking)
+  }
+
+  ghost predicate StdinStatesRelation(
+    cmd: PasteSchema.PasteCmd,
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    before: BenchWorld.Bytes, after: BenchWorld.Bytes,
+    states: seq<BenchWorld.Bytes>
+  )
+  {
+    |states| == |cmd.inputs| + 1 && states[0] == before &&
+    states[|cmd.inputs|] == after &&
+    forall i: nat {:trigger states[i + 1]} | i < |cmd.inputs| ::
+      states[i + 1] == (if cmd.inputs[i].Stdin?
+        then IOContract.ObservedReadStdinRemainingFields(states[i], observations)
+        else states[i])
+  }
+
+  ghost predicate StdinDataRelation(
+    cmd: PasteSchema.PasteCmd, observations: seq<InputObservation>,
+    data: BenchWorld.Bytes, cuts: seq<nat>
+  )
+  {
+    |observations| == |cmd.inputs| && |cuts| == |cmd.inputs| + 1 &&
+    cuts[0] == 0 && cuts[|cmd.inputs|] == |data| &&
+    forall i: nat {:trigger cuts[i]} | i < |cmd.inputs| ::
+      cuts[i] <= cuts[i + 1] <= |data| &&
+      data[cuts[i]..cuts[i + 1]] == (if cmd.inputs[i].Stdin?
+        then IOContract.ReadResultData(observations[i].result) else [])
   }
 
   ghost predicate EscapedDelimiterRelation(
@@ -640,18 +672,18 @@ module PasteSpec {
       ParallelOutputRelation(entries, delims, recordDelimiter, output)
   }
 
-  twostate predicate SpecCmd(cmd: PasteSchema.PasteCmd, io: BenchIO.IO, exit: int)
-    reads io.fsRegion, io.trustedStreamsRegion, io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  twostate predicate SpecCmd(cmd: PasteSchema.PasteCmd, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.Footprint() - {io.stdoutRegion, io.stderrRegion}
   {
     if cmd.mode == PasteSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + HelpText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + HelpText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == PasteSchema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + VersionText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + VersionText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else
       exists plan: DelimPlan ::
@@ -659,8 +691,8 @@ module PasteSpec {
         match plan
         case Err(stderr) =>
           io.stdin() == old(io.stdin()) &&
-          io.stdout() == old(io.stdout()) &&
-          io.stderr() == old(io.stderr()) + stderr &&
+          plannedStdout == old(io.stdout()) &&
+          plannedStderr == old(io.stderr()) + stderr &&
           exit == 1
         case Ok(delims) =>
           exists entries: seq<Entry>,
@@ -674,15 +706,69 @@ module PasteSpec {
             OutputRelation(
               cmd.serial, delims, RecordDelimiter(cmd.zeroTerminated),
               entries, output) &&
-            io.stdout() == old(io.stdout()) +
+            plannedStdout == old(io.stdout()) +
             (if hadBlockingError && !cmd.serial then [] else output) &&
-            io.stderr() == old(io.stderr()) + errorOutput &&
+            plannedStderr == old(io.stderr()) + errorOutput &&
             exit == (if hadError then 1 else 0)
   }
 
-  twostate predicate Spec(raw: PasteSchema.PasteCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.fsRegion, io.trustedStreamsRegion, io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  twostate predicate PreparedSpec(raw: PasteSchema.PasteCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.Footprint() - {
+    io.stdoutRegion, io.stderrRegion}
   {
-    SpecCmd(PasteSchema.Command(raw), io, exit)
+    SpecCmd(PasteSchema.Command(raw), io, exit, plannedStdout, plannedStderr)
+  }
+
+  function Emits(raw: PasteSchema.PasteCmdRaw): bool
+  {
+    true
+  }
+
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode("paste: write error: " + message + "\n")
+  }
+
+  ghost predicate EmitFields(
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    beforeStdout: BenchWorld.Bytes, beforeStderr: BenchWorld.Bytes,
+    afterStdout: BenchWorld.Bytes, afterStderr: BenchWorld.Bytes,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    var stdoutResult := observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+    stdoutResult.StreamWriteResult? &&
+    var errors := diagnostics + (if stdoutResult.err == 0 then [] else
+      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+    var stderrResult := observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+    stderrResult.StreamWriteResult? &&
+    StreamContract.WriteStdoutSpec(
+      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err) &&
+    StreamContract.WriteStderrSpec(
+      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err) &&
+    exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
+  }
+
+  twostate predicate Emission(raw: PasteSchema.PasteCmdRaw, io: BenchIO.IO,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int)
+    reads io.Footprint()
+  {
+    if Emits(raw) then
+      EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+    else
+      io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
+      exit == normalExit
+  }
+
+  twostate predicate Spec(raw: PasteSchema.PasteCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

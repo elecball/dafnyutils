@@ -6,6 +6,8 @@ include "TailRecordCore.dfy"
 include "TailSpec.dfy"
 
 module TailCore {
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -123,7 +125,7 @@ module TailCore {
       case File(path) => path;
   }
 
-  ghost function PrefixStdinCore(cmd: TailSchema.TailCmd, preStdin: BenchWorld.Bytes, i: nat): BenchWorld.Bytes
+  ghost function PrefixStdinCore(cmd: TailSchema.TailCmd, preStdin: BenchWorld.Bytes, i: nat, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
     requires i <= |cmd.inputs|
     decreases i
   {
@@ -131,8 +133,8 @@ module TailCore {
       preStdin
     else
       match cmd.inputs[i - 1]
-      case Stdin(_) => []
-      case File(_) => PrefixStdinCore(cmd, preStdin, i - 1)
+      case Stdin(_) => IOContract.ObservedReadStdinRemainingFields(PrefixStdinCore(cmd, preStdin, i - 1, preStreams), preStreams)
+      case File(_) => PrefixStdinCore(cmd, preStdin, i - 1, preStreams)
   }
 
   ghost function ReadResultCore(
@@ -145,7 +147,7 @@ module TailCore {
     requires i < |cmd.inputs|
   {
     match cmd.inputs[i]
-    case Stdin(_) => Result.Ok(PrefixStdinCore(cmd, preStdin, i))
+    case Stdin(_) => IOContract.ObservedReadStdinResultFields(PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
     case File(path) => IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
   }
 
@@ -246,12 +248,12 @@ module TailCore {
   {
     match result
     case Ok(_) => !SuppressZeroTrailingSelection(cmd)
-    case Err(err) => IOContract.IOErrorIsDirectory(err)
+    case Err(err) => IOContract.IOErrorIsDirectory(err) || ((err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !SuppressZeroTrailingSelection(cmd))
   } by method {
     return
       match result
       case Ok(_) => !SuppressZeroTrailingSelection(cmd)
-      case Err(err) => IOContract.IOErrorIsDirectory(err);
+      case Err(err) => IOContract.IOErrorIsDirectory(err) || ((err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !SuppressZeroTrailingSelection(cmd));
   }
 
   function OutputPiece(
@@ -267,7 +269,10 @@ module TailCore {
         []
       else
         HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, data)
-    case Err(err) => if IOContract.IOErrorIsDirectory(err) then HeaderForInput(cmd, input, printedHeaders) else []
+    case Err(err) =>
+      if (err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !SuppressZeroTrailingSelection(cmd) then
+        HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, err.partial)
+      else if IOContract.IOErrorIsDirectory(err) then HeaderForInput(cmd, input, printedHeaders) else []
   } by method {
     match result
     case Ok(data) =>
@@ -277,7 +282,9 @@ module TailCore {
         return HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, data);
       }
     case Err(err) =>
-      if IOContract.IOErrorIsDirectory(err) {
+      if (err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !SuppressZeroTrailingSelection(cmd) {
+        return HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, err.partial);
+      } else if IOContract.IOErrorIsDirectory(err) {
         return HeaderForInput(cmd, input, printedHeaders);
       } else {
         return [];
@@ -287,7 +294,7 @@ module TailCore {
   function ErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
-    case Stdin(_) => []
+    case Stdin(_) => if result.Err? then Spec.StdinReadErrorMessage(result.e) else []
     case File(path) =>
       match result
       case Ok(_) => []
@@ -295,7 +302,7 @@ module TailCore {
   } by method {
     match input
     case Stdin(_) =>
-      return [];
+      return if result.Err? then Spec.StdinReadErrorMessage(result.e) else [];
     case File(path) =>
       match result
       case Ok(_) =>
@@ -307,7 +314,7 @@ module TailCore {
   function HadErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
   {
     match input
-    case Stdin(_) => false
+    case Stdin(_) => result.Err?
     case File(_) =>
       match result
       case Ok(_) => false
@@ -315,7 +322,7 @@ module TailCore {
   } by method {
     return
       match input
-      case Stdin(_) => false
+      case Stdin(_) => result.Err?
       case File(_) =>
         match result
         case Ok(_) => false
@@ -405,43 +412,43 @@ module TailCore {
     PrefixOutputCore(cmd, preFs, preStdin, |cmd.inputs|, preStreams)
   }
 
-  twostate predicate CoreSummary(raw: TailSchema.TailCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSummary(raw: TailSchema.TailCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := Command(raw);
     if cmd.mode == TailSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.HelpText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == TailSchema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.VersionText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == TailSchema.ModeInvalidCount then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue) &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue) &&
       exit == 1
     else if SuppressZeroTrailingSelection(cmd) then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else
-      io.stdin() == PrefixStdinCore(cmd, old(io.stdin()), |cmd.inputs|) &&
-      io.stdout() == old(io.stdout()) + RunOutputCore(cmd, old(io.fs()), old(io.stdin()), old(io.trustedStreams())) &&
-      io.stderr() == old(io.stderr()) + PrefixErrorOutputCore(cmd, old(io.fs()), old(io.stdin()), |cmd.inputs|, old(io.trustedStreams())) &&
+      io.stdin() == PrefixStdinCore(cmd, old(io.stdin()), |cmd.inputs|, old(io.trustedStreams())) &&
+      plannedStdout == old(io.stdout()) + RunOutputCore(cmd, old(io.fs()), old(io.stdin()), old(io.trustedStreams())) &&
+      plannedStderr == old(io.stderr()) + PrefixErrorOutputCore(cmd, old(io.fs()), old(io.stdin()), |cmd.inputs|, old(io.trustedStreams())) &&
       exit == (if PrefixHadErrorCore(cmd, old(io.fs()), old(io.stdin()), |cmd.inputs|, old(io.trustedStreams())) then 1 else 0)
   }
 
-  lemma PrefixStdinCoreStep(cmd: TailSchema.TailCmd, preStdin: BenchWorld.Bytes, i: nat)
+  lemma PrefixStdinCoreStep(cmd: TailSchema.TailCmd, preStdin: BenchWorld.Bytes, i: nat, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
     requires i < |cmd.inputs|
-    ensures PrefixStdinCore(cmd, preStdin, i + 1) ==
+    ensures PrefixStdinCore(cmd, preStdin, i + 1, preStreams) ==
             match cmd.inputs[i]
-            case Stdin(_) => IOContract.AfterReadStdinFields(PrefixStdinCore(cmd, preStdin, i))
-            case File(_) => PrefixStdinCore(cmd, preStdin, i)
+            case Stdin(_) => IOContract.ObservedReadStdinRemainingFields(PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
+            case File(_) => PrefixStdinCore(cmd, preStdin, i, preStreams)
   {
   }
 
@@ -518,44 +525,54 @@ module TailCore {
     out := Spec.VersionText();
   }
 
-  method RunCore(raw: TailSchema.TailCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  method {:isolate_assertions} Prepare(raw: TailSchema.TailCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr)
     decreases *
   {
+    hide *;
+    reveal PreparedSummary(), PrefixStdinCore(), PrefixOutputCore(), PrefixErrorOutputCore();
+    reveal PrefixHadErrorCore(), PrefixHeaderCountCore(), RunOutputCore(), ReadResultCore();
+    reveal SuppressZeroTrailingSelection();
+    plannedOut := [];
+    plannedErr := [];
+    ghost var initialStdout := io.stdout();
+    ghost var initialStderr := io.stderr();
+
     ghost var preFs := io.fs();
+    ghost var preStreams := io.trustedStreams();
     ghost var preStdin := io.stdin();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
+    ghost var preStdout := (initialStdout + plannedOut);
+    ghost var preStderr := (initialStderr + plannedErr);
     var cmd := Command(raw);
 
     if cmd.mode == TailSchema.ModeHelp {
       var help := GetHelpText();
-      var _ := io.WriteStdout(help, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + help;
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stderr() == preStderr;
-      assert io.stdout() == preStdout + Spec.HelpText();
+      assert (initialStderr + plannedErr) == preStderr;
+      assert (initialStdout + plannedOut) == preStdout + Spec.HelpText();
       return;
     }
 
     if cmd.mode == TailSchema.ModeVersion {
       var version := GetVersionText();
-      var _ := io.WriteStdout(version, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + version;
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stderr() == preStderr;
-      assert io.stdout() == preStdout + Spec.VersionText();
+      assert (initialStderr + plannedErr) == preStderr;
+      assert (initialStdout + plannedOut) == preStdout + Spec.VersionText();
       return;
     }
 
     if cmd.mode == TailSchema.ModeInvalidCount {
       var invalid := Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
-      var _ := io.WriteStderr(invalid, BenchWorld.ThrowOnError);
+      plannedErr := plannedErr + invalid;
       exit := 1;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout;
-      assert io.stderr() == preStderr + Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
+      assert (initialStdout + plannedOut) == preStdout;
+      assert (initialStderr + plannedErr) == preStderr + Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
       return;
     }
 
@@ -563,8 +580,8 @@ module TailCore {
     if suppressZero {
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout;
-      assert io.stderr() == preStderr;
+      assert (initialStdout + plannedOut) == preStdout;
+      assert (initialStderr + plannedErr) == preStderr;
       return;
     }
 
@@ -576,9 +593,9 @@ module TailCore {
     var i := 0;
     while i < |cmd.inputs|
       invariant 0 <= i <= |cmd.inputs|
-      invariant io.stdin() == PrefixStdinCore(cmd, preStdin, i)
-      invariant io.stdout() == preStdout
-      invariant io.stderr() == preStderr
+      invariant io.stdin() == PrefixStdinCore(cmd, preStdin, i, preStreams)
+      invariant (initialStdout + plannedOut) == preStdout
+      invariant (initialStderr + plannedErr) == preStderr
       invariant out == PrefixOutputCore(cmd, preFs, preStdin, i, old(io.trustedStreams()))
       invariant err == PrefixErrorOutputCore(cmd, preFs, preStdin, i, old(io.trustedStreams()))
       invariant hadError == PrefixHadErrorCore(cmd, preFs, preStdin, i, old(io.trustedStreams()))
@@ -590,21 +607,19 @@ module TailCore {
       match input {
         case Stdin(_) =>
           ghost var beforeStdin := io.stdin();
-          var data :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-          readResult := Result.Ok(data);
-          PrefixStdinCoreStep(cmd, preStdin, i);
+          readResult := io.ReadStdin();
+          PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
           PrefixHeaderCountCoreStep(cmd, preFs, preStdin, i, old(io.trustedStreams()));
           PrefixOutputCoreStep(cmd, preFs, preStdin, i, old(io.trustedStreams()));
           PrefixErrorOutputCoreStep(cmd, preFs, preStdin, i, old(io.trustedStreams()));
           PrefixHadErrorCoreStep(cmd, preFs, preStdin, i, old(io.trustedStreams()));
-          assert beforeStdin == PrefixStdinCore(cmd, preStdin, i);
-          assert IOContract.ReadStdinAllFields(beforeStdin, io.stdin(), data);
-          assert data == beforeStdin;
+          assert beforeStdin == PrefixStdinCore(cmd, preStdin, i, preStreams);
+          assert readResult == IOContract.ObservedReadStdinResultFields(beforeStdin, preStreams);
         case File(path) =>
           readResult := io.ReadFile(path);
       }
       if input.File? {
-        PrefixStdinCoreStep(cmd, preStdin, i);
+        PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
         PrefixHeaderCountCoreStep(cmd, preFs, preStdin, i, old(io.trustedStreams()));
         PrefixOutputCoreStep(cmd, preFs, preStdin, i, old(io.trustedStreams()));
         PrefixErrorOutputCoreStep(cmd, preFs, preStdin, i, old(io.trustedStreams()));
@@ -625,24 +640,78 @@ module TailCore {
     }
 
     if |out| > 0 {
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + out;
     } else {
       assert out == [];
-      assert io.stdout() == preStdout + out;
+      assert (initialStdout + plannedOut) == preStdout + out;
     }
     if |err| > 0 {
-      var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
+      plannedErr := plannedErr + err;
     } else {
       assert err == [];
-      assert io.stderr() == preStderr + err;
+      assert (initialStderr + plannedErr) == preStderr + err;
     }
     exit := if hadError then 1 else 0;
 
     assert out == RunOutputCore(cmd, preFs, preStdin, old(io.trustedStreams()));
     assert err == PrefixErrorOutputCore(cmd, preFs, preStdin, |cmd.inputs|, old(io.trustedStreams()));
     assert hadError == PrefixHadErrorCore(cmd, preFs, preStdin, |cmd.inputs|, old(io.trustedStreams()));
-    assert io.stdin() == PrefixStdinCore(cmd, preStdin, |cmd.inputs|);
-    assert io.stdout() == preStdout + RunOutputCore(cmd, preFs, preStdin, old(io.trustedStreams()));
-    assert io.stderr() == preStderr + PrefixErrorOutputCore(cmd, preFs, preStdin, |cmd.inputs|, old(io.trustedStreams()));
+    assert io.stdin() == PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams);
+    assert (initialStdout + plannedOut) == preStdout + RunOutputCore(cmd, preFs, preStdin, old(io.trustedStreams()));
+    assert (initialStderr + plannedErr) == preStderr + PrefixErrorOutputCore(cmd, preFs, preStdin, |cmd.inputs|, old(io.trustedStreams()));
+  }
+
+  twostate predicate CoreSummary(raw: TailSchema.TailCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: TailSchema.TailCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

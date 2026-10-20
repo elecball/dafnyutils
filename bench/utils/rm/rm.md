@@ -56,7 +56,7 @@ Trusted operations: `GetFileTimes`, `OpenDir`, `ReadDir`, `CloseDir`,
 `GetCLocaleErrnoText`, and standard-output/error writes. These are existing
 shared interfaces. Utility code implements option policies, traversal,
 termination, safeguards, error continuation and message ordering. Output and diagnostics are buffered until every filesystem operation has
-finished, then written with `ReturnError`. Exact native committed prefixes,
+finished, then written with explicit `IOResult` checks. Exact native committed prefixes,
 stdout write-error diagnostics, stderr receipts and the final status are
 part of `StreamResults`; a failed verbose flush preserves all removals.
 

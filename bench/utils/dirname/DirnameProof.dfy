@@ -5,6 +5,8 @@ include "DirnameCore.dfy"
 include "DirnameSpec.dfy"
 
 module DirnameProof {
+  import BenchWorld
+
   import Utf8 = Utf8Semantics
   import BenchIO
   import Schema = DirnameSchema
@@ -234,9 +236,9 @@ module DirnameProof {
     );
   }
 
-  twostate lemma CoreSummaryImpliesSpec(raw: Schema.DirnameCmdRaw, io: BenchIO.IO, exit: int)
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.DirnameCmdRaw, io: BenchIO.IO, exit: int, new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     var cmd := Core.Command(raw);
     if cmd.mode == Core.ModeHelp {
@@ -245,8 +247,20 @@ module DirnameProof {
     } else {
       var out :|
         Core.RunOutputSummary(cmd, out) &&
-        io.stdout() == old(io.stdout()) + Utf8.Encode(out);
+        plannedStdout == old(io.stdout()) + Utf8.Encode(out);
       RunOutputSummaryGivesRelation(cmd, out);
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.DirnameCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

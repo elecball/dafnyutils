@@ -6,6 +6,9 @@ include "../../core/StringEscaping.dfy"
 include "ReadlinkSchema.dfy"
 
 module ReadlinkSpec {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Errno = Errnos
   import Result = Results
   import BenchIO
@@ -34,17 +37,7 @@ module ReadlinkSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  function IOErrorFromErrnoSpec(errno: int): BenchWorld.IOError
-  {
-    if errno == Errno.ENOENT then
-      BenchWorld.NoSuchFile
-    else if errno == Errno.EACCES then
-      BenchWorld.PermissionDenied
-    else if errno == Errno.ENOTDIR then
-      BenchWorld.NotDirectory
-    else
-      BenchWorld.InvalidPath
-  }
+
 
   function HelpTextSpec(): BenchWorld.Bytes
   {
@@ -146,9 +139,9 @@ module ReadlinkSpec {
   function MakeAbsoluteSpec(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
   {
     if BenchWorld.IsAbsolutePath(path) then
-      BenchWorld.NormalizePath(path)
+      path
     else
-      BenchWorld.NormalizePath(BenchWorld.AppendPath(cwd, path))
+      BenchWorld.AppendPath(cwd, path)
   }
 
   function EndsInSlashSpec(path: BenchWorld.Path): bool
@@ -156,46 +149,31 @@ module ReadlinkSpec {
     |path| > 0 && path[|path| - 1] == '/'
   }
 
-  function ReadlinkResultFieldsSpec(
-    fs: BenchWorld.FileSystem,
-    cwd: BenchWorld.Path,
-    path: BenchWorld.Path
+  ghost function ReadlinkResultFieldsSpec(
+    cmd: Schema.ReadlinkCmd,
+    fs: BenchWorld.FileSystem, cwd: BenchWorld.Path, path: BenchWorld.Path
   ): BenchWorld.IOResult<BenchWorld.Path>
   {
-    if path == "" then
-      Result.Err(BenchWorld.NoSuchFile)
-    else if EndsInSlashSpec(path) then
-      ReadlinkTrailingSlashResultFieldsSpec(fs, MakeAbsoluteSpec(cwd, path))
+    if path == "" then Result.Err(BenchWorld.NoSuchFile)
     else
-      IOContract.ReadLinkResultFields(fs, MakeAbsoluteSpec(cwd, path))
-  }
-
-  function ReadlinkTrailingSlashResultFieldsSpec(
-    fs: BenchWorld.FileSystem,
-    actualPath: BenchWorld.Path
-  ): BenchWorld.IOResult<BenchWorld.Path>
-  {
-    match IOContract.ResolvePathForMetadataFields(fs, actualPath, true)
-    case Ok(resolved) =>
-      if BenchWorld.FsContainsPath(fs, resolved) then
-        match BenchWorld.FsNodeAt(fs, resolved)
-        case Regular(_, _, _, _) => Result.Err(BenchWorld.NotDirectory)
-        case Directory(_, _, _) => Result.Err(BenchWorld.InvalidPath)
-        case Symlink(_, _, _, _) => Result.Err(BenchWorld.NotDirectory)
-        case Inaccessible(_) => Result.Err(BenchWorld.NotDirectory)
-      else
-        Result.Err(BenchWorld.NoSuchFile)
-    case Err(err) => Result.Err(IOErrorFromErrnoSpec(IOContract.IOErrorErrno(err)))
+      var actualPath := MakeAbsoluteSpec(cwd, path);
+      match cmd.nativeReads
+      case UnboundNativeReads => IOContract.ReadLinkResultFields(fs, actualPath)
+      case BoundNativeReads(failures,context) => IOContract.ObservedReadLinkAtCwdResultFields(fs, context, failures, path)
   }
 
   ghost predicate ReadObservationRelation(
-    fs: BenchWorld.FileSystem,
-    cwd: BenchWorld.Path,
-    path: BenchWorld.Path,
+    cmd: Schema.ReadlinkCmd,
+    fs: BenchWorld.FileSystem, cwd: BenchWorld.Path, path: BenchWorld.Path,
     result: BenchWorld.IOResult<BenchWorld.Path>
   )
   {
-    result == ReadlinkResultFieldsSpec(fs, cwd, path)
+    if path == "" then result == Result.Err(BenchWorld.NoSuchFile)
+    else
+      var actualPath := MakeAbsoluteSpec(cwd, path);
+      match cmd.nativeReads
+      case UnboundNativeReads => result == IOContract.ReadLinkResultFields(fs, actualPath)
+      case BoundNativeReads(failures,context) => IOContract.ReadLinkAtCwdSpec(fs, context, failures, path, result)
   }
 
   ghost predicate ReadFragmentRelation(
@@ -249,9 +227,9 @@ module ReadlinkSpec {
     |stdoutFragments| == |files| &&
     |stderrFragments| == |files| &&
     (forall i: nat | i < |files| ::
-       ReadObservationRelation(fs, cwd, files[i], observations[i]) &&
+       ReadObservationRelation(Schema.WithNativeReadOffset(cmd,files[..i]), fs, cwd, files[i], observations[i]) &&
        ReadFragmentRelation(
-         cmd,
+         Schema.WithNativeReadOffset(cmd,files[..i]),
          files[i],
          observations[i],
          stdoutFragments[i],
@@ -293,31 +271,79 @@ module ReadlinkSpec {
       )
   }
 
-  twostate predicate Spec(raw: Schema.ReadlinkCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
-    var cmd := Schema.Command(raw);
+    "readlink: write error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost predicate EmissionOutcomeFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int,
+    committed: nat, outErr: int, errCommitted: nat, errErr: int
+  )
+  {
+    (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
+     else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
+    var finalDiagnostics := diagnostics +
+      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
+     else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
+    exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
+  }
+
+  ghost predicate EmissionFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
+      EmissionOutcomeFields(beforeOut, beforeErr, afterOut, afterErr, observations,
+                            output, diagnostics, normalExit, exit,
+                            committed, outErr, errCommitted, errErr)
+  }
+  twostate predicate PreparedSpec(raw: Schema.ReadlinkCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    reads io.directoryStateRegion,io.fsRegion,io.cwdRegion
+  {
+    var cmd := Schema.WithNativeFailures(Schema.Command(raw), old(io.trustedNativeFailures()),old(io.cwdContext()));
+    io.directoryModel() == old(io.directoryModel()) &&
+    io.cwdContext() == Schema.FinalNativeContext(cmd,old(io.cwdContext())) &&
     if cmd.mode == Schema.ModeHelp then
-      io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + HelpTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
-      io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + VersionTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if |cmd.operands| == 0 then
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + MissingOperandMessageSpec() &&
+      plannedStdout == [] &&
+      plannedStderr == [] + MissingOperandMessageSpec() &&
       exit == 1
     else if cmd.mode == Schema.ModeUnsupportedCanonicalize then
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + UnsupportedCanonicalizeMessageSpec() &&
+      plannedStdout == [] &&
+      plannedStderr == [] + UnsupportedCanonicalizeMessageSpec() &&
       exit == 1
     else
       exists hadError: bool, out: BenchWorld.Bytes, errOut: BenchWorld.Bytes ::
         RunFilesRelation(cmd, cmd.operands, old(io.fs()), old(io.cwd()), hadError, out, errOut) &&
-        io.stdout() == old(io.stdout()) + out &&
-        io.stderr() == old(io.stderr()) + InitialWarningSpec(cmd) + errOut &&
+        plannedStdout == [] + out &&
+        plannedStderr == [] + InitialWarningSpec(cmd) + errOut &&
         exit == (if hadError then 1 else 0)
+  }
+
+  twostate predicate Spec(raw: Schema.ReadlinkCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit, output, diagnostics) &&
+      EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                     io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 }

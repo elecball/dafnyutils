@@ -4,6 +4,9 @@ include "LsSpec.dfy"
 include "LsCore.dfy"
 
 module LsProof {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -11,6 +14,8 @@ module LsProof {
   import Schema = LsSchema
   import Spec = LsSpec
   import Core = LsCore
+  import Native = LsNativeSpec
+  import NativeIO = LsNativeCore
 
   lemma UnneededDirectoryStatusIsRejected(
     cmd: Schema.LsCmd, fs: BenchWorld.FileSystem, path: BenchWorld.Path,
@@ -39,11 +44,11 @@ module LsProof {
   lemma NamesOnlyDirectoryConsumesNoEntryStatuses(
     cmd: Schema.LsCmd, fs: BenchWorld.FileSystem, path: BenchWorld.Path,
     firstStatus: nat, afterStatus: nat, complete: bool,
-    observations: seq<Spec.EntryObservation>
+    observations: seq<Spec.EntryObservation>, expected: set<BenchWorld.DirEntry>
   )
     requires !Spec.EntryRenderSortMetadataRequiredSpec(cmd) && !cmd.recursive
     requires Spec.DirectoryObservationRelation(
-      cmd, fs, path, firstStatus, afterStatus, complete, observations)
+      cmd,fs,path,firstStatus,afterStatus,complete,observations,expected)
     ensures afterStatus == firstStatus
   {
     var cuts: seq<nat> :|
@@ -1000,23 +1005,27 @@ module LsProof {
     readErr: int,
     output: BenchWorld.Bytes,
     errors: BenchWorld.Bytes,
-    hadError: bool
+    hadError: bool, nativeTrace: Spec.DirectoryTrace
   )
     requires Core.DirectoryListingSummary(
                cmd, displayPath, fs, path, firstStatus, afterStatus,
-               observations, readErr, output, errors, hadError)
+               observations, readErr, output, errors, hadError, nativeTrace)
     ensures Spec.DirectoryListingRelation(
               cmd, displayPath, fs, path, firstStatus, afterStatus,
-              observations, readErr, output, errors, hadError)
+              observations, readErr, output, errors, hadError, nativeTrace)
   {
     reveal Core.DirectoryListingSummary();
     reveal Spec.DirectoryListingRelation();
     var rawObservations: seq<Spec.EntryObservation>,
         outputFragments: seq<BenchWorld.Bytes>, outputCuts: seq<nat>,
         errorFragments: seq<BenchWorld.Bytes>, errorCuts: seq<nat>,
-        entryOutput: BenchWorld.Bytes, entryErrors: BenchWorld.Bytes :|
+        entryOutput: BenchWorld.Bytes, entryErrors: BenchWorld.Bytes, closeErr: int,
+        expectedEntries: set<BenchWorld.DirEntry> :|
+      Spec.DirectoryCloseObservation(cmd, fs, path, readErr, closeErr) &&
+      Spec.ReadCloseDirectoryTrace(cmd, fs, path, nativeTrace, readErr, closeErr) &&
+      nativeTrace.raw == rawObservations && Spec.DirectoryExpectedEntries(nativeTrace,expectedEntries) &&
       Spec.DirectoryObservationRelation(cmd, fs, path, firstStatus, afterStatus,
-                                        readErr == 0, rawObservations) &&
+                                        readErr == 0,rawObservations,expectedEntries) &&
       observations == Core.SortEntriesCore(cmd, rawObservations) &&
       Core.ObservationPiecesSummary(cmd, observations, outputFragments) &&
       Spec.ObservationErrorsRelation(displayPath, rawObservations, errorFragments) &&
@@ -1024,8 +1033,10 @@ module LsProof {
       output == Core.TotalLineCore(cmd, rawObservations) + entryOutput &&
       Spec.FragmentsConcatenate(errorFragments, entryErrors, errorCuts) &&
       errors == entryErrors +
-      (if readErr == 0 then [] else Spec.ReadDirectoryErrorMessageSpec(path, readErr)) &&
-      (readErr != 0 ==> hadError);
+      (if readErr == 0 then [] else Spec.ReadDirectoryErrorMessageSpec(displayPath, readErr)) +
+      Spec.CloseDirectoryErrorMessageSpec(displayPath, closeErr) &&
+      hadError == (readErr != 0 || closeErr != 0 ||
+        exists i: nat :: i < |observations| && Spec.ObservationFailedSpec(observations[i]));
     SortEntriesCoreSatisfiesRelation(cmd, rawObservations);
     TotalLineBridge(cmd, rawObservations);
     ObservationPiecesImpliesSpec(cmd, observations, outputFragments);
@@ -1100,7 +1111,81 @@ module LsProof {
               cmd, fs, displayPath, accessPath, ancestors, tree)
     decreases tree
   {
-    reveal Core.RecursiveDirectorySummary();
+    hide *;
+    reveal Core.RecursiveDirectorySummary(cmd, fs, displayPath, accessPath, ancestors, tree);
+    assert Spec.RecursiveNativeDirectoryTrace(cmd, fs, accessPath, tree) &&
+    Spec.RecursiveNativeCallsFields(cmd,fs,tree) &&
+    cmd.statusContext.BoundStatusObservations? &&
+    Spec.OpenDirectoryObservation(cmd, fs, accessPath, tree.openOk, tree.openErr) &&
+    (tree.openOk ==> Spec.OpenedDirectoryStatusObservation(
+      cmd, fs, accessPath, tree.firstStatus, tree.statusOk,
+      tree.openedStatus, tree.statusErr)) &&
+    (if !tree.openOk then
+       tree.openErr > 0 && !tree.statusOk && !tree.cycle &&
+       tree.listingFirstStatus == tree.firstStatus &&
+       tree.listingAfterStatus == tree.firstStatus &&
+       tree.afterStatus == tree.firstStatus &&
+       tree.observations == [] && tree.children == map[] && tree.cycles == {} &&
+       tree.output == [] &&
+       tree.errors == Spec.OpenDirectoryErrorMessageSpec(displayPath, tree.openErr) &&
+       tree.hadError
+     else if !tree.statusOk then
+       tree.openErr == 0 && tree.statusErr > 0 && !tree.cycle &&
+       tree.listingFirstStatus == tree.firstStatus+1 &&
+       tree.listingAfterStatus == tree.firstStatus+1 &&
+       tree.afterStatus == tree.firstStatus+1 &&
+       tree.observations == [] && tree.children == map[] && tree.cycles == {} &&
+       tree.output == [] &&
+       tree.errors == Spec.DirectoryIdentityErrorMessageSpec(displayPath, tree.statusErr) &&
+       tree.hadError
+     else
+       tree.openErr == 0 && tree.statusErr == 0 &&
+       tree.listingFirstStatus == tree.firstStatus + 1 &&
+       tree.openedStatus.kind == BenchWorld.DirectoryKind &&
+       (if tree.cycle then
+          tree.openedStatus.hostKey in ancestors &&
+          tree.listingAfterStatus == tree.listingFirstStatus &&
+          tree.afterStatus == tree.listingFirstStatus &&
+          tree.observations == [] && tree.children == map[] && tree.cycles == {} &&
+          tree.output == [] && tree.errors == Spec.RecursiveCycleMessageSpec(displayPath) &&
+          tree.hadError
+        else
+          tree.openedStatus.hostKey !in ancestors &&
+          Core.DirectoryListingSummary(
+            cmd, displayPath, fs, accessPath, tree.listingFirstStatus,
+            tree.listingAfterStatus,
+            tree.observations, tree.readErr,
+            tree.listingOutput, tree.listingErrors, tree.listingHadError, tree.nativeTrace) &&
+          (exists statusCuts: seq<nat> ::
+            |statusCuts| == |tree.observations| + 1 &&
+            statusCuts[0] == tree.listingAfterStatus &&
+            statusCuts[|tree.observations|] == tree.afterStatus &&
+            (forall i: nat | i < |tree.observations| ::
+              (if i in tree.children then
+                 tree.children[i].firstStatus == statusCuts[i] &&
+                 tree.children[i].afterStatus == statusCuts[i + 1]
+               else statusCuts[i] == statusCuts[i + 1]))) &&
+          tree.cycles <= tree.children.Keys &&
+          (forall i: nat :: i < |tree.observations| ==>
+            (i in tree.children <==> Spec.RecursiveEntryEligible(tree.observations[i])) &&
+            (i in tree.cycles <==> i in tree.children && tree.children[i].cycle)) &&
+          (forall i: nat :: i in tree.children ==>
+            i < |tree.observations| &&
+            Core.RecursiveDirectorySummary(
+              cmd, fs,
+              Spec.ChildDisplayPath(displayPath, tree.observations[i].displayName),
+              tree.observations[i].accessPath,
+              ancestors + {tree.openedStatus.hostKey}, tree.children[i])) &&
+          tree.output == Spec.DirectoryHeaderSpec(displayPath) + tree.listingOutput +
+            Core.RecursiveChildOutputPrefixCore(
+              tree.observations, tree.children, |tree.observations|) &&
+          tree.errors == tree.listingErrors + Core.RecursiveChildErrorPrefixCore(
+            displayPath, tree.observations, tree.children, tree.cycles,
+            |tree.observations|) &&
+          tree.hadError ==
+            (tree.listingHadError ||
+             exists i: nat :: i in tree.children && tree.children[i].hadError)));
+    hide Core.RecursiveDirectorySummary();
     if !tree.openOk || !tree.statusOk || tree.cycle {
       assert Spec.RecursiveDirectoryRelation(
         cmd, fs, displayPath, accessPath, ancestors, tree) by {
@@ -1112,7 +1197,7 @@ module LsProof {
       cmd, displayPath, fs, accessPath, tree.listingFirstStatus,
       tree.listingAfterStatus,
       tree.observations, tree.readErr,
-      tree.listingOutput, tree.listingErrors, tree.listingHadError);
+      tree.listingOutput, tree.listingErrors, tree.listingHadError, tree.nativeTrace);
     forall i: nat | i in tree.children
       ensures Spec.RecursiveDirectoryRelation(
                 cmd, fs,
@@ -1130,6 +1215,12 @@ module LsProof {
       tree, |tree.observations|);
     var errorCuts := RecursiveErrorPrefixConcatenates(
       displayPath, tree, |tree.observations|);
+    assert |Spec.RecursiveOutputFragments(tree)| == |tree.observations| by {
+      reveal Spec.RecursiveOutputFragments();
+    }
+    assert |Spec.RecursiveErrorFragments(displayPath, tree)| == |tree.observations| by {
+      reveal Spec.RecursiveErrorFragments();
+    }
     assert Spec.RecursiveOutputFragments(tree)[..|tree.observations|] ==
            Spec.RecursiveOutputFragments(tree);
     assert Spec.RecursiveErrorFragments(displayPath, tree)[..|tree.observations|] ==
@@ -1153,29 +1244,34 @@ module LsProof {
     observation: Spec.OperandObservation, entries: seq<Spec.EntryObservation>,
     readErr: int, listingOutput: BenchWorld.Bytes
   )
+    requires Spec.OperandNativeFields(cmd,fs,observation)
     requires observation.index < |cmd.operands|
     requires observation.operand == cmd.operands[observation.index]
-    requires observation.path == Spec.MakeAbsoluteSpec(cwd, observation.operand)
-    requires IOContract.OpenDirOutcomeFields(fs, observation.path, true, 0)
-    requires Spec.OperandStatusResultSpec(cmd, fs, observation.path,
-      observation.firstStatus) == Result.Ok(observation.status)
+    requires observation.path == Spec.OperandPathSpec(cmd, cwd, observation.operand)
+    requires Spec.OpenDirectoryObservation(cmd, fs, observation.path, true, 0)
+    requires Spec.BoundOpenDirectoryTrace(cmd, fs, observation.path, observation.nativeTrace, true, 0)
+    requires observation.nativeCalls == observation.statusCalls+observation.nativeTrace.nativeCalls
+    requires Spec.ObservedOperandStatusResult(cmd,fs,observation) == Result.Ok(observation.status)
     requires observation.status.kind == BenchWorld.DirectoryKind
     requires !cmd.listDirectories && !cmd.recursive
     requires observation.ok && observation.err == 0 && observation.accessErrors == []
     requires observation.operandClass == Spec.ExpandedDirectory
     requires observation.sectionAvailable && !observation.hasCycle
+    requires observation.directoryFailed == Spec.DirectoryOperationFailed(observation.nativeTrace, readErr)
     requires Spec.DirectoryListingRelation(
       cmd, observation.operand, fs, observation.path,
-      observation.firstStatus + Spec.OperandStatusCallCountSpec(
-        cmd, fs, observation.path, observation.firstStatus),
+      observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
       observation.afterStatus, entries, readErr, listingOutput,
-      observation.sectionErrors, observation.failed)
+      observation.sectionErrors, observation.failed, observation.nativeTrace)
     requires observation.body ==
       (if |cmd.operands| > 1 then Spec.DirectoryHeaderSpec(observation.operand) else []) +
       listingOutput
     ensures Spec.OperandObservationRelation(cmd, fs, cwd, observation)
   {
     hide *;
+    assert observation.nativeTrace.DirectoryTrace? by {
+      reveal Spec.BoundOpenDirectoryTrace();
+    }
     reveal Spec.OperandObservationRelation();
   }
 
@@ -1190,8 +1286,7 @@ module LsProof {
   {
     hide *;
     reveal Core.OperandObservationSummary();
-    match Spec.OperandStatusResultSpec(cmd, fs, observation.path,
-                                       observation.firstStatus)
+    match Spec.ObservedOperandStatusResult(cmd,fs,observation)
     case Err(_) =>
       assert Spec.OperandObservationRelation(cmd, fs, cwd, observation) by {
         reveal Spec.OperandObservationRelation();
@@ -1204,15 +1299,16 @@ module LsProof {
               Core.RecursiveDirectorySummary(
                 cmd, fs, observation.operand, observation.path,
                 {}, tree) &&
-              tree.openOk &&
+              tree.openOk && tree.nativeTrace == observation.nativeTrace &&
+              observation.nativeCalls == observation.statusCalls+tree.nativeCalls &&
               tree.firstStatus == observation.firstStatus +
-                Spec.OperandStatusCallCountSpec(cmd, fs, observation.path,
-                                                observation.firstStatus) &&
+                Spec.ObservedOperandStatusCallCount(cmd,fs,observation) &&
               tree.afterStatus == observation.afterStatus &&
               observation.body == tree.output &&
               observation.sectionErrors == tree.errors &&
               observation.failed == tree.hadError &&
-              observation.hasCycle == Spec.RecursiveHasCycle(tree);
+              observation.hasCycle == Spec.RecursiveHasCycle(tree) &&
+              observation.directoryFailed == Spec.RecursiveRootFailed(tree);
             RecursiveSummaryImpliesSpec(
               cmd, fs, observation.operand, observation.path,
               {}, tree);
@@ -1220,15 +1316,16 @@ module LsProof {
               Spec.RecursiveDirectoryRelation(
                 cmd, fs, observation.operand, observation.path,
                 {}, candidateTree) &&
-              candidateTree.openOk &&
+              candidateTree.openOk && candidateTree.nativeTrace == observation.nativeTrace &&
+              observation.nativeCalls == observation.statusCalls+candidateTree.nativeCalls &&
               candidateTree.firstStatus == observation.firstStatus +
-                Spec.OperandStatusCallCountSpec(cmd, fs, observation.path,
-                                                observation.firstStatus) &&
+                Spec.ObservedOperandStatusCallCount(cmd,fs,observation) &&
               candidateTree.afterStatus == observation.afterStatus &&
               observation.body == candidateTree.output &&
               observation.sectionErrors == candidateTree.errors &&
               observation.failed == candidateTree.hadError &&
-                observation.hasCycle == Spec.RecursiveHasCycle(candidateTree) by {
+                observation.hasCycle == Spec.RecursiveHasCycle(candidateTree) &&
+              observation.directoryFailed == Spec.RecursiveRootFailed(candidateTree) by {
               assert Spec.RecursiveDirectoryRelation(
                 cmd, fs, observation.operand, observation.path,
                 {}, tree);
@@ -1241,44 +1338,41 @@ module LsProof {
                 listingOutput: BenchWorld.Bytes :|
               Core.DirectoryListingSummary(
                 cmd, observation.operand, fs, observation.path,
-                observation.firstStatus + Spec.OperandStatusCallCountSpec(
-                  cmd, fs, observation.path, observation.firstStatus),
+                observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
                 observation.afterStatus, entries, readErr,
-                listingOutput, observation.sectionErrors, observation.failed) &&
+                listingOutput, observation.sectionErrors, observation.failed, observation.nativeTrace) &&
+              observation.directoryFailed == Spec.DirectoryOperationFailed(observation.nativeTrace, readErr) &&
               observation.body ==
               (if |cmd.operands| > 1
                then Spec.DirectoryHeaderSpec(observation.operand)
                else []) + listingOutput;
             DirectorySummaryImpliesSpec(
               cmd, observation.operand, fs, observation.path,
-              observation.firstStatus + Spec.OperandStatusCallCountSpec(
-                cmd, fs, observation.path, observation.firstStatus),
+              observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
               observation.afterStatus, entries, readErr,
-              listingOutput, observation.sectionErrors, observation.failed);
+              listingOutput, observation.sectionErrors, observation.failed, observation.nativeTrace);
             assert exists witnessEntries: seq<Spec.EntryObservation>,
                 witnessErr: int, witnessOutput: BenchWorld.Bytes
                 {:trigger Spec.DirectoryListingRelation(
                   cmd, observation.operand, fs, observation.path,
-                  observation.firstStatus + Spec.OperandStatusCallCountSpec(
-                    cmd, fs, observation.path, observation.firstStatus),
+                  observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
                   observation.afterStatus, witnessEntries, witnessErr,
-                  witnessOutput, observation.sectionErrors, observation.failed)} ::
+                  witnessOutput, observation.sectionErrors, observation.failed, observation.nativeTrace)} ::
               Spec.DirectoryListingRelation(
                 cmd, observation.operand, fs, observation.path,
-                observation.firstStatus + Spec.OperandStatusCallCountSpec(
-                  cmd, fs, observation.path, observation.firstStatus),
+                observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
                 observation.afterStatus, witnessEntries, witnessErr,
-                witnessOutput, observation.sectionErrors, observation.failed) &&
+                witnessOutput, observation.sectionErrors, observation.failed, observation.nativeTrace) &&
+              observation.directoryFailed == Spec.DirectoryOperationFailed(observation.nativeTrace, witnessErr) &&
               observation.body ==
                 (if |cmd.operands| > 1
                  then Spec.DirectoryHeaderSpec(observation.operand)
                  else []) + witnessOutput by {
               assert Spec.DirectoryListingRelation(
                 cmd, observation.operand, fs, observation.path,
-                observation.firstStatus + Spec.OperandStatusCallCountSpec(
-                  cmd, fs, observation.path, observation.firstStatus),
+                observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
                 observation.afterStatus, entries, readErr,
-                listingOutput, observation.sectionErrors, observation.failed);
+                listingOutput, observation.sectionErrors, observation.failed, observation.nativeTrace);
             }
             FlatOperandRelationWitness(
               cmd, fs, cwd, observation, entries, readErr, listingOutput);
@@ -1289,12 +1383,7 @@ module LsProof {
           }
         }
       } else {
-        RenderEntryBridge(
-          cmd,
-          Spec.RenderNameSpec(
-            fs, observation.operand, observation.path,
-            Spec.ExplicitCommandLineFollowSpec(cmd), cmd.numericLong, status),
-          status);
+        RenderEntryBridge(cmd,observation.renderName,status);
         assert Spec.OperandObservationRelation(cmd, fs, cwd, observation) by {
           reveal Spec.OperandObservationRelation();
         }
@@ -1307,8 +1396,9 @@ module LsProof {
     output: BenchWorld.Bytes, errors: BenchWorld.Bytes, exit: int,
     observations: seq<Spec.OperandObservation>,
     sorted: seq<Spec.OperandObservation>, groups: seq<Spec.OutputGroup>,
-    statusCuts: seq<nat>
+    statusCuts: seq<nat>, afterNative: seq<Native.State>
   )
+    requires Spec.RunNativeFields(cmd,fs,firstStatus,afterStatus,observations,afterNative)
     requires |observations| == |cmd.operands|
     requires |statusCuts| == |observations| + 1
     requires statusCuts[0] == firstStatus
@@ -1325,7 +1415,7 @@ module LsProof {
     requires Spec.OperandErrorsRelation(observations, sorted, errors)
     requires exit == Spec.OperandExitSpec(observations)
     ensures Spec.RunRelation(cmd, fs, cwd, firstStatus, afterStatus,
-                             output, errors, exit)
+                             output,errors,exit,afterNative)
   {
     reveal Spec.RunRelation();
   }
@@ -1338,16 +1428,19 @@ module LsProof {
     afterStatus: nat,
     output: BenchWorld.Bytes,
     errors: BenchWorld.Bytes,
-    exit: int
+    exit: int, afterNative: seq<Native.State>
   )
     requires Core.RunSummary(cmd, fs, cwd, firstStatus, afterStatus,
-                             output, errors, exit)
+                             output,errors,exit,afterNative)
     ensures Spec.RunRelation(cmd, fs, cwd, firstStatus, afterStatus,
-                             output, errors, exit)
+                             output,errors,exit,afterNative)
   {
+    hide *;
+    reveal Core.RunSummary();
     var observations: seq<Spec.OperandObservation>,
         sorted: seq<Spec.OperandObservation>, groups: seq<Spec.OutputGroup>,
         statusCuts: seq<nat> :|
+      Spec.RunNativeFields(cmd,fs,firstStatus,afterStatus,observations,afterNative) &&
       |observations| == |cmd.operands| &&
       |statusCuts| == |observations| + 1 &&
       statusCuts[0] == firstStatus &&
@@ -1375,31 +1468,45 @@ module LsProof {
     OperandErrorsCoreSatisfiesRelation(observations, sorted);
     RunWitnessImpliesRelation(
       cmd, fs, cwd, firstStatus, afterStatus, output, errors, exit,
-      observations, sorted, groups, statusCuts);
+      observations,sorted,groups,statusCuts,afterNative);
   }
 
-  twostate lemma CoreSummaryImpliesSpec(
+  twostate lemma PreparedSummaryImpliesPreparedSpec(
     raw: Schema.LsCmdRaw,
     io: BenchIO.IO,
     exit: int
-  )
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  , plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    reveal Core.CoreSummary();
+    hide Core.RunSummary;
+    hide Spec.RunRelation;
+    reveal Core.PreparedSummary();
     var cmd := Schema.WithStatusObservations(
       Spec.EffectiveCommandSpec(raw, old(io.env()), old(io.now())),
-      io.statusObservations(), old(io.statusCursor()));
+      io.statusObservations(), old(io.statusCursor()), io.trustedNativeFailures(),old(io.dirHandles()),old(io.cwd()),[old(NativeIO.Inputs(io))],[old(NativeIO.State(io))]);
     if cmd.mode == Schema.ModeRun {
       var output: BenchWorld.Bytes, errors: BenchWorld.Bytes :|
         Core.RunSummary(cmd, old(io.fs()), old(io.cwd()),
                         old(io.statusCursor()), io.statusCursor(),
-                        output, errors, exit) &&
-        io.stdout() == old(io.stdout()) + output &&
-        io.stderr() == old(io.stderr()) + errors;
+                        output,errors,exit,[NativeIO.State(io)]) &&
+        plannedStdout == output &&
+        plannedStderr == errors;
       RunSummaryImpliesSpec(cmd, old(io.fs()), old(io.cwd()),
                             old(io.statusCursor()), io.statusCursor(),
-                            output, errors, exit);
+                            output,errors,exit,[NativeIO.State(io)]);
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.LsCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit, output, diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      output, diagnostics);
   }
 }

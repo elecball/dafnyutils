@@ -5,6 +5,8 @@ include "WcCore.dfy"
 include "WcSpec.dfy"
 
 module WcProof {
+  import BenchWorld
+
   import Result = Results
   import IOContract
   import BenchIO
@@ -147,17 +149,13 @@ module WcProof {
     preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult
   )
     requires i < |cmd.inputs|
-    ensures Spec.ReadResultRelation(
-              cmd,
-              preFs,
-              preStdin,
-              i,
+    ensures Spec.ReadResultRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
               Core.ReadResultCore(cmd, preFs, preStdin, i, preStreams),
               preStreams
             )
   {
     reveal Spec.ReadResultRelation();
-    Core.PrefixStdinRelation(cmd, preStdin, i);
+
     match cmd.inputs[i]
     case Stdin(_) =>
       assert forall j: nat | j < i ::
@@ -215,7 +213,20 @@ module WcProof {
                                                       true
                                                     )
                                                   ];
-          case Err(_) =>
+          case Err(error) =>
+            var counts, countTrace :|
+              Core.CountWitnessRelation(IOContract.ReadResultData(result), counts, countTrace) &&
+              countWitnesses == [countTrace] &&
+              entries == [Core.Entry(input.displayName, counts, true)];
+            CountWitnessImpliesRelation(IOContract.ReadResultData(result), counts, countTrace);
+            assert Core.ToSpecEntries(entries) ==
+              [Spec.Entry(input.displayName, Core.ToSpecCounts(counts), true)];
+            assert Spec.CountRelation(IOContract.ReadResultData(result), Core.ToSpecCounts(counts));
+            assert exists observedCounts: Spec.Counts ::
+              observedCounts == Core.ToSpecCounts(counts) &&
+              Spec.CountRelation(IOContract.ReadResultData(result), observedCounts) &&
+              Core.ToSpecEntries(entries) == [Spec.Entry(input.displayName, observedCounts, true)] &&
+              errorOutput == Spec.StdinReadErrorMessage(input.displayName, error) && failed;
         }
       case File(_) =>
         match result {
@@ -257,11 +268,7 @@ module WcProof {
                observation,
                preStreams
              )
-    ensures Spec.InputObservationRelation(
-              cmd,
-              preFs,
-              preStdin,
-              i,
+    ensures Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
               ToSpecObservation(observation),
               preStreams
             )
@@ -1188,24 +1195,20 @@ module WcProof {
               preStreams
             )
   {
+    Core.PrefixStdinRelation(cmd, preStdin, preStreams);
+    var states := seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams));
+    assert Spec.StdinTraceRelation(cmd, preStdin, postStdin, preStreams, states);
+
     reveal Core.InputTraceWitnessRelation();
     reveal Spec.OrderedTraceWitnessRelation();
     assert |ToSpecObservations(observations)| == |cmd.inputs|;
     assert forall i: nat | i < |ToSpecObservations(observations)| ::
-        Spec.InputObservationRelation(
-          cmd,
-          preFs,
-          preStdin,
-          i,
+        Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
           ToSpecObservations(observations)[i],
           preStreams
         ) by {
       forall i: nat | i < |ToSpecObservations(observations)|
-        ensures Spec.InputObservationRelation(
-                  cmd,
-                  preFs,
-                  preStdin,
-                  i,
+        ensures Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
                   ToSpecObservations(observations)[i],
                   preStreams
                 )
@@ -1248,12 +1251,12 @@ module WcProof {
     }
   }
 
-  twostate lemma CoreSummaryImpliesSpec(raw: Schema.WcCmdRaw, io: BenchIO.IO, exit: int)
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.WcCmdRaw, io: BenchIO.IO, exit: int, new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    reveal Core.CoreSummary();
-    reveal Spec.Spec();
+    reveal Core.PreparedSummary();
+    reveal Spec.PreparedSpec();
     CommandEq(raw);
     var cmd := Core.Command(raw);
     if cmd.mode == Schema.ModeHelp {
@@ -1281,10 +1284,9 @@ module WcProof {
           hadError,
           old(io.trustedStreams())
         ) &&
-        io.stdout() ==
-        old(io.stdout()) +
+        plannedStdout ==
         Core.RunOutputFromEntriesCore(cmd, coreEntries) &&
-        io.stderr() == old(io.stderr()) + errorOutput &&
+        plannedStderr == errorOutput &&
         exit == (if hadError then 1 else 0);
       InputTraceWitnessRefines(
         cmd,
@@ -1335,10 +1337,22 @@ module WcProof {
               old(io.trustedStreams())
             ) &&
             Spec.OutputRelation(cmd, specEntries, specOutputPart) &&
-            io.stdout() ==
-            old(io.stdout()) + specOutputPart &&
-            io.stderr() == old(io.stderr()) + specErrorOutput &&
+            plannedStdout ==
+            specOutputPart &&
+            plannedStderr == specErrorOutput &&
             exit == (if specHadError then 1 else 0);
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.WcCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      out, diagnostics);
   }
 }

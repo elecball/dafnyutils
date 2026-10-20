@@ -6,6 +6,8 @@ include "CatSpec.dfy"
 
 // Pure cat execution semantics used by the executable loop and proof helpers.
 module CatCoreModel {
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchWorld
   import CatSchema
@@ -163,6 +165,7 @@ module CatCoreModel {
 // Public core surface: executable loop plus summary predicates. The richer
 // pure model stays in `CatCoreModel`.
 module CatCore {
+  import StreamContract = IOContract
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -340,14 +343,16 @@ module CatCore {
     cmd: CatSchema.CatCmd,
     preStdin: BenchWorld.Bytes,
     count: nat
-  ): BenchWorld.Bytes
+  , preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
     requires count <= |cmd.inputs|
+    decreases count
   {
-    if exists i: nat ::
-         i < count && cmd.inputs[i] == CatSchema.Stdin
-    then []
-    else preStdin
+    if count == 0 then preStdin else
+      var previous := ExpectedStdinAt(cmd, preStdin, count - 1, preStreams);
+      if cmd.inputs[count - 1].Stdin? then IOContract.ObservedReadStdinRemainingFields(previous, preStreams) else previous
   }
+
+
 
   ghost predicate InputObservationRelation(
     cmd: CatSchema.CatCmd,
@@ -361,7 +366,7 @@ module CatCore {
     observation.input == cmd.inputs[i] &&
     observation.result ==
     match observation.input
-    case Stdin => Result.Ok(ExpectedStdinAt(cmd, preStdin, i))
+    case Stdin => IOContract.ObservedReadStdinResultFields(ExpectedStdinAt(cmd, preStdin, i, preStreams), preStreams)
     case File(path) => IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
   }
 
@@ -371,7 +376,7 @@ module CatCore {
   {
     match observation.result
     case Ok(data) => data
-    case Err(error) => IOContract.ReadFailureData(error)
+    case Err(error) => IOContract.ReadResultData(observation.result)
   }
 
   ghost function InputErrorPiece(
@@ -379,7 +384,7 @@ module CatCore {
   ): BenchWorld.Bytes
   {
     match observation.input
-    case Stdin => []
+    case Stdin => if observation.result.Err? then Spec.ErrorMessageSpec("-", observation.result.e) else []
     case File(path) =>
       match observation.result
       case Ok(_) => []
@@ -388,7 +393,7 @@ module CatCore {
 
   ghost predicate InputFailed(observation: InputObservation)
   {
-    observation.input.File? && observation.result.Err?
+    observation.result.Err?
   }
 
   ghost function ObservationDataFragments(
@@ -460,7 +465,7 @@ module CatCore {
        errorCuts[i] + |InputErrorPiece(observations[i])| &&
        errors[errorCuts[i]..errorCuts[i + 1]] ==
        InputErrorPiece(observations[i])) &&
-    currentStdin == ExpectedStdinAt(cmd, preStdin, count) &&
+    currentStdin == ExpectedStdinAt(cmd, preStdin, count, preStreams) &&
     hadError == HasFailedObservation(observations)
   }
 
@@ -469,19 +474,19 @@ module CatCore {
     io: BenchIO.IO,
     exit: int,
     trace: CoreWitness
-  )
-    reads io.Footprint()
+  , plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := Model.Command(raw);
     if cmd.mode == CatSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == Spec.HelpTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if cmd.mode == CatSchema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == Spec.VersionTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else
       match trace
@@ -510,13 +515,13 @@ module CatCore {
           hadError
         ) &&
         RenderWitnessRelation(cmd, data, processed, renderTrace) &&
-        io.stdout() == old(io.stdout()) + processed.out &&
-        io.stderr() == old(io.stderr()) + errors &&
+        plannedStdout == processed.out &&
+        plannedStderr == errors &&
         exit == (if hadError then 1 else 0)
   }
 
-  twostate predicate CoreSummary(raw: CatSchema.CatCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSummary(raw: CatSchema.CatCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     exists trace: CoreWitness ::
       CoreWitnessRelation(
@@ -524,7 +529,7 @@ module CatCore {
         io,
         exit,
         trace
-      )
+      , plannedStdout, plannedStderr)
   }
 
   lemma PrefixSliceUnchanged<T>(
@@ -633,24 +638,13 @@ module CatCore {
     cmd: CatSchema.CatCmd,
     preStdin: BenchWorld.Bytes,
     count: nat
-  )
+  , preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
     requires count < |cmd.inputs|
-    ensures ExpectedStdinAt(cmd, preStdin, count + 1) ==
-            (if cmd.inputs[count] == CatSchema.Stdin
-             then []
-             else ExpectedStdinAt(cmd, preStdin, count))
+    ensures ExpectedStdinAt(cmd, preStdin, count + 1, preStreams) ==
+      (if cmd.inputs[count].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+        ExpectedStdinAt(cmd, preStdin, count, preStreams), preStreams)
+       else ExpectedStdinAt(cmd, preStdin, count, preStreams))
   {
-    if cmd.inputs[count] == CatSchema.Stdin {
-      assert exists i: nat ::
-          i < count + 1 && cmd.inputs[i] == CatSchema.Stdin;
-    } else if exists i: nat ::
-        i < count + 1 && cmd.inputs[i] == CatSchema.Stdin {
-      var i: nat :|
-        i < count + 1 && cmd.inputs[i] == CatSchema.Stdin;
-      assert i < count;
-      assert exists j: nat ::
-          j < count && cmd.inputs[j] == CatSchema.Stdin;
-    }
   }
 
   lemma ObservationRelationsSnoc(
@@ -762,7 +756,7 @@ module CatCore {
                observation
              )
     requires nextStdin ==
-             (if cmd.inputs[count] == CatSchema.Stdin then [] else currentStdin)
+             (if cmd.inputs[count] == CatSchema.Stdin then IOContract.ObservedReadStdinRemainingFields(currentStdin, preStreams) else currentStdin)
     ensures InputTraceWitnessRelation(
               cmd,
               preFs, preStreams,
@@ -866,7 +860,7 @@ module CatCore {
       observation
     );
     FailedObservationSnoc(observations, observation);
-    ExpectedStdinAtExtend(cmd, preStdin, count);
+    ExpectedStdinAtExtend(cmd, preStdin, count, preStreams);
     assert InputTraceWitnessRelation(
         cmd,
         preFs, preStreams,
@@ -1016,6 +1010,14 @@ module CatCore {
           nextCuts
         ) by {
         reveal RenderPrefixEvidence();
+        assert 1 <= nextState.nextLine;
+        assert 0 <= nextState.blankStreak;
+        assert |nextSteps| == i + 1;
+        assert |nextCuts| == i + 2;
+        assert nextCuts[0] == 0;
+        assert nextCuts[i + 1] == |out + chunk|;
+        assert nextState == nextSteps[i].after;
+        assert NumberTraceRelation(nextSteps, i + 1, nextState);
         forall p: nat {:trigger nextSteps[p]} | p < i + 1
           ensures
             RenderStepRelation(
@@ -1073,52 +1075,53 @@ module CatCore {
     }
   }
 
-  method {:isolate_assertions} RunCore(
+  method {:isolate_assertions} Prepare(
     raw: CatSchema.CatCmdRaw,
     io: BenchIO.IO
-  ) returns (exit: int)
-    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  ) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, plannedOut, plannedErr)
     decreases *
   {
+    plannedOut := [];
+    plannedErr := [];
+
     ghost var preFs := io.fs();
     ghost var preStreams := io.trustedStreams();
     ghost var preStdin := io.stdin();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
     var cmd := Model.Command(raw);
 
     if cmd.mode == CatSchema.ModeHelp {
       var help := Spec.HelpTextSpec();
-      var _ := io.WriteStdout(help, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + help;
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout + Spec.HelpTextSpec();
-      assert io.stderr() == preStderr;
+      assert plannedOut == Spec.HelpTextSpec();
+      assert plannedErr == [];
       assert CoreWitnessRelation(
           raw,
           io,
           exit,
           NonRunWitness
-        );
-      assert CoreSummary(raw, io, exit);
+        , plannedOut, plannedErr);
+      assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by { hide *; reveal PreparedSummary(); }
       return;
     }
 
     if cmd.mode == CatSchema.ModeVersion {
       var version := Spec.VersionTextSpec();
-      var _ := io.WriteStdout(version, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + version;
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout + Spec.VersionTextSpec();
-      assert io.stderr() == preStderr;
+      assert plannedOut == Spec.VersionTextSpec();
+      assert plannedErr == [];
       assert CoreWitnessRelation(
           raw,
           io,
           exit,
           NonRunWitness
-        );
-      assert CoreSummary(raw, io, exit);
+        , plannedOut, plannedErr);
+      assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by { hide *; reveal PreparedSummary(); }
       return;
     }
 
@@ -1147,8 +1150,8 @@ module CatCore {
     var i := 0;
     while i < |cmd.inputs|
       invariant 0 <= i <= |cmd.inputs|
-      invariant io.stdout() == preStdout
-      invariant io.stderr() == preStderr
+      invariant plannedOut == []
+      invariant plannedErr == []
       invariant InputTraceWitnessRelation(
                   cmd,
                   preFs, preStreams,
@@ -1165,165 +1168,44 @@ module CatCore {
       decreases |cmd.inputs| - i
     {
       var input := cmd.inputs[i];
-      match input {
-        case Stdin =>
-          ghost var beforeStdin := io.stdin();
-          assert beforeStdin == ExpectedStdinAt(cmd, preStdin, i) by {
-            reveal InputTraceWitnessRelation();
-          }
-          var data :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-          assert IOContract.ReadStdinAllFields(beforeStdin, io.stdin(), data);
-          assert data == beforeStdin;
-          ghost var observation := InputObservation(
-            input,
-            Result.Ok(data)
-          );
-          assert InputObservationRelation(
-              cmd,
-              preFs, preStreams,
-              preStdin,
-              i,
-              observation
-            );
-          assert InputDataPiece(observation) == data;
-          assert InputErrorPiece(observation) == [];
-          assert !InputFailed(observation);
-          ExtendInputTraceWitness(
-            cmd,
-            preFs, preStreams,
-            preStdin,
-            i,
-            beforeStdin,
-            observations,
-            combined,
-            dataCuts,
-            err,
-            errorCuts,
-            hadError,
-            observation,
-            io.stdin()
-          );
-          assert err + InputErrorPiece(observation) == err;
-          assert |err + InputErrorPiece(observation)| == |err|;
-          assert (hadError || InputFailed(observation)) == hadError;
-          assert InputTraceWitnessRelation(
-              cmd,
-              preFs, preStreams,
-              preStdin,
-              i + 1,
-              io.stdin(),
-              observations + [observation],
-              combined + data,
-              dataCuts + [|combined + data|],
-              err,
-              errorCuts + [|err|],
-              hadError
-            );
-          ghost var nextObservations := observations + [observation];
-          ghost var nextDataCuts := dataCuts + [|combined + data|];
-          ghost var nextErrorCuts := errorCuts + [|err|];
-          combined := combined + data;
-          observations := nextObservations;
-          dataCuts := nextDataCuts;
-          errorCuts := nextErrorCuts;
-          assert InputTraceWitnessRelation(
-              cmd,
-              preFs, preStreams,
-              preStdin,
-              i + 1,
-              io.stdin(),
-              observations,
-              combined,
-              dataCuts,
-              err,
-              errorCuts,
-              hadError
-            );
-        case File(path) =>
-          ghost var beforeStdin := io.stdin();
-          assert beforeStdin == ExpectedStdinAt(cmd, preStdin, i) by {
-            reveal InputTraceWitnessRelation();
-          }
-          var readResult := io.ReadFile(path);
-          var dataPiece: BenchWorld.Bytes := [];
-          var errorPiece: BenchWorld.Bytes := [];
-          var inputHadError := false;
-          if readResult.Ok? {
-            dataPiece := readResult.v;
-          } else {
-            dataPiece := IOContract.ReadFailureData(readResult.e);
-            var msg := Spec.ErrorMessageSpec(path, readResult.e);
-            errorPiece := msg;
-            inputHadError := true;
-          }
-          ghost var observation := InputObservation(
-            input,
-            readResult
-          );
-          assert io.stdin() == beforeStdin;
-          assert InputDataPiece(observation) == dataPiece;
-          assert InputErrorPiece(observation) == errorPiece;
-          assert InputFailed(observation) == inputHadError;
-          assert InputObservationRelation(
-              cmd,
-              preFs, preStreams,
-              preStdin,
-              i,
-              observation
-            );
-          ExtendInputTraceWitness(
-            cmd,
-            preFs, preStreams,
-            preStdin,
-            i,
-            beforeStdin,
-            observations,
-            combined,
-            dataCuts,
-            err,
-            errorCuts,
-            hadError,
-            observation,
-            io.stdin()
-          );
-          ghost var nextObservations := observations + [observation];
-          ghost var nextDataCuts :=
-            dataCuts + [|combined + dataPiece|];
-          ghost var nextErrorCuts :=
-            errorCuts + [|err + errorPiece|];
-          combined := combined + dataPiece;
-          err := err + errorPiece;
-          hadError := hadError || inputHadError;
-          observations := nextObservations;
-          dataCuts := nextDataCuts;
-          errorCuts := nextErrorCuts;
-          assert InputTraceWitnessRelation(
-              cmd,
-              preFs, preStreams,
-              preStdin,
-              i + 1,
-              io.stdin(),
-              observations,
-              combined,
-              dataCuts,
-              err,
-              errorCuts,
-              hadError
-            );
+      ghost var beforeStdin := io.stdin();
+      assert beforeStdin == ExpectedStdinAt(cmd, preStdin, i, preStreams) by {
+        reveal InputTraceWitnessRelation();
       }
+      var read: BenchWorld.IOResult<BenchWorld.Bytes>;
+      match input {
+        case Stdin => read := io.ReadStdin();
+        case File(path) => read := io.ReadFile(path);
+      }
+      var data := IOContract.ReadResultData(read);
+      var diagnostic := if read.Err? then
+        Spec.ErrorMessageSpec(if input.Stdin? then "-" else input.path, read.e) else [];
+      ghost var observation := InputObservation(input, read);
+      assert InputObservationRelation(cmd, preFs, preStreams, preStdin, i, observation) by {
+        reveal InputObservationRelation();
+      }
+      assert InputDataPiece(observation) == data;
+      assert InputErrorPiece(observation) == diagnostic;
+      assert InputFailed(observation) == read.Err?;
+      ExtendInputTraceWitness(cmd, preFs, preStreams, preStdin, i, beforeStdin,
+        observations, combined, dataCuts, err, errorCuts, hadError, observation, io.stdin());
+      combined := combined + data;
+      err := err + diagnostic;
+      hadError := hadError || read.Err?;
+      observations := observations + [observation];
+      dataCuts := dataCuts + [|combined|];
+      errorCuts := errorCuts + [|err|];
+      assert InputTraceWitnessRelation(cmd, preFs, preStreams, preStdin, i + 1, io.stdin(),
+        observations, combined, dataCuts, err, errorCuts, hadError) by { hide *; }
       i := i + 1;
     }
 
     var initialState := Model.InitState();
     var processed, renderWitness := ProcessBytesMethod(cmd, combined, initialState);
-    if |processed.out| > 0 {
-      var _ := io.WriteStdout(processed.out, BenchWorld.ThrowOnError);
-    }
-    assert io.stdout() == preStdout + processed.out;
-    if |err| > 0 {
-      var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
-    }
-    assert io.stderr() == preStderr + err;
+    plannedOut := processed.out;
+    assert plannedOut == processed.out by { hide *; }
+    plannedErr := err;
+    assert plannedErr == err by { hide *; }
     exit := if hadError then 1 else 0;
     assert InputTraceWitnessRelation(
         cmd,
@@ -1353,7 +1235,61 @@ module CatCore {
         io,
         exit,
         trace
-      );
-    assert CoreSummary(raw, io, exit);
+      , plannedOut, plannedErr);
+    assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by { hide *; reveal PreparedSummary(); }
+  }
+
+  twostate predicate CoreSummary(raw: CatSchema.CatCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: CatSchema.CatCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, out, diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, out, diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

@@ -48,17 +48,27 @@ Relevant options include:
 
 ### Benchmark-Supported Behavior
 
-The current benchmark implements a deliberately small symbolic-link slice:
+The current benchmark supports hard links and symbolic links:
 
 - `ln -s SOURCE LINK_NAME`
 - `ln --symbolic SOURCE LINK_NAME`
+- `ln SOURCE LINK_NAME`
+- one-source implicit link-name mode and two-operand directory destinations
+- multiple sources with a final target-directory operand
 - `--help` and `--version`
 - parse diagnostics for unknown options
-- missing operand diagnostics for the supported two-operand form
-- one-target implicit link-name mode, multi-source target-directory mode, and
-  two-operand directory destinations: reject with a benchmark diagnostic
-- existing destination failures through the shared `CreateSymlink(path, target)` IO model
+- missing operand and target-directory diagnostics
+- existing destination and host failures through the shared creation models
 
-The formal spec models symbolic-link creation as a `World` transition using
-`IOContract.CreateSymlinkContract`. The symbolic link stores the raw `SOURCE`
-string as its target.
+The symbolic link stores the raw `SOURCE` string as its target. Hard-link
+creation uses the exact filesystem request and preserves inode identity.
+Directory classification and source status are bound to their ordered native
+observations, so a host metadata error on an existing path remains an explicit
+error. A failed destination-directory probe in the two-operand form falls
+through to the link-name interpretation, matching the existing command flow;
+the multi-source form diagnoses the failed target probe.
+
+The final specification records the number of metadata requests and the actual
+creation outcome. Diagnostics use C locale errno text. Standard descriptor
+writes retain their committed prefixes, and a failed stdout or stderr write
+makes the command fail.

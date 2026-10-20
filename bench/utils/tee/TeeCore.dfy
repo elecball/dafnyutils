@@ -5,6 +5,9 @@ include "TeeSchema.dfy"
 include "TeeSpec.dfy"
 
 module TeeCore {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -33,8 +36,9 @@ module TeeCore {
         stderr == (if ok then [] else Spec.WriteErrorMessageSpec(path, writeErr)) &&
         exit == (if ok then 0 else 1)
     else
-      exists ok: bool, writeErr: int ::
-        IOContract.WriteFileContractFields(preFs, preNow, path, input, ok, writeErr, fs2) &&
+      exists ok: bool, writeErr: int, committed: nat, stage: BenchWorld.FileWriteStage ::
+        IOContract.WriteFileSpec(preFs, preProps, preNow, preCredentials, preTrustedFilesystem,
+                                fs2, path, input, ok, writeErr, committed, stage) &&
         stderr == (if ok then [] else Spec.WriteErrorMessageSpec(path, writeErr)) &&
         exit == (if ok then 0 else 1)
   }
@@ -94,31 +98,43 @@ module TeeCore {
     return Schema.TeeCmd(mode, raw.seenAppend, raw.seenIgnoreInterrupts, raw.operands);
   }
 
-  twostate predicate CoreSummary(raw: Schema.TeeCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  opaque twostate predicate PreparedSummary(raw: Schema.TeeCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    reads io.fsRegion, io.stdinRegion
   {
     var cmd := Command(raw);
     if cmd.mode == Schema.ModeHelp then
       io.fs() == old(io.fs()) &&
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.HelpTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
       io.fs() == old(io.fs()) &&
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.VersionTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else
+      var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+      var input := IOContract.ReadResultData(read);
       exists errOut: BenchWorld.Bytes, writeExit: int ::
-        WriteOutputsSummaryFields(cmd.append, cmd.outputs, old(io.stdin()), old(io.fs()), old(io.props()),
+        WriteOutputsSummaryFields(cmd.append, cmd.outputs, input, old(io.fs()), old(io.props()),
                                   old(io.now()), old(io.credentials()), old(io.trustedFilesystem()),
                                   io.fs(), errOut, writeExit) &&
-        io.stdin() == IOContract.AfterReadStdinFields(old(io.stdin())) &&
-        io.stdout() == old(io.stdout()) + old(io.stdin()) &&
-        io.stderr() == old(io.stderr()) + errOut &&
-        exit == writeExit
+        io.stdin() == IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) &&
+        plannedStdout == old(io.stdout()) + input &&
+        plannedStderr == old(io.stderr()) + errOut +
+          (if read.Ok? then [] else Spec.StdinReadError(IOContract.ResultErrno(read))) &&
+        exit == (if read.Ok? then writeExit else 1)
+  }
+
+  opaque twostate predicate CoreSummary(raw: Schema.TeeCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      Spec.EmissionFields(raw, old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 
   method GetHelpText() returns (out: BenchWorld.Bytes)
@@ -139,10 +155,10 @@ module TeeCore {
     text := Spec.ReadErrnoTextSpec(err);
   }
 
-  method GetWriteErrnoText(err: int) returns (text: string)
+  method GetWriteErrnoText(err: int, io: BenchIO.IO) returns (text: string)
     ensures text == Spec.WriteErrnoTextSpec(err)
   {
-    text := Spec.WriteErrnoTextSpec(err);
+    text := io.GetCLocaleErrnoText(err);
   }
 
   method GetReadErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError) returns (msg: BenchWorld.Bytes)
@@ -151,10 +167,11 @@ module TeeCore {
     msg := Spec.ReadErrorMessageSpec(path, err);
   }
 
-  method GetWriteErrorMessage(path: BenchWorld.Path, err: int) returns (msg: BenchWorld.Bytes)
+  method GetWriteErrorMessage(path: BenchWorld.Path, err: int, io: BenchIO.IO) returns (msg: BenchWorld.Bytes)
     ensures msg == Spec.WriteErrorMessageSpec(path, err)
   {
-    msg := Spec.WriteErrorMessageSpec(path, err);
+    var reason := GetWriteErrnoText(err, io);
+    msg := Spec.WriteErrorMessageText(path, reason);
   }
 
   method WriteOne(
@@ -167,21 +184,19 @@ module TeeCore {
     ensures WriteOneSummaryFields(append, path, input, old(io.fs()), old(io.props()), old(io.now()),
                                   old(io.credentials()), old(io.trustedFilesystem()), io.fs(), stderr, exit)
   {
+    hide *;
+    reveal WriteOneSummaryFields();
     ghost var beforeFs := io.fs();
     ghost var beforeNow := io.now();
     var result: BenchWorld.IOResult<BenchWorld.WriteReceipt>;
     if append {
       result := io.AppendFile(path, input);
     } else {
+      reveal BenchWorld.CREATE_FILE_MODE;
       result := io.WriteFile(path, input);
-      assert IOContract.WriteFileOutcomeFields(beforeFs, beforeNow, path, input,
-        false, result.Ok?, IOContract.ResultErrno(result),
-        IOContract.WriteResultCommitted(result), IOContract.WriteResultStage(result), io.fs());
-      assert IOContract.WriteFileContractFields(beforeFs, beforeNow, path, input,
-        result.Ok?, IOContract.ResultErrno(result), io.fs());
     }
     if result.Err? {
-      stderr := GetWriteErrorMessage(path, IOContract.ResultErrno(result));
+      stderr := GetWriteErrorMessage(path, IOContract.ResultErrno(result), io);
       exit := 1;
     } else {
       stderr := [];
@@ -200,6 +215,7 @@ module TeeCore {
                                       old(io.credentials()), old(io.trustedFilesystem()), io.fs(), stderr, exit)
     decreases |outputs|
   {
+    hide *;
     reveal WriteOutputsSummaryFields();
     if |outputs| == 0 {
       stderr := [];
@@ -212,15 +228,21 @@ module TeeCore {
     }
   }
 
-  method {:isolate_assertions} RunCore(raw: Schema.TeeCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.fsRegion, io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  method {:isolate_assertions} Prepare(raw: Schema.TeeCmdRaw, io: BenchIO.IO) returns (exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    modifies io.fsRegion, io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedStdout, old(io.stderr()) + plannedStderr)
     decreases *
   {
+    hide *;
+    reveal PreparedSummary();
+    ghost var emissionBeforeOut := io.stdout();
+    ghost var emissionBeforeErr := io.stderr();
+    plannedStdout := [];
+    plannedStderr := [];
     ghost var preFs := io.fs();
     ghost var preStdin := io.stdin();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
+    ghost var preStdout := (emissionBeforeOut + plannedStdout);
+    ghost var preStderr := (emissionBeforeErr + plannedStderr);
     ghost var preNow := io.now();
     ghost var preProps := io.props();
     ghost var preCredentials := io.credentials();
@@ -229,35 +251,110 @@ module TeeCore {
     match cmd.mode
     case ModeHelp =>
       var out := GetHelpText();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedStdout := plannedStdout + (out);
       exit := 0;
       assert io.fs() == preFs;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout + Spec.HelpTextSpec();
-      assert io.stderr() == preStderr;
+      assert (emissionBeforeOut + plannedStdout) == preStdout + Spec.HelpTextSpec();
+      assert (emissionBeforeErr + plannedStderr) == preStderr;
       return;
     case ModeVersion =>
       var out := GetVersionText();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedStdout := plannedStdout + (out);
       exit := 0;
       assert io.fs() == preFs;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout + Spec.VersionTextSpec();
-      assert io.stderr() == preStderr;
+      assert (emissionBeforeOut + plannedStdout) == preStdout + Spec.VersionTextSpec();
+      assert (emissionBeforeErr + plannedStderr) == preStderr;
       return;
     case ModeRun =>
-      var input :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-      assert IOContract.ReadStdinAllFields(preStdin, io.stdin(), input);
-      assert input == preStdin;
-      assert io.stdin() == IOContract.AfterReadStdinFields(preStdin);
+      var read := io.ReadStdin();
+      var input := IOContract.ReadResultData(read);
       var errOut, writeExit := WriteOutputs(cmd.append, cmd.outputs, input, io);
-      var _ := io.WriteStdout(input, BenchWorld.ThrowOnError);
-      var _ := io.WriteStderr(errOut, BenchWorld.ThrowOnError);
-      exit := writeExit;
-      assert WriteOutputsSummaryFields(cmd.append, cmd.outputs, preStdin, preFs, preProps, preNow,
+      var diagnostics := errOut;
+      if read.Err? {
+        var reason := io.GetCLocaleErrnoText(IOContract.ResultErrno(read));
+        diagnostics := diagnostics + Spec.StdinReadErrorText(reason);
+      }
+      plannedStdout := plannedStdout + (input);
+      plannedStderr := plannedStderr + (diagnostics);
+      exit := if read.Ok? then writeExit else 1;
+      assert WriteOutputsSummaryFields(cmd.append, cmd.outputs, input, preFs, preProps, preNow,
                                        preCredentials, preTrustedFilesystem, io.fs(), errOut, writeExit);
-      assert io.stdin() == IOContract.AfterReadStdinFields(preStdin);
-      assert io.stdout() == preStdout + preStdin;
-      assert io.stderr() == preStderr + errOut;
+      assert io.stdin() == IOContract.ObservedReadStdinRemainingFields(preStdin, io.trustedStreams());
+      assert (emissionBeforeOut + plannedStdout) == preStdout + input;
+      assert (emissionBeforeErr + plannedStderr) == preStderr + diagnostics;
+      assert diagnostics == errOut + (if read.Ok? then []
+        else Spec.StdinReadError(IOContract.ResultErrno(read))) by {
+        reveal Spec.StdinReadError();
+      }
+      assert exists errors: BenchWorld.Bytes, status: int ::
+        WriteOutputsSummaryFields(cmd.append, cmd.outputs, input, preFs, preProps,
+          preNow, preCredentials, preTrustedFilesystem, io.fs(), errors, status) &&
+        plannedStderr == errors + (if read.Ok? then []
+          else Spec.StdinReadError(IOContract.ResultErrno(read))) &&
+        exit == (if read.Ok? then status else 1) by {
+        ghost var errors := errOut;
+        ghost var status := writeExit;
+      }
+  }
+
+
+  method Flush(raw: Schema.TeeCmdRaw, output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+               normalExit: int, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmissionFields(raw, old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit)
+  {
+    var committed: nat := 0;
+    var outErr := 0;
+    if |output| != 0 {
+      var result := io.WriteStdout(output);
+      committed := StreamContract.WriteResultCommitted(result);
+      outErr := StreamContract.ResultErrno(result);
+    }
+    var finalDiagnostics := diagnostics;
+    if outErr != 0 {
+      var reason := io.GetCLocaleErrnoText(outErr);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(raw, reason);
+    }
+    assert finalDiagnostics == diagnostics + (if outErr == 0 then []
+      else Spec.WriteErrorText(raw, StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errCommitted: nat := 0;
+    var errErr := 0;
+    if |finalDiagnostics| != 0 {
+      var result := io.WriteStderr(finalDiagnostics);
+      errCommitted := StreamContract.WriteResultCommitted(result);
+      errErr := StreamContract.ResultErrno(result);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        finalDiagnostics, errCommitted, errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+    assert Spec.EmissionOutcomeFields(raw, old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+  }
+
+  method RunCore(raw: Schema.TeeCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.fsRegion, io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, output, diagnostics := Prepare(raw, io);
+    ghost var beforeOut := io.stdout();
+    ghost var beforeErr := io.stderr();
+    exit := Flush(raw, output, diagnostics, normalExit, io);
+    assert exists plannedOut: StreamWorld.Bytes, plannedErr: StreamWorld.Bytes, preparedExit: int ::
+      PreparedSummary(raw, io, preparedExit, beforeOut + plannedOut, beforeErr + plannedErr) &&
+      Spec.EmissionFields(raw, beforeOut, beforeErr, io.stdout(), io.stderr(),
+        io.trustedStreams(), plannedOut, plannedErr, preparedExit, exit) by {
+      hide *;
+      ghost var plannedOut := output;
+      ghost var plannedErr := diagnostics;
+      ghost var preparedExit := normalExit;
+    }
+    assert CoreSummary(raw, io, exit) by {
+      hide *;
+      reveal CoreSummary();
+    }
   }
 }

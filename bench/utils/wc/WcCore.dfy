@@ -5,6 +5,8 @@ include "WcSchema.dfy"
 include "WcSpec.dfy"
 
 module WcCore {
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -67,7 +69,7 @@ module WcCore {
     case File(path) => return path;
   }
 
-  ghost function PrefixStdinCore(cmd: WcSchema.WcCmd, preStdin: BenchWorld.Bytes, i: nat): BenchWorld.Bytes
+  ghost function PrefixStdinCore(cmd: WcSchema.WcCmd, preStdin: BenchWorld.Bytes, i: nat, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
     requires i <= |cmd.inputs|
     decreases i
   {
@@ -75,8 +77,8 @@ module WcCore {
       preStdin
     else
       match cmd.inputs[i - 1]
-      case Stdin(_) => []
-      case File(_) => PrefixStdinCore(cmd, preStdin, i - 1)
+      case Stdin(_) => IOContract.ObservedReadStdinRemainingFields(PrefixStdinCore(cmd, preStdin, i - 1, preStreams), preStreams)
+      case File(_) => PrefixStdinCore(cmd, preStdin, i - 1, preStreams)
   }
 
   ghost function ReadResultCore(
@@ -89,7 +91,7 @@ module WcCore {
     requires i < |cmd.inputs|
   {
     match cmd.inputs[i]
-    case Stdin(_) => Result.Ok(PrefixStdinCore(cmd, preStdin, i))
+    case Stdin(_) => IOContract.ObservedReadStdinResultFields(PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
     case File(path) => IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
   }
 
@@ -290,7 +292,12 @@ module WcCore {
            errorOutput == [] &&
            !failed &&
            countWitnesses == [countTrace]
-       case Err(_) => false)
+       case Err(error) =>
+         exists counts: Counts, countTrace: CountWitness ::
+           CountWitnessRelation(IOContract.ReadResultData(result), counts, countTrace) &&
+           entries == [Entry(displayName, counts, true)] &&
+           errorOutput == Spec.StdinReadErrorMessage(displayName, error) && failed &&
+           countWitnesses == [countTrace])
     case File(path) =>
       (match result
        case Ok(data) =>
@@ -410,10 +417,7 @@ module WcCore {
       errorCuts
     ) &&
     hadError == HasFailedObservation(observations) &&
-    currentStdin ==
-    (if exists i: nat :: i < count && IsStdinInput(cmd.inputs[i])
-     then []
-     else preStdin)
+    currentStdin == PrefixStdinCore(cmd, preStdin, count, preStreams)
   }
 
   function TotalCounts(entries: seq<Entry>): Counts
@@ -735,19 +739,19 @@ module WcCore {
     }
   }
 
-  twostate predicate CoreSummary(raw: WcSchema.WcCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSummary(raw: WcSchema.WcCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := Command(raw);
     (if cmd.mode == WcSchema.ModeHelp then
        io.stdin() == old(io.stdin()) &&
-       io.stdout() == old(io.stdout()) + Spec.HelpText() &&
-       io.stderr() == old(io.stderr()) &&
+       plannedStdout == Spec.HelpText() &&
+       plannedStderr == [] &&
        exit == 0
      else if cmd.mode == WcSchema.ModeVersion then
        io.stdin() == old(io.stdin()) &&
-       io.stdout() == old(io.stdout()) + Spec.VersionText() &&
-       io.stderr() == old(io.stderr()) &&
+       plannedStdout == Spec.VersionText() &&
+       plannedStderr == [] &&
        exit == 0
      else
        exists observations: seq<InputObservation>,
@@ -770,54 +774,34 @@ module WcCore {
            hadError,
            old(io.trustedStreams())
          ) &&
-         io.stdout() ==
-         old(io.stdout()) + RunOutputFromEntriesCore(cmd, entries) &&
-         io.stderr() == old(io.stderr()) + errorOutput &&
+         plannedStdout ==
+         RunOutputFromEntriesCore(cmd, entries) &&
+         plannedStderr == errorOutput &&
          exit == (if hadError then 1 else 0))
   }
 
-  lemma PrefixStdinCoreStep(cmd: WcSchema.WcCmd, preStdin: BenchWorld.Bytes, i: nat)
+  lemma PrefixStdinCoreStep(cmd: WcSchema.WcCmd, preStdin: BenchWorld.Bytes, i: nat, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
     requires i < |cmd.inputs|
-    ensures PrefixStdinCore(cmd, preStdin, i + 1) ==
+    ensures PrefixStdinCore(cmd, preStdin, i + 1, preStreams) ==
             match cmd.inputs[i]
-            case Stdin(_) => IOContract.AfterReadStdinFields(PrefixStdinCore(cmd, preStdin, i))
-            case File(_) => PrefixStdinCore(cmd, preStdin, i)
+            case Stdin(_) => IOContract.ObservedReadStdinRemainingFields(PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
+            case File(_) => PrefixStdinCore(cmd, preStdin, i, preStreams)
   {
   }
 
-  lemma PrefixStdinRelation(
-    cmd: WcSchema.WcCmd,
-    preStdin: BenchWorld.Bytes,
-    i: nat
-  )
-    requires i <= |cmd.inputs|
-    ensures PrefixStdinCore(cmd, preStdin, i) ==
-            (if exists j: nat :: j < i && IsStdinInput(cmd.inputs[j])
-             then []
-             else preStdin)
-    decreases i
+  lemma PrefixStdinRelation(cmd: WcSchema.WcCmd, preStdin: BenchWorld.Bytes,
+    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
+    ensures Spec.StdinTraceRelation(cmd, preStdin,
+      PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams), preStreams,
+      seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => PrefixStdinCore(cmd, preStdin, i, preStreams)))
   {
-    if i > 0 {
-      PrefixStdinRelation(cmd, preStdin, i - 1);
-      match cmd.inputs[i - 1]
-      case Stdin(_) =>
-        assert IsStdinInput(cmd.inputs[i - 1]);
-      case File(_) =>
-        if exists j: nat :: j < i && IsStdinInput(cmd.inputs[j]) {
-          assert forall j: nat |
-              j < i && IsStdinInput(cmd.inputs[j])
-              :: j < i - 1 by {
-            forall j: nat | j < i && IsStdinInput(cmd.inputs[j])
-              ensures j < i - 1
-            {
-              if j >= i - 1 {
-                assert j == i - 1;
-                assert !IsStdinInput(cmd.inputs[j]);
-              }
-            }
-          }
-          assert exists k: nat :: k < i - 1 && IsStdinInput(cmd.inputs[k]);
-        }
+    forall i: nat | i < |cmd.inputs|
+      ensures PrefixStdinCore(cmd, preStdin, i + 1, preStreams) ==
+        (if cmd.inputs[i].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+          PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
+         else PrefixStdinCore(cmd, preStdin, i, preStreams))
+    {
+      PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
     }
   }
 
@@ -1129,7 +1113,6 @@ module WcCore {
       hadError: bool,
       ghost countWitnesses: seq<CountWitness>
     )
-    requires input.Stdin? ==> result.Ok?
     ensures InputStepWitnessRelation(
               input,
               result,
@@ -1163,6 +1146,14 @@ module WcCore {
           assert entries == [Entry(path, counts, false)];
       }
     case Err(err) =>
+      if input.Stdin? {
+        var counts, countTrace := CountDataMethod(IOContract.ReadResultData(result));
+        entries := [Entry(name, counts, true)];
+        errorPiece := Spec.StdinReadErrorMessage(name, err);
+        hadError := true;
+        countWitnesses := [countTrace];
+        return;
+      }
       assert input.File?;
       var path := input.path;
       if IOContract.IOErrorIsDirectory(err) {
@@ -1339,7 +1330,7 @@ module WcCore {
                preStreams
              )
     requires nextStdin ==
-             if IsStdinInput(cmd.inputs[count]) then [] else currentStdin
+             if IsStdinInput(cmd.inputs[count]) then IOContract.ObservedReadStdinRemainingFields(currentStdin, preStreams) else currentStdin
     ensures InputTraceWitnessRelation(
               cmd,
               preFs,
@@ -1408,41 +1399,42 @@ module WcCore {
                hadError,
                preStreams
              )
-    ensures currentStdin == PrefixStdinCore(cmd, preStdin, count)
+    ensures currentStdin == PrefixStdinCore(cmd, preStdin, count, preStreams)
   {
     reveal InputTraceWitnessRelation();
-    PrefixStdinRelation(cmd, preStdin, count);
   }
 
-  method {:isolate_assertions} RunCore(
+  method {:isolate_assertions} Prepare(
     raw: WcSchema.WcCmdRaw,
     io: BenchIO.IO
-  ) returns (exit: int)
-    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  ) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, plannedOut, plannedErr)
     decreases *
   {
+    plannedOut := [];
+    plannedErr := [];
+
     ghost var preFs := io.fs();
+    ghost var preStreams := io.trustedStreams();
     ghost var preStdin := io.stdin();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
     var cmd := Command(raw);
 
     if cmd.mode == WcSchema.ModeHelp {
       var help := GetHelpText();
-      var _ := io.WriteStdout(help, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + help;
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stderr() == preStderr;
+      assert plannedErr == [];
       return;
     }
 
     if cmd.mode == WcSchema.ModeVersion {
       var version := GetVersionText();
-      var _ := io.WriteStdout(version, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + version;
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stderr() == preStderr;
+      assert plannedErr == [];
       return;
     }
 
@@ -1465,13 +1457,22 @@ module WcCore {
         errorCuts,
         hadError,
         old(io.trustedStreams())
-      );
+      ) by {
+      hide *;
+      reveal InputTraceWitnessRelation();
+      reveal FragmentsConcatenate();
+      reveal ObservationEntryFragments();
+      reveal ObservationErrorFragments();
+      reveal EntriesNonnegative();
+      reveal HasFailedObservation();
+      reveal PrefixStdinCore();
+    }
 
     var i := 0;
     while i < |cmd.inputs|
       invariant 0 <= i <= |cmd.inputs|
-      invariant io.stdout() == preStdout
-      invariant io.stderr() == preStderr
+      invariant plannedOut == []
+      invariant plannedErr == []
       invariant InputTraceWitnessRelation(
                   cmd,
                   preFs,
@@ -1502,26 +1503,24 @@ module WcCore {
         hadError,
         old(io.trustedStreams())
       );
-      assert io.stdin() == PrefixStdinCore(cmd, preStdin, i);
+      assert io.stdin() == PrefixStdinCore(cmd, preStdin, i, preStreams);
       var input := cmd.inputs[i];
       var readResult: BenchWorld.IOResult<BenchWorld.Bytes>;
       ghost var inputStdin := io.stdin();
       match input {
         case Stdin(_) =>
           ghost var beforeStdin := io.stdin();
-          var data :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-          readResult := Result.Ok(data);
-          PrefixStdinCoreStep(cmd, preStdin, i);
-          assert beforeStdin == PrefixStdinCore(cmd, preStdin, i);
-          assert data == beforeStdin;
+          readResult := io.ReadStdin();
+          PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
+          assert beforeStdin == PrefixStdinCore(cmd, preStdin, i, preStreams);
+          assert readResult == IOContract.ObservedReadStdinResultFields(beforeStdin, preStreams);
         case File(path) =>
           readResult := io.ReadFile(path);
       }
       if input.File? {
-        PrefixStdinCoreStep(cmd, preStdin, i);
+        PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
       }
       assert readResult == ReadResultCore(cmd, preFs, preStdin, i, old(io.trustedStreams()));
-      assert input.Stdin? ==> readResult.Ok?;
 
       var entrySeq, errorPiece, inputHadError, countWitnesses :=
         ProcessReadMethod(input, readResult);
@@ -1541,7 +1540,7 @@ module WcCore {
           old(io.trustedStreams())
         );
       assert io.stdin() ==
-             (if IsStdinInput(cmd.inputs[i]) then [] else inputStdin);
+             (if IsStdinInput(cmd.inputs[i]) then IOContract.ObservedReadStdinRemainingFields(inputStdin, preStreams) else inputStdin);
       ExtendInputTraceWitness(
         cmd,
         preFs,
@@ -1572,18 +1571,8 @@ module WcCore {
 
     var out := RunOutputFromEntriesCore(cmd, entries);
 
-    if |out| > 0 {
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
-    } else {
-      assert out == [];
-      assert io.stdout() == preStdout + out;
-    }
-    if |err| > 0 {
-      var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
-    } else {
-      assert err == [];
-      assert io.stderr() == preStderr + err;
-    }
+    plannedOut := out;
+    plannedErr := err;
     exit := if hadError then 1 else 0;
     TraceCurrentStdinMatchesPrefix(
       cmd,
@@ -1599,13 +1588,9 @@ module WcCore {
       hadError,
       old(io.trustedStreams())
     );
-    PrefixStdinRelation(cmd, preStdin, |cmd.inputs|);
+    PrefixStdinRelation(cmd, preStdin, preStreams);
     assert io.stdin() ==
-           (if exists stdinIndex: nat ::
-                 stdinIndex < |cmd.inputs| &&
-                 IsStdinInput(cmd.inputs[stdinIndex])
-            then []
-            else preStdin);
+           PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams);
     assert InputTraceWitnessRelation(
         cmd,
         preFs,
@@ -1620,9 +1605,8 @@ module WcCore {
         hadError,
         old(io.trustedStreams())
       );
-    assert io.stdout() ==
-           preStdout + RunOutputFromEntriesCore(cmd, entries);
-    assert io.stderr() == preStderr + err;
+    assert plannedOut == RunOutputFromEntriesCore(cmd, entries) by { hide *; }
+    assert plannedErr == err by { hide *; }
     assert exists
         trace: seq<InputObservation>,
         coreEntries: seq<Entry>,
@@ -1651,9 +1635,63 @@ module WcCore {
             failed,
             old(io.trustedStreams())
           ) &&
-          io.stdout() ==
-          preStdout + RunOutputFromEntriesCore(cmd, coreEntries) &&
-          io.stderr() == preStderr + errorOutput &&
+          plannedOut ==
+          RunOutputFromEntriesCore(cmd, coreEntries) &&
+          plannedErr == errorOutput &&
           exit == (if failed then 1 else 0);
+  }
+
+  twostate predicate CoreSummary(raw: WcSchema.WcCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: WcSchema.WcCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, out, diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, out, diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

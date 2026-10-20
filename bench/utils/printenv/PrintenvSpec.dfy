@@ -4,6 +4,9 @@ include "../../core/IOContract.dfy"
 include "PrintenvSchema.dfy"
 
 module PrintenvSpec {
+  import StreamContract = IOContract
+  import StreamUtf8 = Utf8Semantics
+
   import BenchIO
   import Schema = PrintenvSchema
   import BenchWorld
@@ -93,25 +96,25 @@ module PrintenvSpec {
           exit == 1
   }
 
-  twostate predicate Spec(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.envRegion, io.stdoutRegion, io.stderrRegion
+  twostate predicate PreparedSpec(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+
   {
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeHelp then
-      io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + HelpTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
-      io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + VersionTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if |cmd.operands| == 0 then
       exists entries: seq<string>, out: BenchWorld.Bytes ::
         IOContract.GetEnvironmentContractFields(old(io.env()), entries) &&
         EnvironmentOutputRelation(
           entries, Terminator(cmd.nullTerminated), out) &&
-        io.stdout() == old(io.stdout()) + out &&
-        io.stderr() == old(io.stderr()) &&
+        plannedStdout == old(io.stdout()) + out &&
+        plannedStderr == old(io.stderr()) &&
         exit == 0
     else
       exists out: BenchWorld.Bytes ::
@@ -122,7 +125,67 @@ module PrintenvSpec {
           out,
           exit
         ) &&
-        io.stdout() == old(io.stdout()) + out &&
-        io.stderr() == old(io.stderr())
+        plannedStdout == old(io.stdout()) + out &&
+        plannedStderr == old(io.stderr())
+  }
+
+  function Emits(raw: Schema.PrintenvCmdRaw): bool
+  {
+    true
+  }
+
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode("printenv: write error: " + message + "\n")
+  }
+
+  function StreamFailureExit(): int
+  {
+    2
+  }
+
+  ghost predicate EmitFields(
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    beforeStdout: BenchWorld.Bytes, beforeStderr: BenchWorld.Bytes,
+    afterStdout: BenchWorld.Bytes, afterStderr: BenchWorld.Bytes,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
+      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+    stdoutResult.StreamWriteResult? &&
+    var errors := diagnostics + (if stdoutResult.err == 0 then [] else
+      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+    var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
+      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+    stderrResult.StreamWriteResult? &&
+    (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
+      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+    (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
+      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+    exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then StreamFailureExit() else normalExit)
+  }
+
+  twostate predicate Emission(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    if Emits(raw) then
+      EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+    else
+      io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
+      exit == normalExit
+  }
+
+  twostate predicate Spec(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

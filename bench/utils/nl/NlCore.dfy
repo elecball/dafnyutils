@@ -5,6 +5,8 @@ include "NlSchema.dfy"
 include "NlSpec.dfy"
 
 module NlCore {
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -13,7 +15,7 @@ module NlCore {
   import NlSchema
   import Spec = NlSpec
 
-  twostate predicate CoreSummary(
+  twostate predicate PreparedSummary(
     raw: NlSchema.NlCmdRaw,
     io: BenchIO.IO,
     exit: int,
@@ -27,24 +29,24 @@ module NlCore {
     hadError: bool,
     hasDelimiter: bool,
     new outputPart: BenchWorld.Bytes
-  )
-    reads io.fsRegion, io.stdinRegion, io.stdoutRegion, io.stderrRegion, io.trustedStreamsRegion
+  , plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := NlSchema.Command(raw);
     if cmd.mode == NlSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpText() &&
-      io.stderr() == old(io.stderr()) + NlSchema.OptionErrorsText(cmd.optionErrors) &&
+      plannedStdout == Spec.HelpText() &&
+      plannedStderr == NlSchema.OptionErrorsText(cmd.optionErrors) &&
       exit == 0
     else if cmd.mode == NlSchema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionText() &&
-      io.stderr() == old(io.stderr()) + NlSchema.OptionErrorsText(cmd.optionErrors) &&
+      plannedStdout == Spec.VersionText() &&
+      plannedStderr == NlSchema.OptionErrorsText(cmd.optionErrors) &&
       exit == 0
     else if cmd.mode != NlSchema.ModeRun then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.ModeErrorMessage(cmd) &&
+      plannedStdout == [] &&
+      plannedStderr == Spec.ModeErrorMessage(cmd) &&
       exit == 1
     else
       InputTraceSummary(
@@ -52,19 +54,13 @@ module NlCore {
         combined, inputCuts, errorFragments, errorOutput, errorCuts,
         hadError, hasDelimiter,
         old(io.trustedStreams())
-      ) &&
-      io.stdin() ==
-      (if exists i ::
-            (0 <= i < |cmd.inputs| &&
-             cmd.inputs[i] == NlSchema.Stdin)
-       then []
-       else old(io.stdin())) &&
+      , io.stdin()) &&
       (if hasDelimiter then
          outputPart == []
        else
          OutputSummary(cmd, combined, outputPart)) &&
-      io.stdout() == old(io.stdout()) + outputPart &&
-      io.stderr() == old(io.stderr()) + errorOutput +
+      plannedStdout == outputPart &&
+      plannedStderr == errorOutput +
       (if hasDelimiter then
          Spec.UnsupportedLogicalPageDelimiterMessage()
        else
@@ -101,6 +97,27 @@ module NlCore {
            line == [(92 as char), ':', (92 as char), ':', (92 as char), ':'];
   }
 
+  opaque ghost function PrefixStdinCore(cmd: NlSchema.NlCmd, before: BenchWorld.Bytes, count: nat,
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
+    requires count <= |cmd.inputs|
+    decreases count
+  {
+    if count == 0 then before else
+      var previous := PrefixStdinCore(cmd, before, count - 1, observations);
+      if cmd.inputs[count - 1].Stdin? then IOContract.ObservedReadStdinRemainingFields(previous, observations) else previous
+  }
+
+  lemma PrefixStdinStep(cmd: NlSchema.NlCmd, before: BenchWorld.Bytes, count: nat,
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
+    requires count < |cmd.inputs|
+    ensures PrefixStdinCore(cmd, before, count + 1, observations) ==
+      (if cmd.inputs[count].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+        PrefixStdinCore(cmd, before, count, observations), observations)
+       else PrefixStdinCore(cmd, before, count, observations))
+  {
+      reveal PrefixStdinCore();
+  }
+
   ghost predicate InputTraceSummary(
     cmd: NlSchema.NlCmd,
     preFs: BenchWorld.FileSystem,
@@ -115,18 +132,18 @@ module NlCore {
     hadError: bool,
     hasDelimiter: bool,
     preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
-  )
+  , postStdin: BenchWorld.Bytes)
   {
+    postStdin == PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams) &&
     |readResults| == |cmd.inputs| &&
     |inputFragments| == |cmd.inputs| &&
     |errorFragments| == |cmd.inputs| &&
     (forall i :: 0 <= i < |cmd.inputs| ==>
-                   Spec.ReadResultRelation(
-                     cmd, preFs, preStdin, i, readResults[i], preStreams) &&
+                   Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, i, preStreams), i, readResults[i], preStreams) &&
                    inputFragments[i] ==
                    (match readResults[i]
                     case Ok(data) => NormalizeInputData(data)
-                    case Err(_) => []) &&
+                    case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                    errorFragments[i] ==
                    Spec.ErrorPiece(cmd.inputs[i], readResults[i])) &&
     Spec.FragmentsConcatenate(
@@ -523,7 +540,7 @@ module NlCore {
     }
   }
 
-  method {:isolate_assertions} RunCore(
+  method {:isolate_assertions} Prepare(
     raw: NlSchema.NlCmdRaw,
     io: BenchIO.IO
   ) returns (
@@ -538,19 +555,21 @@ module NlCore {
       ghost hadErrorWitness: bool,
       ghost hasDelimiterWitness: bool,
       ghost outputPart: BenchWorld.Bytes
-    )
-    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(
+    , plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(
               raw, io, exit, readResults, inputFragments, combinedWitness,
               inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
               hasDelimiterWitness, outputPart
-            )
+            , plannedOut, plannedErr)
     decreases *
   {
+    plannedOut := [];
+    plannedErr := [];
+
     ghost var preFs := io.fs();
+    ghost var preStreams := io.trustedStreams();
     ghost var preStdin := io.stdin();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
     var cmd := NlSchema.Command(raw);
     readResults := [];
     inputFragments := [];
@@ -566,34 +585,58 @@ module NlCore {
     if cmd.mode == NlSchema.ModeHelp {
       var help := Spec.HelpText();
       var diagnostics := NlSchema.OptionErrorsText(cmd.optionErrors);
-      var _ := io.WriteStdout(help, BenchWorld.ThrowOnError);
-      var _ := io.WriteStderr(diagnostics, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + help;
+      plannedErr := plannedErr + diagnostics;
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout + help;
-      assert io.stderr() == preStderr + diagnostics;
+      assert plannedOut == help;
+      assert plannedErr == diagnostics;
+      assert PreparedSummary(
+              raw, io, exit, readResults, inputFragments, combinedWitness,
+              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+              hasDelimiterWitness, outputPart
+            , plannedOut, plannedErr) by {
+        hide *;
+        reveal PreparedSummary();
+      }
       return;
     }
 
     if cmd.mode == NlSchema.ModeVersion {
       var version := Spec.VersionText();
       var diagnostics := NlSchema.OptionErrorsText(cmd.optionErrors);
-      var _ := io.WriteStdout(version, BenchWorld.ThrowOnError);
-      var _ := io.WriteStderr(diagnostics, BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + version;
+      plannedErr := plannedErr + diagnostics;
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout + version;
-      assert io.stderr() == preStderr + diagnostics;
+      assert plannedOut == version;
+      assert plannedErr == diagnostics;
+      assert PreparedSummary(
+              raw, io, exit, readResults, inputFragments, combinedWitness,
+              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+              hasDelimiterWitness, outputPart
+            , plannedOut, plannedErr) by {
+        hide *;
+        reveal PreparedSummary();
+      }
       return;
     }
 
     if cmd.mode != NlSchema.ModeRun {
       var err := Spec.ModeErrorMessage(cmd);
-      var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
+      plannedErr := plannedErr + err;
       exit := 1;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout;
-      assert io.stderr() == preStderr + err;
+      assert plannedOut == [];
+      assert plannedErr == err;
+      assert PreparedSummary(
+              raw, io, exit, readResults, inputFragments, combinedWitness,
+              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+              hasDelimiterWitness, outputPart
+            , plannedOut, plannedErr) by {
+        hide *;
+        reveal PreparedSummary();
+      }
       return;
     }
 
@@ -602,23 +645,23 @@ module NlCore {
     var hadError := false;
     var seenStdin := false;
 
+    assert PrefixStdinCore(cmd, preStdin, 0, preStreams) == preStdin by { reveal PrefixStdinCore(); }
     var i := 0;
     while i < |cmd.inputs|
       invariant 0 <= i <= |cmd.inputs|
-      invariant io.stdout() == preStdout
-      invariant io.stderr() == preStderr
+      invariant plannedOut == []
+      invariant plannedErr == []
       invariant |readResults| == i
       invariant |inputFragments| == i
       invariant |errorFragments| == i
       invariant forall j: nat :: j < i ==>
-                                   Spec.ReadResultRelation(
-                                     cmd, preFs, preStdin, j, readResults[j],
-                                     old(io.trustedStreams())
+                                   Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, j, preStreams), j, readResults[j],
+                                     preStreams
                                    ) &&
                                    inputFragments[j] ==
                                    (match readResults[j]
                                     case Ok(data) => NormalizeInputData(data)
-                                    case Err(_) => []) &&
+                                    case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                                    errorFragments[j] ==
                                    Spec.ErrorPiece(cmd.inputs[j], readResults[j])
       invariant Spec.FragmentsConcatenate(
@@ -633,29 +676,26 @@ module NlCore {
       invariant seenStdin ==
                 (exists j :: 0 <= j < i &&
                              cmd.inputs[j] == NlSchema.Stdin)
-      invariant io.stdin() == (if seenStdin then [] else preStdin)
+      invariant io.stdin() == PrefixStdinCore(cmd, preStdin, i, preStreams)
       decreases |cmd.inputs| - i
     {
       var input := cmd.inputs[i];
+      ghost var beforeReadStdin := io.stdin();
+      assert beforeReadStdin == PrefixStdinCore(cmd, preStdin, i, preStreams);
       var readResult: BenchWorld.IOResult<BenchWorld.Bytes>;
       var piece: BenchWorld.Bytes;
       var errorPiece: BenchWorld.Bytes;
       var pieceHadError: bool;
       match input {
         case Stdin =>
-          ghost var beforeReadStdin := io.stdin();
-          var data :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-          assert IOContract.ReadStdinAllFields(
-              beforeReadStdin, io.stdin(), data
-            );
-          readResult := Result.Ok(data);
-          piece := NormalizeInputData(data);
-          errorPiece := [];
-          pieceHadError := false;
+          readResult := io.ReadStdin();
+          piece := NormalizeInputData(IOContract.ReadResultData(readResult));
+          errorPiece := Spec.ErrorPiece(input, readResult);
+          pieceHadError := readResult.Err?;
         case File(path) =>
           readResult := io.ReadFile(path);
           assert readResult ==
-                 IOContract.ObservedReadFileResultFields(preFs, old(io.trustedStreams()), path);
+                 IOContract.ObservedReadFileResultFields(preFs, preStreams, path);
           if readResult.Ok? {
             piece := NormalizeInputData(readResult.v);
             errorPiece := [];
@@ -666,15 +706,17 @@ module NlCore {
             pieceHadError := true;
           }
       }
-      reveal Spec.ReadResultRelation();
-      assert Spec.ReadResultRelation(
-          cmd, preFs, preStdin, i, readResult,
-          old(io.trustedStreams())
-        );
+      assert io.stdin() == (if input.Stdin? then
+        IOContract.ObservedReadStdinRemainingFields(beforeReadStdin, preStreams) else beforeReadStdin) by { hide *; }
+      assert Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, i, preStreams), i, readResult,
+          preStreams
+        ) by {
+        reveal Spec.ReadResultRelation();
+      }
       assert piece ==
              (match readResult
               case Ok(data) => NormalizeInputData(data)
-              case Err(_) => []);
+              case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []);
       assert errorPiece == Spec.ErrorPiece(input, readResult);
       assert pieceHadError ==
              Spec.HadErrorPiece(input, readResult);
@@ -696,25 +738,23 @@ module NlCore {
       assert Spec.FragmentsConcatenate(
           errorFragments, err, errorCuts);
       assert forall j: nat :: j < i + 1 ==>
-                                Spec.ReadResultRelation(
-                                  cmd, preFs, preStdin, j, readResults[j],
-                                  old(io.trustedStreams())
+                                Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, j, preStreams), j, readResults[j],
+                                  preStreams
                                 ) &&
                                 inputFragments[j] ==
                                 (match readResults[j]
                                  case Ok(data) => NormalizeInputData(data)
-                                 case Err(_) => []) &&
+                                 case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                                 errorFragments[j] ==
                                 Spec.ErrorPiece(cmd.inputs[j], readResults[j]) by {
         forall j: nat | j < i + 1
-          ensures Spec.ReadResultRelation(
-                    cmd, preFs, preStdin, j, readResults[j],
-                    old(io.trustedStreams())
+          ensures Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, j, preStreams), j, readResults[j],
+                    preStreams
                   ) &&
                   inputFragments[j] ==
                   (match readResults[j]
                    case Ok(data) => NormalizeInputData(data)
-                   case Err(_) => []) &&
+                   case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                   errorFragments[j] ==
                   Spec.ErrorPiece(cmd.inputs[j], readResults[j])
         {
@@ -802,6 +842,8 @@ module NlCore {
       assert seenStdin ==
              (exists j :: (0 <= j < i + 1 &&
                            cmd.inputs[j] == NlSchema.Stdin));
+      PrefixStdinStep(cmd, preStdin, i, preStreams);
+      assert io.stdin() == PrefixStdinCore(cmd, preStdin, i + 1, preStreams) by { hide *; }
       i := i + 1;
     }
 
@@ -812,7 +854,6 @@ module NlCore {
     errorOutput := err;
     hadErrorWitness := hadError;
     hasDelimiterWitness := hasDelimiter;
-    reveal InputTraceSummary();
     assert exists ls: seq<BenchWorld.Bytes>,
         ts: seq<bool>,
         fs: seq<BenchWorld.Bytes>,
@@ -830,14 +871,25 @@ module NlCore {
     assert InputTraceSummary(
         cmd, preFs, preStdin, readResults, inputFragments, combined,
         inputCuts, errorFragments, err, errorCuts, hadError, hasDelimiter,
-        old(io.trustedStreams())
-      );
+        preStreams
+      , io.stdin()) by {
+      hide *;
+      reveal InputTraceSummary();
+    }
     if hasDelimiter {
       var delimiterErr := Spec.UnsupportedLogicalPageDelimiterMessage();
-      var _ := io.WriteStderr(err + delimiterErr, BenchWorld.ThrowOnError);
+      plannedErr := err + delimiterErr;
       exit := 1;
-      assert io.stdout() == preStdout;
-      assert io.stderr() == preStderr + err + delimiterErr;
+      assert plannedOut == [];
+      assert plannedErr == err + delimiterErr;
+      assert PreparedSummary(
+              raw, io, exit, readResults, inputFragments, combinedWitness,
+              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+              hasDelimiterWitness, outputPart
+            , plannedOut, plannedErr) by {
+        hide *;
+        reveal PreparedSummary();
+      }
       return;
     }
 
@@ -867,14 +919,113 @@ module NlCore {
     }
     assert OutputSummary(cmd, combined, rendered);
     outputPart := rendered;
-    if |rendered| > 0 {
-      var _ := io.WriteStdout(rendered, BenchWorld.ThrowOnError);
-    }
-    if |err| > 0 {
-      var _ := io.WriteStderr(err, BenchWorld.ThrowOnError);
-    }
+    plannedOut := rendered;
+    plannedErr := err;
     exit := if hadError then 1 else 0;
-    assert io.stdout() == preStdout + rendered;
-    assert io.stderr() == preStderr + err;
+    assert plannedOut == rendered;
+    assert plannedErr == err;
+      assert PreparedSummary(
+              raw, io, exit, readResults, inputFragments, combinedWitness,
+              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+              hasDelimiterWitness, outputPart
+            , plannedOut, plannedErr) by {
+        hide *;
+        reveal PreparedSummary();
+      }
+  }
+
+  twostate predicate CoreSummary(
+    raw: NlSchema.NlCmdRaw,
+    io: BenchIO.IO,
+    exit: int,
+    new readResults: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
+    new inputFragments: seq<BenchWorld.Bytes>,
+    new combined: BenchWorld.Bytes,
+    new inputCuts: seq<nat>,
+    new errorFragments: seq<BenchWorld.Bytes>,
+    new errorOutput: BenchWorld.Bytes,
+    new errorCuts: seq<nat>,
+    hadError: bool,
+    hasDelimiter: bool,
+    new outputPart: BenchWorld.Bytes
+  )
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, outputPart,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: NlSchema.NlCmdRaw, io: BenchIO.IO) returns (
+      exit: int,
+      ghost readResults: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
+      ghost inputFragments: seq<BenchWorld.Bytes>,
+      ghost combinedWitness: BenchWorld.Bytes,
+      ghost inputCuts: seq<nat>,
+      ghost errorFragments: seq<BenchWorld.Bytes>,
+      ghost errorOutput: BenchWorld.Bytes,
+      ghost errorCuts: seq<nat>,
+      ghost hadErrorWitness: bool,
+      ghost hasDelimiterWitness: bool,
+      ghost outputPart: BenchWorld.Bytes
+    )
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(
+              raw, io, exit, readResults, inputFragments, combinedWitness,
+              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+              hasDelimiterWitness, outputPart
+            )
+    decreases *
+  {
+    var normalExit: int;
+    var out: BenchWorld.Bytes;
+    var diagnostics: BenchWorld.Bytes;
+    normalExit, readResults, inputFragments, combinedWitness, inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness, hasDelimiterWitness, outputPart, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(
+              raw, io, normalExit, readResults, inputFragments, combinedWitness,
+              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+              hasDelimiterWitness, outputPart
+            , out, diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(
+              raw, io, normalExit, readResults, inputFragments, combinedWitness,
+              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+              hasDelimiterWitness, outputPart
+            , out, diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

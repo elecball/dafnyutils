@@ -111,13 +111,13 @@ module ChmodSpec {
   function ReferenceErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
   {
     "chmod: failed to get attributes of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    ": " + err + "\n"
+    ": " + Utf8.Encode(err) + "\n"
   }
 
   function GettingNewAttributesMessageSpec(path: string, err: string): BenchWorld.Bytes
   {
     "chmod: getting new attributes of " +
-    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " + err + "\n"
+    Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " + Utf8.Encode(err) + "\n"
   }
 
   function CombineModeReferenceMessageSpec(): BenchWorld.Bytes
@@ -138,13 +138,13 @@ module ChmodSpec {
   function ChangeErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
   {
     "chmod: changing permissions of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    ": " + err + "\n"
+    ": " + Utf8.Encode(err) + "\n"
   }
 
   function AccessErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
   {
     "chmod: cannot access " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    ": " + err + "\n"
+    ": " + Utf8.Encode(err) + "\n"
   }
 
   function DanglingSymlinkMessageSpec(path: string): BenchWorld.Bytes
@@ -153,10 +153,15 @@ module ChmodSpec {
     Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + "\n"
   }
 
-  function CannotDereferenceMessageSpec(path: string, err: int): BenchWorld.Bytes
+  function CannotDereferenceText(path: string, reason: string): BenchWorld.Bytes
   {
     "chmod: cannot dereference " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-    ": " + ErrnoTextSpec(err) + "\n"
+    ": " + Utf8.Encode(reason) + "\n"
+  }
+
+  function CannotDereferenceMessageSpec(path: string, err: int): BenchWorld.Bytes
+  {
+    CannotDereferenceText(path, ErrnoTextSpec(err))
   }
 
   function NeitherChangedMessageSpec(path: string): BenchWorld.Bytes
@@ -169,6 +174,9 @@ module ChmodSpec {
     requires Utf8.Encode(path) == path
     requires Quote.SpecQuoteAfBytes(path) == "'" + path + "'"
     ensures AccessErrorMessageSpec(path, err) ==
+            "chmod: cannot access '" + path + "': " + Utf8.Encode(err) + "\n"
+    ensures Utf8.Encode(err) == err ==>
+            AccessErrorMessageSpec(path, err) ==
             "chmod: cannot access '" + path + "': " + err + "\n"
   {
   }
@@ -1303,6 +1311,42 @@ module ChmodSpec {
                   Utf8.ValidExternalText(cmd.files[i])
   }
 
+  function WriteErrorText(reason: string): BenchWorld.Bytes
+  {
+    "chmod: write error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost predicate EmissionOutcomeFields(
+    beforeOut: BenchWorld.Bytes, beforeErr: BenchWorld.Bytes,
+    afterOut: BenchWorld.Bytes, afterErr: BenchWorld.Bytes,
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int,
+    committed: nat, outErr: int, errCommitted: nat, errErr: int
+  )
+  {
+    (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
+     else IOContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
+    var finalDiagnostics := diagnostics +
+      (if outErr == 0 then [] else WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
+    (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
+     else IOContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
+    exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
+  }
+
+  ghost predicate EmissionFields(
+    beforeOut: BenchWorld.Bytes, beforeErr: BenchWorld.Bytes,
+    afterOut: BenchWorld.Bytes, afterErr: BenchWorld.Bytes,
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
+      EmissionOutcomeFields(beforeOut, beforeErr, afterOut, afterErr, observations,
+                            output, diagnostics, normalExit, exit,
+                            committed, outErr, errCommitted, errErr)
+  }
   twostate predicate Spec(raw: Schema.ChmodCmdRaw, io: BenchIO.IO, exit: int)
     reads io.Footprint()
   {
@@ -1354,4 +1398,56 @@ module ChmodSpec {
          ))
   }
 
+  datatype ObservationContext = ObservationContext(
+    times: BenchWorld.StatusTimeObservations,
+    failures: (BenchWorld.NativeFailureRequest) -> int,
+    cursor: nat,
+    cwd: BenchWorld.Path)
+
+  ghost function Context(io: BenchIO.IO): (context: ObservationContext)
+    reads io.statusObservationsRegion, io.trustedNativeFailuresRegion, io.cwdRegion
+    ensures context == ObservationContext(io.statusObservations(), io.trustedNativeFailures(), io.statusCursor(), io.cwd())
+  {
+    ObservationContext(io.statusObservations(), io.trustedNativeFailures(), io.statusCursor(), io.cwd())
+  }
+
+  ghost function AtCursor(context: ObservationContext, cursor: nat): (shifted: ObservationContext)
+    ensures shifted == ObservationContext(context.times, context.failures, cursor, context.cwd)
+  {
+    context.(cursor := cursor)
+  }
+
+  ghost predicate SuccessOutputRelation(cmd: Schema.ChmodCmd, plan: SpecModePlan,
+    path: string,
+    before: bv32, requested: bv32, isDir: bool, fs: BenchWorld.FileSystem,
+    postOk: bool, postMode: bv32, postErr: int, result: SpecPathResult)
+  {
+    exists naive: bv32 :: SpecNaiveModeRelation(plan, before, isDir, naive) &&
+      if SpecPostChangeLookupNeeded(cmd, requested) then
+        if !postOk then
+          var surprise := SpecDiagnoseSurpriseForNaive(cmd, requested, naive);
+          result == SpecPathResult(fs,
+            if cmd.verbose then RetainedMessageSpec(path, requested) else [],
+            (if cmd.silent then [] else GettingNewAttributesMessageSpec(path,
+              IOContract.CLocaleErrnoTextResult(postErr))) +
+            (if surprise then SurpriseModeMessageSpec(path, requested, naive) else []),
+            !surprise, SpecPathRetained(requested))
+        else
+          var observed := postMode;
+          var surprise := SpecDiagnoseSurpriseForNaive(cmd, observed, naive);
+          result == SpecPathResult(fs, SpecSuccessStdout(cmd, path, before, observed),
+            if surprise then SurpriseModeMessageSpec(path, observed, naive) else [], !surprise,
+            if surprise then SpecPathSurprise(before, observed, naive)
+            else if before == observed then SpecPathRetained(observed) else SpecPathChanged(before, observed))
+      else
+        var surprise := SpecDiagnoseSurpriseForNaive(cmd, requested, naive);
+        result == SpecPathResult(fs, SpecSuccessStdout(cmd, path, before, requested),
+          if surprise then SurpriseModeMessageSpec(path, requested, naive) else [], !surprise,
+          if surprise then SpecPathSurprise(before, requested, naive)
+          else if before == requested then SpecPathRetained(requested) else SpecPathChanged(before, requested))
+  }
+  function ModeNotSupported(err: int): bool
+  {
+    err == Errno.EOPNOTSUPP
+  }
 }

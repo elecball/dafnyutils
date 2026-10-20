@@ -1,135 +1,78 @@
-include "../../core/World.dfy"
-include "../../core/IO.dfy"
-include "PwdSchema.dfy"
+include "PwdTextSpec.dfy"
+include "PwdRuntimeModel.dfy"
+include "PwdLogicalSpec.dfy"
+include "PwdPhysicalSpec.dfy"
+include "PwdEmissionSpec.dfy"
 
 module PwdSpec {
   import BenchIO
-  import Utf8 = Utf8Semantics
-  import BenchWorld
+  import W = BenchWorld
+  import C = IOContract
   import Schema = PwdSchema
+  import Text = PwdTextSpec
+  import Model = PwdRuntimeModel
+  import Recovery = PwdRecoverySpec
+  import Logical = PwdLogicalSpec
+  import Physical = PwdPhysicalSpec
+  import Emission = PwdEmissionSpec
 
+  datatype DirectoryEvidence = DirectoryEvidence(
+    ghost logicalSelected: bool, ghost logicalAfter: Recovery.RuntimeState,
+    ghost logical: Logical.SelectionEvidence, ghost physical: seq<Physical.PhysicalEvidence>)
 
-
-
-  function HelpTextSpec(): BenchWorld.Bytes
+  ghost predicate DirectorySelectionFields(raw: Schema.PwdCmdRaw, env: map<string,string>,
+    inputs: Recovery.RuntimeInputs, before: Recovery.RuntimeState, after: Recovery.RuntimeState,
+    outcome: Recovery.DirectoryOutcome, evidence: DirectoryEvidence)
   {
-    "Usage: pwd [OPTION]...\n"
-    + "Print the full filename of the current working directory.\n"
-    + "\n"
-    + "  -L, --logical\n"
-    + "         use PWD from environment, even if it contains symlinks\n"
-    + "  -P, --physical\n"
-    + "         resolve all symlinks\n"
-    + "      --help\n"
-    + "         display this help and exit\n"
-    + "      --version\n"
-    + "         output version information and exit\n"
-    + "\n"
-    + "If no option is specified, -P is assumed.\n"
-    + "\n"
-    + "Your shell may have its own version of pwd, which usually supersedes\n"
-    + "the version described here.  Please refer to your shell's documentation\n"
-    + "for details about the options it supports.\n"
-    + "\n"
-    + "Report bugs to: bug-coreutils@gnu.org\n"
-    + "GNU coreutils home page: <https://www.gnu.org/software/coreutils/>\n"
-    + "General help using GNU software: <https://www.gnu.org/gethelp/>\n"
-    + "Report any translation bugs to <https://translationproject.org/team/>\n"
-    + "Full documentation <https://www.gnu.org/software/coreutils/pwd>\n"
-    + "or available locally via: info '(coreutils) pwd invocation'\n"
-  }
-
-  function VersionTextSpec(): BenchWorld.Bytes
-  {
-    "pwd (GNU coreutils) 9.10.13-2cf49\n"
-    + "Copyright (C) 2026 Free Software Foundation, Inc.\n"
-    + "License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\n"
-    + "This is free software: you are free to change and redistribute it.\n"
-    + "There is NO WARRANTY, to the extent permitted by law.\n"
-    + "\n"
-    + "Written by Jim Meyering.\n"
-  }
-
-  function IgnoredOperandsWarningSpec(): BenchWorld.Bytes
-  {
-    "pwd: ignoring non-option arguments\n"
-  }
-
-  function CurrentDirectoryTextSpec(dir: string): BenchWorld.Bytes
-  {
-    Utf8.Encode(dir) + "\n"
-  }
-
-  function HelpSelected(raw: Schema.PwdCmdRaw): bool
-  {
-    raw.seenHelp &&
-    (!raw.seenVersion || raw.helpOccurrenceIndex < raw.versionOccurrenceIndex)
-  }
-
-  function VersionSelected(raw: Schema.PwdCmdRaw): bool
-  {
-    raw.seenVersion &&
-    (!raw.seenHelp || raw.versionOccurrenceIndex < raw.helpOccurrenceIndex)
-  }
-
-  function UseLogicalFields(raw: Schema.PwdCmdRaw, env: map<string, string>): bool
-  {
-    if raw.seenLogical && raw.seenPhysical then
-      raw.logicalOccurrenceIndex > raw.physicalOccurrenceIndex
-    else if raw.seenLogical then
-      true
-    else if raw.seenPhysical then
-      false
+    Recovery.DirectoryOutcomeFields(outcome) &&
+    (if Text.UseLogicalFields(raw,env) && "PWD" in env then
+      Logical.NativeSelectionFields(inputs,before,evidence.logicalAfter,env["PWD"],
+        evidence.logicalSelected,evidence.logical)
+     else !evidence.logicalSelected && evidence.logicalAfter == before &&
+       evidence.logical.statuses == [] && evidence.logical.calls == []) &&
+    if evidence.logicalSelected then
+      "PWD" in env && outcome == Recovery.DirectoryRecovered(env["PWD"]) &&
+      after == evidence.logicalAfter && evidence.physical == []
     else
-      "POSIXLY_CORRECT" in env
+      |evidence.physical| == 1 &&
+      Physical.PhysicalSelectionFields(inputs,evidence.logicalAfter,after,outcome,evidence.physical[0])
   }
 
-  ghost predicate SelectedDirectoryRelation(
-    raw: Schema.PwdCmdRaw,
-    cwd: string,
-    env: map<string, string>,
-    dir: string
-  )
+  ghost predicate WarningFields(raw: Schema.PwdCmdRaw,
+    beforeErr: W.Bytes, afterErr: W.Bytes,
+    streams: (W.TrustedStreamRequest)->W.TrustedStreamResult, warningErr: int)
   {
-    if UseLogicalFields(raw, env) && "PWD" in env then
-      var pwd := env["PWD"];
-      var components :=
-        BenchWorld.SplitSegments(BenchWorld.StripLeadingSlash(pwd), 0, 0);
-      if BenchWorld.IsAbsolutePath(pwd) &&
-         "." !in components &&
-         ".." !in components &&
-         BenchWorld.NormalizePath(pwd) == cwd
-      then
-        dir == pwd
-      else
-        dir == cwd
+    if |raw.operands| == 0 then beforeErr == afterErr && warningErr == 0
+    else exists committed: nat ::
+      C.WriteStderrSpec(beforeErr,streams,afterErr,Text.IgnoredOperandsWarningSpec(),committed,warningErr)
+  }
+
+  ghost predicate RunFields(raw: Schema.PwdCmdRaw, env: map<string,string>,
+    inputs: Recovery.RuntimeInputs, before: Recovery.RuntimeState, after: Recovery.RuntimeState,
+    beforeOut: W.Bytes, beforeErr: W.Bytes, afterOut: W.Bytes, afterErr: W.Bytes,
+    streams: (W.TrustedStreamRequest)->W.TrustedStreamResult, exit: int)
+  {
+    if Text.HelpSelected(raw) then
+      before == after &&
+      Emission.EmissionFields(beforeOut,beforeErr,afterOut,afterErr,streams,Text.HelpTextSpec(),[],0,exit)
+    else if Text.VersionSelected(raw) then
+      before == after &&
+      Emission.EmissionFields(beforeOut,beforeErr,afterOut,afterErr,streams,Text.VersionTextSpec(),[],0,exit)
     else
-      dir == cwd
+      exists middleErr: W.Bytes, warningErr: int, outcome: Recovery.DirectoryOutcome,
+        evidence: DirectoryEvidence, emissionExit: int ::
+        WarningFields(raw,beforeErr,middleErr,streams,warningErr) &&
+        DirectorySelectionFields(raw,env,inputs,before,after,outcome,evidence) &&
+        Emission.PhysicalEmissionFields(outcome,beforeOut,middleErr,afterOut,afterErr,streams,emissionExit) &&
+        exit == (if warningErr == 0 then emissionExit else 1)
   }
 
   twostate predicate Spec(raw: Schema.PwdCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+    reads io.fsRegion,io.directoryStateRegion,io.dirHandlesRegion,io.cwdRegion,io.statusObservationsRegion,
+      io.envRegion,io.stdoutRegion,io.stderrRegion,io.trustedStreamsRegion,io.trustedNativeFailuresRegion
   {
-    if HelpSelected(raw) then
-      io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
-      exit == 0
-    else if VersionSelected(raw) then
-      io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
-      exit == 0
-    else
-      exists dir: string ::
-        SelectedDirectoryRelation(
-          raw, old(io.cwd()), old(io.env()), dir
-        ) &&
-        io.stdout() ==
-        old(io.stdout()) + CurrentDirectoryTextSpec(dir) &&
-        io.stderr() ==
-        old(io.stderr()) +
-        (if |raw.operands| > 0
-         then IgnoredOperandsWarningSpec()
-         else "") &&
-        exit == 0
+    Model.Inputs(io) == old(Model.Inputs(io)) &&
+    RunFields(raw,old(io.env()),old(Model.Inputs(io)),old(Model.State(io)),Model.State(io),
+      old(io.stdout()),old(io.stderr()),io.stdout(),io.stderr(),io.trustedStreams(),exit)
   }
 }

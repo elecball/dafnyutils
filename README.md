@@ -200,9 +200,9 @@ twostate predicate CopyResult(io: BenchIO.IO, readErr: int, writeErr: int)
 {
   exists data: BenchWorld.Bytes, committed: nat ::
     C.ReadStdinSpec(
-      old(io.stdin()), old(io.trustedStreams()), io.stdin(), BenchWorld.ReturnError, data, readErr) &&
+      old(io.stdin()), old(io.trustedStreams()), io.stdin(), data, readErr) &&
     C.WriteStdoutSpec(
-      old(io.stdout()), old(io.trustedStreams()), io.stdout(), data, BenchWorld.ReturnError, committed, writeErr)
+      old(io.stdout()), old(io.trustedStreams()), io.stdout(), data, committed, writeErr)
 }
 ```
 
@@ -243,10 +243,10 @@ method CopyInput(io: BenchIO.IO) returns (readErr: int, writeErr: int)
   modifies io.stdinRegion, io.stdoutRegion
   ensures CopySpec.CopyResult(io, readErr, writeErr)
 {
-  var read := io.ReadStdin(BenchIO.BenchWorld.ReturnError);
+  var read := io.ReadStdin();
   var data := C.ReadResultData(read);
   readErr := C.ResultErrno(read);
-  var write := io.WriteStdout(data, BenchIO.BenchWorld.ReturnError);
+  var write := io.WriteStdout(data);
   writeErr := C.ResultErrno(write);
 }
 ```

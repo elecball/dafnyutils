@@ -7,6 +7,9 @@ include "HeadCore.dfy"
 include "HeadSpec.dfy"
 
 module HeadProof {
+  import IOContract
+  import BenchWorld
+
   import Result = Results
   import BenchIO
   import BW = BenchWorld
@@ -41,17 +44,19 @@ module HeadProof {
   {
   }
 
-  lemma PrefixStdinRelation(cmd: Schema.HeadCmd, preStdin: BW.Bytes, i: nat)
-    requires i <= |cmd.inputs|
-    ensures Core.PrefixStdinCore(cmd, preStdin, i) ==
-            (if exists j: nat :: j < i && Spec.IsStdinInput(cmd.inputs[j])
-             then []
-             else preStdin)
-    decreases i
+  lemma PrefixStdinRelation(cmd: Schema.HeadCmd, preStdin: BW.Bytes,
+    preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult)
+    ensures Spec.StdinTraceRelation(cmd, preStdin,
+      Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams), preStreams,
+      seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams)))
   {
-    if i > 0 {
-      PrefixStdinRelation(cmd, preStdin, i - 1);
-      IsStdinInputEq(cmd.inputs[i - 1]);
+    forall i: nat | i < |cmd.inputs|
+      ensures Core.PrefixStdinCore(cmd, preStdin, i + 1, preStreams) ==
+        (if cmd.inputs[i].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+          Core.PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
+         else Core.PrefixStdinCore(cmd, preStdin, i, preStreams))
+    {
+      Core.PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
     }
   }
 
@@ -62,12 +67,11 @@ module HeadProof {
     i: nat
   )
     requires i < |cmd.inputs|
-    ensures Spec.ReadResultRelation(
-              cmd, preFs, preStreams, preStdin, i,
+    ensures Spec.ReadResultRelation(cmd, preFs, preStreams, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
               Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
             )
   {
-    PrefixStdinRelation(cmd, preStdin, i);
+
   }
 
   lemma RecordCountRelation(data: BW.Bytes, delimiter: char)
@@ -292,10 +296,7 @@ module HeadProof {
     i: nat
   )
     requires i < |cmd.inputs|
-    ensures Spec.InputObservationRelation(
-              cmd,
-              preFs, preStreams,
-              preStdin,
+    ensures Spec.InputObservationRelation(cmd, preFs, preStreams, Core.PrefixStdinCore(cmd, preStdin, i, preStreams),
               i,
               Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i),
               Core.PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i),
@@ -327,7 +328,10 @@ module HeadProof {
     match Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
     case Ok(data) =>
       DataSelectionRelation(cmd, data);
-    case Err(_) =>
+    case Err(error) =>
+      if error.StreamFailure? || (error.ReadFailure? && error.readStage == BW.CloseFailed) {
+        DataSelectionRelation(cmd, error.partial);
+      }
   }
 
   ghost function CoreResults(
@@ -709,10 +713,7 @@ module HeadProof {
   )
     requires count <= |cmd.inputs|
     requires i < count
-    ensures Spec.InputObservationRelation(
-              cmd,
-              preFs, preStreams,
-              preStdin,
+    ensures Spec.InputObservationRelation(cmd, preFs, preStreams, Core.PrefixStdinCore(cmd, preStdin, i, preStreams),
               i,
               CoreResults(cmd, preFs, preStreams, preStdin, count)[i],
               |set j: nat |
@@ -757,10 +758,7 @@ module HeadProof {
   )
     requires count <= |cmd.inputs|
     ensures forall i: nat | i < count ::
-              Spec.InputObservationRelation(
-                cmd,
-                preFs, preStreams,
-                preStdin,
+              Spec.InputObservationRelation(cmd, preFs, preStreams, Core.PrefixStdinCore(cmd, preStdin, i, preStreams),
                 i,
                 CoreResults(cmd, preFs, preStreams, preStdin, count)[i],
                 |set j: nat |
@@ -772,10 +770,7 @@ module HeadProof {
               )
   {
     forall i: nat | i < count
-      ensures Spec.InputObservationRelation(
-                cmd,
-                preFs, preStreams,
-                preStdin,
+      ensures Spec.InputObservationRelation(cmd, preFs, preStreams, Core.PrefixStdinCore(cmd, preStdin, i, preStreams),
                 i,
                 CoreResults(cmd, preFs, preStreams, preStdin, count)[i],
                 |set j: nat |
@@ -875,7 +870,7 @@ module HeadProof {
               cmd,
               preFs, preStreams,
               preStdin,
-              Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|),
+              Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams),
               Core.PrefixOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
               Core.PrefixErrorOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
               Core.PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
@@ -891,9 +886,11 @@ module HeadProof {
     var count := |cmd.inputs|;
     AllInputObservations(cmd, preFs, preStreams, preStdin, count);
     FragmentsConcatenateCore(cmd, preFs, preStreams, preStdin, count);
-    PrefixStdinRelation(cmd, preStdin, count);
+    PrefixStdinRelation(cmd, preStdin, preStreams);
     PrefixHadErrorRelation(cmd, preFs, preStreams, preStdin, count);
     reveal Spec.InputTraceWitnessRelation();
+    var states := seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams));
+    assert Spec.StdinTraceRelation(cmd, preStdin, Core.PrefixStdinCore(cmd, preStdin, count, preStreams), preStreams, states);
   }
 
   lemma {:isolate_assertions} InputTraceRelation(
@@ -905,7 +902,7 @@ module HeadProof {
               cmd,
               preFs, preStreams,
               preStdin,
-              Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|),
+              Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams),
               Core.PrefixOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
               Core.PrefixErrorOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
               Core.PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|)
@@ -917,7 +914,7 @@ module HeadProof {
       cmd,
       preFs, preStreams,
       preStdin,
-      Core.PrefixStdinCore(cmd, preStdin, count),
+      Core.PrefixStdinCore(cmd, preStdin, count, preStreams),
       Core.PrefixOutputCore(cmd, preFs, preStreams, preStdin, count),
       Core.PrefixErrorOutputCore(cmd, preFs, preStreams, preStdin, count),
       Core.PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, count),
@@ -931,18 +928,30 @@ module HeadProof {
     );
   }
 
-  twostate lemma {:isolate_assertions} CoreSummaryImpliesSpec(
+  twostate lemma {:isolate_assertions} PreparedSummaryImpliesPreparedSpec(
     raw: Schema.HeadCmdRaw,
     io: BenchIO.IO,
     exit: int
-  )
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  , new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     CommandEq(raw);
     var cmd := Core.Command(raw);
     if cmd.mode == Schema.ModeRun {
       InputTraceRelation(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.HeadCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

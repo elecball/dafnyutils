@@ -4,6 +4,9 @@ include "../../core/Utf8.dfy"
 include "../../core/CliModel.dfy"
 
 module UnlinkSpec {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import BenchIO
   import BenchWorld
   import CliTypes
@@ -122,42 +125,88 @@ module UnlinkSpec {
     + Utf8.Encode(reason) + "\n"
   }
 
-  twostate predicate Spec(raw: Schema.UnlinkCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+
+  function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    "unlink: write error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost predicate EmissionOutcomeFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int,
+    committed: nat, outErr: int, errCommitted: nat, errErr: int
+  )
+  {
+    (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
+     else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
+    var finalDiagnostics := diagnostics +
+      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
+     else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
+    exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
+  }
+
+  ghost predicate EmissionFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
+      EmissionOutcomeFields(beforeOut, beforeErr, afterOut, afterErr, observations,
+                            output, diagnostics, normalExit, exit,
+                            committed, outErr, errCommitted, errErr)
+  }
+  twostate predicate PreparedSpec(raw: Schema.UnlinkCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    reads io.fsRegion, io.nowRegion, io.trustedFilesystemRegion
   {
     if raw.mode == Schema.ModeHelp then
       io.fs() == old(io.fs()) &&
-      io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + HelpTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if raw.mode == Schema.ModeVersion then
       io.fs() == old(io.fs()) &&
-      io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == [] + VersionTextSpec() &&
+      plannedStderr == [] &&
       exit == 0
     else if raw.mode != Schema.ModeRun then
       match raw.mode
       case ModeExtraOperand(operand) =>
         io.fs() == old(io.fs()) &&
-        io.stdout() == old(io.stdout()) &&
-        io.stderr() == old(io.stderr()) +
+        plannedStdout == [] &&
+        plannedStderr == [] +
           ExtraOperandText(C.QuoteArgumentResult(Utf8.Encode(operand))) &&
         exit == 1
       case _ => false
     else if |raw.operands| == 0 then
       io.fs() == old(io.fs()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + MissingOperandText() &&
+      plannedStdout == [] &&
+      plannedStderr == [] + MissingOperandText() &&
       exit == 1
     else
       exists ok: bool, err: int ::
         UnlinkResult(io, raw.operands[0], ok, err) &&
-        io.stdout() == old(io.stdout()) &&
+        plannedStdout == [] &&
         (if ok then
-          io.stderr() == old(io.stderr()) && exit == 0
+          plannedStderr == [] && exit == 0
         else
-          io.stderr() == old(io.stderr()) +
+          plannedStderr == [] +
             CannotUnlinkText(C.QuoteafPathResult(raw.operands[0]), C.CLocaleErrnoTextResult(err)) &&
           exit == 1)
+  }
+
+  twostate predicate Spec(raw: Schema.UnlinkCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit, output, diagnostics) &&
+      EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                     io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 }

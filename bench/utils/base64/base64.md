@@ -14,3 +14,17 @@ Deferred GNU behavior: the broader `basenc` alphabet family, streaming memory
 stress behavior for very large inputs, and exact partial-output diagnostics for
 every malformed decode edge case are intentionally left outside this benchmark
 slice.
+
+File-read error receipts retain the bytes returned before failure. A close
+failure after encoding preserves the encoded output and reports the operand;
+a read failure uses the GNU read-error diagnostic. Output failures retain the
+committed prefix and produce a nonzero status.
+
+On a decoding read error, only completed 4096-byte input buffers contribute
+output. Garbage filtering precedes the buffer-full decision when requested;
+quartets can span buffers, and a failed read does not flush an unfinished
+quartet as EOF. A close error follows ordinary EOF decoding. Invalid input in
+an already completed buffer takes precedence over a later read or close error,
+and valid decoded bytes preceding an invalid character are retained. Broader
+stream-ordering and finalization limits are recorded in
+[the failure audit](../../../docs/trustbase-failures.md).

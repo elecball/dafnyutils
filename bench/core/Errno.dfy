@@ -20,10 +20,12 @@ module Errnos {
   const EROFS: int := 30
   const EMLINK: int := 31
   const EPIPE: int := 32
+  const ERANGE: int := 34
   const ENAMETOOLONG: int := 36
   const ENOTEMPTY: int := 39
   const ELOOP: int := 40
   const EOVERFLOW: int := 75
+  const ENOSYS: int := 38
   const EOPNOTSUPP: int := 95
   const EDQUOT: int := 122
 }

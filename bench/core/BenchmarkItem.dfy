@@ -1,12 +1,15 @@
 include "IO.dfy"
 include "CliTypes.dfy"
 include "CliExtern.dfy"
+include "Utf8.dfy"
 
 module {:verify false} BenchItem {
   import opened BenchWorld
   import BenchIO
   import opened CliTypes
   import opened CliExtern
+  import C = IOContract
+  import Utf8 = Utf8Semantics
 
   trait {:termination false} BenchmarkItemTwostate<CmdRaw> {
     method Name() returns (name: string)
@@ -58,9 +61,15 @@ module {:verify false} BenchItem {
       case CliRun(raw) =>
         exit := item.RunCore(raw, io);
       case CliEarlyExit(code, stdout, stderr) =>
-        var _ := io.WriteStdout(stdout, BenchWorld.ThrowOnError);
-        var _ := io.WriteStderr(stderr, BenchWorld.ThrowOnError);
-        exit := code;
+        var stdoutResult := io.WriteStdout(stdout);
+        var diagnostic := stderr;
+        if stdoutResult.Err? {
+          var name := item.Name();
+          var reason := io.GetCLocaleErrnoText(C.ResultErrno(stdoutResult));
+          diagnostic := diagnostic + Utf8.Encode(name + ": write error: " + reason + "\n");
+        }
+        var stderrResult := io.WriteStderr(diagnostic);
+        exit := if stdoutResult.Err? || stderrResult.Err? then 1 else code;
     }
   }
 }

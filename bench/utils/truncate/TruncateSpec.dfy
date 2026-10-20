@@ -227,12 +227,15 @@ module TruncateSpec {
          else after == before && !isOpen && err == (if queryErr == 2 then 0 else queryErr))
     else C.CreateFileSpec(before, now, observations, after, path, isOpen, err)
   }
+  datatype StatusObservations = StatusObservations(times: W.StatusTimeObservations,
+    failures: (W.NativeFailureRequest) -> int)
+
   opaque ghost predicate StatusRelation(
-    observations: W.StatusTimeObservations, cursor: nat, cursor2: nat, fs: W.FileSystem,
+    observations: StatusObservations, cursor: nat, cursor2: nat, fs: W.FileSystem,
     path: string, ok: bool, status: W.FileStatus, err: int
   )
   {
-    C.GetFileStatusSpec(observations, cursor, cursor2, fs, path, true, ok, status, err)
+    C.GetFileStatusSpec(observations.times, observations.failures, cursor, cursor2, fs, path, true, ok, status, err)
   }
   opaque ghost predicate Truncation(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
@@ -245,7 +248,7 @@ module TruncateSpec {
   }
   opaque ghost predicate ResizeOutcome(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int, path: string,
+    statusTimes: StatusObservations, now: int, path: string,
     mode: S.Modifier, delta: int, blocks: bool, reference: int,
     before: W.FileSystem, cursor: nat, after: W.FileSystem, cursor2: nat,
     error: W.Bytes,
@@ -267,7 +270,7 @@ module TruncateSpec {
   }
   opaque ghost predicate ResizeRelation(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int, path: string,
+    statusTimes: StatusObservations, now: int, path: string,
     mode: S.Modifier, delta: int, blocks: bool, reference: int,
     before: W.FileSystem, cursor: nat, after: W.FileSystem, cursor2: nat,
     error: W.Bytes
@@ -279,7 +282,7 @@ module TruncateSpec {
   }
   opaque ghost predicate FileStep(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int, path: string,
+    statusTimes: StatusObservations, now: int, path: string,
     noCreate: bool, mode: S.Modifier, delta: int, blocks: bool, reference: int,
     before: W.FileSystem, cursor: nat, after: W.FileSystem, cursor2: nat, error: W.Bytes
   )
@@ -293,7 +296,7 @@ module TruncateSpec {
   }
   opaque ghost predicate FileRelation(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int, path: string,
+    statusTimes: StatusObservations, now: int, path: string,
     noCreate: bool, mode: S.Modifier, delta: int, blocks: bool, reference: int,
     before: FileState, after: FileState
   )
@@ -306,7 +309,7 @@ module TruncateSpec {
   opaque ghost predicate FilesRelation(
     raw: S.TruncateCmdRaw, mode: S.Modifier, delta: int, reference: int,
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int,
+    statusTimes: StatusObservations, now: int,
     before: W.FileSystem, cursor: nat, after: W.FileSystem, cursor2: nat,
     errors: W.Bytes, exit: int
   )
@@ -322,7 +325,7 @@ module TruncateSpec {
   opaque ghost predicate RunRelation(
     raw: S.TruncateCmdRaw, mode: S.Modifier, value: int,
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int,
+    statusTimes: StatusObservations, now: int,
     before: W.FileSystem, cursor: nat, after: W.FileSystem, cursor2: nat,
     errors: W.Bytes, exit: int
   )
@@ -338,52 +341,75 @@ module TruncateSpec {
     else FilesRelation(raw, mode, value, -1,
            observations, statusTimes, now, before, cursor, after, cursor2, errors, exit)
   }
+  opaque ghost predicate DiagnosticResult(
+    before: W.Bytes, after: W.Bytes,
+    observations: (W.TrustedStreamRequest) -> W.TrustedStreamResult,
+    message: W.Bytes, err: int
+  )
+  {
+    if message == [] then after == before && err == 0
+    else
+      var observed := observations(W.StreamWriteStderr(before, message));
+      observed.StreamWriteResult? &&
+      C.WriteStderrSpec(before, observations, after, message, observed.committed, err) &&
+      err == observed.err
+  }
+
   opaque ghost predicate HelpResult(
     mode: S.Mode, beforeOut: W.Bytes, afterOut: W.Bytes,
     beforeErr: W.Bytes, afterErr: W.Bytes,
     observations: (W.TrustedStreamRequest) -> W.TrustedStreamResult, exit: int
   )
   {
-    exists committed: nat, err: int
-      {:trigger C.WriteStdoutSpec(beforeOut, observations, afterOut,
-        HelpText(), W.ReturnError, committed, err)}
-      {:trigger C.WriteStdoutSpec(beforeOut, observations, afterOut,
-        VersionText(), W.ReturnError, committed, err)} ::
-      C.WriteStdoutSpec(beforeOut, observations, afterOut,
-        if mode == S.Help then HelpText() else VersionText(), W.ReturnError, committed, err) &&
-      afterErr == beforeErr + (if err == 0 then [] else WriteError(err)) &&
-      exit == (if err == 0 then 0 else 1)
+    var payload := if mode == S.Help then HelpText() else VersionText();
+    var observed := observations(W.StreamWriteStdout(beforeOut, payload));
+    observed.StreamWriteResult? &&
+    C.WriteStdoutSpec(beforeOut, observations, afterOut, payload, observed.committed, observed.err) &&
+    var diagnostic := if observed.err == 0 then [] else WriteError(observed.err);
+    var diagnosticObservation := observations(W.StreamWriteStderr(beforeErr, diagnostic));
+    (if diagnostic == [] then afterErr == beforeErr
+     else diagnosticObservation.StreamWriteResult? &&
+       DiagnosticResult(beforeErr, afterErr, observations, diagnostic, diagnosticObservation.err)) &&
+    exit == (if observed.err == 0 then 0 else 1)
   }
 
   twostate predicate ExecutionRelation(
     raw: S.TruncateCmdRaw, mode: S.Modifier, value: int, error: W.Bytes, io: BenchIO.IO, exit: int
   )
     reads io.fsRegion, io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion,
-          io.nowRegion, io.trustedFilesystemRegion, io.trustedStreamsRegion
+          io.nowRegion, io.trustedFilesystemRegion, io.trustedNativeFailuresRegion, io.trustedStreamsRegion
   {
       if error != [] then
         io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
-        io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) + error && exit == 1
+        io.stdout() == old(io.stdout()) && exit == 1 &&
+        (exists err: int :: DiagnosticResult(old(io.stderr()), io.stderr(),
+          old(io.trustedStreams()), error, err))
       else if raw.mode != S.Run then
         io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
         HelpResult(raw.mode, old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
           old(io.trustedStreams()), exit)
       else if raw.parseError != [] then
         io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
-        io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) + raw.parseError && exit == 1
+        io.stdout() == old(io.stdout()) && exit == 1 &&
+        (exists err: int :: DiagnosticResult(old(io.stderr()), io.stderr(),
+          old(io.trustedStreams()), raw.parseError, err))
       else if ConfigurationError(raw, mode) != [] then
         io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
         io.stdout() == old(io.stdout()) &&
-        io.stderr() == old(io.stderr()) + ConfigurationError(raw, mode) && exit == 1
+        exit == 1 &&
+        (exists err: int :: DiagnosticResult(old(io.stderr()), io.stderr(),
+          old(io.trustedStreams()), ConfigurationError(raw, mode), err))
       else
-        exists errors: W.Bytes :: io.stdout() == old(io.stdout()) &&
-          io.stderr() == old(io.stderr()) + errors &&
-          RunRelation(raw, mode, value, old(io.trustedFilesystem()), io.statusObservations(), old(io.now()),
-            old(io.fs()), old(io.statusCursor()), io.fs(), io.statusCursor(), errors, exit)
+        exists errors: W.Bytes, normalExit: int, diagnosticErr: int ::
+          io.stdout() == old(io.stdout()) &&
+          DiagnosticResult(old(io.stderr()), io.stderr(), old(io.trustedStreams()), errors, diagnosticErr) &&
+          exit == (if diagnosticErr == 0 then normalExit else 1) &&
+          RunRelation(raw, mode, value, old(io.trustedFilesystem()), StatusObservations(io.statusObservations(),io.trustedNativeFailures()), old(io.now()),
+            old(io.fs()), old(io.statusCursor()), io.fs(), io.statusCursor(), errors, normalExit)
   }
   twostate predicate Spec(raw: S.TruncateCmdRaw, io: BenchIO.IO, exit: int)
     reads io.fsRegion, io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion,
-          io.nowRegion, io.trustedFilesystemRegion, io.trustedStreamsRegion
+          io.nowRegion, io.trustedFilesystemRegion, io.trustedNativeFailuresRegion, io.trustedStreamsRegion
   {
     exists mode: S.Modifier, value: int, error: W.Bytes ::
       Resolved(raw, mode, value, error) && ExecutionRelation(raw, mode, value, error, io, exit)

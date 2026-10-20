@@ -1,197 +1,121 @@
-include "../../core/World.dfy"
-include "../../core/IO.dfy"
-include "../../core/IOContract.dfy"
-include "PwdSchema.dfy"
 include "PwdSpec.dfy"
+include "PwdLogicalCore.dfy"
+include "PwdRecoveryCore.dfy"
+include "PwdEmissionCore.dfy"
 
 module PwdCore {
   import BenchIO
-  import Utf8 = Utf8Semantics
-  import IOContract
+  import W = BenchWorld
+  import C = IOContract
   import Schema = PwdSchema
-  import BenchWorld
+  import Text = PwdTextSpec
   import Spec = PwdSpec
+  import Model = PwdRuntimeModel
+  import Recovery = PwdRecoverySpec
+  import RecoveryCore = PwdRecoveryCore
+  import Logical = PwdLogicalSpec
+  import LogicalCore = PwdLogicalCore
+  import Physical = PwdPhysicalSpec
+  import Emission = PwdEmissionSpec
+  import Emit = PwdEmissionCore
 
-  method GetHelpText() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.HelpTextSpec()
+  method UseLogical(raw: Schema.PwdCmdRaw, io: BenchIO.IO) returns (logical: bool)
+    ensures logical == Text.UseLogicalFields(raw,io.env())
   {
-    out := Spec.HelpTextSpec();
-  }
-
-  method GetVersionText() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.VersionTextSpec()
-  {
-    out := Spec.VersionTextSpec();
-  }
-
-  method GetIgnoredOperandsWarning() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.IgnoredOperandsWarningSpec()
-  {
-    out := Spec.IgnoredOperandsWarningSpec();
-  }
-
-  method GetCurrentDirectoryText(dir: string) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.CurrentDirectoryTextSpec(dir)
-  {
-    out := Spec.CurrentDirectoryTextSpec(dir);
-  }
-
-  function ContainsUnsafeComponent(segs: seq<string>, i: nat): bool
-    requires i <= |segs|
-    decreases |segs| - i
-  {
-    if i >= |segs| then
-      false
-    else if segs[i] == "." || segs[i] == ".." then
-      true
-    else
-      ContainsUnsafeComponent(segs, i + 1)
-  } by method
-  {
-    if i >= |segs| {
-      return false;
-    } else if segs[i] == "." || segs[i] == ".." {
-      return true;
+    if raw.seenLogical && raw.seenPhysical {
+      logical := raw.logicalOccurrenceIndex > raw.physicalOccurrenceIndex;
+    } else if raw.seenLogical {
+      logical := true;
+    } else if raw.seenPhysical {
+      logical := false;
     } else {
-      return ContainsUnsafeComponent(segs, i + 1);
+      var posix := io.GetEnv("POSIXLY_CORRECT");
+      logical := posix.Ok?;
     }
   }
 
-  function HasValidLogicalPwdForCwd(pwd: string, cwd: string): bool
+  method SelectDirectory(raw: Schema.PwdCmdRaw, io: BenchIO.IO)
+    returns (outcome: Recovery.DirectoryOutcome, ghost evidence: Spec.DirectoryEvidence)
+    modifies io.directoryStateRegion,io.cwdRegion,io.statusObservationsRegion
+    ensures Model.Inputs(io) == old(Model.Inputs(io))
+    ensures Recovery.DirectoryOutcomeFields(outcome)
+    ensures Spec.DirectorySelectionFields(raw,old(io.env()),old(Model.Inputs(io)),
+      old(Model.State(io)),Model.State(io),outcome,evidence)
+    decreases *
   {
-    BenchWorld.IsAbsolutePath(pwd) &&
-    !ContainsUnsafeComponent(BenchWorld.SplitSegments(BenchWorld.StripLeadingSlash(pwd), 0, 0), 0) &&
-    BenchWorld.NormalizePath(pwd) == cwd
-  } by method
-  {
-    if !BenchWorld.IsAbsolutePath(pwd) {
-      return false;
+    ghost var inputs := Model.Inputs(io);
+    ghost var before := Model.State(io);
+    ghost var env := io.env();
+    ghost var logicalEvidence := Logical.SelectionEvidence([],[]);
+    var selected := false;
+    var logicalDirectory := "";
+    var logical := UseLogical(raw,io);
+    if logical {
+      var pwd := io.GetEnv("PWD");
+      if pwd.Ok? {
+        selected,logicalEvidence := LogicalCore.SelectLogical(pwd.v,io);
+        logicalDirectory := pwd.v;
+      }
     }
-
-    var segs := BenchWorld.SplitSegments(BenchWorld.StripLeadingSlash(pwd), 0, 0);
-    var unsafe := ContainsUnsafeComponent(segs, 0);
-    if unsafe {
-      return false;
+    ghost var logicalAfter := Model.State(io);
+    if selected {
+      outcome := Recovery.DirectoryRecovered(logicalDirectory);
+      evidence := Spec.DirectoryEvidence(true,logicalAfter,logicalEvidence,[]);
+      assert Recovery.DirectoryOutcomeFields(outcome) by {
+        reveal Logical.NativeSelectionFields(),Recovery.LogicalSelectionFields(),Recovery.LogicalTextFields();
+      }
+    } else {
+      outcome := RecoveryCore.PhysicalDirectory(io);
+      ghost var physical :| Physical.PhysicalSelectionFields(inputs,logicalAfter,Model.State(io),outcome,physical);
+      evidence := Spec.DirectoryEvidence(false,logicalAfter,logicalEvidence,[physical]);
     }
-
-    return BenchWorld.NormalizePath(pwd) == cwd;
+    assert Spec.DirectorySelectionFields(raw,env,inputs,before,Model.State(io),outcome,evidence);
   }
 
-  function HelpSelected(raw: Schema.PwdCmdRaw): bool
+  method WarnIgnoredOperands(raw: Schema.PwdCmdRaw, io: BenchIO.IO) returns (warningErr: int)
+    modifies io.stderrRegion
+    ensures Spec.WarningFields(raw,old(io.stderr()),io.stderr(),io.trustedStreams(),warningErr)
   {
-    raw.seenHelp &&
-    (!raw.seenVersion || raw.helpOccurrenceIndex < raw.versionOccurrenceIndex)
-  }
-
-  function VersionSelected(raw: Schema.PwdCmdRaw): bool
-  {
-    raw.seenVersion &&
-    (!raw.seenHelp || raw.versionOccurrenceIndex < raw.helpOccurrenceIndex)
-  }
-
-  ghost function UseLogicalFields(raw: Schema.PwdCmdRaw, env: map<string, string>): bool
-  {
-    if raw.seenLogical && raw.seenPhysical then
-      raw.logicalOccurrenceIndex > raw.physicalOccurrenceIndex
-    else if raw.seenLogical then
-      true
-    else if raw.seenPhysical then
-      false
-    else
-      "POSIXLY_CORRECT" in env
-  }
-
-  ghost function SelectedCurrentDirFields(raw: Schema.PwdCmdRaw, cwd: string, env: map<string, string>): string
-  {
-    if UseLogicalFields(raw, env) then
-      if "PWD" in env && HasValidLogicalPwdForCwd(env["PWD"], cwd) then
-        env["PWD"]
-      else
-        cwd
-    else
-      cwd
-  }
-
-  twostate predicate CoreSummary(raw: Schema.PwdCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
-  {
-    if HelpSelected(raw) then
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
-      exit == 0
-    else if VersionSelected(raw) then
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
-      exit == 0
-    else
-      io.stdout() == old(io.stdout()) + Spec.CurrentDirectoryTextSpec(SelectedCurrentDirFields(raw, old(io.cwd()), old(io.env()))) &&
-      io.stderr() == old(io.stderr()) + (if |raw.operands| > 0 then Spec.IgnoredOperandsWarningSpec() else "") &&
-      exit == 0
+    warningErr := 0;
+    if |raw.operands| != 0 {
+      var written := io.WriteStderr(Text.IgnoredOperandsWarningSpec());
+      warningErr := C.ResultErrno(written);
+      assert C.WriteStderrSpec(old(io.stderr()),io.trustedStreams(),io.stderr(),
+        Text.IgnoredOperandsWarningSpec(),C.WriteResultCommitted(written),warningErr);
+    }
   }
 
   method RunCore(raw: Schema.PwdCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.stdoutRegion
-    modifies io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+    modifies io.stdoutRegion,io.stderrRegion,io.directoryStateRegion,io.cwdRegion,io.statusObservationsRegion
+    ensures Spec.Spec(raw,io,exit)
     decreases *
   {
-    ghost var preEnv := io.env();
-    ghost var preCwd := io.cwd();
-    var helpSelected := HelpSelected(raw);
-    if helpSelected {
-      var out := GetHelpText();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
-      exit := 0;
-      return;
-    }
-
-    var versionSelected := VersionSelected(raw);
-    if versionSelected {
-      var out := GetVersionText();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
-      exit := 0;
-      return;
-    }
-
-    var useLogical := false;
-    if raw.seenLogical && raw.seenPhysical {
-      useLogical := raw.logicalOccurrenceIndex > raw.physicalOccurrenceIndex;
-    } else if raw.seenLogical {
-      useLogical := true;
-    } else if raw.seenPhysical {
-      useLogical := false;
+    ghost var inputs := Model.Inputs(io);
+    ghost var before := Model.State(io);
+    ghost var beforeOut := io.stdout();
+    ghost var beforeErr := io.stderr();
+    if Text.HelpSelected(raw) {
+      exit := Emit.Flush(Text.HelpTextSpec(),[],0,io);
+    } else if Text.VersionSelected(raw) {
+      exit := Emit.Flush(Text.VersionTextSpec(),[],0,io);
     } else {
-      var posix := io.GetEnv("POSIXLY_CORRECT");
-      assert IOContract.GetEnvContractFields(preEnv, "POSIXLY_CORRECT", posix);
-      match posix
-      case Ok(_) => useLogical := true;
-      case Err(_) => useLogical := false;
+      var warningErr := WarnIgnoredOperands(raw,io);
+      ghost var middleErr := io.stderr();
+      var outcome, evidence := SelectDirectory(raw,io);
+      var emissionExit := RecoveryCore.FlushPhysical(outcome,io);
+      exit := if warningErr == 0 then emissionExit else 1;
     }
-
-    var cwd := io.GetCwd();
-    assert cwd == IOContract.GetCwdResultFields(preCwd);
-    var dir := cwd;
-    if useLogical {
-      var pwdResult := io.GetEnv("PWD");
-      assert IOContract.GetEnvContractFields(preEnv, "PWD", pwdResult);
-      match pwdResult
-      case Ok(pwd) =>
-        var valid := HasValidLogicalPwdForCwd(pwd, cwd);
-        if valid {
-          dir := pwd;
-        }
-      case Err(_) =>
-        dir := cwd;
+    assert Model.Inputs(io) == inputs by {
+      hide *;
     }
-
-    if |raw.operands| > 0 {
-      var warning := GetIgnoredOperandsWarning();
-      var _ := io.WriteStderr(warning, BenchWorld.ThrowOnError);
+    assert Spec.RunFields(raw,io.env(),inputs,before,Model.State(io),
+      beforeOut,beforeErr,io.stdout(),io.stderr(),io.trustedStreams(),exit) by {
+      hide *;
+      reveal Spec.RunFields();
     }
-    var out := GetCurrentDirectoryText(dir);
-    var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
-    exit := 0;
-    assert dir == SelectedCurrentDirFields(raw, preCwd, preEnv);
-    assert CoreSummary(raw, io, exit);
+    assert Spec.Spec(raw,io,exit) by {
+      hide *;
+      reveal Spec.Spec();
+    }
   }
 }

@@ -6,6 +6,9 @@ include "TailSchema.dfy"
 include "TailRecordSpec.dfy"
 
 module TailSpec {
+  import StreamContract = IOContract
+  import StreamUtf8 = Utf8Semantics
+
   import Result = Results
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -178,9 +181,7 @@ module TailSpec {
   {
     match cmd.inputs[i]
     case Stdin(_) =>
-      result == Result.Ok(
-        if exists j: nat :: j < i && cmd.inputs[j].Stdin? then [] else preStdin
-      )
+      result == IOContract.ObservedReadStdinResultFields(preStdin, preStreams)
     case File(path) => result == IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
   }
 
@@ -264,7 +265,7 @@ module TailSpec {
   {
     match result
     case Ok(_) => !SuppressZeroTrailingSelection(cmd)
-    case Err(err) => IOContract.IOErrorIsDirectory(err)
+    case Err(err) => IOContract.IOErrorIsDirectory(err) || ((err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !SuppressZeroTrailingSelection(cmd))
   }
 
   ghost predicate OutputFragmentRelation(
@@ -284,16 +285,20 @@ module TailSpec {
           RenderDataRelation(cmd, data, rendered) &&
           fragment == HeaderForInput(cmd, input, printedHeaders) + rendered
     case Err(err) =>
-      fragment ==
-      (if IOContract.IOErrorIsDirectory(err)
-       then HeaderForInput(cmd, input, printedHeaders)
-       else [])
+      if (err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !SuppressZeroTrailingSelection(cmd) then
+        exists rendered: BenchWorld.Bytes ::
+          RenderDataRelation(cmd, err.partial, rendered) &&
+          fragment == HeaderForInput(cmd, input, printedHeaders) + rendered
+      else
+        fragment == (if IOContract.IOErrorIsDirectory(err)
+                     then HeaderForInput(cmd, input, printedHeaders)
+                     else [])
   }
 
   function ErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
-    case Stdin(_) => []
+    case Stdin(_) => if result.Err? then StdinReadErrorMessage(result.e) else []
     case File(path) =>
       match result
       case Ok(_) => []
@@ -303,11 +308,28 @@ module TailSpec {
   function HadErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
   {
     match input
-    case Stdin(_) => false
+    case Stdin(_) => result.Err?
     case File(_) =>
       match result
       case Ok(_) => false
       case Err(_) => true
+  }
+
+  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  {
+    "tail: error reading 'standard input': " + Utf8.Encode(ErrnoText(error)) + "\n"
+  }
+
+  ghost predicate StdinTraceRelation(
+    cmd: TailSchema.TailCmd, before: BenchWorld.Bytes, after: BenchWorld.Bytes,
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    states: seq<BenchWorld.Bytes>
+  )
+  {
+    |states| == |cmd.inputs| + 1 && states[0] == before && states[|cmd.inputs|] == after &&
+    forall i: nat | i < |cmd.inputs| ::
+      states[i + 1] == (if cmd.inputs[i].Stdin? then
+        IOContract.ObservedReadStdinRemainingFields(states[i], observations) else states[i])
   }
 
   ghost predicate InputObservationRelation(
@@ -384,6 +406,8 @@ module TailSpec {
     preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
   )
   {
+    exists stdinStates: seq<BenchWorld.Bytes> ::
+    StdinTraceRelation(cmd, preStdin, postStdin, preStreams, stdinStates) &&
     |observations| == |cmd.inputs| &&
     |headerCounts| == |observations| + 1 &&
     headerCounts[0] == 0 &&
@@ -395,7 +419,7 @@ module TailSpec {
        InputObservationRelation(
          cmd,
          preFs,
-         preStdin,
+         stdinStates[i],
          i,
          observations[i],
          headerCounts[i],
@@ -411,9 +435,7 @@ module TailSpec {
       stderrPart,
       stderrCuts
     ) &&
-    hadError == (exists i: nat :: i < |observations| && observations[i].failed) &&
-    postStdin ==
-    (if exists i: nat :: i < |cmd.inputs| && cmd.inputs[i].Stdin? then [] else preStdin)
+    hadError == (exists i: nat :: i < |observations| && observations[i].failed)
   }
 
   ghost predicate InputTraceRelation(
@@ -447,29 +469,29 @@ module TailSpec {
       )
   }
 
-  twostate predicate Spec(raw: TailSchema.TailCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSpec(raw: TailSchema.TailCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := Command(raw);
     if cmd.mode == TailSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + HelpText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + HelpText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == TailSchema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + VersionText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + VersionText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == TailSchema.ModeInvalidCount then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue) &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue) &&
       exit == 1
     else if SuppressZeroTrailingSelection(cmd) then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else
       exists stdoutPart: BenchWorld.Bytes, stderrPart: BenchWorld.Bytes, hadError: bool ::
@@ -483,8 +505,63 @@ module TailSpec {
           hadError,
           old(io.trustedStreams())
         ) &&
-        io.stdout() == old(io.stdout()) + stdoutPart &&
-        io.stderr() == old(io.stderr()) + stderrPart &&
+        plannedStdout == old(io.stdout()) + stdoutPart &&
+        plannedStderr == old(io.stderr()) + stderrPart &&
         exit == (if hadError then 1 else 0)
+  }
+
+  function Emits(raw: TailSchema.TailCmdRaw): bool
+  {
+    true
+  }
+
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode("tail: write error: " + message + "\n")
+  }
+
+  ghost predicate EmitFields(
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    beforeStdout: BenchWorld.Bytes, beforeStderr: BenchWorld.Bytes,
+    afterStdout: BenchWorld.Bytes, afterStderr: BenchWorld.Bytes,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
+      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+    stdoutResult.StreamWriteResult? &&
+    var errors := diagnostics + (if stdoutResult.err == 0 then [] else
+      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+    var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
+      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+    stderrResult.StreamWriteResult? &&
+    (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
+      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+    (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
+      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+    exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
+  }
+
+  twostate predicate Emission(raw: TailSchema.TailCmdRaw, io: BenchIO.IO,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    if Emits(raw) then
+      EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+    else
+      io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
+      exit == normalExit
+  }
+
+  twostate predicate Spec(raw: TailSchema.TailCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

@@ -72,3 +72,10 @@ Baillie--PSW primality test.@: Math Comp.@: 2021;90:1931--1955.@:
 https://doi.org/10.1090/mcom/3616.
 
 ### Exit Status
+
+The benchmark models a policy-free stdin result with an explicit read error
+and successfully read prefix. Its final stream relation records exactly the
+bytes committed to stdout and stderr, including failed writes and the resulting
+nonzero exit status. Help and version output use the same failure-aware
+emission path. Factorization and prime-factor proof obligations remain in the
+utility implementation and proof modules.

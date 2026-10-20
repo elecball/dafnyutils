@@ -53,7 +53,7 @@ module Printenv {
     }
 
     method RunCore(raw: PrintenvSchema.PrintenvCmdRaw, io: BenchIO.IO) returns (exit: int)
-      modifies io.stdoutRegion
+      modifies io.stdoutRegion, io.stderrRegion
       ensures PS.Spec(raw, io, exit)
       decreases *
     {

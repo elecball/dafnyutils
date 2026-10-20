@@ -1,9 +1,13 @@
+include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/StringEscaping.dfy"
 include "SeqSchema.dfy"
 
 module SeqSpec {
+  import StreamContract = IOContract
+  import StreamUtf8 = Utf8Semantics
+
   import Result = Results
   import BenchIO
   import Utf8 = Utf8Semantics
@@ -555,24 +559,24 @@ module SeqSpec {
       )
   }
 
-  twostate predicate Spec(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSpec(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+
   {
     if HelpSelected(raw) then
-      io.stdout() == old(io.stdout()) + HelpText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + HelpText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if VersionSelected(raw) then
-      io.stdout() == old(io.stdout()) + VersionText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + VersionText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else
       exists plan: NumberPlan ::
         NumberPlanRelation(raw.operands, plan) &&
         match plan
         case NumbersErr(stderr) =>
-          io.stdout() == old(io.stdout()) &&
-          io.stderr() == old(io.stderr()) + stderr &&
+          plannedStdout == old(io.stdout()) &&
+          plannedStderr == old(io.stderr()) + stderr &&
           exit == 1
         case NumbersOk(first, step, last) =>
           exists stdout: BenchWorld.Bytes ::
@@ -584,8 +588,63 @@ module SeqSpec {
               Separator(raw),
               stdout
             ) &&
-            io.stdout() == old(io.stdout()) + stdout &&
-            io.stderr() == old(io.stderr()) &&
+            plannedStdout == old(io.stdout()) + stdout &&
+            plannedStderr == old(io.stderr()) &&
             exit == 0
+  }
+
+  function Emits(raw: SeqSchema.SeqCmdRaw): bool
+  {
+    true
+  }
+
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode("seq: write error: " + message + "\n")
+  }
+
+  ghost predicate EmitFields(
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    beforeStdout: BenchWorld.Bytes, beforeStderr: BenchWorld.Bytes,
+    afterStdout: BenchWorld.Bytes, afterStderr: BenchWorld.Bytes,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
+      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+    stdoutResult.StreamWriteResult? &&
+    var errors := diagnostics + (if stdoutResult.err == 0 then [] else
+      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+    var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
+      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+    stderrResult.StreamWriteResult? &&
+    (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
+      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+    (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
+      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+    exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
+  }
+
+  twostate predicate Emission(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    if Emits(raw) then
+      EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+    else
+      io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
+      exit == normalExit
+  }
+
+  twostate predicate Spec(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

@@ -672,7 +672,22 @@ module ExpandProof {
         pieces, columns, leadings
       );
       reveal Spec.DataExpansionRelation();
-    case Err(_) =>
+    case Err(error) =>
+      if error.StreamFailure? {
+      ghost var pieces: seq<BenchWorld.Bytes>,
+                columns: seq<nat>, leadings: seq<bool> :|
+        Core.DataExpansionWitnessSummary(
+          cmd.tabs, cmd.initialOnly, error.partial, column, leading,
+          output, nextColumn, nextLeading,
+          pieces, columns, leadings
+        );
+      DataExpansionWitnessSummaryImpliesRelation(
+        cmd.tabs, cmd.initialOnly, error.partial, column, leading,
+        output, nextColumn, nextLeading,
+        pieces, columns, leadings
+      );
+      reveal Spec.DataExpansionRelation();
+      }
   }
 
   lemma ErrorPieceSummaryImpliesRelation(
@@ -823,15 +838,15 @@ module ExpandProof {
         );
   }
 
-  twostate lemma CoreSummaryImpliesSpec(
+  twostate lemma PreparedSummaryImpliesPreparedSpec(
     raw: Schema.ExpandCmdRaw, io: BenchIO.IO, exit: int
-  )
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  , new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     CommandSatisfies(raw);
-    reveal Core.CoreSummary();
-    reveal Spec.Spec();
+    reveal Core.PreparedSummary();
+    reveal Spec.PreparedSpec();
     var cmd := Core.Command(raw);
     if cmd.mode != Schema.ModeHelp &&
        cmd.mode != Schema.ModeVersion &&
@@ -843,8 +858,8 @@ module ExpandProof {
           output, errorOutput, hadError,
           old(io.trustedStreams())
         ) &&
-        io.stdout() == old(io.stdout()) + output &&
-        io.stderr() == old(io.stderr()) + errorOutput &&
+        plannedStdout == output &&
+        plannedStderr == errorOutput &&
         exit == (if hadError then 1 else 0);
       InputTraceSummaryImpliesRelation(
         cmd, old(io.fs()), old(io.stdin()), io.stdin(),
@@ -852,5 +867,17 @@ module ExpandProof {
         old(io.trustedStreams())
       );
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.ExpandCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      out, diagnostics);
   }
 }

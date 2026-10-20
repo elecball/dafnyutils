@@ -60,7 +60,7 @@ module True {
     }
 
     method RunCore(raw: TrueSchema.TrueCmdRaw, io: BenchIO.IO) returns (exit: int)
-      modifies io.stdoutRegion
+      modifies io.stdoutRegion, io.stderrRegion
       ensures TS.Spec(raw, io, exit)
       decreases *
     {

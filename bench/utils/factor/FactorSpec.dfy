@@ -5,6 +5,9 @@ include "../../core/StringEscaping.dfy"
 include "FactorSchema.dfy"
 
 module FactorSpec {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import BenchIO
   import BenchWorld
   import IOContract
@@ -466,25 +469,74 @@ module FactorSpec {
         hadError == (headHadError || tailHadError)
   }
 
-  twostate predicate Spec(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int)
+  function ReadErrorText(reason: string): BenchWorld.Bytes
+  {
+    "factor: error reading input: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost function ReadError(err: int): BenchWorld.Bytes
+  {
+    ReadErrorText(IOContract.CLocaleErrnoTextResult(err))
+  }
+
+
+  function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    "factor: write error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost predicate EmissionOutcomeFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int,
+    committed: nat, outErr: int, errCommitted: nat, errErr: int
+  )
+  {
+    (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
+     else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
+    var finalDiagnostics := diagnostics +
+      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
+     else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
+    exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
+  }
+
+  ghost predicate EmissionFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
+      EmissionOutcomeFields(beforeOut, beforeErr, afterOut, afterErr, observations,
+                            output, diagnostics, normalExit, exit,
+                            committed, outErr, errCommitted, errErr)
+  }
+  twostate predicate PreparedSpec(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     reads io.Footprint()
   {
     if HelpSelected(raw) then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + HelpTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if VersionSelected(raw) then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + VersionTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else
       var fromArgv := |raw.operands| > 0;
+      var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+      var input := IOContract.ReadResultData(read);
       io.stdin() ==
       (if |raw.operands| > 0
        then old(io.stdin())
-       else IOContract.AfterReadStdinFields(old(io.stdin()))) &&
+       else IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams()))) &&
       exists tokens: seq<string>,
         output: BenchWorld.Bytes,
         errorOutput: BenchWorld.Bytes,
@@ -492,10 +544,20 @@ module FactorSpec {
         {:trigger RunRelation(tokens, raw.seenExponents, fromArgv, output, errorOutput, hadError)} ::
         (if |raw.operands| > 0
          then tokens == raw.operands
-         else InputTokensRelation(old(io.stdin()), tokens)) &&
+         else InputTokensRelation(input, tokens)) &&
         RunRelation(tokens, raw.seenExponents, fromArgv, output, errorOutput, hadError) &&
-        io.stdout() == old(io.stdout()) + output &&
-        io.stderr() == old(io.stderr()) + errorOutput &&
-        exit == (if hadError then 1 else 0)
+        plannedStdout == old(io.stdout()) + output &&
+        plannedStderr == old(io.stderr()) + errorOutput +
+          (if fromArgv || read.Ok? then [] else ReadError(IOContract.ResultErrno(read))) &&
+        exit == (if hadError || (!fromArgv && read.Err?) then 1 else 0)
+  }
+
+  twostate predicate Spec(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                     io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 }

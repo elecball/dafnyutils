@@ -24,7 +24,7 @@ module TruncateProof {
   }
   lemma ResizeWitness(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int, path: string,
+    statusTimes: Spec.StatusObservations, now: int, path: string,
     mode: S.Modifier, delta: int, blocks: bool, reference: int,
     before: W.FileSystem, cursor: nat, after: W.FileSystem, cursor2: nat, error: W.Bytes,
     status: W.FileStatus, statOk: bool, statErr: int
@@ -37,7 +37,7 @@ module TruncateProof {
 
   lemma FileWitness(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int, path: string,
+    statusTimes: Spec.StatusObservations, now: int, path: string,
     noCreate: bool, mode: S.Modifier, delta: int, blocks: bool, reference: int,
     before: W.FileSystem, cursor: nat, after: W.FileSystem, cursor2: nat, error: W.Bytes,
     openedFs: W.FileSystem, isOpen: bool, err: int
@@ -53,7 +53,7 @@ module TruncateProof {
 
   lemma FileStepImpliesRelation(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int, path: string,
+    statusTimes: Spec.StatusObservations, now: int, path: string,
     noCreate: bool, mode: S.Modifier, delta: int, blocks: bool, reference: int,
     before: Spec.FileState, after: Spec.FileState, error: W.Bytes
   )
@@ -68,7 +68,7 @@ module TruncateProof {
   lemma FilesWitness(
     raw: S.TruncateCmdRaw, mode: S.Modifier, delta: int, reference: int,
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int,
+    statusTimes: Spec.StatusObservations, now: int,
     before: W.FileSystem, cursor: nat, after: W.FileSystem, cursor2: nat,
     errors: W.Bytes, exit: int, states: seq<Spec.FileState>
   )
@@ -87,7 +87,7 @@ module TruncateProof {
   lemma ReferenceRunWitness(
     raw: S.TruncateCmdRaw, mode: S.Modifier, value: int,
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int,
+    statusTimes: Spec.StatusObservations, now: int,
     before: W.FileSystem, cursor: nat, after: W.FileSystem, cursor2: nat,
     errors: W.Bytes, exit: int, ok: bool, status: W.FileStatus, err: int, next: nat
   )
@@ -118,7 +118,7 @@ module TruncateProof {
   lemma NoReferenceRunWitness(
     raw: S.TruncateCmdRaw, mode: S.Modifier, value: int,
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
-    statusTimes: W.StatusTimeObservations, now: int,
+    statusTimes: Spec.StatusObservations, now: int,
     before: W.FileSystem, cursor: nat, after: W.FileSystem, cursor2: nat,
     errors: W.Bytes, exit: int
   )
@@ -143,16 +143,20 @@ module TruncateProof {
   lemma {:isolate_assertions} HelpOutputWitness(
     before: W.Bytes, observations: (W.TrustedStreamRequest) -> W.TrustedStreamResult,
     after: W.Bytes, mode: S.Mode, beforeError: W.Bytes, afterError: W.Bytes,
-    exit: int, committed: nat, err: int
+    exit: int, committed: nat, err: int, diagnosticErr: int
   )
     requires C.WriteStdoutSpec(before, observations, after,
-      if mode == S.Help then Spec.HelpText() else Spec.VersionText(), W.ReturnError, committed, err)
-    requires afterError == beforeError + (if err == 0 then [] else Spec.WriteError(err))
+      if mode == S.Help then Spec.HelpText() else Spec.VersionText(), committed, err)
+    requires Spec.DiagnosticResult(beforeError, afterError, observations,
+      if err == 0 then [] else Spec.WriteError(err), diagnosticErr)
     requires exit == (if err == 0 then 0 else 1)
     ensures Spec.HelpResult(mode, before, after, beforeError, afterError, observations, exit)
   {
     hide *;
     reveal Spec.HelpResult();
+    reveal C.WriteStdoutSpec(), Spec.DiagnosticResult();
+    reveal C.TrustedWriteStdoutWithOutcomeContractFields(), C.TrustedWriteStderrWithOutcomeContractFields();
+    reveal C.TrustedWriteWithOutcomeFields();
     // Match the concrete payload in the stdout receipt trigger.
     if mode == S.Help {
       assert Spec.HelpResult(mode, before, after, beforeError, afterError, observations, exit);

@@ -740,4 +740,25 @@ module ChmodRecursiveSpec {
     reveal Spec;
   }
 
+  function ReadDirectoryText(path: string, reason: string): BenchWorld.Bytes
+  {
+    "chmod: cannot read directory " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ": " + Utf8.Encode(reason) + "\n"
+  }
+
+  function TerminalReadDirectoryText(path: string, hadEntries: bool, reason: string): BenchWorld.Bytes
+  {
+    if hadEntries then
+      "chmod: " + Quote.SpecQuoteFBytes(Utf8.Encode(path)) + ": " + Utf8.Encode(reason) + "\n"
+    else ReadDirectoryText(path, reason)
+  }
+
+  function NativeAccessText(cmd: Schema.ChmodCmd, path: string, kind: RecursiveFailureKind,
+    reason: string): BenchWorld.Bytes
+  {
+    if cmd.silent then []
+    else if kind.RecursiveDangling? then DanglingSymlinkMessageSpec(path)
+    else if kind.RecursiveDereference? then Base.CannotDereferenceText(path, reason)
+    else Base.AccessErrorMessageSpec(path, reason)
+  }
+
 }

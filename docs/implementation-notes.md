@@ -23,19 +23,19 @@ Method bodies with `io: BenchIO.IO` that modify `io.stdinRegion` and
 Bad — drops bytes returned with a read error and ignores write errors:
 
 ```dafny
-var read := io.ReadStdin(BenchWorld.ReturnError);
+var read := io.ReadStdin();
 if read.Err? {
   return 1; // The error may retain bytes that must still be written.
 }
-var write := io.WriteStdout(read.v, BenchWorld.ReturnError);
+var write := io.WriteStdout(read.v);
 return 0; // A failed write is reported as success.
 ```
 
 Good — writes the returned bytes and checks both errors:
 
 ```dafny
-var read := io.ReadStdin(BenchWorld.ReturnError);
-var write := io.WriteStdout(IOContract.ReadResultData(read), BenchWorld.ReturnError);
+var read := io.ReadStdin();
+var write := io.WriteStdout(IOContract.ReadResultData(read));
 return if read.Ok? && write.Ok? then 0 else 1;
 ```
 
@@ -70,7 +70,7 @@ lemma PartialWriteExample()
 ```
 
 `WrittenPrefix` shows one property, not a full write specification. Use
-`C.WriteStdoutSpec` with `BenchWorld.ReturnError` to tie the result and `errno`
+`C.WriteStdoutSpec` to tie the result and `errno`
 to the trusted IO observation, as [CopySpec.dfy](../example/copy/CopySpec.dfy)
 does.
 

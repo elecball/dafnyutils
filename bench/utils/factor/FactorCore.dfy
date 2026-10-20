@@ -5,6 +5,9 @@ include "FactorSchema.dfy"
 include "FactorSpec.dfy"
 
 module FactorCore {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import BenchIO
   import BenchWorld
   import IOContract
@@ -484,38 +487,55 @@ module FactorCore {
     return RunResult(output, errorOutput, hadError);
   }
 
-  twostate predicate CoreSummary(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int)
+  twostate predicate PreparedSummary(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     reads io.Footprint()
   {
     if HelpSelected(raw) then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.HelpTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if VersionSelected(raw) then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.VersionTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else
-      var tokens := if |raw.operands| > 0 then raw.operands else SplitWords(old(io.stdin()));
+      var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+      var input := IOContract.ReadResultData(read);
+      var tokens := if |raw.operands| > 0 then raw.operands else SplitWords(input);
       var run := RunTokens(tokens, raw.seenExponents, |raw.operands| > 0);
-      io.stdin() == (if |raw.operands| > 0 then old(io.stdin()) else IOContract.AfterReadStdinFields(old(io.stdin()))) &&
-      io.stdout() == old(io.stdout()) + run.stdout &&
-      io.stderr() == old(io.stderr()) + run.stderr &&
-      exit == (if run.hadError then 1 else 0)
+      io.stdin() == (if |raw.operands| > 0 then old(io.stdin())
+        else IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams()))) &&
+      plannedStdout == old(io.stdout()) + run.stdout &&
+      plannedStderr == old(io.stderr()) + run.stderr +
+        (if |raw.operands| > 0 || read.Ok? then [] else Spec.ReadError(IOContract.ResultErrno(read))) &&
+      exit == (if run.hadError || (|raw.operands| == 0 && read.Err?) then 1 else 0)
   }
 
-  method RunCore(raw: Schema.FactorCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  twostate predicate CoreSummary(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit)
+  }
+
+  method Prepare(raw: Schema.FactorCmdRaw, io: BenchIO.IO) returns (exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedStdout, old(io.stderr()) + plannedStderr)
     decreases *
   {
+    ghost var emissionBeforeOut := io.stdout();
+    ghost var emissionBeforeErr := io.stderr();
+    plannedStdout := [];
+    plannedStderr := [];
     ghost var preStdin := io.stdin();
     var help := HelpSelected(raw);
     if help {
       var out := Spec.HelpTextSpec();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedStdout := plannedStdout + (out);
       exit := 0;
       return;
     }
@@ -523,30 +543,78 @@ module FactorCore {
     var version := VersionSelected(raw);
     if version {
       var out := Spec.VersionTextSpec();
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
+      plannedStdout := plannedStdout + (out);
       exit := 0;
       return;
     }
 
     var tokens: seq<string>;
+    var readErr := 0;
     if |raw.operands| > 0 {
       tokens := raw.operands;
     } else {
       ghost var beforeStdin := io.stdin();
-      var stdinBytes :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-      assert IOContract.ReadStdinAllFields(beforeStdin, io.stdin(), stdinBytes);
-      assert beforeStdin == preStdin;
-      assert stdinBytes == preStdin;
-      assert io.stdin() == IOContract.AfterReadStdinFields(preStdin);
+      var read := io.ReadStdin();
+      var stdinBytes := IOContract.ReadResultData(read);
+      readErr := IOContract.ResultErrno(read);
       tokens := SplitWords(stdinBytes);
     }
 
     var run := RunTokens(tokens, raw.seenExponents, |raw.operands| > 0);
-    var _ := io.WriteStdout(run.stdout, BenchWorld.ThrowOnError);
-    var _ := io.WriteStderr(run.stderr, BenchWorld.ThrowOnError);
-    exit := if run.hadError then 1 else 0;
+    var diagnostics := run.stderr;
+    if readErr != 0 {
+      var reason := io.GetCLocaleErrnoText(readErr);
+      diagnostics := diagnostics + Spec.ReadErrorText(reason);
+    }
+    plannedStdout := plannedStdout + (run.stdout);
+    plannedStderr := plannedStderr + (diagnostics);
+    exit := if run.hadError || readErr != 0 then 1 else 0;
     if |raw.operands| > 0 {
       assert io.stdin() == preStdin;
     }
+  }
+
+
+  method Flush(output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+               normalExit: int, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit)
+  {
+    var committed: nat := 0;
+    var outErr := 0;
+    if |output| != 0 {
+      var result := io.WriteStdout(output);
+      committed := StreamContract.WriteResultCommitted(result);
+      outErr := StreamContract.ResultErrno(result);
+    }
+    var finalDiagnostics := diagnostics;
+    if outErr != 0 {
+      var reason := io.GetCLocaleErrnoText(outErr);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+    }
+    assert finalDiagnostics == diagnostics + (if outErr == 0 then []
+      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errCommitted: nat := 0;
+    var errErr := 0;
+    if |finalDiagnostics| != 0 {
+      var result := io.WriteStderr(finalDiagnostics);
+      errCommitted := StreamContract.WriteResultCommitted(result);
+      errErr := StreamContract.ResultErrno(result);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        finalDiagnostics, errCommitted, errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+    assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+  }
+
+  method RunCore(raw: Schema.FactorCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, output, diagnostics := Prepare(raw, io);
+    exit := Flush(output, diagnostics, normalExit, io);
   }
 }

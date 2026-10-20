@@ -26,7 +26,6 @@ module BenchWorld {
 
   datatype FileReadStage = ReadSucceeded | OpenFailed | ReadFailed | CloseFailed
   datatype FileWriteStage = WriteSucceeded | WriteOpenFailed | WriteFailed | WriteCloseFailed
-  datatype StreamErrorPolicy = ReturnError | ThrowOnError
   datatype FileTimes = FileTimes(
     atimeSec: int,
     atimeNsec: int,
@@ -45,7 +44,7 @@ module BenchWorld {
   // This ghost context is never an alternative executable status API.
   datatype StatusObservationContext =
     | UnboundStatusObservations
-    | BoundStatusObservations(observations: StatusTimeObservations, firstStatus: nat)
+    | BoundStatusObservations(observations: StatusTimeObservations, firstStatus: nat, failures: (NativeFailureRequest) -> int)
 
   datatype TimestampUpdate =
     | Current
@@ -174,6 +173,30 @@ module BenchWorld {
     writeCommitted: nat,
     writeStage: FileWriteStage
   )
+
+  datatype MetadataQueryKind = ModeQuery | DirectoryQuery | SymlinkQuery
+  datatype NativeFailureRequest =
+    | StatusAtDirRequest(ordinal: nat, preFs: FileSystem, context: CwdContext, handle: int, path: Path, follow: bool)
+    | SetModeAtDirRequest(preFs: FileSystem, now: int, context: CwdContext, handle: int, path: Path, follow: bool, mode: bv32)
+    | OpenDirectoryAtDirRequest(preFs: FileSystem, context: CwdContext, handle: int, path: Path, includeDots: bool)
+    | StatusAtCwdRequest(ordinal: nat, preFs: FileSystem, context: CwdContext, path: Path, follow: bool)
+    | ReadLinkAtCwdRequest(preFs: FileSystem, context: CwdContext, path: Path)
+    | SetModeAtCwdRequest(preFs: FileSystem, context: CwdContext, now: int, path: Path, follow: bool, mode: bv32)
+    | OpenDirectoryAtCwdRequest(preFs: FileSystem, context: CwdContext, path: Path, includeDots: bool)
+    | CapabilityStatusRequest(ordinal: nat, preFs: FileSystem, context: CwdContext, handle: int)
+    | StatusRequest(ordinal: nat, preFs: FileSystem, path: Path, follow: bool)
+    | MetadataQueryRequest(preFs: FileSystem, path: Path, follow: bool, kind: MetadataQueryKind)
+    | ReadLinkRequest(preFs: FileSystem, path: Path)
+    | ResolveIdentityRequest(preFs: FileSystem, cwd: Path, path: Path)
+    | CreateSymlinkRequest(preFs: FileSystem, now: int, path: Path, target: Path)
+    | DeletePathRequest(preFs: FileSystem, path: Path)
+    | SetModeRequest(preFs: FileSystem, now: int, path: Path, follow: bool, mode: bv32)
+    | RenameRequest(preFs: FileSystem, now: int, source: Path, target: Path)
+    | StdoutTimesRequest(before: StdoutTimestampState, now: int, atime: TimestampUpdate, mtime: TimestampUpdate)
+    | OpenDirectoryStatusRequest(ordinal: nat, preFs: FileSystem, handles: map<int, DirHandleState>, handle: int)
+    | OpenDirectoryRequest(preFs: FileSystem, handles: map<int, DirHandleState>, path: Path, includeDots: bool)
+    | ReadDirectoryRequest(preFs: FileSystem, handles: map<int, DirHandleState>, handle: int)
+    | CloseDirectoryRequest(handles: map<int, DirHandleState>, handle: int)
 
   datatype DirEntry =
     | DirEntry(name: string, isDir: bool, isSymlink: bool)
@@ -1507,4 +1530,58 @@ module BenchWorld {
                     );
                   InodeFileSystemData(resultNamespace, withoutTarget.inodes)
   }
+
+  // A directory position is a mount-aware location, independent of st_dev/st_ino.
+  datatype DirectoryPosition = DirectoryPosition(token: nat)
+  datatype LiveDirectoryEntry = LiveDirectoryEntry(
+    rawInode: int, kind: DirectoryEntryKind, status: FileStatus,
+    directory: seq<DirectoryPosition>, ghost mountBoundary: bool := false)
+  datatype LiveDirectoryNode = LiveDirectoryNode(
+    status: FileStatus, parent: DirectoryPosition,
+    entries: map<string, LiveDirectoryEntry>, pathname: seq<Path>,
+    ghost selfRawInode: nat := 0, ghost parentRawInode: nat := 0,
+    ghost parentMountBoundary: bool := false)
+  datatype LiveDirectoryTopology = LiveDirectoryTopology(
+    root: DirectoryPosition, nodes: map<DirectoryPosition, LiveDirectoryNode>,
+    ghost objects: map<HostInodeKey, InodeRecord>)
+  // Native relative lookups use this authenticated current position. The hint
+  // remains provenance for legacy specifications and is never a fallback path.
+  datatype CwdContext = CwdContext(
+    hint: Path, topology: LiveDirectoryTopology, position: DirectoryPosition,
+    ordinal: nat, ghost capabilities: map<int,DirectoryCapabilityState> := map[],
+    ghost legacyHandles: map<int,DirHandleState> := map[],
+    ghost legacyOrigins: map<int,FileSystem> := map[])
+  datatype CwdTarget =
+    CwdNamedTarget(path: Path) |
+    CwdDirectoryTarget(position: DirectoryPosition) |
+    CwdEntryTarget(parent: DirectoryPosition, name: string)
+
+  // Each filesystem snapshot has its own additive live view. Namespace mutation
+  // therefore does not require weakening or rewriting the old filesystem type.
+  type LiveDirectoryViews = (FileSystem) -> LiveDirectoryTopology
+  datatype DirectoryCapabilityState = DirectoryCapabilityState(
+    position: DirectoryPosition, remaining: set<string>, descriptor: seq<int>,
+    anchorFs: FileSystem, anchorTopology: LiveDirectoryTopology,
+    ghost includeDots: bool := false)
+  datatype DirectoryOperation =
+    DirectoryGetCwd | DirectoryCurrentStatus | DirectoryOpenParent |
+    DirectoryGetDescriptor | DirectoryFchdir | DirectoryChdirParent |
+    DirectoryFstat | DirectoryReadNext | DirectoryEntryLstat | DirectoryClose
+  datatype DirectoryRequest = DirectoryRequest(
+    operation: DirectoryOperation, ordinal: nat, fs: FileSystem,
+    topology: LiveDirectoryTopology, position: DirectoryPosition,
+    capabilities: map<int, DirectoryCapabilityState>, handle: int,
+    fd: int, name: string, statusOrdinal: nat, cwdHint: Path,
+    ghost occupiedLegacyHandles: set<int> := {})
+  datatype DirectoryResponse = DirectoryResponse(
+    err: int, path: Path, status: FileStatus, handle: int, fd: int,
+    read: DirectoryRead, ghost remainingAfterReadError: set<string>)
+  type DirectoryObservations = (DirectoryRequest) -> DirectoryResponse
+  datatype DirectoryModel = DirectoryModel(
+    positions: set<DirectoryPosition>, views: LiveDirectoryViews,
+    observations: DirectoryObservations)
+  datatype DirectoryState = DirectoryState(
+    model: DirectoryModel, position: DirectoryPosition,
+    capabilities: map<int, DirectoryCapabilityState>, ordinal: nat)
+
 }

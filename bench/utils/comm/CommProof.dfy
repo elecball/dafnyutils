@@ -6,7 +6,10 @@ include "CommCore.dfy"
 include "CommSpec.dfy"
 
 module CommProof {
+  import BenchWorld
+
   import BenchIO
+  import IOContract
   import BW = BenchWorld
   import Schema = CommSchema
   import RCore = CommRenderCore
@@ -851,8 +854,8 @@ module CommProof {
   {
   }
 
-  lemma AfterInputReadEq(preStdin: BW.Bytes, input: Schema.CommInput)
-    ensures Core.AfterInputRead(preStdin, input) == Spec.AfterInputRead(preStdin, input)
+  lemma AfterInputReadEq(preStdin: BW.Bytes, input: Schema.CommInput, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
+    ensures Core.AfterInputRead(preStdin, input, preStreams) == Spec.AfterInputRead(preStdin, input, preStreams)
   {
   }
 
@@ -862,33 +865,33 @@ module CommProof {
     InputResultEq(preFs, preStreams, preStdin, cmd.input1);
   }
 
-  lemma AfterFirstReadEq(cmd: Schema.CommCmd, preStdin: BW.Bytes)
-    ensures Core.AfterFirstRead(cmd, preStdin) == Spec.AfterFirstRead(cmd, preStdin)
+  lemma AfterFirstReadEq(cmd: Schema.CommCmd, preStdin: BW.Bytes, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
+    ensures Core.AfterFirstRead(cmd, preStdin, preStreams) == Spec.AfterFirstRead(cmd, preStdin, preStreams)
   {
-    AfterInputReadEq(preStdin, cmd.input1);
+    AfterInputReadEq(preStdin, cmd.input1, preStreams);
   }
 
   lemma ReadSecondResultEq(cmd: Schema.CommCmd, preFs: BW.FileSystem, preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult, preStdin: BW.Bytes)
     ensures Core.ReadSecondResult(cmd, preFs, preStreams, preStdin) == Spec.ReadSecondResult(cmd, preFs, preStreams, preStdin)
   {
-    AfterFirstReadEq(cmd, preStdin);
-    InputResultEq(preFs, preStreams, Core.AfterFirstRead(cmd, preStdin), cmd.input2);
+    AfterFirstReadEq(cmd, preStdin, preStreams);
+    InputResultEq(preFs, preStreams, Core.AfterFirstRead(cmd, preStdin, preStreams), cmd.input2);
   }
 
-  lemma AfterSecondReadEq(cmd: Schema.CommCmd, preStdin: BW.Bytes)
-    ensures Core.AfterSecondRead(cmd, preStdin) == Spec.AfterSecondRead(cmd, preStdin)
+  lemma AfterSecondReadEq(cmd: Schema.CommCmd, preStdin: BW.Bytes, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
+    ensures Core.AfterSecondRead(cmd, preStdin, preStreams) == Spec.AfterSecondRead(cmd, preStdin, preStreams)
   {
-    AfterFirstReadEq(cmd, preStdin);
-    AfterInputReadEq(Core.AfterFirstRead(cmd, preStdin), cmd.input2);
+    AfterFirstReadEq(cmd, preStdin, preStreams);
+    AfterInputReadEq(Core.AfterFirstRead(cmd, preStdin, preStreams), cmd.input2, preStreams);
   }
 
-  twostate lemma CoreSummaryImpliesSpec(
+  twostate lemma PreparedSummaryImpliesPreparedSpec(
     raw: Schema.CommCmdRaw,
     io: BenchIO.IO,
     exit: int
-  )
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  , new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     CommandEq(raw);
     var cmd := Core.Command(raw);
@@ -902,17 +905,21 @@ module CommProof {
     case ModeRepeatedStdinOperand =>
     case ModeRun =>
       ReadFirstResultEq(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
-      AfterFirstReadEq(cmd, old(io.stdin()));
+      AfterFirstReadEq(cmd, old(io.stdin()), old(io.trustedStreams()));
       var first := Core.ReadFirstResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
-      match first
-      case Err(_) =>
-      case Ok(leftData) =>
+      FirstReadAbortsEq(cmd, first);
+      if !Core.FirstReadAborts(cmd, first) {
         ReadSecondResultEq(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
-        AfterSecondReadEq(cmd, old(io.stdin()));
+        AfterSecondReadEq(cmd, old(io.stdin()), old(io.trustedStreams()));
         var second := Core.ReadSecondResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
-        match second
-        case Err(_) =>
-        case Ok(rightData) =>
+        if first.Err? || second.Err? {
+          FailedReadOutputForCore(cmd, first, second);
+          var plan := Core.FailedReadsPlan(cmd, first, second);
+          assert plannedStdout == old(io.stdout()) + plan.output;
+          assert plannedStderr == old(io.stderr()) + Spec.FailedReadMessage(cmd, first, second, plan.leftFault);
+        } else {
+          var leftData := first.v;
+          var rightData := second.v;
           if RCore.DataSorted(leftData, cmd.zeroTerminated) &&
              RCore.DataSorted(rightData, cmd.zeroTerminated) {
             DataSortedRelation(leftData, cmd.zeroTerminated);
@@ -923,13 +930,139 @@ module CommProof {
             assert exists stdoutPart: BW.Bytes ::
                 stdoutPart == RCore.RenderData(cmd, leftData, rightData) &&
                 RSpec.OutputRelation(cmd, leftData, rightData, stdoutPart) &&
-                io.stdout() == old(io.stdout()) + stdoutPart;
+                plannedStdout == old(io.stdout()) + stdoutPart;
           } else {
             if !RCore.DataSorted(leftData, cmd.zeroTerminated) {
               DataUnsortedRelation(leftData, cmd.zeroTerminated);
             } else {
               DataUnsortedRelation(rightData, cmd.zeroTerminated);
             }
-          }
+          }        }
+      }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.CommCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+  }
+  lemma FirstReadAbortsEq(cmd: Schema.CommCmd, first: BW.IOResult<BW.Bytes>)
+    ensures Core.FirstReadAborts(cmd, first) == Spec.FirstReadAborts(cmd, first)
+  {
+    if first.Err? {
+      var data := IOContract.ReadResultData(first);
+      var delimiter := RCore.RecordDelimiter(cmd.zeroTerminated);
+      var complete := Core.CompleteRecordsData(data, delimiter);
+      assert Spec.CompleteInputPrefixRelation(data, delimiter, complete);
+      if complete != [] {
+        assert delimiter in complete;
+        assert delimiter in data;
+      } else {
+        assert delimiter !in data;
+      }
+    }
+  }
+
+  lemma FailedMergeWitnessForCore(cmd: Schema.CommCmd,
+    left: seq<BW.Bytes>, right: seq<BW.Bytes>, leftFailed: bool, rightFailed: bool)
+    returns (kinds: seq<RSpec.MergeKind>, leftStates: seq<seq<BW.Bytes>>, rightStates: seq<seq<BW.Bytes>>,
+      fragments: seq<BW.Bytes>, cuts: seq<nat>)
+    requires leftFailed || rightFailed
+    ensures Spec.FailedMergeWitness(cmd, left, right, leftFailed, rightFailed,
+      Core.RenderBeforeReadFailure(cmd, left, right, leftFailed, rightFailed).output,
+      Core.RenderBeforeReadFailure(cmd, left, right, leftFailed, rightFailed).leftFault,
+      kinds, leftStates, rightStates, fragments, cuts)
+    decreases |left| + |right|
+  {
+    var plan := Core.RenderBeforeReadFailure(cmd, left, right, leftFailed, rightFailed);
+    if (leftFailed && left == []) || (rightFailed && right == []) {
+      kinds := [];
+      leftStates := [left];
+      rightStates := [right];
+      fragments := [];
+      cuts := [0];
+      assert plan.output == [];
+    } else {
+      var nextLeft: seq<BW.Bytes>;
+      var nextRight: seq<BW.Bytes>;
+      var kind: RSpec.MergeKind;
+      var head: BW.Bytes;
+      if right == [] {
+        nextLeft := left[1..]; nextRight := right;
+        kind := RSpec.OnlyFirst;
+        head := RCore.RenderOnlyFirst(cmd, left[0]);
+      } else if left == [] {
+        nextLeft := left; nextRight := right[1..];
+        kind := RSpec.OnlySecond;
+        head := RCore.RenderOnlySecond(cmd, right[0]);
+      } else {
+        match RCore.CompareRecords(left[0], right[0])
+        case LineLess =>
+          CompareLessImpliesBytesLess(left[0], right[0]);
+          nextLeft := left[1..]; nextRight := right;
+          kind := RSpec.OnlyFirst;
+          head := RCore.RenderOnlyFirst(cmd, left[0]);
+        case LineGreater =>
+          CompareGreaterReverseLess(left[0], right[0]);
+          CompareLessImpliesBytesLess(right[0], left[0]);
+          nextLeft := left; nextRight := right[1..];
+          kind := RSpec.OnlySecond;
+          head := RCore.RenderOnlySecond(cmd, right[0]);
+        case LineEqual =>
+          CompareEqualImpliesEqual(left[0], right[0]);
+          nextLeft := left[1..]; nextRight := right[1..];
+          kind := RSpec.Both;
+          head := RCore.RenderBoth(cmd, left[0]);
+      }
+      assert RSpec.MergeStepRelation(cmd, kind, left, nextLeft, right, nextRight, head);
+      var tailKinds, tailLeftStates, tailRightStates, tailFragments, tailCuts :=
+        FailedMergeWitnessForCore(cmd, nextLeft, nextRight, leftFailed, rightFailed);
+      var tail := Core.RenderBeforeReadFailure(cmd, nextLeft, nextRight, leftFailed, rightFailed);
+      assert plan == Core.FailedMergePlan(head + tail.output, tail.leftFault);
+      kinds := [kind] + tailKinds;
+      leftStates := [left] + tailLeftStates;
+      rightStates := [right] + tailRightStates;
+      fragments := [head] + tailFragments;
+      cuts := [0] + ShiftNats(tailCuts, |head|);
+      PrependFragment(head, tailFragments, tail.output, tailCuts);
+      forall i: nat | i < |kinds|
+        ensures (!leftFailed || leftStates[i] != []) && (!rightFailed || rightStates[i] != []) &&
+          RSpec.MergeStepRelation(cmd, kinds[i], leftStates[i], leftStates[i + 1],
+            rightStates[i], rightStates[i + 1], fragments[i])
+      {
+        if i > 0 {
+          assert kinds[i] == tailKinds[i - 1];
+          assert leftStates[i] == tailLeftStates[i - 1];
+          assert rightStates[i] == tailRightStates[i - 1];
+        }
+      }
+    }
+    assert Spec.FailedMergeWitness(cmd, left, right, leftFailed, rightFailed,
+      plan.output, plan.leftFault, kinds, leftStates, rightStates, fragments, cuts);
+  }
+
+  lemma FailedReadOutputForCore(cmd: Schema.CommCmd,
+    first: BW.IOResult<BW.Bytes>, second: BW.IOResult<BW.Bytes>)
+    requires first.Err? || second.Err?
+    ensures Spec.FailedReadOutputRelation(cmd, first, second,
+      Core.FailedReadsPlan(cmd, first, second).output, Core.FailedReadsPlan(cmd, first, second).leftFault)
+  {
+    var delimiter := RCore.RecordDelimiter(cmd.zeroTerminated);
+    var leftData := Core.ReadRecordsData(first, delimiter);
+    var rightData := Core.ReadRecordsData(second, delimiter);
+    var left, _, _, _ := RecordsWitness(leftData, delimiter);
+    var right, _, _, _ := RecordsWitness(rightData, delimiter);
+    assert Spec.ReadRecordsRelation(first, delimiter, left);
+    assert Spec.ReadRecordsRelation(second, delimiter, right);
+    var kinds, leftStates, rightStates, fragments, cuts :=
+      FailedMergeWitnessForCore(cmd, left, right, first.Err?, second.Err?);
+    assert Spec.FailedReadOutputRelation(cmd, first, second,
+      Core.FailedReadsPlan(cmd, first, second).output, Core.FailedReadsPlan(cmd, first, second).leftFault);
   }
 }

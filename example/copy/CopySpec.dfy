@@ -10,9 +10,9 @@ module CopySpec {
   {
     exists data: BenchWorld.Bytes, committed: nat ::
       C.ReadStdinSpec(
-        old(io.stdin()), old(io.trustedStreams()), io.stdin(), BenchWorld.ReturnError, data, readErr) &&
+        old(io.stdin()), old(io.trustedStreams()), io.stdin(), data, readErr) &&
       C.WriteStdoutSpec(
-        old(io.stdout()), old(io.trustedStreams()), io.stdout(), data, BenchWorld.ReturnError, committed, writeErr)
+        old(io.stdout()), old(io.trustedStreams()), io.stdout(), data, committed, writeErr)
   }
 
   twostate predicate Spec(io: BenchIO.IO, exit: int)

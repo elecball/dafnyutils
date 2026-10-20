@@ -7,6 +7,9 @@ include "TailCore.dfy"
 include "TailSpec.dfy"
 
 module TailProof {
+  import IOContract
+  import BenchWorld
+
   import Result = Results
   import BenchIO
   import BW = BenchWorld
@@ -31,18 +34,19 @@ module TailProof {
     InputsFromOperandsEq(raw.operands);
   }
 
-  lemma PrefixStdinCharacterization(
-    cmd: Schema.TailCmd,
-    preStdin: BW.Bytes,
-    count: nat
-  )
-    requires count <= |cmd.inputs|
-    ensures Core.PrefixStdinCore(cmd, preStdin, count) ==
-            (if exists i: nat :: i < count && cmd.inputs[i].Stdin? then [] else preStdin)
-    decreases count
+  lemma PrefixStdinCharacterization(cmd: Schema.TailCmd, preStdin: BW.Bytes,
+    preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult)
+    ensures Spec.StdinTraceRelation(cmd, preStdin,
+      Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams), preStreams,
+      seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams)))
   {
-    if count > 0 {
-      PrefixStdinCharacterization(cmd, preStdin, count - 1);
+    forall i: nat | i < |cmd.inputs|
+      ensures Core.PrefixStdinCore(cmd, preStdin, i + 1, preStreams) ==
+        (if cmd.inputs[i].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+          Core.PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
+         else Core.PrefixStdinCore(cmd, preStdin, i, preStreams))
+    {
+      Core.PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
     }
   }
 
@@ -54,16 +58,12 @@ module TailProof {
     preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult
   )
     requires i < |cmd.inputs|
-    ensures Spec.ReadResultRelation(
-              cmd,
-              preFs,
-              preStdin,
-              i,
+    ensures Spec.ReadResultRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
               Core.ReadResultCore(cmd, preFs, preStdin, i, preStreams),
               preStreams
             )
   {
-    PrefixStdinCharacterization(cmd, preStdin, i);
+
   }
 
   lemma ShiftCutsLength(cuts: seq<nat>, delta: nat)
@@ -316,7 +316,10 @@ module TailProof {
       if !Core.SuppressZeroTrailingSelection(cmd) {
         RenderDataGivesRelation(cmd, data);
       }
-    case Err(_) =>
+    case Err(error) =>
+      if error.StreamFailure? || (error.ReadFailure? && error.readStage == BW.CloseFailed) {
+        RenderDataGivesRelation(cmd, error.partial);
+      }
   }
 
   lemma AppendFragment(
@@ -490,11 +493,7 @@ module TailProof {
               headerCounts[i + 1] ==
               headerCounts[i] + (if observations[i].hasHeader then 1 else 0)
     ensures forall i: nat {:trigger observations[i]} | i < |observations| ::
-              Spec.InputObservationRelation(
-                cmd,
-                preFs,
-                preStdin,
-                i,
+              Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
                 observations[i],
                 headerCounts[i],
                 preStreams
@@ -575,21 +574,13 @@ module TailProof {
         stderrFragment
       );
       assert forall j: nat {:trigger observations[j]} | j < |observations| ::
-          Spec.InputObservationRelation(
-            cmd,
-            preFs,
-            preStdin,
-            j,
+          Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, j, preStreams), j,
             observations[j],
             headerCounts[j],
             preStreams
           ) by {
         forall j: nat {:trigger observations[j]} | j < |observations|
-          ensures Spec.InputObservationRelation(
-                    cmd,
-                    preFs,
-                    preStdin,
-                    j,
+          ensures Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, j, preStreams), j,
                     observations[j],
                     headerCounts[j],
                     preStreams
@@ -616,7 +607,7 @@ module TailProof {
               cmd,
               preFs,
               preStdin,
-              Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|),
+              Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams),
               Core.PrefixOutputCore(cmd, preFs, preStdin, |cmd.inputs|, preStreams),
               Core.PrefixErrorOutputCore(cmd, preFs, preStdin, |cmd.inputs|, preStreams),
               Core.PrefixHadErrorCore(cmd, preFs, preStdin, |cmd.inputs|, preStreams),
@@ -626,12 +617,14 @@ module TailProof {
     var observations, headerCounts, stdoutCuts, stderrCuts :=
       BuildPrefixWitness(cmd, preFs, preStdin, |cmd.inputs|, preStreams);
     CoreObservationsFailure(cmd, preFs, preStdin, |cmd.inputs|, preStreams);
-    PrefixStdinCharacterization(cmd, preStdin, |cmd.inputs|);
+    PrefixStdinCharacterization(cmd, preStdin, preStreams);
+    var states := seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams));
+    assert Spec.StdinTraceRelation(cmd, preStdin, Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams), preStreams, states);
     assert Spec.InputTraceWitnessRelation(
         cmd,
         preFs,
         preStdin,
-        Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|),
+        Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams),
         Core.PrefixOutputCore(cmd, preFs, preStdin, |cmd.inputs|, preStreams),
         Core.PrefixErrorOutputCore(cmd, preFs, preStdin, |cmd.inputs|, preStreams),
         Core.PrefixHadErrorCore(cmd, preFs, preStdin, |cmd.inputs|, preStreams),
@@ -643,13 +636,13 @@ module TailProof {
       );
   }
 
-  twostate lemma CoreSummaryImpliesSpec(
+  twostate lemma PreparedSummaryImpliesPreparedSpec(
     raw: Schema.TailCmdRaw,
     io: BenchIO.IO,
     exit: int
-  )
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  , new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     CommandEq(raw);
     var cmd := Core.Command(raw);
@@ -660,5 +653,17 @@ module TailProof {
     } else {
       CoreSummaryImpliesTrace(cmd, old(io.fs()), old(io.stdin()), old(io.trustedStreams()));
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.TailCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

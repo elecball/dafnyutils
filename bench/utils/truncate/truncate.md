@@ -112,7 +112,18 @@ ordered partial progress. Generated successful operation sizes stay small;
 signed-64 parser boundaries target missing files or arithmetic failures before
 resize.
 
-Final validation used `/workspace/tmp/fs-benchmarks-20261020/integration`,
+Native status requests now bind both timestamp observations and native failure
+observations at the exact request ordinal. Diagnostic and help writes retain
+their committed prefixes and explicit errors; empty diagnostic output does
+not issue a native write. A failed help write or diagnostic write contributes
+to the final nonzero exit status.
+
+The following validation is historical: it describes the earlier filesystem
+implementation, not the later native-failure contract changes. Current checks
+are recorded separately in
+[the failure-model audit](../../../docs/trustbase-failures.md).
+
+Historical validation used `/workspace/tmp/fs-benchmarks-20261020/integration`,
 with `PYTHONPATH="$PWD/src:$PWD"`, based on
 `1ed3144e6b092f50ce99b0450d242a43309e1bd4` plus this maintenance change.
 

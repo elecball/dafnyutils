@@ -1,9 +1,12 @@
+include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "PrintfSchema.dfy"
 include "PrintfSpec.dfy"
 
 module PrintfCore {
+  import StreamContract = IOContract
+
   import BenchIO
   import Utf8 = Utf8Semantics
   import BenchWorld
@@ -191,13 +194,71 @@ module PrintfCore {
     }
   }
 
+  twostate predicate PreparedSummary(raw: Schema.PrintfCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+
+  {
+    var result := Evaluate(raw);
+    plannedStdout == old(io.stdout()) + result.0 &&
+    plannedStderr == old(io.stderr()) + result.1 &&
+    exit == result.2
+  }
+
+  method Prepare(raw: Schema.PrintfCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr)
+    decreases *
+  {
+    plannedOut := [];
+    plannedErr := [];
+    ghost var initialStdout := io.stdout();
+    ghost var initialStderr := io.stderr();
+
+    ghost var preStdout := (initialStdout + plannedOut);
+    ghost var preStderr := (initialStderr + plannedErr);
+    var result := Evaluate(raw);
+    plannedOut := plannedOut + result.0;
+    assert (initialStdout + plannedOut) == preStdout + result.0;
+    plannedErr := plannedErr + result.1;
+    assert (initialStderr + plannedErr) == preStderr + result.1;
+    exit := result.2;
+    assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
+  }
+
   twostate predicate CoreSummary(raw: Schema.PrintfCmdRaw, io: BenchIO.IO, exit: int)
     reads io.stdoutRegion, io.stderrRegion
   {
-    var result := Evaluate(raw);
-    io.stdout() == old(io.stdout()) + result.0 &&
-    io.stderr() == old(io.stderr()) + result.1 &&
-    exit == result.2
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }
 
   method RunCore(raw: Schema.PrintfCmdRaw, io: BenchIO.IO) returns (exit: int)
@@ -205,14 +266,15 @@ module PrintfCore {
     ensures CoreSummary(raw, io, exit)
     decreases *
   {
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
-    var result := Evaluate(raw);
-    var _ := io.WriteStdout(result.0, BenchWorld.ThrowOnError);
-    assert io.stdout() == preStdout + result.0;
-    var _ := io.WriteStderr(result.1, BenchWorld.ThrowOnError);
-    assert io.stderr() == preStderr + result.1;
-    exit := result.2;
-    assert CoreSummary(raw, io, exit);
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

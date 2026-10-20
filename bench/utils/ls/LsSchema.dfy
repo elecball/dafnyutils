@@ -1,11 +1,13 @@
 include "../../core/Utf8.dfy"
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
+include "LsNativeSpec.dfy"
 
 module LsSchema {
   import Utf8 = Utf8Semantics
   import BenchWorld
   import CliTypes
+  import Native = LsNativeSpec
 
   datatype LsMode =
     ModeRun | ModeHelp | ModeVersion |
@@ -52,7 +54,11 @@ module LsSchema {
     followMode: FollowMode,
     recursive: bool,
     operands: seq<string>,
-    ghost statusContext: BenchWorld.StatusObservationContext
+    ghost statusContext: BenchWorld.StatusObservationContext,
+    ghost directoryHandles: map<int, BenchWorld.DirHandleState>,
+    ghost workingDirectory: BenchWorld.Path,
+    ghost nativeInputs: seq<Native.Inputs> := [],
+    ghost nativeStart: seq<Native.State> := []
   )
 
   function DecimalDigitValue(ch: char): nat
@@ -130,7 +136,7 @@ module LsSchema {
       raw.followMode,
       raw.recursive,
       EffectiveOperands(raw),
-      BenchWorld.UnboundStatusObservations
+      BenchWorld.UnboundStatusObservations, map[], ""
     )
   }
 
@@ -156,7 +162,7 @@ module LsSchema {
       cmd.followMode,
       cmd.recursive,
       cmd.operands,
-      cmd.statusContext
+      cmd.statusContext, cmd.directoryHandles, cmd.workingDirectory, cmd.nativeInputs, cmd.nativeStart
     )
   }
 
@@ -167,16 +173,24 @@ module LsSchema {
       cmd.showBlocks, cmd.cliBlockSize, cmd.fileSizeBlockSize,
       cmd.timeStyle, referenceNow,
       cmd.sortMode, cmd.reverse, cmd.timeField, cmd.followMode,
-      cmd.recursive, cmd.operands, cmd.statusContext)
+      cmd.recursive, cmd.operands, cmd.statusContext, cmd.directoryHandles, cmd.workingDirectory,
+      cmd.nativeInputs, cmd.nativeStart)
   }
 
   function WithStatusObservations(
     cmd: LsCmd,
     ghost observations: BenchWorld.StatusTimeObservations,
-    ghost firstStatus: nat
+    ghost firstStatus: nat,
+    ghost failures: (BenchWorld.NativeFailureRequest) -> int,
+    ghost handles: map<int, BenchWorld.DirHandleState>,
+    ghost cwd: BenchWorld.Path,
+    ghost nativeInputs: seq<Native.Inputs> := [],
+    ghost nativeStart: seq<Native.State> := []
   ): LsCmd
   {
-    cmd.(statusContext := BenchWorld.BoundStatusObservations(observations, firstStatus))
+    cmd.(statusContext := BenchWorld.BoundStatusObservations(observations, firstStatus, failures),
+         directoryHandles := handles, workingDirectory := cwd,
+         nativeInputs := nativeInputs, nativeStart := nativeStart)
   }
 
   method Schema() returns (s: CliTypes.CliSchema)

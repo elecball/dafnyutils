@@ -7,6 +7,19 @@ include "ChmodSchema.dfy"
 include "ChmodSpec.dfy"
 
 module ChmodCore {
+  class Output {
+    var stdout: BenchWorld.Bytes
+    var stderr: BenchWorld.Bytes
+
+    constructor()
+      ensures stdout == [] && stderr == []
+    {
+      stdout := [];
+      stderr := [];
+    }
+  }
+
+
   import Errno = Errnos
   import BenchIO
   import IOContract
@@ -485,76 +498,38 @@ module ChmodCore {
       )
   }
 
-  method {:isolate_assertions} FinishSuccessfulChangeCore(
-    cmd: Schema.ChmodCmd,
-    plan: CoreModePlan,
-    path: string,
-    actual: BenchWorld.Path,
-    follow: bool,
-    before: bv32,
-    requestedAfter: bv32,
-    isDir: bool,
-    io: BenchIO.IO
+  method {:isolate_assertions} AppendSuccessfulChangeOutputCore(
+    cmd: Schema.ChmodCmd, plan: CoreModePlan, path: string, before: bv32, requested: bv32,
+    isDir: bool, postOk: bool, postMode: bv32, postErr: int, io: BenchIO.IO, output: Output
   ) returns (ok: bool)
-    modifies io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion
-    ensures var result := CoreSuccessfulChangeResult(
-                            cmd,
-                            plan,
-                            path,
-                            actual,
-                            follow,
-                            before,
-                            requestedAfter,
-                            isDir,
-                            old(io.fs())
-                          );
-            io.stdout() == old(io.stdout()) + result.stdoutChunk &&
-            io.stderr() == old(io.stderr()) + result.stderrChunk &&
-            ok == result.ok
+    modifies output
+    ensures var result := SuccessfulChangeResultForPost(cmd, plan, path, before, requested, isDir,
+      old(io.fs()), postOk, postMode, postErr);
+      output.stdout == old(output.stdout) + result.stdoutChunk &&
+      output.stderr == old(output.stderr) + result.stderrChunk && ok == result.ok
   {
-    var after := requestedAfter;
-    if CorePostChangeLookupNeeded(cmd, requestedAfter) {
-      var getFileStatusResult := io.GetFileStatus(actual, follow);
-      var postOk := getFileStatusResult.Ok?;
-      var rawModeStatus1 := IOContract.ResultValue(getFileStatusResult, BenchWorld.DEFAULT_FILE_STATUS);
-      var postErr := IOContract.ResultErrno(getFileStatusResult);
-      IOContract.FileStatusImpliesMode(io.fs(), actual, follow, postOk, rawModeStatus1, postErr);
-      var observed := rawModeStatus1.mode;
+    hide *;
+    reveal SuccessfulChangeResultForPost();
+    var after := requested;
+    if CorePostChangeLookupNeeded(cmd, requested) {
       if !postOk {
         if !cmd.silent {
-          var _ := io.WriteStderr(
-            GettingNewAttributesMessageCore(path, ErrnoTextCore(postErr))
-          , BenchWorld.ThrowOnError);
+          output.stderr := output.stderr + GettingNewAttributesMessageCore(path, NativeErrnoTextCore(postErr, io));
         }
-        if cmd.verbose {
-          var _ := io.WriteStdout(RetainedMessageCore(path, requestedAfter), BenchWorld.ThrowOnError);
-        }
-        var failedNaive := CoreNaiveMode(plan, before, isDir);
-        var failedSurprise := CoreDiagnoseSurprise(
-          cmd, plan, before, requestedAfter, isDir
-        );
-        if failedSurprise {
-          var _ := io.WriteStderr(
-            SurpriseModeMessageCore(path, requestedAfter, failedNaive)
-          , BenchWorld.ThrowOnError);
-        }
-        ok := !failedSurprise;
-        reveal IOContract.GetFileModeContractFields;
+        if cmd.verbose { output.stdout := output.stdout + RetainedMessageCore(path, requested); }
+        var naive := CoreNaiveMode(plan, before, isDir);
+        var surprise := CoreDiagnoseSurprise(cmd, plan, before, requested, isDir);
+        if surprise { output.stderr := output.stderr + SurpriseModeMessageCore(path, requested, naive); }
+        ok := !surprise;
         return;
       }
-      after := observed;
+      after := postMode;
     }
-    var out := CoreSuccessStdout(cmd, path, before, after);
-    if |out| > 0 {
-      var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
-    }
+    output.stdout := output.stdout + CoreSuccessStdout(cmd, path, before, after);
     var naive := CoreNaiveMode(plan, before, isDir);
     var surprise := CoreDiagnoseSurprise(cmd, plan, before, after, isDir);
-    if surprise {
-      var _ := io.WriteStderr(SurpriseModeMessageCore(path, after, naive), BenchWorld.ThrowOnError);
-    }
+    if surprise { output.stderr := output.stderr + SurpriseModeMessageCore(path, after, naive); }
     ok := !surprise;
-    reveal IOContract.GetFileModeContractFields;
   }
 
   function CoreModeSetFs(
@@ -884,227 +859,6 @@ module ChmodCore {
       )
   }
 
-  method {:isolate_assertions} RunOnePathCore(
-    cmd: Schema.ChmodCmd,
-    plan: CoreModePlan,
-    cwd: BenchWorld.Path,
-    path: string,
-    io: BenchIO.IO
-  ) returns (ok: bool)
-    modifies io.fsRegion, io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion
-    ensures var result := CorePathStep(
-                            cmd, plan, cwd, old(io.fs()), path, old(io.now())
-                          );
-            io.fs() == result.fs &&
-            io.stdout() == old(io.stdout()) + result.stdoutChunk &&
-            io.stderr() == old(io.stderr()) + result.stderrChunk &&
-            ok == result.ok
-  {
-    ghost var fs0 := io.fs();
-    ghost var now0 := io.now();
-    ghost var stdout0 := io.stdout();
-    ghost var stderr0 := io.stderr();
-    var actual := MakeAbsoluteCore(cwd, path);
-    var follow := ShouldDereferenceCore(cmd);
-    var metadataFollow := if CoreUsesPhysicalTopLevelMetadata(cmd) then false else follow;
-    var getFileStatusResult2 := io.GetFileStatus(actual, false);
-    var rawMetadataOk2 := getFileStatusResult2.Ok?;
-    var rawMetadataStatus2 := IOContract.ResultValue(getFileStatusResult2, BenchWorld.DEFAULT_FILE_STATUS);
-    var rawMetadataErr2 := IOContract.ResultErrno(getFileStatusResult2);
-    IOContract.FileStatusStructureImpliesMetadata(io.fs(), actual, false, rawMetadataOk2, rawMetadataStatus2, rawMetadataErr2);
-    var linkOk := rawMetadataOk2;
-    var isLink := rawMetadataStatus2.kind == BenchWorld.SymlinkKind;
-    assert (linkOk && isLink) ==
-           CoreNoDereferenceSymlink(fs0, actual, false) by {
-      reveal IOContract.IsSymlinkContractFields;
-      reveal CoreNoDereferenceSymlink;
-    }
-    assert (!follow && linkOk && isLink) ==
-           CoreNoDereferenceSymlink(fs0, actual, follow) by {
-      reveal IOContract.IsSymlinkContractFields;
-      reveal CoreNoDereferenceSymlink;
-    }
-    if !follow && linkOk && isLink {
-      if CoreUsesFollowedTopLevelNoDereference(cmd) {
-        var getFileStatusResult3 := io.GetFileStatus(actual, true);
-        var followedOk := getFileStatusResult3.Ok?;
-        var rawModeStatus2 := IOContract.ResultValue(getFileStatusResult3, BenchWorld.DEFAULT_FILE_STATUS);
-        var followedErr := IOContract.ResultErrno(getFileStatusResult3);
-        IOContract.FileStatusImpliesMode(io.fs(), actual, true, followedOk, rawModeStatus2, followedErr);
-        if !followedOk && followedErr != Errno.ENOENT {
-          if !cmd.silent {
-            var _ := io.WriteStderr(AccessErrorMessageCore(path, ErrnoTextCore(followedErr)), BenchWorld.ThrowOnError);
-          }
-          if cmd.verbose {
-            var _ := io.WriteStdout(AccessFailureMessageCore(path), BenchWorld.ThrowOnError);
-          }
-          ok := false;
-          return;
-        }
-      }
-      if cmd.verbose {
-        var _ := io.WriteStdout(NeitherChangedMessageCore(path), BenchWorld.ThrowOnError);
-      }
-      ok := true;
-      return;
-    }
-    var getFileStatusResult4 := io.GetFileStatus(actual, metadataFollow);
-    var gotMode := getFileStatusResult4.Ok?;
-    var rawModeStatus3 := IOContract.ResultValue(getFileStatusResult4, BenchWorld.DEFAULT_FILE_STATUS);
-    var getErr := IOContract.ResultErrno(getFileStatusResult4);
-    IOContract.FileStatusImpliesMode(io.fs(), actual, metadataFollow, gotMode, rawModeStatus3, getErr);
-    var before := rawModeStatus3.mode;
-    if !gotMode {
-      assert CoreIsDanglingSymlinkFailure(linkOk && isLink, getErr) ==
-             CorePathIsDanglingSymlinkFailure(fs0, actual, metadataFollow, getErr) by {
-        reveal CoreIsDanglingSymlinkFailure;
-        reveal CorePathIsDanglingSymlinkFailure;
-        reveal IOContract.GetFileModeContractFields;
-        reveal IOContract.IsSymlinkContractFields;
-      }
-      if !cmd.silent {
-        if CoreUsesExplicitPhysicalDereference(cmd) && linkOk && isLink {
-          var _ := io.WriteStderr(CannotDereferenceMessageCore(path, getErr), BenchWorld.ThrowOnError);
-        } else if CoreIsDanglingSymlinkFailure(linkOk && isLink, getErr) {
-          var _ := io.WriteStderr(DanglingSymlinkMessageCore(path), BenchWorld.ThrowOnError);
-        } else {
-          var _ := io.WriteStderr(AccessErrorMessageCore(path, ErrnoTextCore(getErr)), BenchWorld.ThrowOnError);
-        }
-      }
-      if cmd.verbose {
-        var _ := io.WriteStdout(AccessFailureMessageCore(path), BenchWorld.ThrowOnError);
-      }
-      ok := false;
-      return;
-    }
-
-    var getFileStatusResult5 := io.GetFileStatus(actual, metadataFollow);
-    var rawMetadataOk1 := getFileStatusResult5.Ok?;
-    var rawMetadataStatus1 := IOContract.ResultValue(getFileStatusResult5, BenchWorld.DEFAULT_FILE_STATUS);
-    var rawMetadataErr1 := IOContract.ResultErrno(getFileStatusResult5);
-    IOContract.FileStatusStructureImpliesMetadata(io.fs(), actual, metadataFollow, rawMetadataOk1, rawMetadataStatus1, rawMetadataErr1);
-    var dirOk := rawMetadataOk1;
-    var isDir := rawMetadataStatus1.kind == BenchWorld.DirectoryKind;
-    var dirErr := rawMetadataErr1;
-    if !dirOk {
-      if !cmd.silent {
-        var _ := io.WriteStderr(AccessErrorMessageCore(path, ErrnoTextCore(dirErr)), BenchWorld.ThrowOnError);
-      }
-      if cmd.verbose {
-        var _ := io.WriteStdout(AccessFailureMessageCore(path), BenchWorld.ThrowOnError);
-      }
-      ok := false;
-      return;
-    }
-
-    var desired := CorePlannedMode(plan, before, isDir);
-    var setFileModeResult := io.SetFileMode(actual, follow, desired);
-    var setOk := setFileModeResult.Ok?;
-    var setErr := IOContract.ResultErrno(setFileModeResult);
-    if !setOk {
-      if cmd.verbose {
-        var _ := io.WriteStdout(FailedChangeMessageCore(path, before, desired), BenchWorld.ThrowOnError);
-      }
-      if !cmd.silent {
-        var _ := io.WriteStderr(ChangeErrorMessageCore(path, ErrnoTextCore(setErr)), BenchWorld.ThrowOnError);
-      }
-      ok := false;
-      return;
-    }
-    assert {:split_here} true;
-    var requestedAfter := BenchWorld.NormalizeMode(desired);
-    assert CorePathStep(cmd, plan, cwd, fs0, path, now0) ==
-           CoreSuccessfulChangeResult(
-             cmd,
-             plan,
-             path,
-             actual,
-             follow,
-             before,
-             requestedAfter,
-             isDir,
-             io.fs()
-           ) by {
-      match IOContract.ResolvePathForMetadataFields(fs0, actual, metadataFollow)
-      case Err(_) =>
-      case Ok(metadataTarget) =>
-    assert BenchWorld.FsContainsPath(fs0, metadataTarget);
-    assert before == BenchWorld.NodeMode(BenchWorld.FsNodeAt(fs0, metadataTarget));
-    assert isDir == CoreNodeIsDirectory(BenchWorld.FsNodeAt(fs0, metadataTarget));
-    match IOContract.ResolvePathForMetadataFields(fs0, actual, follow)
-    case Err(_) =>
-    case Ok(changeTarget) =>
-    assert BenchWorld.FsContainsPath(fs0, changeTarget);
-    assert !CoreModeSetSuppressed(fs0, changeTarget, follow) by {
-      assert !CoreNoDereferenceSymlink(fs0, actual, follow);
-      reveal CoreNoDereferenceSymlink;
-      reveal CoreModeSetSuppressed;
-    }
-    assert io.fs() == CoreModeSetFs(
-                        fs0, follow, changeTarget, desired, now0
-                      );
-    }
-    ok := FinishSuccessfulChangeCore(
-      cmd,
-      plan,
-      path,
-      actual,
-      follow,
-      before,
-      requestedAfter,
-      isDir,
-      io
-    );
-  }
-
-  method {:isolate_assertions} RunFilesFromCore(
-    files: seq<string>,
-    i: nat,
-    cmd: Schema.ChmodCmd,
-    plan: CoreModePlan,
-    cwd: BenchWorld.Path,
-    io: BenchIO.IO
-  ) returns (allOk: bool)
-    requires i <= |files|
-    modifies io.fsRegion, io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion
-    ensures var result := CoreRunFilesFrom(
-                            files, i, cmd, plan, cwd, old(io.fs()), old(io.now())
-                          );
-            io.fs() == result.fs &&
-            io.stdout() == old(io.stdout()) + result.stdoutChunk &&
-            io.stderr() == old(io.stderr()) + result.stderrChunk &&
-            allOk == result.allOk
-    decreases |files| - i
-  {
-    if i == |files| {
-      allOk := true;
-      return;
-    }
-    ghost var fs0 := io.fs();
-    ghost var now0 := io.now();
-    ghost var stdout0 := io.stdout();
-    ghost var stderr0 := io.stderr();
-    var stepOk := RunOnePathCore(cmd, plan, cwd, files[i], io);
-    ghost var step := CorePathStep(cmd, plan, cwd, fs0, files[i], now0);
-    assert io.fs() == step.fs;
-    assert io.stdout() == stdout0 + step.stdoutChunk;
-    assert io.stderr() == stderr0 + step.stderrChunk;
-    assert {:split_here} true;
-    var restOk := RunFilesFromCore(files, i + 1, cmd, plan, cwd, io);
-    ghost var rest := CoreRunFilesFrom(
-      files, i + 1, cmd, plan, cwd, step.fs, now0
-    );
-    AppendAssociative(
-      stdout0, step.stdoutChunk, rest.stdoutChunk
-    );
-    AppendAssociative(
-      stderr0, step.stderrChunk, rest.stderrChunk
-    );
-    assert {:split_here} true;
-    allOk := stepOk && restOk;
-  }
-
-  // Kept independent from the specification's normalized external-text domain.
   predicate CoreExternalDomain(raw: Schema.ChmodCmdRaw)
   {
     var cmd := Schema.Command(raw);
@@ -1167,105 +921,70 @@ module ChmodCore {
       )
   }
 
-  method RunCore(raw: Schema.ChmodCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.fsRegion, io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion
-    ensures CoreSummary(raw, io, exit)
+  method Flush(output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+               normalExit: int, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
-    ghost var preFs := io.fs();
-    ghost var preCwd := io.cwd();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
-    ghost var preNow := io.now();
-    var cmd := Schema.Command(raw);
+    var committed: nat := 0;
+    var outErr := 0;
+    if |output| != 0 {
+      var result := io.WriteStdout(output);
+      committed := IOContract.WriteResultCommitted(result);
+      outErr := IOContract.ResultErrno(result);
+    }
+    var finalDiagnostics := diagnostics;
+    if outErr != 0 {
+      var reason := io.GetCLocaleErrnoText(outErr);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
+    }
+    assert finalDiagnostics == diagnostics + (if outErr == 0 then []
+      else Spec.WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
+    var errCommitted: nat := 0;
+    var errErr := 0;
+    if |finalDiagnostics| != 0 {
+      var result := io.WriteStderr(finalDiagnostics);
+      errCommitted := IOContract.WriteResultCommitted(result);
+      errErr := IOContract.ResultErrno(result);
+      assert IOContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        finalDiagnostics, errCommitted, errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+    assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+  }
 
-    if cmd.mode == Schema.ModeHelp {
-      var _ := io.WriteStdout(HelpTextCore(), BenchWorld.ThrowOnError);
-      exit := 0;
-      assert CoreSummary(raw, io, exit);
-      return;
-    }
-    if cmd.mode == Schema.ModeVersion {
-      var _ := io.WriteStdout(VersionTextCore(), BenchWorld.ThrowOnError);
-      exit := 0;
-      assert CoreSummary(raw, io, exit);
-      return;
-    }
-    if cmd.seenReference && cmd.diagnoseSurprises {
-      var _ := io.WriteStderr(CombineModeReferenceMessageCore(), BenchWorld.ThrowOnError);
-      exit := 1;
-      assert CoreSummary(raw, io, exit);
-      return;
-    }
-    if |cmd.files| == 0 {
-      var _ := io.WriteStderr(MissingOperandMessageCore(cmd), BenchWorld.ThrowOnError);
-      exit := 1;
-      assert CoreSummary(raw, io, exit);
-      return;
-    }
-    var cwd := io.GetCwd();
-    assert cwd == preCwd;
-    var plan := CoreGeneralModePlan(cmd.modeExpr, 0 as bv32);
-    if cmd.seenReference {
-      var refActual := MakeAbsoluteCore(cwd, cmd.referenceFile);
-      var getFileStatusResult6 := io.GetFileStatus(refActual, true);
-      var refOk := getFileStatusResult6.Ok?;
-      var rawModeStatus4 := IOContract.ResultValue(getFileStatusResult6, BenchWorld.DEFAULT_FILE_STATUS);
-      var refErr := IOContract.ResultErrno(getFileStatusResult6);
-      IOContract.FileStatusImpliesMode(io.fs(), refActual, true, refOk, rawModeStatus4, refErr);
-      var refMode := rawModeStatus4.mode;
-      if !refOk {
-        var _ := io.WriteStderr(ReferenceErrorMessageCore(cmd.referenceFile, ErrnoTextCore(refErr)), BenchWorld.ThrowOnError);
-        exit := 1;
-        assert CoreReferenceFailure(cmd, preFs, preCwd);
-        assert CoreReferenceFailureOutcome(
-            cmd, preFs, preCwd, io.fs(),
-            preStdout, io.stdout(), preStderr, io.stderr(), exit
-          );
-        assert CoreSummary(raw, io, exit);
-        return;
-      }
-      plan := CoreReferenceModePlan(refMode);
-    }
 
-    if !cmd.seenReference && !Schema.IsValidModeExpr(cmd.modeExpr) {
-      var _ := io.WriteStderr(InvalidModeMessageCore(cmd.modeExpr), BenchWorld.ThrowOnError);
-      exit := 1;
-      assert CoreSummary(raw, io, exit);
-      return;
-    }
-    if cmd.recursive {
-      var _ := io.WriteStderr(UnsupportedRecursiveMessageCore(), BenchWorld.ThrowOnError);
-      exit := 1;
-      assert CoreSummary(raw, io, exit);
-      return;
-    }
-    if !cmd.seenReference {
-      var umask := io.GetUmask();
-      plan := CoreGeneralModePlan(cmd.modeExpr, umask);
-    }
+  function NativeErrnoTextCore(err: int, io: BenchIO.IO): (reason: string)
+    ensures reason == IOContract.CLocaleErrnoTextResult(err)
+  {
+    IOContract.CLocaleErrnoTextResult(err)
+  } by method {
+    var nativeText := io.GetCLocaleErrnoText(err);
+    return nativeText;
+  }
 
-    var allOk := RunFilesFromCore(cmd.files, 0, cmd, plan, cwd, io);
-    exit := if allOk then 0 else 1;
-    if cmd.seenReference {
-      assert CoreReferenceBatchOutcome(
-          cmd, preFs, preCwd, io.fs(),
-          preStdout, io.stdout(), preStderr, io.stderr(), exit, preNow
-        );
-    } else {
-      assert CoreBatchOutcome(
-          cmd,
-          CoreGeneralModePlan(cmd.modeExpr, IOContract.GetUmaskResultFields(io.props())),
-          preFs,
-          preCwd,
-          io.fs(),
-          preStdout,
-          io.stdout(),
-          preStderr,
-          io.stderr(),
-          exit,
-          preNow
-        );
-    }
-    assert CoreSummary(raw, io, exit);
+  ghost function SuccessfulChangeResultForPost(cmd: Schema.ChmodCmd, plan: CoreModePlan,
+    path: string, before: bv32,
+    requested: bv32, isDir: bool, fs: BenchWorld.FileSystem, postOk: bool, postMode: bv32, postErr: int): CorePathResult
+  {
+    if CorePostChangeLookupNeeded(cmd, requested) && !postOk then
+      var naive := CoreNaiveMode(plan, before, isDir);
+      var surprise := CoreDiagnoseSurprise(cmd, plan, before, requested, isDir);
+      CorePathResult(fs,
+        if cmd.verbose then RetainedMessageCore(path, requested) else [],
+        (if cmd.silent then [] else GettingNewAttributesMessageCore(path,
+          IOContract.CLocaleErrnoTextResult(postErr))) +
+        (if surprise then SurpriseModeMessageCore(path, requested, naive) else []),
+        !surprise, CorePathRetained(requested))
+    else
+      var after := if CorePostChangeLookupNeeded(cmd, requested) && postOk then postMode else requested;
+      var naive := CoreNaiveMode(plan, before, isDir);
+      var surprise := CoreDiagnoseSurprise(cmd, plan, before, after, isDir);
+      CorePathResult(fs, CoreSuccessStdout(cmd, path, before, after),
+        if surprise then SurpriseModeMessageCore(path, after, naive) else [], !surprise,
+        if surprise then CorePathSurprise(before, after, naive)
+        else if before == after then CorePathRetained(after) else CorePathChanged(before, after))
   }
 }

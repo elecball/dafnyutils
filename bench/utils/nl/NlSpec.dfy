@@ -6,6 +6,9 @@ include "../../core/StringEscaping.dfy"
 include "NlSchema.dfy"
 
 module NlSpec {
+  import StreamContract = IOContract
+  import StreamUtf8 = Utf8Semantics
+
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -283,7 +286,7 @@ module NlSpec {
   function ErrorPiece(input: NlSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
-    case Stdin => []
+    case Stdin => if result.Err? then ErrorMessage("-", result.e) else []
     case File(path) =>
       match result
       case Ok(_) => []
@@ -293,7 +296,7 @@ module NlSpec {
   function HadErrorPiece(input: NlSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
   {
     match input
-    case Stdin => false
+    case Stdin => result.Err?
     case File(_) =>
       match result
       case Ok(_) => false
@@ -485,16 +488,22 @@ module NlSpec {
   {
     match cmd.inputs[i]
     case Stdin =>
-      result == Result.Ok(
-        if exists j :: 0 <= j < i && cmd.inputs[j] == NlSchema.Stdin
-        then []
-        else preStdin
-      )
+      result == IOContract.ObservedReadStdinResultFields(preStdin, preStreams)
     case File(path) =>
       result == IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
   }
 
-  ghost predicate InputTraceRelation(
+  ghost predicate StdinTraceRelation(cmd: NlSchema.NlCmd, before: BenchWorld.Bytes,
+    after: BenchWorld.Bytes, observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    states: seq<BenchWorld.Bytes>)
+  {
+    |states| == |cmd.inputs| + 1 && states[0] == before && states[|cmd.inputs|] == after &&
+    forall i: nat | i < |cmd.inputs| ::
+      states[i + 1] == (if cmd.inputs[i].Stdin? then
+        IOContract.ObservedReadStdinRemainingFields(states[i], observations) else states[i])
+  }
+
+  opaque ghost predicate InputTraceWitnessRelation(
     cmd: NlSchema.NlCmd,
     preFs: BenchWorld.FileSystem,
     preStdin: BenchWorld.Bytes,
@@ -508,18 +517,20 @@ module NlSpec {
     hadError: bool,
     hasDelimiter: bool,
     preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
-  )
+  , postStdin: BenchWorld.Bytes, stdinStates: seq<BenchWorld.Bytes>)
   {
     |readResults| == |cmd.inputs| &&
     |inputFragments| == |cmd.inputs| &&
     |errorFragments| == |cmd.inputs| &&
+    StdinTraceRelation(cmd, preStdin, postStdin, preStreams, stdinStates) &&
     (forall i :: 0 <= i < |cmd.inputs| ==>
-                   ReadResultRelation(cmd, preFs, preStdin, i, readResults[i], preStreams) &&
+                   ReadResultRelation(cmd, preFs, stdinStates[i], i, readResults[i], preStreams) &&
                    (match readResults[i]
                     case Ok(data) =>
                       NormalizedInputRelation(data, inputFragments[i])
-                    case Err(_) =>
-                      inputFragments[i] == []) &&
+                    case Err(error) =>
+                      if error.StreamFailure? then NormalizedInputRelation(error.partial, inputFragments[i])
+                      else inputFragments[i] == []) &&
                    errorFragments[i] == ErrorPiece(cmd.inputs[i], readResults[i])) &&
     FragmentsConcatenate(inputFragments, combined, inputCuts) &&
     FragmentsConcatenate(errorFragments, errorOutput, errorCuts) &&
@@ -536,6 +547,26 @@ module NlSpec {
                     IsLogicalPageDelimiterLine(lines[i])))
   }
 
+  ghost predicate InputTraceRelation(
+    cmd: NlSchema.NlCmd,
+    preFs: BenchWorld.FileSystem,
+    preStdin: BenchWorld.Bytes,
+    readResults: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
+    inputFragments: seq<BenchWorld.Bytes>,
+    combined: BenchWorld.Bytes,
+    inputCuts: seq<nat>,
+    errorFragments: seq<BenchWorld.Bytes>,
+    errorOutput: BenchWorld.Bytes,
+    errorCuts: seq<nat>,
+    hadError: bool,
+    hasDelimiter: bool,
+    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
+  , postStdin: BenchWorld.Bytes)
+  {
+    exists stdinStates: seq<BenchWorld.Bytes> ::
+      InputTraceWitnessRelation(cmd, preFs, preStdin, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, preStreams, postStdin, stdinStates)
+  }
+
   function ModeErrorMessage(cmd: NlSchema.NlCmd): BenchWorld.Bytes
   {
     match cmd.mode
@@ -546,58 +577,130 @@ module NlSpec {
     case _ => []
   }
 
-  twostate predicate Spec(raw: NlSchema.NlCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.fsRegion, io.stdinRegion, io.stdoutRegion, io.stderrRegion, io.trustedStreamsRegion
+  datatype RunWitness = RunWitness(
+    readResults: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
+    inputFragments: seq<BenchWorld.Bytes>,
+    combined: BenchWorld.Bytes,
+    inputCuts: seq<nat>,
+    errorFragments: seq<BenchWorld.Bytes>,
+    errorOutput: BenchWorld.Bytes,
+    errorCuts: seq<nat>,
+    hadError: bool,
+    hasDelimiter: bool,
+    outputPart: BenchWorld.Bytes)
+
+  ghost predicate PreparedRunRelation(cmd: NlSchema.NlCmd,
+    beforeFs: BenchWorld.FileSystem, beforeStdin: BenchWorld.Bytes, afterStdin: BenchWorld.Bytes,
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes, exit: int,
+    trace: RunWitness)
   {
-    var cmd := NlSchema.Command(raw);
-    if cmd.mode == NlSchema.ModeHelp then
-      io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + HelpText() &&
-      io.stderr() == old(io.stderr()) + NlSchema.OptionErrorsText(cmd.optionErrors) &&
-      exit == 0
-    else if cmd.mode == NlSchema.ModeVersion then
-      io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + VersionText() &&
-      io.stderr() == old(io.stderr()) + NlSchema.OptionErrorsText(cmd.optionErrors) &&
-      exit == 0
-    else if cmd.mode != NlSchema.ModeRun then
-      io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + ModeErrorMessage(cmd) &&
-      exit == 1
-    else
-      exists readResults: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
-        inputFragments: seq<BenchWorld.Bytes>,
-        combined: BenchWorld.Bytes,
-        inputCuts: seq<nat>,
-        errorFragments: seq<BenchWorld.Bytes>,
-        errorOutput: BenchWorld.Bytes,
-        errorCuts: seq<nat>,
-        hadError: bool,
-        hasDelimiter: bool,
-        outputPart: BenchWorld.Bytes ::
+    var readResults := trace.readResults;
+    var inputFragments := trace.inputFragments;
+    var combined := trace.combined;
+    var inputCuts := trace.inputCuts;
+    var errorFragments := trace.errorFragments;
+    var errorOutput := trace.errorOutput;
+    var errorCuts := trace.errorCuts;
+    var hadError := trace.hadError;
+    var hasDelimiter := trace.hasDelimiter;
+    var outputPart := trace.outputPart;
         InputTraceRelation(
-          cmd, old(io.fs()), old(io.stdin()), readResults, inputFragments,
+          cmd, beforeFs, beforeStdin, readResults, inputFragments,
           combined, inputCuts, errorFragments, errorOutput, errorCuts,
           hadError, hasDelimiter,
-          old(io.trustedStreams())
-        ) &&
-        io.stdin() ==
-        (if exists i ::
-              (0 <= i < |cmd.inputs| &&
-               cmd.inputs[i] == NlSchema.Stdin)
-         then []
-         else old(io.stdin())) &&
+          observations
+        , afterStdin) &&
         (if hasDelimiter then
            outputPart == []
          else
            OutputRelation(cmd, combined, outputPart)) &&
-        io.stdout() == old(io.stdout()) + outputPart &&
-        io.stderr() == old(io.stderr()) + errorOutput +
+        plannedStdout == outputPart &&
+        plannedStderr == errorOutput +
         (if hasDelimiter then
            UnsupportedLogicalPageDelimiterMessage()
          else
            []) &&
         exit == (if hasDelimiter || hadError then 1 else 0)
+  }
+
+  twostate predicate PreparedSpec(raw: NlSchema.NlCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
+  {
+    var cmd := NlSchema.Command(raw);
+    if cmd.mode == NlSchema.ModeHelp then
+      io.stdin() == old(io.stdin()) &&
+      plannedStdout == HelpText() &&
+      plannedStderr == NlSchema.OptionErrorsText(cmd.optionErrors) &&
+      exit == 0
+    else if cmd.mode == NlSchema.ModeVersion then
+      io.stdin() == old(io.stdin()) &&
+      plannedStdout == VersionText() &&
+      plannedStderr == NlSchema.OptionErrorsText(cmd.optionErrors) &&
+      exit == 0
+    else if cmd.mode != NlSchema.ModeRun then
+      io.stdin() == old(io.stdin()) &&
+      plannedStdout == [] &&
+      plannedStderr == ModeErrorMessage(cmd) &&
+      exit == 1
+    else
+      exists trace: RunWitness ::
+        PreparedRunRelation(cmd, old(io.fs()), old(io.stdin()), io.stdin(), old(io.trustedStreams()),
+          plannedStdout, plannedStderr, exit, trace)
+  }
+
+  function Emits(raw: NlSchema.NlCmdRaw): bool
+  {
+    true
+  }
+
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  {
+    StreamUtf8.Encode("nl: write error: " + message + "\n")
+  }
+
+  ghost predicate EmitFields(
+    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    beforeStdout: BenchWorld.Bytes, beforeStderr: BenchWorld.Bytes,
+    afterStdout: BenchWorld.Bytes, afterStderr: BenchWorld.Bytes,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
+      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+    stdoutResult.StreamWriteResult? &&
+    var errors := diagnostics + (if stdoutResult.err == 0 then [] else
+      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+    var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
+      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+    stderrResult.StreamWriteResult? &&
+    (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
+      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+    (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
+      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+    exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
+  }
+
+  twostate predicate Emission(raw: NlSchema.NlCmdRaw, io: BenchIO.IO,
+    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+    normalExit: int, exit: int)
+    reads io.stdoutRegion, io.stderrRegion
+  {
+    if Emits(raw) then
+      EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+    else
+      io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
+      exit == normalExit
+  }
+
+  twostate predicate Spec(raw: NlSchema.NlCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit,
+        out, diagnostics) &&
+      Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

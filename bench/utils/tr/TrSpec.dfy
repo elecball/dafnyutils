@@ -5,11 +5,15 @@ include "../../core/StringEscaping.dfy"
 include "TrSchema.dfy"
 
 module TrSpec {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import BenchWorld
   import IOContract
   import TrSchema
+  import Schema = TrSchema
   import Utf8 = Utf8Semantics
   import SE = StringEscaping
 
@@ -665,7 +669,61 @@ module TrSpec {
         output == transformed
   }
 
-  twostate predicate Spec(raw: TrSchema.TrCmdRaw, io: BenchIO.IO, exit: int)
+  function ReadErrorText(reason: string): BenchWorld.Bytes
+  {
+    "tr: read error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost function ReadError(err: int): BenchWorld.Bytes
+  {
+    ReadErrorText(IOContract.CLocaleErrnoTextResult(err))
+  }
+
+
+  function WriteErrorText(reason: string): StreamWorld.Bytes
+  {
+    "tr: write error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  function WriteErrorAfterReadFailure(): StreamWorld.Bytes
+  {
+    "tr: write error\n"
+  }
+
+  ghost predicate EmissionOutcomeFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int,
+    committed: nat, outErr: int, errCommitted: nat, errErr: int
+  )
+  {
+    (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
+     else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
+    var finalDiagnostics := diagnostics +
+      (if outErr == 0 then []
+       else if normalExit != 0 then WriteErrorAfterReadFailure()
+       else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
+     else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
+    exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
+  }
+
+  ghost predicate EmissionFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
+      EmissionOutcomeFields(beforeOut, beforeErr, afterOut, afterErr, observations,
+                            output, diagnostics, normalExit, exit,
+                            committed, outErr, errCommitted, errErr)
+  }
+  twostate predicate PreparedSpec(raw: TrSchema.TrCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     reads io.Footprint()
   {
     exists cmd: TrCmd ::
@@ -673,42 +731,54 @@ module TrSpec {
       match cmd.mode
       case ModeHelp =>
         io.stdin() == old(io.stdin()) &&
-        io.stdout() == old(io.stdout()) + HelpTextSpec() &&
-        io.stderr() == old(io.stderr()) &&
+        plannedStdout == old(io.stdout()) + HelpTextSpec() &&
+        plannedStderr == old(io.stderr()) &&
         exit == 0
       case ModeVersion =>
         io.stdin() == old(io.stdin()) &&
-        io.stdout() == old(io.stdout()) + VersionTextSpec() &&
-        io.stderr() == old(io.stderr()) &&
+        plannedStdout == old(io.stdout()) + VersionTextSpec() &&
+        plannedStderr == old(io.stderr()) &&
         exit == 0
       case ModeMissingOperand(message) =>
         io.stdin() == old(io.stdin()) &&
-        io.stdout() == old(io.stdout()) &&
-        io.stderr() == old(io.stderr()) + message &&
+        plannedStdout == old(io.stdout()) &&
+        plannedStderr == old(io.stderr()) + message &&
         exit == 1
       case ModeExtraOperand(operand) =>
         io.stdin() == old(io.stdin()) &&
-        io.stdout() == old(io.stdout()) &&
-        io.stderr() == old(io.stderr()) +
+        plannedStdout == old(io.stdout()) &&
+        plannedStderr == old(io.stderr()) +
           ExtraOperandMessageSpec(operand, |raw.operands| == 2) &&
         exit == 1
       case ModeUnsupportedSet(operand) =>
         io.stdin() == old(io.stdin()) &&
-        io.stdout() == old(io.stdout()) &&
-        io.stderr() == old(io.stderr()) + cmd.warnings +
+        plannedStdout == old(io.stdout()) &&
+        plannedStderr == old(io.stderr()) + cmd.warnings +
           UnsupportedSetMessageSpec(operand) &&
         exit == 1
       case ModeEmptySet2 =>
         io.stdin() == old(io.stdin()) &&
-        io.stdout() == old(io.stdout()) &&
-        io.stderr() == old(io.stderr()) + EmptySet2MessageSpec() &&
+        plannedStdout == old(io.stdout()) &&
+        plannedStderr == old(io.stderr()) + EmptySet2MessageSpec() &&
         exit == 1
       case ModeRun =>
-        io.stdin() == IOContract.AfterReadStdinFields(old(io.stdin())) &&
+        var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+        var input := IOContract.ReadResultData(read);
+        io.stdin() == IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) &&
         (exists output: BenchWorld.Bytes ::
-           OutputRelation(cmd, old(io.stdin()), output) &&
-           io.stdout() == old(io.stdout()) + output) &&
-        io.stderr() == old(io.stderr()) + cmd.warnings &&
-        exit == 0
+           OutputRelation(cmd, input, output) &&
+           plannedStdout == old(io.stdout()) + output) &&
+        plannedStderr == old(io.stderr()) + cmd.warnings +
+          (if read.Ok? then [] else ReadError(IOContract.ResultErrno(read))) &&
+        exit == (if read.Ok? then 0 else 1)
+  }
+
+  twostate predicate Spec(raw: Schema.TrCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                     io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 }

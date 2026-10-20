@@ -6,6 +6,8 @@ include "PrintenvCore.dfy"
 include "PrintenvSpec.dfy"
 
 module PrintenvProof {
+  import BenchWorld
+
   import BenchIO
   import BW = BenchWorld
   import IOC = IOContract
@@ -197,9 +199,9 @@ module PrintenvProof {
     }
   }
 
-  twostate lemma CoreSummaryImpliesSpec(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO, exit: int)
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO, exit: int, new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     var cc := Schema.Command(raw);
 
@@ -208,8 +210,8 @@ module PrintenvProof {
     } else {
       var entries: seq<string> :|
         IOC.GetEnvironmentContractFields(old(io.env()), entries) &&
-        io.stdout() == old(io.stdout()) + Core.Output(cc, entries) &&
-        io.stderr() == old(io.stderr()) &&
+        plannedStdout == old(io.stdout()) + Core.Output(cc, entries) &&
+        plannedStderr == old(io.stderr()) &&
         exit == Core.ExitStatus(cc, entries);
       if |cc.operands| == 0 {
         TerminatorEq(cc.nullTerminated);
@@ -234,5 +236,17 @@ module PrintenvProof {
         TerminatorEq(cc.nullTerminated);
       }
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.PrintenvCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

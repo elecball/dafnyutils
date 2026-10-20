@@ -58,8 +58,9 @@ module Mv {
     {
       ghost var statusCalls: seq<MS.StatusCallEvidence>;
       ghost var runEvidence: Core.RunStatusEvidence;
-      exit, statusCalls, runEvidence := Core.RunCore(raw, io);
-      MP.CoreSummaryImpliesSpec(raw, io, exit, statusCalls, runEvidence);
+      ghost var plan: Core.PlannedOutput;
+      exit, statusCalls, runEvidence, plan := Core.RunCore(raw, io);
+      MP.CoreSummaryImpliesSpec(raw, io, exit, statusCalls, runEvidence, plan);
     }
   }
 }

@@ -6,6 +6,9 @@ include "../../core/StringEscaping.dfy"
 include "StatSchema.dfy"
 
 module StatSpec {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Errno = Errnos
   import Result = Results
   import BenchWorld
@@ -150,19 +153,20 @@ module StatSpec {
     "stat: missing operand\nTry 'stat --help' for more information.\n"
   }
 
-  function ErrnoTextSpec(errno: int): string
+  ghost function ErrnoTextSpec(errno: int): string
   {
-    if errno == Errno.ENOENT then "No such file or directory"
-    else if errno == Errno.EACCES then "Permission denied"
-    else if errno == Errno.ENOTDIR then "Not a directory"
-    else if errno == Errno.ELOOP then "Too many levels of symbolic links"
-    else "unknown error"
+    IOContract.CLocaleErrnoTextResult(errno)
   }
 
-  function ErrorMessageSpec(path: BenchWorld.Path, errno: int): BenchWorld.Bytes
+  function ErrorMessageWithReasonSpec(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
   {
     "stat: cannot statx " + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
-      ": " + ErrnoTextSpec(errno) + "\n"
+      ": " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost function ErrorMessageSpec(path: BenchWorld.Path, errno: int): BenchWorld.Bytes
+  {
+    ErrorMessageWithReasonSpec(path, ErrnoTextSpec(errno))
   }
 
   function DigitForBaseSpec(digit: nat): char
@@ -358,8 +362,8 @@ module StatSpec {
   {
     match cmd.statusContext
     case UnboundStatusObservations => IOContract.GetFileStatusResultFields(fs, path, cmd.followSymlink)
-    case BoundStatusObservations(observations, firstStatus) =>
-      IOContract.ObservedFileStatusResultFields(observations, firstStatus + index,
+    case BoundStatusObservations(observations, firstStatus, failures) =>
+      IOContract.ObservedNativeStatusResultFields(observations, failures, firstStatus + index,
                                                 fs, path, cmd.followSymlink)
   }
 
@@ -506,6 +510,7 @@ module StatSpec {
     raw: Schema.StatCmdRaw,
     fs: BenchWorld.FileSystem,
     observations: BenchWorld.StatusTimeObservations,
+    failures: (BenchWorld.NativeFailureRequest) -> int,
     firstStatus: nat,
     afterStatus: nat,
     beforeStdout: BenchWorld.Bytes,
@@ -515,7 +520,7 @@ module StatSpec {
     exit: int
   )
   {
-    var cmd := Schema.WithStatusObservations(Schema.Command(raw), observations, firstStatus);
+    var cmd := Schema.WithStatusObservations(Schema.Command(raw), observations, firstStatus, failures);
     afterStatus == firstStatus + (if cmd.mode == Schema.ModeRun then |cmd.files| else 0) &&
     if cmd.mode == Schema.ModeHelp then
       afterStdout == beforeStdout + HelpTextSpec() && afterStderr == beforeStderr && exit == 0
@@ -536,10 +541,56 @@ module StatSpec {
         exit == (if hadError then 1 else 0)
   }
 
-  twostate predicate Spec(raw: Schema.StatCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.fsRegion, io.statusObservationsRegion, io.stdoutRegion, io.stderrRegion
+
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
-    ObservedSpec(raw, old(io.fs()), io.statusObservations(), old(io.statusCursor()), io.statusCursor(),
-                 old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(), exit)
+    "stat: write error: " + Utf8.Encode(reason) + "\n"
+  }
+
+  ghost predicate EmissionOutcomeFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int,
+    committed: nat, outErr: int, errCommitted: nat, errErr: int
+  )
+  {
+    (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
+     else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
+    var finalDiagnostics := diagnostics +
+      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
+     else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
+    exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
+  }
+
+  ghost predicate EmissionFields(
+    beforeOut: StreamWorld.Bytes, beforeErr: StreamWorld.Bytes,
+    afterOut: StreamWorld.Bytes, afterErr: StreamWorld.Bytes,
+    observations: (StreamWorld.TrustedStreamRequest) -> StreamWorld.TrustedStreamResult,
+    output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+    normalExit: int, exit: int
+  )
+  {
+    exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
+      EmissionOutcomeFields(beforeOut, beforeErr, afterOut, afterErr, observations,
+                            output, diagnostics, normalExit, exit,
+                            committed, outErr, errCommitted, errErr)
+  }
+  twostate predicate PreparedSpec(raw: Schema.StatCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    reads io.statusObservationsRegion
+  {
+    ObservedSpec(raw, old(io.fs()), io.statusObservations(), old(io.trustedNativeFailures()), old(io.statusCursor()), io.statusCursor(),
+                 [], plannedStdout, [], plannedStderr, exit)
+  }
+
+  twostate predicate Spec(raw: Schema.StatCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSpec(raw, io, normalExit, output, diagnostics) &&
+      EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                     io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 }

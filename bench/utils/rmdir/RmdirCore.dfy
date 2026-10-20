@@ -32,47 +32,48 @@ module RmdirCore {
 
   method ProbeNonempty(io: BenchIO.IO, path: string) returns (nonempty: bool)
     modifies io.dirHandlesRegion
-    ensures Spec.NonemptyObservation(io.fs(), path, nonempty)
+    ensures io.dirHandles() == old(io.dirHandles())
+    ensures Spec.NonemptyObservation(Spec.ObservationContextFor(io), io.fs(), path, nonempty)
   {
+    ghost var context := Spec.ObservationContextFor(io);
     var linkResult := io.IsSymlink(path);
     if linkResult.Ok? && linkResult.v {
       nonempty := false;
-      Proof.NonemptyWitness(io.fs(), path, linkResult.Ok?, C.ResultValue(linkResult, false),
-        C.ResultErrno(linkResult), map[], map[], map[], 0, false, 0, false, "",
-        UnknownDirentKind, 0, nonempty);
+      Proof.NonemptyWitness(context, io.fs(), path,
+        true, true, 0, map[], map[], 0, false, 0,
+        false, "", UnknownDirentKind, 0, false, 0, nonempty);
       return;
     }
-    ghost var before := io.dirHandles();
-    var openState := io.OpenDir(path, false);
+    var openResult := io.OpenDir(path, false);
     ghost var openHandles := io.dirHandles();
     nonempty := false;
-    if openState.Ok? {
-      var item := io.ReadDir(openState.v);
-      ghost var after := io.dirHandles();
+    if openResult.Ok? {
+      var item := io.ReadDir(openResult.v);
+      ghost var afterRead := io.dirHandles();
       nonempty := item.Ok? && item.v.DirectoryItem?;
-      assert C.ReadDirContractFields(io.fs(), openHandles, openState.v,
+      var closeResult := io.CloseDir(openResult.v);
+      assert io.dirHandles() == context.handles;
+      // Cleanup-close failure is observed; GNU uses the saved readdir result.
+      Proof.NonemptyWitness(context, io.fs(), path,
+        linkResult.Ok?, C.ResultValue(linkResult, false), C.ResultErrno(linkResult),
+        openHandles, afterRead, openResult.v, true, 0,
         item.Ok? && item.v.DirectoryItem?,
         if item.Ok? && item.v.DirectoryItem? then item.v.name else "",
         if item.Ok? && item.v.DirectoryItem? then item.v.kind else UnknownDirentKind,
-        C.ResultErrno(item), after);
-      Proof.NonemptyWitness(io.fs(), path, linkResult.Ok?, C.ResultValue(linkResult, false),
-        C.ResultErrno(linkResult), before, openHandles, after, openState.v, true, 0,
-        item.Ok? && item.v.DirectoryItem?,
-        if item.Ok? && item.v.DirectoryItem? then item.v.name else "",
-        if item.Ok? && item.v.DirectoryItem? then item.v.kind else UnknownDirentKind,
-        C.ResultErrno(item), nonempty);
-      io.CloseDir(openState.v);
+        C.ResultErrno(item), closeResult.Ok?, C.ResultErrno(closeResult), nonempty);
     } else {
-      Proof.NonemptyWitness(io.fs(), path, linkResult.Ok?, C.ResultValue(linkResult, false),
-        C.ResultErrno(linkResult), before, openHandles, openHandles, 0, false,
-        C.ResultErrno(openState), false, "", UnknownDirentKind, 0, nonempty);
+      Proof.NonemptyWitness(context, io.fs(), path,
+        linkResult.Ok?, C.ResultValue(linkResult, false), C.ResultErrno(linkResult),
+        openHandles, openHandles, 0, false, C.ResultErrno(openResult),
+        false, "", UnknownDirentKind, 0, false, 0, nonempty);
     }
   }
 
   method IgnoreFailure(raw: S.RmdirCmdRaw, io: BenchIO.IO,
                        path: string, err: int) returns (ignored: bool)
     modifies io.dirHandlesRegion
-    ensures Spec.IgnoredFailure(raw, io.fs(), path, err, ignored)
+    ensures io.dirHandles() == old(io.dirHandles())
+    ensures Spec.IgnoredFailure(Spec.ObservationContextFor(io), raw, io.fs(), path, err, ignored)
   {
     ignored := false;
     if raw.ignoreNonempty {
@@ -86,27 +87,44 @@ module RmdirCore {
 
   method DiagnosticPath(io: BenchIO.IO, path: string, parent: bool, err: int)
     returns (display: string, custom: bool)
-    ensures Spec.FailureDisplay(io.fs(), path, parent, err, display, custom)
+    ensures Spec.FailureDisplay(Spec.ObservationContextFor(io), io.fs(), path, parent, err, display, custom)
   {
+    hide Spec.FailureDisplay();
+    ghost var context := Spec.ObservationContextFor(io);
+    ghost var statOk, statDirectory := false, false;
+    ghost var statErr := 0;
+    ghost var observedTrimmed := path;
+    ghost var linkOk, symbolicLink := false, false;
+    ghost var linkErr := 0;
     display, custom := path, false;
     if !parent && err == Errno.ENOTDIR && C.HasTrailingSlash(path) {
       var directory := io.IsDirectory(path, true);
+      statOk, statDirectory, statErr := directory.Ok?, C.ResultValue(directory, false), C.ResultErrno(directory);
+      assert C.IsDirectorySpec(io.fs(), context.failures, path, true,
+        directory.Ok?, C.ResultValue(directory, false), C.ResultErrno(directory));
       if (!directory.Ok? && C.ResultErrno(directory) != Errno.ENOTDIR) ||
          (directory.Ok? && directory.v) {
         var stripped := PathCore.TrimTrailingSlashes(path);
         Proof.TrimmedRelation(path, stripped);
         var link := io.IsSymlink(stripped);
+        observedTrimmed := stripped;
+        linkOk, symbolicLink, linkErr := link.Ok?, C.ResultValue(link, false), C.ResultErrno(link);
+        assert C.IsSymlinkSpec(io.fs(), context.failures, stripped,
+          link.Ok?, C.ResultValue(link, false), C.ResultErrno(link));
         custom := link.Ok? && link.v;
         display := if custom then path else stripped;
       }
     }
+    Proof.FailureDisplayWitness(context, io.fs(), path, parent, err, display, custom,
+      statOk, statDirectory, statErr, observedTrimmed, linkOk, symbolicLink, linkErr);
   }
 
   method {:isolate_assertions} Attempt(raw: S.RmdirCmdRaw, io: BenchIO.IO, path: string, parent: bool)
     returns (removed: bool, accepted: bool, output: Bytes, diagnostic: Bytes,
              ghost record: Spec.Removal)
     modifies io.fsRegion, io.dirHandlesRegion
-    ensures Spec.RemovalRelation(raw, io.now(), io.trustedFilesystem(), record)
+    ensures io.dirHandles() == old(io.dirHandles())
+    ensures Spec.RemovalRelation(Spec.ObservationContextFor(io), raw, io.now(), io.trustedFilesystem(), record)
     ensures record.path == path && record.parent == parent
     ensures record.before == old(io.fs()) && record.after == io.fs()
     ensures removed <==> record.err == 0
@@ -145,20 +163,21 @@ module RmdirCore {
     }
     accepted := removed || ignored;
     record := Spec.Removal(path, parent, before, io.fs(), err, ignored, display, custom);
-    assert Spec.RemovalRelation(raw, io.now(), io.trustedFilesystem(), record) by {
+    assert Spec.RemovalRelation(Spec.ObservationContextFor(io), raw, io.now(), io.trustedFilesystem(), record) by {
       hide *;
-      Proof.RemovalWitness(raw, io.now(), io.trustedFilesystem(), record);
+      Proof.RemovalWitness(Spec.ObservationContextFor(io), raw, io.now(), io.trustedFilesystem(), record);
     }
   }
 
   method RemoveOperand(raw: S.RmdirCmdRaw, io: BenchIO.IO, path: string)
     returns (good: bool, out: Bytes, error: Bytes)
     modifies io.fsRegion, io.dirHandlesRegion
-    ensures Spec.ChainEffect(raw, path, io.now(), io.trustedFilesystem(),
+    ensures io.dirHandles() == old(io.dirHandles())
+    ensures Spec.ChainEffect(Spec.ObservationContextFor(io), raw, path, io.now(), io.trustedFilesystem(),
         old(io.fs()), io.fs(), out, error, good)
   {
     hide *;
-    reveal Spec.ChainPrefix();
+    reveal Spec.ObservationContextFor(), Spec.ChainPrefix();
     reveal Spec.BytePartition();
     ghost var before := io.fs();
     ghost var records: seq<Spec.Removal> := [];
@@ -170,7 +189,8 @@ module RmdirCore {
     var current := path;
     var parent := false;
     while true
-      invariant Spec.ChainPrefix(raw, path, io.now(), io.trustedFilesystem(), records)
+      invariant io.dirHandles() == old(io.dirHandles())
+      invariant Spec.ChainPrefix(Spec.ObservationContextFor(io), raw, path, io.now(), io.trustedFilesystem(), records)
       invariant |records| == 0 ==> current == path && !parent && io.fs() == before
       invariant |records| > 0 ==>
         (parent && records[0].before == before &&
@@ -183,7 +203,7 @@ module RmdirCore {
       decreases |current|
     {
       var removed, accepted, addedOut, addedErr, record := Attempt(raw, io, current, parent);
-      Proof.AppendChain(raw, path, io.now(), io.trustedFilesystem(), records, record);
+      Proof.AppendChain(Spec.ObservationContextFor(io), raw, path, io.now(), io.trustedFilesystem(), records, record);
       Proof.AppendPartition(outputs, out, outCuts, Spec.OutputChunk(raw, record));
       Proof.AppendPartition(errors, error, errCuts, Spec.ErrorChunk(record));
       records := records + [record];
@@ -215,12 +235,12 @@ module RmdirCore {
             assert records[|records| - 1].err == 0 || records[|records| - 1].ignored;
           }
         }
-        assert Spec.ChainWitness(raw, path, io.now(), io.trustedFilesystem(),
+        assert Spec.ChainWitness(Spec.ObservationContextFor(io), raw, path, io.now(), io.trustedFilesystem(),
           before, io.fs(), out, error, good, records, outCuts, errCuts) by {
           hide *;
           reveal Spec.ChainWitness();
         }
-        Proof.ChainExists(raw, path, io.now(), io.trustedFilesystem(),
+        Proof.ChainExists(Spec.ObservationContextFor(io), raw, path, io.now(), io.trustedFilesystem(),
           before, io.fs(), out, error, good, records, outCuts, errCuts);
         return;
       }
@@ -237,18 +257,25 @@ module RmdirCore {
   {
     ghost var observations := io.trustedStreams();
     ghost var beforeOut, beforeErr := io.stdout(), io.stderr();
-    var outResult := io.WriteStdout(output, ReturnError);
+    var outResult := io.WriteStdout(output);
     var outErr := C.ResultErrno(outResult);
     ghost var outObservation := observations(StreamWriteStdout(beforeOut, output));
     assert outObservation.StreamWriteResult? && outObservation.err == outErr;
     var finalDiagnostic := diagnostics;
     if outErr != 0 {
-      var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostic := diagnostics + Spec.WriteErrorText(reason);
+      if |diagnostics| != 0 {
+        // GNU error() flushes the preceding verbose attempt before diagnostics.
+        // close_stream later reports that prior failure without an errno suffix.
+        finalDiagnostic := diagnostics + Spec.PriorWriteErrorText();
+      } else {
+        var reason := io.GetCLocaleErrnoText(outErr);
+        finalDiagnostic := diagnostics + Spec.WriteErrorText(reason);
+      }
     }
     assert finalDiagnostic == diagnostics + (if outObservation.err == 0 then []
+      else if |diagnostics| != 0 then Spec.PriorWriteErrorText()
       else Spec.WriteErrorText(C.CLocaleErrnoTextResult(outObservation.err)));
-    var errResult := io.WriteStderr(finalDiagnostic, ReturnError);
+    var errResult := io.WriteStderr(finalDiagnostic);
     ghost var errObservation := observations(StreamWriteStderr(beforeErr, finalDiagnostic));
     assert errObservation.StreamWriteResult? && errObservation.err == C.ResultErrno(errResult);
     exit := if removalExit == 0 && outErr == 0 && C.ResultErrno(errResult) == 0 then 0 else 1;
@@ -261,7 +288,7 @@ module RmdirCore {
     ensures Spec.Spec(raw, io, exit)
   {
     hide *;
-    reveal Spec.BatchWitness();
+    reveal Spec.ObservationContextFor(), Spec.BatchWitness();
     reveal Spec.BytePartition();
     if raw.mode == S.ModeHelp {
       exit := Flush(Spec.HelpText(), [], 0, io);
@@ -291,14 +318,15 @@ module RmdirCore {
     var i := 0;
     while i < |raw.operands|
       modifies io.fsRegion, io.dirHandlesRegion
+      invariant io.dirHandles() == old(io.dirHandles())
       invariant 0 <= i <= |raw.operands|
-      invariant Spec.BatchWitness(raw, raw.operands[..i], io.now(), io.trustedFilesystem(),
+      invariant Spec.BatchWitness(Spec.ObservationContextFor(io), raw, raw.operands[..i], io.now(), io.trustedFilesystem(),
         before, io.fs(), out, error, allGood, states, outputs, errors, goods, outCuts, errCuts)
       decreases |raw.operands| - i
     {
       ghost var fsBefore := io.fs();
       var good, partOut, partErr := RemoveOperand(raw, io, raw.operands[i]);
-      Proof.ExtendBatch(raw, raw.operands[..i], io.now(), io.trustedFilesystem(),
+      Proof.ExtendBatch(Spec.ObservationContextFor(io), raw, raw.operands[..i], io.now(), io.trustedFilesystem(),
         before, fsBefore, out, error, allGood, states, outputs, errors, goods, outCuts, errCuts,
         raw.operands[i], io.fs(), partOut, partErr, good);
       states := states + [io.fs()];
@@ -312,7 +340,7 @@ module RmdirCore {
       allGood := allGood && good;
       i := i + 1;
     }
-    Proof.BatchExists(raw, io.now(), io.trustedFilesystem(), before, io.fs(), out, error,
+    Proof.BatchExists(Spec.ObservationContextFor(io), raw, io.now(), io.trustedFilesystem(), before, io.fs(), out, error,
       allGood, states, outputs, errors, goods, outCuts, errCuts);
     exit := Flush(out, error, if allGood then 0 else 1, io);
     Proof.Complete(raw, io, out, error, allGood, exit);

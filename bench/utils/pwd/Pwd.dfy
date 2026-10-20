@@ -4,12 +4,10 @@ include "../../core/CliTypes.dfy"
 include "../../core/BenchmarkItem.dfy"
 include "PwdSchema.dfy"
 include "PwdCore.dfy"
-include "PwdProof.dfy"
 include "PwdSpec.dfy"
 
 module Pwd {
   import BenchIO
-  import PP = PwdProof
   import BenchWorld
   import CliTypes
   import BenchItem
@@ -54,12 +52,11 @@ module Pwd {
     }
 
     method RunCore(raw: PwdSchema.PwdCmdRaw, io: BenchIO.IO) returns (exit: int)
-      modifies io.stdoutRegion, io.stderrRegion
+      modifies io.stdoutRegion, io.stderrRegion, io.directoryStateRegion, io.cwdRegion, io.statusObservationsRegion
       ensures PS.Spec(raw, io, exit)
       decreases *
     {
       exit := Core.RunCore(raw, io);
-      PP.CoreSummaryImpliesSpec(raw, io, exit);
     }
   }
 }

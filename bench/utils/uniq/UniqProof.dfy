@@ -4,6 +4,10 @@ include "UniqCore.dfy"
 include "UniqSpec.dfy"
 
 module UniqProof {
+  import IOContract
+
+  import BenchWorld
+
   import Result = Results
   import BenchIO
   import BW = BenchWorld
@@ -420,11 +424,22 @@ module UniqProof {
                      j < |lines[i]| ==> lines[i][j] != '\n') &&
                   (i + 1 < |lines| ==> terminated[i])
         {
+          if i == 0 {
+            assert lines[i] == current;
+            assert fragments[i] == current + ['\n'];
+          } else {
+            assert lines[i] == Core.LinesFrom(data[1..], [])[i - 1];
+            assert terminated[i] == tailTerminated[i - 1];
+            assert fragments[i] == tailFragments[i - 1];
+          }
         }
       }
+      assert current + data == head + data[1..];
     } else {
       terminated, fragments, cuts :=
         LinesFromWitness(data[1..], current + [data[0]]);
+      assert current + data == (current + [data[0]]) + data[1..];
+      assert lines == Core.LinesFrom(data[1..], current + [data[0]]);
     }
   }
 
@@ -764,7 +779,7 @@ module UniqProof {
     reveal Spec.InputTraceRelation();
     match cmd.input {
       case Stdin =>
-        OutputRelationForCore(cmd, old(io.stdin()));
+        OutputRelationForCore(cmd, IOContract.ReadResultData(readResults[0]));
       case File(_) =>
         match readResults[0] {
           case Ok(data) =>
@@ -774,7 +789,7 @@ module UniqProof {
     }
   }
 
-  twostate lemma CoreSummaryImpliesSpec(
+  twostate lemma PreparedSummaryImpliesPreparedSpec(
     raw: Schema.UniqCmdRaw,
     io: BenchIO.IO,
     exit: int,
@@ -782,14 +797,14 @@ module UniqProof {
     new stdoutPart: BW.Bytes,
     new stderrPart: BW.Bytes,
     hadError: bool
-  )
-    requires Core.CoreSummary(
+  , new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(
                raw, io, exit, readResults, stdoutPart, stderrPart, hadError
-             )
-    ensures Spec.Spec(raw, io, exit)
+             , plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    reveal Core.CoreSummary();
-    reveal Spec.Spec();
+    reveal Core.PreparedSummary();
+    reveal Spec.PreparedSpec();
     CommandEq(raw);
     var cmd := Core.Command(raw);
     if cmd.mode == Schema.ModeRun {
@@ -803,5 +818,25 @@ module UniqProof {
         hadError
       );
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(
+    raw: Schema.UniqCmdRaw,
+    io: BenchIO.IO,
+    exit: int,
+    new readResults: seq<BW.IOResult<BW.Bytes>>,
+    new stdoutPart: BW.Bytes,
+    new stderrPart: BW.Bytes,
+    hadError: bool
+  )
+    requires Core.CoreSummary(raw, io, exit, readResults, stdoutPart, stderrPart, hadError)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit, readResults, stdoutPart, stderrPart, hadError,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit, readResults, stdoutPart, stderrPart, hadError,
+      out, diagnostics);
   }
 }

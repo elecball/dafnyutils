@@ -6,6 +6,8 @@ include "Base64Schema.dfy"
 include "Base64Spec.dfy"
 
 module Base64Core {
+  import StreamContract = IOContract
+
   import BenchIO
   import Utf8 = Utf8Semantics
   import BenchWorld
@@ -427,7 +429,7 @@ module Base64Core {
           ] &&
           !ok
         else if !Valid64(c2) then
-          output == [] && !ok
+          output == [ByteChar((DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat)] && !ok
         else if remaining == 3 then
           output == [
             ByteChar(
@@ -455,7 +457,10 @@ module Base64Core {
             ] &&
             !ok
           else
-            output == [] && !ok
+            output == [
+              ByteChar((DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat),
+              ByteChar((((DecodeValue(c1) % 16) * 16 + DecodeValue(c2) / 4) as nat))
+            ] && !ok
   }
 
   ghost predicate FragmentsConcatenate(
@@ -508,6 +513,46 @@ module Base64Core {
       DecodeWitnessRelation(
         data, output, ok, blocks, fragments, cuts
       )
+  }
+
+  ghost predicate CompleteBufferPrefixRelation(
+    source: BenchWorld.Bytes, buffered: BenchWorld.Bytes
+  )
+  {
+    |buffered| <= |source| && buffered == source[..|buffered|] &&
+    |buffered| % Spec.DECODE_INPUT_BUFFER_BYTES == 0 &&
+    |source| - |buffered| < Spec.DECODE_INPUT_BUFFER_BYTES
+  }
+
+  ghost predicate CompletedInputBuffersRelation(
+    data: BenchWorld.Bytes, ignoreGarbage: bool, buffered: BenchWorld.Bytes
+  )
+  {
+    if ignoreGarbage then
+      exists source: BenchWorld.Bytes, indices: seq<nat> ::
+        KeptInputRelation(data, true, source, indices) &&
+        CompleteBufferPrefixRelation(source, buffered)
+    else CompleteBufferPrefixRelation(data, buffered)
+  }
+
+  ghost predicate InterruptedDecodeRelation(
+    data: BenchWorld.Bytes, ignoreGarbage: bool, output: BenchWorld.Bytes, ok: bool
+  )
+  {
+    exists buffered: BenchWorld.Bytes, kept: BenchWorld.Bytes, indices: seq<nat> ::
+      CompletedInputBuffersRelation(data, ignoreGarbage, buffered) &&
+      KeptInputRelation(buffered, false, kept, indices) &&
+      DecodeRelation(kept[..4 * (|kept| / 4)], output, ok)
+  }
+
+  ghost predicate TransformAfterReadRelation(
+    cmd: Schema.Base64Cmd, data: BenchWorld.Bytes, stage: BenchWorld.FileReadStage,
+    output: BenchWorld.Bytes, ok: bool
+  )
+  {
+    if cmd.decode && stage == BenchWorld.ReadFailed then
+      InterruptedDecodeRelation(data, cmd.ignoreGarbage, output, ok)
+    else TransformRelation(cmd, data, output, ok)
   }
 
   ghost predicate TransformRelation(
@@ -888,6 +933,8 @@ module Base64Core {
               [0] + ShiftCuts(tailCuts, width + 1)
             )
   {
+    hide *;
+    reveal WrappedWitnessRelation();
     var tail := text[width..];
     var head := text[..width] + ['\n'];
     var chunks := [head] + tailChunks;
@@ -1001,7 +1048,7 @@ module Base64Core {
           false
         );
       } else if !Valid64(data[2]) {
-        result := TransformResult([], false);
+        result := TransformResult([ByteChar((v0 * 4 + v1 / 16) as nat)], false);
       } else {
         var v2 := DecodeValue(data[2]);
         var out := [
@@ -1013,7 +1060,7 @@ module Base64Core {
         } else if data[3] == '=' {
           result := TransformResult(out, false);
         } else {
-          result := TransformResult([], false);
+          result := TransformResult(out, false);
         }
       }
     }
@@ -1267,16 +1314,19 @@ module Base64Core {
     io: BenchIO.IO,
     data: BenchWorld.Bytes,
     errorOutput: BenchWorld.Bytes,
-    hadReadError: bool
+    hadReadError: bool,
+    stage: BenchWorld.FileReadStage
   )
-    reads io.Footprint()
+    reads io.stdinRegion
   {
     |cmd.inputs| == 1 &&
     match cmd.inputs[0]
     case Stdin =>
-      data == old(io.stdin()) &&
-      errorOutput == [] &&
-      !hadReadError
+      var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+      data == IOContract.ReadResultData(read) &&
+      errorOutput == (if read.Err? then Spec.StdinReadErrorMessage(read.e) else []) &&
+      hadReadError == read.Err? &&
+      stage == (if read.Err? then BenchWorld.ReadFailed else BenchWorld.ReadSucceeded)
     case File(path) =>
       match IOContract.ObservedReadFileResultFields(
         old(io.fs()), old(io.trustedStreams()), path
@@ -1284,31 +1334,31 @@ module Base64Core {
       case Ok(fileData) =>
         data == fileData &&
         errorOutput == [] &&
-        !hadReadError
+        !hadReadError && stage == BenchWorld.ReadSucceeded
       case Err(err) =>
-        data == [] &&
+        data == IOContract.ReadFailureData(err) &&
         errorOutput == Spec.ErrorMessage(path, err) &&
-        hadReadError
+        hadReadError && stage == (if err.ReadFailure? then err.readStage else BenchWorld.ReadSucceeded)
   }
 
-  twostate predicate CoreSummary(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int)
-    reads io.Footprint()
+  twostate predicate PreparedSummary(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
   {
     var cmd := Command(raw);
     if cmd.mode == Schema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.HelpText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == Schema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionText() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.VersionText() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     else if cmd.mode == Schema.ModeInvalidWrap then
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() ==
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr ==
       old(io.stderr()) +
       Spec.InvalidWrapMessage(cmd.invalidWrapValue) &&
       exit == 1
@@ -1316,8 +1366,8 @@ module Base64Core {
       match cmd.mode
       case ModeExtraOperand(operand) =>
         io.stdin() == old(io.stdin()) &&
-        io.stdout() == old(io.stdout()) &&
-        io.stderr() ==
+        plannedStdout == old(io.stdout()) &&
+        plannedStderr ==
         old(io.stderr()) + Spec.ExtraOperandMessage(operand) &&
         exit == 1
       case _ => false
@@ -1325,25 +1375,24 @@ module Base64Core {
       exists data: BenchWorld.Bytes,
         errorOutput: BenchWorld.Bytes,
         hadReadError: bool,
+        stage: BenchWorld.FileReadStage,
         output: BenchWorld.Bytes,
         ok: bool ::
         InputTraceRelation(
-          cmd, io, data, errorOutput, hadReadError
+          cmd, io, data, errorOutput, hadReadError, stage
         ) &&
-        TransformRelation(
-          cmd, data, output, ok
+        TransformAfterReadRelation(
+          cmd, data, stage, output, ok
         ) &&
         io.stdin() ==
         (if cmd.inputs[0].Stdin?
-         then []
+         then IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams()))
          else old(io.stdin())) &&
-        io.stdout() ==
+        plannedStdout ==
         old(io.stdout()) + output &&
-        io.stderr() ==
-        old(io.stderr()) + errorOutput +
-        (if ok
-         then []
-         else Spec.InvalidInputMessage()) &&
+        plannedStderr ==
+        old(io.stderr()) +
+        (if cmd.decode && !ok then Spec.InvalidInputMessage() else errorOutput) &&
         exit ==
         (if hadReadError || !ok
          then 1
@@ -1353,30 +1402,32 @@ module Base64Core {
   method ProcessInput(
     cmd: Schema.Base64Cmd,
     io: BenchIO.IO
-  ) returns (data: BenchWorld.Bytes, errOut: BenchWorld.Bytes, hadReadError: bool)
+  ) returns (data: BenchWorld.Bytes, errOut: BenchWorld.Bytes, hadReadError: bool, stage: BenchWorld.FileReadStage)
     modifies io.stdinRegion
     requires |cmd.inputs| == 1
     ensures io.stdin() ==
-            (if cmd.inputs[0].Stdin? then [] else old(io.stdin()))
+            (if cmd.inputs[0].Stdin? then IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) else old(io.stdin()))
     ensures InputTraceRelation(
-              cmd, io, data, errOut, hadReadError
+              cmd, io, data, errOut, hadReadError, stage
             )
   {
     match cmd.inputs[0]
     case Stdin =>
-      var stdinData :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-      data := stdinData;
-      errOut := [];
-      hadReadError := false;
+      var read := io.ReadStdin();
+      data := IOContract.ReadResultData(read);
+      errOut := if read.Err? then Spec.StdinReadErrorMessage(read.e) else [];
+      hadReadError := read.Err?;
+      stage := if read.Err? then BenchWorld.ReadFailed else BenchWorld.ReadSucceeded;
     case File(path) =>
       var res := io.ReadFile(path);
+      stage := IOContract.ReadResultStage(res);
       match res
       case Ok(chunk) =>
         data := chunk;
         errOut := [];
         hadReadError := false;
       case Err(err) =>
-        data := [];
+        data := IOContract.ReadFailureData(err);
         errOut := Spec.ErrorMessage(path, err);
         hadReadError := true;
   }
@@ -1405,45 +1456,104 @@ module Base64Core {
     }
   }
 
-  method RunCore(raw: Schema.Base64CmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  method CompletedInputBuffersMethod(data: BenchWorld.Bytes, ignoreGarbage: bool)
+    returns (buffered: BenchWorld.Bytes)
+    ensures CompletedInputBuffersRelation(data, ignoreGarbage, buffered)
+  {
+    hide *;
+    reveal Spec.DECODE_INPUT_BUFFER_BYTES;
+    reveal CompletedInputBuffersRelation(), CompleteBufferPrefixRelation();
+    var source := data;
+    ghost var indices: seq<nat> := [];
+    if ignoreGarbage {
+      var filtered, keptIndices := FilterInputMethod(data, true);
+      source := filtered;
+      indices := keptIndices;
+    }
+    var completed := Spec.DECODE_INPUT_BUFFER_BYTES * (|source| / Spec.DECODE_INPUT_BUFFER_BYTES);
+    buffered := source[..completed];
+    assert if ignoreGarbage then KeptInputRelation(data, true, source, indices) else source == data;
+    assert |buffered| == completed;
+    assert |buffered| % Spec.DECODE_INPUT_BUFFER_BYTES == 0;
+    assert |source| - |buffered| < Spec.DECODE_INPUT_BUFFER_BYTES;
+    assert CompleteBufferPrefixRelation(source, buffered);
+    if ignoreGarbage {
+      assert exists input: BenchWorld.Bytes, selection: seq<nat> ::
+        input == source && selection == indices &&
+        KeptInputRelation(data, true, input, selection) &&
+        CompleteBufferPrefixRelation(input, buffered);
+    }
+  }
+
+  method TransformAfterReadMethod(cmd: Schema.Base64Cmd, data: BenchWorld.Bytes, stage: BenchWorld.FileReadStage)
+    returns (result: TransformResult)
+    ensures TransformAfterReadRelation(cmd, data, stage, result.out, result.ok)
+  {
+    if cmd.decode && stage == BenchWorld.ReadFailed {
+      var buffered := CompletedInputBuffersMethod(data, cmd.ignoreGarbage);
+      var kept, indices := FilterInputMethod(buffered, false);
+      var completeQuartets := 4 * (|kept| / 4);
+      var decoded, blocks, fragments, cuts := DecodeRestMethod(kept[..completeQuartets]);
+      result := decoded;
+      assert DecodeRelation(kept[..completeQuartets], result.out, result.ok) by {
+        reveal DecodeRelation();
+      }
+      assert exists input: BenchWorld.Bytes, retained: BenchWorld.Bytes, selection: seq<nat> ::
+        input == buffered && retained == kept && selection == indices &&
+        CompletedInputBuffersRelation(data, cmd.ignoreGarbage, input) &&
+        KeptInputRelation(input, false, retained, selection) &&
+        DecodeRelation(retained[..4 * (|retained| / 4)], result.out, result.ok);
+    } else {
+      result := TransformMethod(cmd, data);
+    }
+  }
+
+  method Prepare(raw: Schema.Base64CmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr)
     decreases *
   {
+    hide *;
+    reveal PreparedSummary();
+    plannedOut := [];
+    plannedErr := [];
+    ghost var initialStdout := io.stdout();
+    ghost var initialStderr := io.stderr();
+
     ghost var preStdin := io.stdin();
-    ghost var preStdout := io.stdout();
-    ghost var preStderr := io.stderr();
+    ghost var preStdout := (initialStdout + plannedOut);
+    ghost var preStderr := (initialStderr + plannedErr);
     var cmd := Command(raw);
     if cmd.mode == Schema.ModeHelp {
-      var _ := io.WriteStdout(Spec.HelpText(), BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + Spec.HelpText();
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stderr() == preStderr;
-      assert CoreSummary(raw, io, exit);
+      assert (initialStderr + plannedErr) == preStderr;
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
       return;
     }
     if cmd.mode == Schema.ModeVersion {
-      var _ := io.WriteStdout(Spec.VersionText(), BenchWorld.ThrowOnError);
+      plannedOut := plannedOut + Spec.VersionText();
       exit := 0;
       assert io.stdin() == preStdin;
-      assert io.stderr() == preStderr;
-      assert CoreSummary(raw, io, exit);
+      assert (initialStderr + plannedErr) == preStderr;
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
       return;
     }
     if cmd.mode == Schema.ModeInvalidWrap {
-      var _ := io.WriteStderr(Spec.InvalidWrapMessage(cmd.invalidWrapValue), BenchWorld.ThrowOnError);
+      plannedErr := plannedErr + Spec.InvalidWrapMessage(cmd.invalidWrapValue);
       exit := 1;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout;
-      assert CoreSummary(raw, io, exit);
+      assert (initialStdout + plannedOut) == preStdout;
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
       return;
     }
     if cmd.mode.ModeExtraOperand? {
-      var _ := io.WriteStderr(Spec.ExtraOperandMessage(cmd.mode.operand), BenchWorld.ThrowOnError);
+      plannedErr := plannedErr + Spec.ExtraOperandMessage(cmd.mode.operand);
       exit := 1;
       assert io.stdin() == preStdin;
-      assert io.stdout() == preStdout;
-      assert CoreSummary(raw, io, exit);
+      assert (initialStdout + plannedOut) == preStdout;
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
       return;
     }
 
@@ -1451,65 +1561,113 @@ module Base64Core {
     var data: BenchWorld.Bytes;
     var errOut: BenchWorld.Bytes;
     var hadReadError: bool;
+    var stage: BenchWorld.FileReadStage;
     assert |cmd.inputs| == 1;
-    data, errOut, hadReadError := ProcessInput(cmd, io);
-    var transform := TransformMethod(cmd, data);
-    var _ := io.WriteStdout(transform.out, BenchWorld.ThrowOnError);
-    assert io.stdout() == preStdout + transform.out;
-    if |errOut| > 0 {
-      var _ := io.WriteStderr(errOut, BenchWorld.ThrowOnError);
+    data, errOut, hadReadError, stage := ProcessInput(cmd, io);
+    var transform := TransformAfterReadMethod(cmd, data, stage);
+    plannedOut := plannedOut + transform.out;
+    assert (initialStdout + plannedOut) == preStdout + transform.out;
+    if cmd.decode && !transform.ok {
+      plannedErr := plannedErr + Spec.InvalidInputMessage();
     } else {
-      assert io.stderr() == preStderr + errOut;
-    }
-    if !transform.ok {
-      var _ := io.WriteStderr(Spec.InvalidInputMessage(), BenchWorld.ThrowOnError);
+      plannedErr := plannedErr + errOut;
     }
     exit := if hadReadError || !transform.ok then 1 else 0;
     assert InputTraceRelation(
-        cmd, io, data, errOut, hadReadError
+        cmd, io, data, errOut, hadReadError, stage
       );
     assert io.stdin() ==
-           (if cmd.inputs[0].Stdin? then [] else preStdin);
-    assert io.stdout() == preStdout + transform.out;
-    assert io.stderr() ==
-           preStderr + errOut +
-           (if transform.ok
-            then []
-            else Spec.InvalidInputMessage());
-    assert CoreSummary(raw, io, exit) by {
-      reveal CoreSummary();
+           (if cmd.inputs[0].Stdin? then IOContract.ObservedReadStdinRemainingFields(preStdin, old(io.trustedStreams())) else preStdin);
+    assert (initialStdout + plannedOut) == preStdout + transform.out;
+    assert (initialStderr + plannedErr) ==
+           preStderr + (if cmd.decode && !transform.ok then Spec.InvalidInputMessage() else errOut);
+    assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr) by {
+      reveal PreparedSummary();
       assert exists traceData: BenchWorld.Bytes,
           errorOutput: BenchWorld.Bytes,
           traceHadReadError: bool,
+          traceStage: BenchWorld.FileReadStage,
           output: BenchWorld.Bytes,
           ok: bool ::
           traceData == data &&
           errorOutput == errOut &&
           traceHadReadError == hadReadError &&
+          traceStage == stage &&
           output == transform.out &&
           ok == transform.ok &&
           InputTraceRelation(
-            cmd, io, traceData, errorOutput, traceHadReadError
+            cmd, io, traceData, errorOutput, traceHadReadError, traceStage
           ) &&
-          TransformRelation(
-            cmd, traceData, output, ok
+          TransformAfterReadRelation(
+            cmd, traceData, traceStage, output, ok
           ) &&
           io.stdin() ==
           (if cmd.inputs[0].Stdin?
-           then []
+           then IOContract.ObservedReadStdinRemainingFields(preStdin, old(io.trustedStreams()))
            else preStdin) &&
-          io.stdout() ==
+          (initialStdout + plannedOut) ==
           preStdout + output &&
-          io.stderr() ==
-          preStderr + errorOutput +
-          (if ok
-           then []
-           else Spec.InvalidInputMessage()) &&
+          (initialStderr + plannedErr) ==
+          preStderr + (if cmd.decode && !ok then Spec.InvalidInputMessage() else errorOutput) &&
           exit ==
           (if traceHadReadError ||
               !ok
            then 1
            else 0);
     }
+  }
+
+  twostate predicate CoreSummary(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: Schema.Base64CmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

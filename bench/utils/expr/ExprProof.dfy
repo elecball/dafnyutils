@@ -640,10 +640,22 @@ module ExprProof {
     }
   }
 
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.ExprCmdRaw, io: BenchIO.IO, exit: int, new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
+  {
+    EvaluateRefinement(raw.args);
+  }
+
   twostate lemma CoreSummaryImpliesSpec(raw: Schema.ExprCmdRaw, io: BenchIO.IO, exit: int)
     requires Core.CoreSummary(raw, io, exit)
     ensures Spec.Spec(raw, io, exit)
   {
-    EvaluateRefinement(raw.args);
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

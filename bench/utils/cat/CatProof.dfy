@@ -5,6 +5,8 @@ include "CatCore.dfy"
 include "CatSpec.dfy"
 
 module CatProofBridge {
+  import BenchWorld
+
   import Result = Results
   import BenchIO
   import BW = BenchWorld
@@ -70,6 +72,8 @@ module CatProofBridge {
 }
 
 module CatProof {
+  import IOContract
+  import BenchWorld
   import Result = Results
   import BenchIO
   import BW = BenchWorld
@@ -447,11 +451,7 @@ module CatProof {
                i,
                observation
              )
-    ensures Spec.ReadResultRelation(
-              cmd,
-              preFs, preStreams,
-              preStdin,
-              i,
+    ensures Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, Core.ExpectedStdinAt(cmd, preStdin, i, preStreams), i,
               observation.result
             )
     ensures Core.InputDataPiece(observation) ==
@@ -462,7 +462,7 @@ module CatProof {
             Spec.InputFailed(cmd.inputs[i], observation.result)
   {
     reveal Core.InputObservationRelation();
-    reveal Spec.ReadResultRelation();
+    reveal Spec.InputReadOutcomeRelation();
     reveal Core.ExpectedStdinAt();
     reveal Core.InputDataPiece();
     reveal Spec.InputDataPiece();
@@ -520,11 +520,7 @@ module CatProof {
     assert |Core.ObservationErrorFragments(observations)| ==
            |cmd.inputs|;
     assert forall i: nat | i < |cmd.inputs| ::
-        Spec.ReadResultRelation(
-          cmd,
-          preFs, preStreams,
-          preStdin,
-          i,
+        Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, Core.ExpectedStdinAt(cmd, preStdin, i, preStreams), i,
           ObservationResults(observations)[i]
         ) &&
         Core.ObservationDataFragments(observations)[i] ==
@@ -535,11 +531,7 @@ module CatProof {
           ObservationResults(observations)[i]
         ) by {
       forall i: nat | i < |cmd.inputs|
-        ensures Spec.ReadResultRelation(
-                  cmd,
-                  preFs, preStreams,
-                  preStdin,
-                  i,
+        ensures Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, Core.ExpectedStdinAt(cmd, preStdin, i, preStreams), i,
                   ObservationResults(observations)[i]
                 ) &&
                 Core.ObservationDataFragments(observations)[i] ==
@@ -598,12 +590,7 @@ module CatProof {
                Core.InputErrorPiece(observations[i]);
       }
     }
-    reveal Core.ExpectedStdinAt();
-    assert currentStdin ==
-           (if exists i: nat ::
-                 i < |cmd.inputs| && cmd.inputs[i] == Schema.Stdin
-            then []
-            else preStdin);
+    assert currentStdin == Core.ExpectedStdinAt(cmd, preStdin, |cmd.inputs|, preStreams);
     assert hadError ==
            (exists i: nat ::
               i < |cmd.inputs| &&
@@ -645,16 +632,22 @@ module CatProof {
         assert Core.HasFailedObservation(observations);
       }
     }
+    var states := seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.ExpectedStdinAt(cmd, preStdin, i, preStreams));
+    forall i: nat | i < |cmd.inputs|
+      ensures states[i + 1] == (if cmd.inputs[i].Stdin? then
+        IOContract.ObservedReadStdinRemainingFields(states[i], preStreams) else states[i])
+    { Core.ExpectedStdinAtExtend(cmd, preStdin, i, preStreams); }
+    assert Spec.StdinTraceRelation(cmd, preStdin, currentStdin, preStreams, states);
   }
 
   twostate lemma {:isolate_assertions}
-    CoreSummaryImpliesSpec(
+    PreparedSummaryImpliesPreparedSpec(
     raw: Schema.CatCmdRaw,
     io: BenchIO.IO,
     exit: int
-  )
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  , new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     var trace: Core.CoreWitness :|
       Core.CoreWitnessRelation(
@@ -662,13 +655,13 @@ module CatProof {
         io,
         exit,
         trace
-      );
+      , plannedStdout, plannedStderr);
     Bridge.CommandEq(raw);
     var cmd := Model.Command(raw);
     if cmd.mode == Schema.ModeHelp {
-      assert Spec.Spec(raw, io, exit);
+      assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr);
     } else if cmd.mode == Schema.ModeVersion {
-      assert Spec.Spec(raw, io, exit);
+      assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr);
     } else {
       match trace
       case NonRunWitness =>
@@ -707,8 +700,8 @@ module CatProof {
           ) by {
           reveal Spec.RunRelation();
         }
-        assert Spec.Spec(raw, io, exit) by {
-          reveal Spec.Spec();
+        assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr) by {
+          reveal Spec.PreparedSpec();
         }
     }
   }
@@ -918,13 +911,20 @@ module CatProof {
         errorCuts2
       );
     reveal Spec.InputTraceRelation();
+    var states1: seq<BW.Bytes> :| Spec.StdinTraceRelation(cmd, preStdin, postStdin1, preStreams, states1) &&
+      forall i: nat | i < |cmd.inputs| :: Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, states1[i], i, readResults1[i]);
+    var states2: seq<BW.Bytes> :| Spec.StdinTraceRelation(cmd, preStdin, postStdin2, preStreams, states2) &&
+      forall i: nat | i < |cmd.inputs| :: Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, states2[i], i, readResults2[i]);
+    forall i: nat | i <= |cmd.inputs|
+      ensures states1[i] == states2[i]
+    { Spec.StdinStatePrefixFunctional(cmd, preStdin, preStreams, states1, states2, i); }
     assert |readResults1| == |readResults2|;
     assert forall i: nat | i < |readResults1| ::
         readResults1[i] == readResults2[i] by {
       forall i: nat | i < |readResults1|
         ensures readResults1[i] == readResults2[i]
       {
-        reveal Spec.ReadResultRelation();
+        reveal Spec.InputReadOutcomeRelation();
       }
     }
     assert readResults1 == readResults2;
@@ -1136,6 +1136,111 @@ module CatProof {
     RenderRelationFunctional(cmd, data1, output1, output2);
   }
 
+  twostate lemma {:isolate_assertions} PreparedRunObservationFunctional(
+    raw: Schema.CatCmdRaw,
+    io1: BenchIO.IO,
+    io2: BenchIO.IO,
+    exit1: int,
+    exit2: int
+  , new plannedOut1: BW.Bytes, new plannedErr1: BW.Bytes,
+    new plannedOut2: BW.Bytes, new plannedErr2: BW.Bytes)
+    requires old(io1.stdin()) == old(io2.stdin())
+    requires old(io1.stdout()) == old(io2.stdout())
+    requires old(io1.stderr()) == old(io2.stderr())
+    requires old(io1.fs()) == old(io2.fs())
+    requires old(io1.trustedStreams()) == old(io2.trustedStreams())
+    requires Spec.PreparedSpec(raw, io1, exit1, plannedOut1, plannedErr1)
+    requires Spec.PreparedSpec(raw, io2, exit2, plannedOut2, plannedErr2)
+    ensures io1.stdin() == io2.stdin()
+    ensures plannedOut1 ==
+            plannedOut2
+    ensures plannedErr1 ==
+            plannedErr2
+    ensures exit1 == exit2
+  {
+    var cmd := Spec.Command(raw);
+    if cmd.mode == Schema.ModeHelp {
+    } else if cmd.mode == Schema.ModeVersion {
+    } else {
+      assert exists output: BW.Bytes, errors: BW.Bytes ::
+          Spec.RunRelation(
+            cmd,
+            old(io1.fs()),
+            old(io1.trustedStreams()),
+            old(io1.stdin()),
+            io1.stdin(),
+            output,
+            errors,
+            exit1
+          ) &&
+          plannedOut1 == output &&
+          plannedErr1 == errors by {
+        reveal Spec.PreparedSpec();
+        reveal Spec.RunRelation();
+      }
+      var output1: BW.Bytes, errors1: BW.Bytes :|
+        Spec.RunRelation(
+          cmd,
+          old(io1.fs()),
+          old(io1.trustedStreams()),
+          old(io1.stdin()),
+          io1.stdin(),
+          output1,
+          errors1,
+          exit1
+        ) &&
+        plannedOut1 == output1 &&
+        plannedErr1 == errors1;
+      assert exists output: BW.Bytes, errors: BW.Bytes ::
+          Spec.RunRelation(
+            cmd,
+            old(io2.fs()),
+            old(io2.trustedStreams()),
+            old(io2.stdin()),
+            io2.stdin(),
+            output,
+            errors,
+            exit2
+          ) &&
+          plannedOut2 == output &&
+          plannedErr2 == errors by {
+        reveal Spec.PreparedSpec();
+        reveal Spec.RunRelation();
+      }
+      var output2: BW.Bytes, errors2: BW.Bytes :|
+        Spec.RunRelation(
+          cmd,
+          old(io2.fs()),
+          old(io2.trustedStreams()),
+          old(io2.stdin()),
+          io2.stdin(),
+          output2,
+          errors2,
+          exit2
+        ) &&
+        plannedOut2 == output2 &&
+        plannedErr2 == errors2;
+      RunRelationFunctional(
+        cmd,
+        old(io1.fs()),
+        old(io1.trustedStreams()),
+        old(io1.stdin()),
+        io1.stdin(),
+        output1,
+        errors1,
+        exit1,
+        io2.stdin(),
+        output2,
+        errors2,
+        exit2
+      );
+      assert plannedOut1 == output1;
+      assert plannedOut2 == output2;
+      assert plannedErr1 == errors1;
+      assert plannedErr2 == errors2;
+    }
+  }
+
   twostate lemma {:isolate_assertions} RunObservationFunctional(
     raw: Schema.CatCmdRaw,
     io1: BenchIO.IO,
@@ -1157,86 +1262,27 @@ module CatProof {
             io2.stderr()[|old(io2.stderr())|..]
     ensures exit1 == exit2
   {
-    var cmd := Spec.Command(raw);
-    if cmd.mode == Schema.ModeHelp {
-    } else if cmd.mode == Schema.ModeVersion {
-    } else {
-      assert exists output: BW.Bytes, errors: BW.Bytes ::
-          Spec.RunRelation(
-            cmd,
-            old(io1.fs()),
-            old(io1.trustedStreams()),
-            old(io1.stdin()),
-            io1.stdin(),
-            output,
-            errors,
-            exit1
-          ) &&
-          io1.stdout() == old(io1.stdout()) + output &&
-          io1.stderr() == old(io1.stderr()) + errors by {
-        reveal Spec.Spec();
-        reveal Spec.RunRelation();
-      }
-      var output1: BW.Bytes, errors1: BW.Bytes :|
-        Spec.RunRelation(
-          cmd,
-          old(io1.fs()),
-          old(io1.trustedStreams()),
-          old(io1.stdin()),
-          io1.stdin(),
-          output1,
-          errors1,
-          exit1
-        ) &&
-        io1.stdout() == old(io1.stdout()) + output1 &&
-        io1.stderr() == old(io1.stderr()) + errors1;
-      assert exists output: BW.Bytes, errors: BW.Bytes ::
-          Spec.RunRelation(
-            cmd,
-            old(io2.fs()),
-            old(io2.trustedStreams()),
-            old(io2.stdin()),
-            io2.stdin(),
-            output,
-            errors,
-            exit2
-          ) &&
-          io2.stdout() == old(io2.stdout()) + output &&
-          io2.stderr() == old(io2.stderr()) + errors by {
-        reveal Spec.Spec();
-        reveal Spec.RunRelation();
-      }
-      var output2: BW.Bytes, errors2: BW.Bytes :|
-        Spec.RunRelation(
-          cmd,
-          old(io2.fs()),
-          old(io2.trustedStreams()),
-          old(io2.stdin()),
-          io2.stdin(),
-          output2,
-          errors2,
-          exit2
-        ) &&
-        io2.stdout() == old(io2.stdout()) + output2 &&
-        io2.stderr() == old(io2.stderr()) + errors2;
-      RunRelationFunctional(
-        cmd,
-        old(io1.fs()),
-        old(io1.trustedStreams()),
-        old(io1.stdin()),
-        io1.stdin(),
-        output1,
-        errors1,
-        exit1,
-        io2.stdin(),
-        output2,
-        errors2,
-        exit2
-      );
-      assert io1.stdout()[|old(io1.stdout())|..] == output1;
-      assert io2.stdout()[|old(io2.stdout())|..] == output2;
-      assert io1.stderr()[|old(io1.stderr())|..] == errors1;
-      assert io2.stderr()[|old(io2.stderr())|..] == errors2;
-    }
+    var out1: BW.Bytes, diagnostics1: BW.Bytes, normal1: int :|
+      Spec.PreparedSpec(raw, io1, normal1, out1, diagnostics1) &&
+      Spec.Emission(raw, io1, out1, diagnostics1, normal1, exit1);
+    var out2: BW.Bytes, diagnostics2: BW.Bytes, normal2: int :|
+      Spec.PreparedSpec(raw, io2, normal2, out2, diagnostics2) &&
+      Spec.Emission(raw, io2, out2, diagnostics2, normal2, exit2);
+    PreparedRunObservationFunctional(raw, io1, io2, normal1, normal2,
+      out1, diagnostics1,
+      out2, diagnostics2);
+    assert out1 == out2 && diagnostics1 == diagnostics2 && normal1 == normal2;
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.CatCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        out, diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      out, diagnostics);
   }
 }

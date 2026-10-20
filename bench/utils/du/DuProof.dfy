@@ -4,6 +4,9 @@ include "DuCore.dfy"
 include "DuSpec.dfy"
 
 module DuProof {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import BenchWorld
@@ -230,6 +233,7 @@ module DuProof {
       ghost var errorPiece := Spec.ErrorPieceSpec(cmd.operands[i], result);
 
       observations := observations[i := result];
+      assert forall j: nat :: j in observations.Keys <==> j < i + 1 by { hide *; }
       outputPieces := outputPieces + [outputPiece];
       errorPieces := errorPieces + [errorPiece];
       outputCuts := outputCuts + [|Core.PrefixOutputCore(cmd, preFs, preStreams, i + 1)|];
@@ -308,11 +312,12 @@ module DuProof {
               i < |cmd.operands| && Core.ReadResultCore(cmd, preFs, preStreams, i).Err?);
   }
 
-  twostate lemma CoreSummaryImpliesSpec(raw: Schema.DuCmdRaw, io: BenchIO.IO, exit: int)
-    requires Core.CoreSummary(raw, io, exit)
-    ensures Spec.Spec(raw, io, exit)
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.DuCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    var cmd := Schema.Command(raw);
+
+    reveal Core.PreparedSummary();    var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeRun {
       ghost var observations, outputPieces, outputCuts, errorPieces, errorCuts :=
         BuildRunWitness(cmd, old(io.fs()), old(io.trustedStreams()));
@@ -327,5 +332,17 @@ module DuProof {
         exit
       );
     }
+  }
+
+  twostate lemma CoreSummaryImpliesSpec(raw: Schema.DuCmdRaw, io: BenchIO.IO, exit: int)
+    requires Core.CoreSummary(raw, io, exit)
+    ensures Spec.Spec(raw, io, exit)
+  {
+    var output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit, output, diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      output, diagnostics);
   }
 }

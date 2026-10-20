@@ -4,6 +4,8 @@ include "PrintfCore.dfy"
 include "PrintfSpec.dfy"
 
 module PrintfProof {
+  import BenchWorld
+
   import BenchIO
   import BW = BenchWorld
   import Schema = PrintfSchema
@@ -151,10 +153,22 @@ module PrintfProof {
     }
   }
 
+  twostate lemma PreparedSummaryImpliesPreparedSpec(raw: Schema.PrintfCmdRaw, io: BenchIO.IO, exit: int, new plannedStdout: BenchWorld.Bytes, new plannedStderr: BenchWorld.Bytes)
+    requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
+    ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
+  {
+    EvaluateRefines(raw);
+  }
+
   twostate lemma CoreSummaryImpliesSpec(raw: Schema.PrintfCmdRaw, io: BenchIO.IO, exit: int)
     requires Core.CoreSummary(raw, io, exit)
     ensures Spec.Spec(raw, io, exit)
   {
-    EvaluateRefines(raw);
+    var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
+      Core.PreparedSummary(raw, io, normalExit,
+        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+    PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
+      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

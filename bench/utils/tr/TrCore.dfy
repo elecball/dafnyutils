@@ -5,11 +5,15 @@ include "TrSchema.dfy"
 include "TrSpec.dfy"
 
 module TrCore {
+  import StreamWorld = BenchWorld
+  import StreamContract = IOContract
+
   import Result = Results
   import BenchIO
   import BenchWorld
   import IOContract
   import TrSchema
+  import Schema = TrSchema
   import Spec = TrSpec
   import Utf8 = Utf8Semantics
 
@@ -459,100 +463,169 @@ module TrCore {
     }
   }
 
-  twostate predicate CoreSummary(raw: TrSchema.TrCmdRaw, io: BenchIO.IO, exit: int)
+  twostate predicate PreparedSummary(raw: TrSchema.TrCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     reads io.Footprint()
   {
     var cmd := Command(raw);
     match cmd.mode
     case ModeHelp =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.HelpTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     case ModeVersion =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
-      io.stderr() == old(io.stderr()) &&
+      plannedStdout == old(io.stdout()) + Spec.VersionTextSpec() &&
+      plannedStderr == old(io.stderr()) &&
       exit == 0
     case ModeMissingOperand(message) =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + message &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + message &&
       exit == 1
     case ModeExtraOperand(operand) =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) +
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) +
         Spec.ExtraOperandMessageSpec(operand, |raw.operands| == 2) &&
       exit == 1
     case ModeUnsupportedSet(operand) =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + cmd.warnings +
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + cmd.warnings +
         Spec.UnsupportedSetMessageSpec(operand) &&
       exit == 1
     case ModeEmptySet2 =>
       io.stdin() == old(io.stdin()) &&
-      io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + Spec.EmptySet2MessageSpec() &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + Spec.EmptySet2MessageSpec() &&
       exit == 1
     case ModeRun =>
-      io.stdin() == IOContract.AfterReadStdinFields(old(io.stdin())) &&
-      io.stdout() == old(io.stdout()) + RenderData(cmd, old(io.stdin())) &&
-      io.stderr() == old(io.stderr()) + cmd.warnings &&
-      exit == 0
+      var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+      var input := IOContract.ReadResultData(read);
+      io.stdin() == IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) &&
+      plannedStdout == old(io.stdout()) + RenderData(cmd, input) &&
+      plannedStderr == old(io.stderr()) + cmd.warnings +
+        (if read.Ok? then [] else Spec.ReadError(IOContract.ResultErrno(read))) &&
+      exit == (if read.Ok? then 0 else 1)
   }
 
-  method RunCore(raw: TrSchema.TrCmdRaw, io: BenchIO.IO) returns (exit: int)
-    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
-    ensures CoreSummary(raw, io, exit)
+  twostate predicate CoreSummary(raw: Schema.TrCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.Footprint()
+  {
+    exists output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit, old(io.stdout()) + output, old(io.stderr()) + diagnostics) &&
+      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                          io.trustedStreams(), output, diagnostics, normalExit, exit)
+  }
+
+  method Prepare(raw: TrSchema.TrCmdRaw, io: BenchIO.IO) returns (exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedStdout, old(io.stderr()) + plannedStderr)
     decreases *
   {
+    hide *;
+    reveal PreparedSummary();
+    ghost var emissionBeforeOut := io.stdout();
+    ghost var emissionBeforeErr := io.stderr();
+    plannedStdout := [];
+    plannedStderr := [];
     ghost var preStdin := io.stdin();
     var cmd := Command(raw);
 
     match cmd.mode {
       case ModeHelp =>
-        var _ := io.WriteStdout(Spec.HelpTextSpec(), BenchWorld.ThrowOnError);
+        plannedStdout := plannedStdout + (Spec.HelpTextSpec());
         exit := 0;
-        assert CoreSummary(raw, io, exit);
+        assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
         return;
       case ModeVersion =>
-        var _ := io.WriteStdout(Spec.VersionTextSpec(), BenchWorld.ThrowOnError);
+        plannedStdout := plannedStdout + (Spec.VersionTextSpec());
         exit := 0;
-        assert CoreSummary(raw, io, exit);
+        assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
         return;
       case ModeMissingOperand(message) =>
-        var _ := io.WriteStderr(message, BenchWorld.ThrowOnError);
+        plannedStderr := plannedStderr + (message);
         exit := 1;
-        assert CoreSummary(raw, io, exit);
+        assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
         return;
       case ModeExtraOperand(operand) =>
-        var _ := io.WriteStderr(Spec.ExtraOperandMessageSpec(operand, |raw.operands| == 2), BenchWorld.ThrowOnError);
+        plannedStderr := plannedStderr + (Spec.ExtraOperandMessageSpec(operand, |raw.operands| == 2));
         exit := 1;
-        assert CoreSummary(raw, io, exit);
+        assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
         return;
       case ModeUnsupportedSet(operand) =>
-        var _ := io.WriteStderr(cmd.warnings, BenchWorld.ThrowOnError);
-        var _ := io.WriteStderr(Spec.UnsupportedSetMessageSpec(operand), BenchWorld.ThrowOnError);
+        plannedStderr := plannedStderr + (cmd.warnings);
+        plannedStderr := plannedStderr + (Spec.UnsupportedSetMessageSpec(operand));
         exit := 1;
-        assert CoreSummary(raw, io, exit);
+        assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
         return;
       case ModeEmptySet2 =>
-        var _ := io.WriteStderr(Spec.EmptySet2MessageSpec(), BenchWorld.ThrowOnError);
+        plannedStderr := plannedStderr + (Spec.EmptySet2MessageSpec());
         exit := 1;
-        assert CoreSummary(raw, io, exit);
+        assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
         return;
       case ModeRun =>
-        var _ := io.WriteStderr(cmd.warnings, BenchWorld.ThrowOnError);
-        var data :- assert io.ReadStdin(BenchWorld.ThrowOnError);
-        assert IOContract.ReadStdinAllFields(preStdin, io.stdin(), data);
-        assert data == preStdin;
-        assert io.stdin() == IOContract.AfterReadStdinFields(preStdin);
+        plannedStderr := plannedStderr + (cmd.warnings);
+        var read := io.ReadStdin();
+        var data := IOContract.ReadResultData(read);
         var out := RenderData(cmd, data);
-        var _ := io.WriteStdout(out, BenchWorld.ThrowOnError);
-        exit := 0;
+        plannedStdout := plannedStdout + (out);
+        if read.Err? {
+          var reason := io.GetCLocaleErrnoText(IOContract.ResultErrno(read));
+          plannedStderr := plannedStderr + (Spec.ReadErrorText(reason));
+          assert Spec.ReadErrorText(reason) == Spec.ReadError(IOContract.ResultErrno(read)) by {
+            reveal Spec.ReadError();
+          }
+        }
+        exit := if read.Ok? then 0 else 1;
     }
-    assert CoreSummary(raw, io, exit);
+    assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
+  }
+
+
+  method Flush(output: StreamWorld.Bytes, diagnostics: StreamWorld.Bytes,
+               normalExit: int, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit)
+  {
+    var committed: nat := 0;
+    var outErr := 0;
+    if |output| != 0 {
+      var result := io.WriteStdout(output);
+      committed := StreamContract.WriteResultCommitted(result);
+      outErr := StreamContract.ResultErrno(result);
+    }
+    var finalDiagnostics := diagnostics;
+    if outErr != 0 {
+      var reason := io.GetCLocaleErrnoText(outErr);
+      finalDiagnostics := diagnostics + (if normalExit != 0 then
+        Spec.WriteErrorAfterReadFailure() else Spec.WriteErrorText(reason));
+    }
+    assert finalDiagnostics == diagnostics + (if outErr == 0 then []
+      else if normalExit != 0 then Spec.WriteErrorAfterReadFailure()
+      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errCommitted: nat := 0;
+    var errErr := 0;
+    if |finalDiagnostics| != 0 {
+      var result := io.WriteStderr(finalDiagnostics);
+      errCommitted := StreamContract.WriteResultCommitted(result);
+      errErr := StreamContract.ResultErrno(result);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+        finalDiagnostics, errCommitted, errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+    assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+  }
+
+  method RunCore(raw: Schema.TrCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, output, diagnostics := Prepare(raw, io);
+    exit := Flush(output, diagnostics, normalExit, io);
   }
 }
