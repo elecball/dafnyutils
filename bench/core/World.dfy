@@ -14,6 +14,7 @@ module BenchWorld {
   // observable to utility code.
   datatype TrustedStreamRequest =
     | StreamReadFile(preFs: FileSystem, path: Path)
+    | StreamOpenReadFile(preFs: FileSystem, path: Path)
     | StreamReadStdin(preStdin: Bytes)
     | StreamWriteStdout(preStdout: Bytes, requested: Bytes)
     | StreamWriteStderr(preStderr: Bytes, requested: Bytes)
@@ -131,13 +132,15 @@ module BenchWorld {
         preFs: FileSystem,
         source: Path,
         hardLinkTarget: Path,
-        now: int
+        now: int,
+        followSource: bool
       )
     | FilesystemUnlink(preFs: FileSystem, path: Path, now: int)
     | FilesystemTruncate(preFs: FileSystem, path: Path, size: nat, now: int)
     | FilesystemWrite(
         preFs: FileSystem, path: Path, data: Bytes, now: int,
-        props: map<string, string>, credentials: ProcessCredentials
+        props: map<string, string>, credentials: ProcessCredentials,
+        requestedCreateMode: bv32
       )
     | FilesystemAppend(
         preFs: FileSystem, path: Path, data: Bytes, now: int,
@@ -567,7 +570,7 @@ module BenchWorld {
     atimeSec: int, atimeNsec: int, mtimeSec: int, mtimeNsec: int,
     isDir: bool, isSymlink: bool, device: int, inode: int, linkCount: int
   )
-  datatype DirectoryRead = DirectoryEnd | DirectoryItem(name: string, kind: DirectoryEntryKind)
+  datatype DirectoryRead = DirectoryEnd | DirectoryItem(name: string, kind: DirectoryEntryKind, inode: int)
 
   type IOResult<T> = R.Result<T, IOError>
 

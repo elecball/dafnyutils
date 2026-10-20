@@ -452,38 +452,17 @@ module MvSpec {
 
   function DigitCharSpec(d: nat): char
     requires d < 10
-  {
-    if d == 0 then '0'
-    else if d == 1 then '1'
-    else if d == 2 then '2'
-    else if d == 3 then '3'
-    else if d == 4 then '4'
-    else if d == 5 then '5'
-    else if d == 6 then '6'
-    else if d == 7 then '7'
-    else if d == 8 then '8'
-    else '9'
-  }
+  { Basename.DigitCharSpec(d) }
 
   function DecimalNatSpec(n: nat): string
-    decreases n
-  {
-    if n < 10 then
-      [DigitCharSpec(n)]
-    else
-      DecimalNatSpec(n / 10) + [DigitCharSpec(n % 10)]
-  }
+  { Basename.DecimalNatSpec(n) }
 
   function NumberedBackupPathSpec(target: string, index: nat): string
     requires index >= 1
-  {
-    target + ".~" + DecimalNatSpec(index) + "~"
-  }
+  { Basename.NumberedBackupPathSpec(target,index) }
 
   function SimpleBackupPathSpec(target: string, suffix: string): string
-  {
-    target + suffix
-  }
+  { Basename.SimpleBackupPathSpec(target,suffix) }
 
   function SourceNewerSpec(srcSec: int, srcNsec: int, dstSec: int, dstNsec: int): bool
   {

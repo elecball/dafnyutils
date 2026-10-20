@@ -513,6 +513,33 @@ module IOContract {
             )
   }
 
+  // Expose one successful symlink step in a single filesystem before comparing
+  // two filesystems. This keeps recursive-call obligations local.
+  lemma ResolveRawNextSymlinkStepFields(
+    fs: FileSystem, segs: seq<string>, i: nat, current: Path,
+    seen: set<Path>, fuel: nat, followTerminalSymlink: bool,
+    requireDirectory: bool, link: Path, target: Path
+  )
+    requires i < |segs|
+    requires segs[i] != "." && segs[i] != ".."
+    requires fuel > 0 && link != ""
+    requires FsContainsPath(fs, AppendPath(current, segs[i]))
+    requires FsNodeAt(fs, AppendPath(current, segs[i])).Symlink?
+    requires FsNodeAt(fs, AppendPath(current, segs[i])).target == link
+    requires DirectNoFollowResultFields(fs, AppendPath(current, segs[i])).Ok?
+    requires i + 1 < |segs| || followTerminalSymlink || requireDirectory
+    requires ResolveRawSymlinkSegmentsFields(
+      fs, segs, i, current, seen, fuel, followTerminalSymlink, false,
+      requireDirectory) == Result.Ok(target)
+    ensures ResolveRawSymlinkSegmentsFields(
+      fs, RawPathSegmentsFields(link) + segs[i + 1..], 0,
+      if IsAbsolutePath(link) then "/" else ParentPath(AppendPath(current, segs[i])),
+      seen + {AppendPath(current, segs[i])}, fuel - 1, followTerminalSymlink, false,
+      requireDirectory || (i + 1 == |segs| && HasTrailingSlash(link))) == Result.Ok(target)
+  {
+    reveal ResolveRawSymlinkSegmentsFields();
+  }
+
   lemma ResolveRawSuccessfulTargetsEqualExceptModeFieldsInternal(
     before: FileSystem,
     after: FileSystem,
@@ -656,17 +683,34 @@ module IOContract {
           assert beforeLink != "";
           assert fuel > 0;
           var remaining := segs[i + 1..];
+          ResolveRawNextSymlinkStepFields(
+            before, segs, i, current, seen, fuel,
+            followTerminalSymlink, requireDirectory, beforeLink, beforeTarget);
+          ResolveRawNextSymlinkStepFields(
+            after, segs, i, current, seen, fuel,
+            followTerminalSymlink, requireDirectory, beforeLink, afterTarget);
+          var restarted := RawPathSegmentsFields(beforeLink) + remaining;
+          var restartCurrent := if IsAbsolutePath(beforeLink) then "/" else ParentPath(next);
+          var restartDirectory := requireDirectory ||
+            (|remaining| == 0 && HasTrailingSlash(beforeLink));
+          assert (|remaining| == 0) == (i + 1 == |segs|);
+          hide *;
+          assert ResolveRawSymlinkSegmentsFields(
+            before, restarted, 0, restartCurrent, seen + {next}, fuel - 1,
+            followTerminalSymlink, false, restartDirectory) == Result.Ok(beforeTarget);
+          assert ResolveRawSymlinkSegmentsFields(
+            after, restarted, 0, restartCurrent, seen + {next}, fuel - 1,
+            followTerminalSymlink, false, restartDirectory) == Result.Ok(afterTarget);
           ResolveRawSuccessfulTargetsEqualExceptModeFieldsInternal(
             before,
             after,
-            RawPathSegmentsFields(beforeLink) + remaining,
+            restarted,
             0,
-            if IsAbsolutePath(beforeLink) then "/" else ParentPath(next),
+            restartCurrent,
             seen + {next},
             fuel - 1,
             followTerminalSymlink,
-            requireDirectory ||
-            (|remaining| == 0 && HasTrailingSlash(beforeLink)),
+            restartDirectory,
             beforeTarget,
             afterTarget
           );
@@ -1008,6 +1052,40 @@ module IOContract {
        case Ok(contents) =>
          BytesPrefix(data, contents) && (err == 0 ==> data == contents)
        case Err(_) => data == [] && err != 0)
+    case _ => false
+  }
+
+  // A read-only open followed by close observes access failures without reading data.
+  ghost function ObservedOpenReadFileResultFields(
+    fs: FileSystem,
+    observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    path: Path
+  ): IOResult<Bytes>
+  {
+    match observations(StreamOpenReadFile(fs, path))
+    case StreamReadFileResult(data, err, stage) =>
+      FileReadResultFromOutcome(data, err, stage, CLocaleErrnoTextResult(err))
+    case _ => Result.Err(NoSuchFile)
+  }
+
+  ghost predicate TrustedOpenReadFileContractFields(
+    observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    fs: FileSystem,
+    path: Path,
+    data: Bytes,
+    err: int,
+    stage: FileReadStage
+  )
+  {
+    match observations(StreamOpenReadFile(fs, path))
+    case StreamReadFileResult(observedData, observedErr, observedStage) =>
+      data == observedData && err == observedErr && stage == observedStage &&
+      data == [] && 0 <= err && (err == 0 <==> stage == ReadSucceeded) &&
+      stage in {ReadSucceeded, OpenFailed, CloseFailed} &&
+      (stage != OpenFailed ==>
+        match ResolvePathForMetadataFields(fs, path, true)
+        case Err(_) => false
+        case Ok(target) => FsContainsPath(fs, target) && !FsNodeAt(fs, target).Inaccessible?)
     case _ => false
   }
 
@@ -1679,6 +1757,29 @@ module IOContract {
           FsContainsPath(fs2, target) &&
           NodeMode(FsNodeAt(fs2, target)) == NormalizeMode(
             CREATE_FILE_MODE &
+            (ParsedUmaskFromProps(props) ^ ALL_MODE_BITS)
+          )
+  }
+
+  ghost predicate CreatedRegularRequestedModeFields(
+    fs: FileSystem,
+    props: map<string, string>,
+    path: Path,
+    ok: bool,
+    fs2: FileSystem,
+    requestedMode: bv32
+  )
+  {
+    ok ==>
+      match ResolvePathForCreateFields(fs, path)
+      case Err(_) => true
+      case Ok(target) =>
+        if FsContainsPath(fs, target) then
+          true
+        else
+          FsContainsPath(fs2, target) &&
+          NodeMode(FsNodeAt(fs2, target)) == NormalizeMode(
+            requestedMode &
             (ParsedUmaskFromProps(props) ^ ALL_MODE_BITS)
           )
   }
@@ -2535,6 +2636,16 @@ module IOContract {
     {DirEntry(".", true, false), DirEntry("..", true, false)}
   }
 
+  ghost predicate OpenDirOutcomeFields(fs: FileSystem, path: Path, ok: bool, err: int)
+  {
+    (if ok then
+      err == 0 && OpenDirFailureErrFields(fs,path) == 0
+    else
+      err > 0 &&
+      (err == OpenDirFailureErrFields(fs,path) ||
+       err in NativeLookupFaultErrnos + {Errno.ENFILE, Errno.EMFILE}))
+  }
+
   ghost predicate OpenDirContractFields(
     fs: FileSystem,
     dirHandles: map<int, DirHandleState>,
@@ -2547,7 +2658,7 @@ module IOContract {
   )
   {
     (!ok ==> dirHandles2 == dirHandles) &&
-    (!ok ==> err == OpenDirFailureErrFields(fs, path)) &&
+    OpenDirOutcomeFields(fs,path,ok,err) &&
     (ok ==>
        err == 0 &&
        !(handle in dirHandles) &&
@@ -2568,7 +2679,7 @@ module IOContract {
      case Ok(resolved) =>
        FsContainsPath(fs, resolved) &&
        (match FsNodeAt(fs, resolved)
-        case Directory(_, _, _) => ok
+        case Directory(_, _, _) => true
         case _ => !ok))
   }
 
@@ -2655,7 +2766,8 @@ module IOContract {
     dirHandles2: map<int, DirHandleState>
   )
   {
-    if !(handle in dirHandles) then
+    0 <= err &&
+    (if !(handle in dirHandles) then
       !hasMore && name == "" && kind == UnknownDirentKind &&
       err != 0 && dirHandles2 == dirHandles
     else
@@ -2682,7 +2794,15 @@ module IOContract {
           if state.DotDirHandleState? then
             DotDirHandleState(state.path, state.remaining - {entry})
           else
-            DirHandleState(state.path, state.remaining - {entry})]
+            DirHandleState(state.path, state.remaining - {entry})])
+  }
+
+  ghost predicate ReadDirInodeFields(fs: FileSystem, handles: map<int,DirHandleState>,
+    handle: int, name: string, hasMore: bool, inode: int)
+  {
+    hasMore && handle in handles && name != "." && name != ".." ==>
+      var path := AppendPath(handles[handle].path,name);
+      FsContainsPath(fs,path) && inode == fs.inodes[FsIdAt(fs,path)].hostKey.inode
   }
 
   // Inspect the opened directory descriptor, which remains available to the
@@ -3084,6 +3204,20 @@ module IOContract {
     )
   }
 
+  ghost predicate OpenReadFileSpec(
+    beforeFs: FileSystem,
+    beforeTrustedStreams: (TrustedStreamRequest) -> TrustedStreamResult,
+    path: Path,
+    data: Bytes,
+    err: int,
+    stage: FileReadStage
+  )
+  {
+    TrustedOpenReadFileContractFields(
+      beforeTrustedStreams, beforeFs, path, data, err, stage
+    )
+  }
+
   ghost predicate ReadLinkSpec(beforeFs: FileSystem, path: Path, r: IOResult<Path>)
   {
     r == ReadLinkResultFields(beforeFs, path)
@@ -3255,17 +3389,18 @@ module IOContract {
     beforeCredentials: ProcessCredentials,
     beforeTrustedFilesystem: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
     afterFs: FileSystem, path: Path, data: Bytes, ok: bool, err: int,
-    committed: nat, stage: FileWriteStage
+    committed: nat, stage: FileWriteStage,
+    requestedCreateMode: bv32 := CREATE_FILE_MODE
   )
   {
-    var request := FilesystemWrite(beforeFs, path, data, beforeNow, beforeProps, beforeCredentials);
+    var request := FilesystemWrite(beforeFs, path, data, beforeNow, beforeProps, beforeCredentials, requestedCreateMode);
     var observed := beforeTrustedFilesystem(request);
     ValidFilesystemObservation(request, observed) &&
     ok == observed.ok && err == observed.err && afterFs == observed.postFs &&
     committed == observed.writeCommitted && stage == observed.writeStage &&
     WriteFileOutcomeFields(beforeFs, beforeNow, path, data, false, ok, err, committed, stage, afterFs) &&
     CreatedRegularOwnershipFields(beforeFs, beforeCredentials, path, stage != WriteOpenFailed, afterFs) &&
-    CreatedRegularModeFields(beforeFs, beforeProps, path, stage != WriteOpenFailed, afterFs)
+    CreatedRegularRequestedModeFields(beforeFs, beforeProps, path, stage != WriteOpenFailed, afterFs, requestedCreateMode)
   }
 
   ghost predicate AppendFileSpec(
@@ -3370,6 +3505,136 @@ module IOContract {
            after.inodes[oldId].node.ext == before.inodes[oldId].node.ext)
   }
 
+  // Path lookup may read a symlink without changing its target or inode identity.
+  ghost predicate TraversalRecordEffectFields(before: InodeRecord, after: InodeRecord)
+  {
+    if before.node.Symlink? then
+      var times := NodeTimes(before.node);
+      var observed := NodeTimes(after.node);
+      after == before.(node := WithNodeTimes(before.node,
+        times.(atimeSec := observed.atimeSec, atimeNsec := observed.atimeNsec)))
+    else after == before
+  }
+
+  ghost predicate ParentDirectoryEffectFields(before: InodeRecord, after: InodeRecord)
+  {
+    before.node.Directory? && after.node.Directory? &&
+    after.hostKey == before.hostKey && after.ownership == before.ownership &&
+    after.kind == before.kind && after.node.mode == before.node.mode &&
+    after.node.ext == before.node.ext
+  }
+
+  // Successful removal changes one namespace entry, preserving surviving aliases.
+  // Parent metadata and the removed inode's ctime remain native observations.
+  ghost predicate EntryRemovalEffectFields(
+    before: FileSystem, path: Path, directory: bool, after: FileSystem
+  )
+  {
+    var resolved := if directory then ResolveDirectoryCreationPathFields(before, path)
+                    else ResolvePathForMetadataFields(before, path, false);
+    match resolved
+    case Err(_) => false
+    case Ok(target) =>
+      FsContainsPath(before, target) &&
+      FsContainsPath(before, ParentPath(target)) &&
+      InodeTreeCanRemove(before.inodes, before.namespace, PathSegments(target)) &&
+      (if directory then
+         FsNodeAt(before, target).Directory? && HasNoDescendants(before, target)
+       else !FsNodeAt(before, target).Directory?) &&
+      var id := FsIdAt(before, target);
+      var parentId := FsIdAt(before, ParentPath(target));
+      id != parentId &&
+      after.namespace == InodeTreeRemoveSegments(before.namespace, PathSegments(target)) &&
+      after.inodes.Keys == (if InodeNamespaceRefCount(before.namespace, id) == 1
+                            then before.inodes.Keys - {id} else before.inodes.Keys) &&
+      (forall oldId | oldId in after.inodes ::
+        if oldId == parentId then
+          ParentDirectoryEffectFields(before.inodes[oldId], after.inodes[oldId])
+        else if oldId == id then
+          var prior := before.inodes[oldId];
+          var observed := after.inodes[oldId];
+          var times := NodeTimes(prior.node);
+          var observedTimes := NodeTimes(observed.node);
+          observed == prior.(
+            links := (match prior.links
+                      case LinkCountUnknown => LinkCountUnknown
+                      case LinkCountKnown(count) => LinkCountKnown(if count == 0 then 0 else count - 1)),
+            node := WithNodeTimes(prior.node,
+              times.(ctimeSec := observedTimes.ctimeSec, ctimeNsec := observedTimes.ctimeNsec,
+                atimeSec := (if prior.node.Symlink? then observedTimes.atimeSec else times.atimeSec),
+                atimeNsec := (if prior.node.Symlink? then observedTimes.atimeNsec else times.atimeNsec))))
+        else TraversalRecordEffectFields(before.inodes[oldId], after.inodes[oldId]))
+  }
+
+  // link/linkat add a namespace alias to the selected existing inode.
+  ghost predicate HardLinkEffectFields(before: FileSystem, source: Path, target: Path,
+                                       followSource: bool, after: FileSystem)
+  {
+    match ResolvePathForMetadataFields(before,source,followSource)
+    case Err(_) => false
+    case Ok(existing) =>
+      match ResolvePathForCreateNoFollowTerminalFields(before,target)
+      case Err(_) => false
+      case Ok(destination) =>
+        FsContainsPath(before,existing) && !FsNodeAt(before,existing).Directory? &&
+        !FsContainsPath(before,destination) && FsContainsPath(before,ParentPath(destination)) &&
+        InodeTreeCanInsert(before.inodes,before.namespace,PathSegments(destination)) &&
+        var id := FsIdAt(before,existing);
+        var parentId := FsIdAt(before,ParentPath(destination));
+        after.namespace == InodeTreeSetSubtreeSegments(before.namespace,PathSegments(destination),InodeTreeNode(id,map[])) &&
+        after.inodes.Keys == before.inodes.Keys &&
+        (forall oldId | oldId in before.inodes ::
+          if oldId == id then
+            var prior := before.inodes[id];
+            var observed := after.inodes[id];
+            var times := NodeTimes(prior.node);
+            var observedTimes := NodeTimes(observed.node);
+            observed == prior.(
+              links := (match prior.links
+                        case LinkCountUnknown => LinkCountUnknown
+                        case LinkCountKnown(count) => LinkCountKnown(count + 1)),
+              node := WithNodeTimes(prior.node,
+                times.(ctimeSec := observedTimes.ctimeSec,ctimeNsec := observedTimes.ctimeNsec,
+                  atimeSec := (if prior.node.Symlink? then observedTimes.atimeSec else times.atimeSec),
+                  atimeNsec := (if prior.node.Symlink? then observedTimes.atimeNsec else times.atimeNsec))))
+          else if oldId == parentId then ParentDirectoryEffectFields(before.inodes[oldId],after.inodes[oldId])
+          else TraversalRecordEffectFields(before.inodes[oldId],after.inodes[oldId]))
+  }
+
+  ghost predicate TruncatedContentsFields(before: Bytes, size: nat, after: Bytes)
+  {
+    |after| == size &&
+    (forall i :: 0 <= i < size ==>
+      after[i] == (if i < |before| then before[i] else (0 as char)))
+  }
+
+  // Truncation changes the existing inode, so every hard-link alias sees the
+  // same preserved prefix or zero-filled extension. It never creates a path.
+  ghost predicate TruncationEffectFields(
+    before: FileSystem, path: Path, size: nat, after: FileSystem
+  )
+  {
+    match ResolvePathForMetadataFields(before, path, true)
+    case Err(_) => false
+    case Ok(target) =>
+      FsContainsPath(before, target) && FsNodeAt(before, target).Regular? &&
+      after.namespace == before.namespace && after.inodes.Keys == before.inodes.Keys &&
+      var id := FsIdAt(before, target);
+      var prior := before.inodes[id];
+      var observed := after.inodes[id];
+      observed.node.Regular? && observed.hostKey == prior.hostKey &&
+      observed.links == prior.links && observed.ownership == prior.ownership &&
+      observed.kind == prior.kind && observed.node.ext == prior.node.ext &&
+      TruncatedContentsFields(prior.node.data, size, observed.node.data) &&
+      // Linux may clear set-ID bits. The other permission bits are preserved.
+      (observed.node.mode & (1023 as bv32)) == (prior.node.mode & (1023 as bv32)) &&
+      (observed.node.mode & (3072 as bv32) & (prior.node.mode ^ ALL_MODE_BITS)) == (0 as bv32) &&
+      observed.node.times.atimeSec == prior.node.times.atimeSec &&
+      observed.node.times.atimeNsec == prior.node.times.atimeNsec &&
+      (forall other | other in before.inodes && other != id ::
+        TraversalRecordEffectFields(before.inodes[other], after.inodes[other]))
+  }
+
   // Lookup may fail because of storage, allocation, access-control or name-limit
   // conditions absent from the inode model. These are Linux lookup errors, not
   // an arbitrary substitute for a modeled ENOENT/ENOTDIR/ELOOP cause.
@@ -3384,11 +3649,11 @@ module IOContract {
      case Ok(_) => {})
   }
 
-  function HardLinkFailureErrnosFields(fs: FileSystem, source: Path, target: Path): set<int>
+  function HardLinkFailureErrnosFields(fs: FileSystem, source: Path, target: Path, followSource: bool := false): set<int>
   {
     if (0 as char) in source || (0 as char) in target then {Errno.EINVAL}
     else
-      match ResolvePathForMetadataFields(fs, source, false)
+      match ResolvePathForMetadataFields(fs, source, followSource)
       case Err(error) => NativeLookupFaultErrnos + {IOErrorErrno(error)}
       case Ok(resolvedSource) =>
         if target == "" then NativeLookupFaultErrnos + {Errno.ENOENT}
@@ -3443,8 +3708,8 @@ module IOContract {
     case FilesystemSetTimes(fs, path, follow, _, atime, mtime) =>
       LookupFailureErrnosFields(fs, path, follow) + NativeMutationFaultErrnos +
       (if !TimestampUpdateValidFields(atime) || !TimestampUpdateValidFields(mtime) then {Errno.EINVAL} else {})
-    case FilesystemCreateHardLink(fs, source, target, _) =>
-      HardLinkFailureErrnosFields(fs, source, target)
+    case FilesystemCreateHardLink(fs, source, target, _, followSource) =>
+      HardLinkFailureErrnosFields(fs, source, target, followSource)
     case FilesystemUnlink(fs, path, _) => EntryRemovalFailureErrnosFields(fs, path, false)
     case FilesystemRemoveDirectory(fs, path, _) => EntryRemovalFailureErrnosFields(fs, path, true)
     case FilesystemCreateDirectory(fs, path, _, _, _) =>
@@ -3464,7 +3729,7 @@ module IOContract {
        else match ResolveDirectoryCreationPathFields(fs, path)
             case Err(error) => {IOErrorErrno(error)}
             case Ok(target) => if FsContainsPath(fs, target) then {Errno.EEXIST} else {})
-    case FilesystemWrite(fs, path, _, _, _, _) =>
+    case FilesystemWrite(fs, path, _, _, _, _, _) =>
       WriteOpenFailureErrnosFields(fs, path) + {Errno.EINTR, Errno.EIO, Errno.EBADF, Errno.EFBIG, Errno.ENOSPC, Errno.EROFS, Errno.EPIPE, Errno.EDQUOT}
     case FilesystemAppend(fs, path, _, _, _, _) =>
       WriteOpenFailureErrnosFields(fs, path) + {Errno.EINTR, Errno.EIO, Errno.EBADF, Errno.EFBIG, Errno.ENOSPC, Errno.EROFS, Errno.EPIPE, Errno.EDQUOT}
@@ -3498,9 +3763,9 @@ module IOContract {
     case FilesystemSetTimes(fs, path, follow, _, atime, mtime) =>
       ResolvePathForMetadataFields(fs, path, follow).Ok? &&
       TimestampUpdateValidFields(atime) && TimestampUpdateValidFields(mtime)
-    case FilesystemCreateHardLink(fs, source, target, _) =>
+    case FilesystemCreateHardLink(fs, source, target, _, followSource) =>
       target != "" && (0 as char) !in source && (0 as char) !in target &&
-      (match ResolvePathForMetadataFields(fs, source, false)
+      (match ResolvePathForMetadataFields(fs, source, followSource)
        case Err(_) => false
        case Ok(resolvedSource) =>
          !FsNodeAt(fs, resolvedSource).Directory? &&
@@ -3533,11 +3798,27 @@ module IOContract {
       (match ResolvePathForMetadataFields(fs, path, true)
        case Err(_) => false
        case Ok(target) => FsNodeAt(fs, target).Regular?)
-    case FilesystemWrite(fs, path, _, _, _, _) => WriteFileFailureErrFields(fs, path) == 0
+    case FilesystemWrite(fs, path, _, _, _, _, _) => WriteFileFailureErrFields(fs, path) == 0
     case FilesystemAppend(fs, path, _, _, _, _) => WriteFileFailureErrFields(fs, path) == 0
     case FilesystemSync(fs, target, mode) =>
       if target.AllSyncTargets? then mode == SyncAllFilesystems
       else mode != SyncAllFilesystems && ResolvePathForMetadataFields(fs, target.path, true).Ok?
+  }
+
+  // Metadata observations may refresh times, but cannot invent an identity or kind.
+  ghost predicate FilesystemQueryShapeFields(request: TrustedFilesystemRequest,
+                                            result: TrustedFilesystemResult)
+  {
+    request.FilesystemQuery? && result.ok ==>
+      match ResolvePathForMetadataFields(request.preFs, request.path, request.followSymlink)
+      case Err(_) => false
+      case Ok(target) =>
+        FsContainsPath(request.preFs, target) &&
+        var record := request.preFs.inodes[FsIdAt(request.preFs, target)];
+        result.isDir == record.node.Directory? &&
+        result.isSymlink == record.node.Symlink? &&
+        HostInodeKey(result.device, result.inode) == record.hostKey &&
+        0 <= result.linkCount && record.links == LinkCountKnown(result.linkCount as nat)
   }
 
   ghost predicate ValidFilesystemObservation(
@@ -3545,6 +3826,7 @@ module IOContract {
   )
   {
     0 <= result.err && (result.ok <==> result.err == 0) &&
+    FilesystemQueryShapeFields(request, result) &&
     (result.ok ==> FilesystemRequestCanSucceedFields(request)) &&
     (!result.ok ==> result.err in FilesystemFailureErrnosFields(request)) &&
     (request.FilesystemQuery? || request.FilesystemSync? ==> result.postFs == request.preFs) &&
@@ -3557,20 +3839,32 @@ module IOContract {
           CreateFileContractFields(request.preFs, request.now, request.path, true, 0, result.postFs))) &&
     ((!result.ok && !request.FilesystemAppend? && !request.FilesystemWrite? && !request.FilesystemCreate?) ==>
        FailedFilesystemEffectFields(request.preFs, result.postFs)) &&
+    (request.FilesystemCreateHardLink? && result.ok ==>
+       HardLinkEffectFields(request.preFs,request.source,request.hardLinkTarget,request.followSource,result.postFs)) &&
     (request.FilesystemCreateDirectory? && result.ok ==>
        DirectoryCreationEffectFields(request.preFs, request.path, result.postFs)) &&
+    (request.FilesystemUnlink? && result.ok ==>
+       EntryRemovalEffectFields(request.preFs, request.path, false, result.postFs)) &&
+    (request.FilesystemRemoveDirectory? && result.ok ==>
+       EntryRemovalEffectFields(request.preFs, request.path, true, result.postFs)) &&
+    (request.FilesystemTruncate? && result.ok ==>
+       TruncationEffectFields(request.preFs, request.path, request.size, result.postFs)) &&
     (request.FilesystemWrite? || request.FilesystemAppend? ==>
        WriteFileOutcomeFields(request.preFs, request.now, request.path, request.data,
                               request.FilesystemAppend?, result.ok, result.err, result.writeCommitted, result.writeStage, result.postFs) &&
        CreatedRegularOwnershipFields(request.preFs, request.credentials, request.path,
                                      result.writeStage != WriteOpenFailed, result.postFs) &&
-       CreatedRegularModeFields(request.preFs, request.props, request.path,
-                                result.writeStage != WriteOpenFailed, result.postFs))
+       (if request.FilesystemWrite? then
+          CreatedRegularRequestedModeFields(request.preFs, request.props, request.path,
+            result.writeStage != WriteOpenFailed, result.postFs, request.requestedCreateMode)
+        else CreatedRegularModeFields(request.preFs, request.props, request.path,
+            result.writeStage != WriteOpenFailed, result.postFs)))
   }
 
   // Construct an admissible failure for the subtype witness. This ghost choice
   // never replaces the native errno returned by an executable operation.
-  ghost function FilesystemFailureWitness(request: TrustedFilesystemRequest): TrustedFilesystemResult
+  ghost function FilesystemFailureWitness(request: TrustedFilesystemRequest): (result: TrustedFilesystemResult)
+    ensures ValidFilesystemObservation(request, result)
   {
     TrustedFilesystemResult(false,
                             if Errno.EIO in FilesystemFailureErrnosFields(request) then Errno.EIO else Errno.EINVAL,
@@ -3629,12 +3923,13 @@ module IOContract {
     source: Path,
     target: Path,
     ok: bool,
-    err: int
+    err: int,
+    followSource: bool := false
   )
   {
     TrustedFilesystemEffectContractFields(
       beforeTrustedFilesystem,
-      FilesystemCreateHardLink(beforeFs, source, target, beforeNow),
+      FilesystemCreateHardLink(beforeFs, source, target, beforeNow, followSource),
       ok, err, afterFs
     )
   }

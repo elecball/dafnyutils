@@ -1143,9 +1143,8 @@ module LsSpec {
     decreases tree
   {
     cmd.statusContext.BoundStatusObservations? &&
-    tree.openOk == (IOContract.OpenDirFailureErrFields(fs, accessPath) == 0) &&
+    IOContract.OpenDirOutcomeFields(fs, accessPath, tree.openOk, tree.openErr) &&
     (if !tree.openOk then
-       tree.openErr == IOContract.OpenDirFailureErrFields(fs, accessPath) &&
        tree.openErr > 0 && !tree.statusOk && !tree.cycle &&
        tree.listingFirstStatus == tree.firstStatus &&
        tree.listingAfterStatus == tree.firstStatus &&
@@ -1271,12 +1270,12 @@ module LsSpec {
     observation.index < |cmd.operands| &&
     observation.operand == cmd.operands[observation.index] &&
     observation.path == MakeAbsoluteSpec(cwd, observation.operand) &&
-    observation.sectionAvailable ==
-    (observation.operandClass == ExpandedDirectory &&
-     IOContract.OpenDirFailureErrFields(fs, observation.path) == 0) &&
+    (observation.sectionAvailable ==>
+       observation.operandClass == ExpandedDirectory &&
+       IOContract.OpenDirOutcomeFields(fs, observation.path, true, 0)) &&
     match OperandStatusResultSpec(cmd, fs, observation.path, observation.firstStatus)
     case Err(error) =>
-      !observation.ok &&
+      !observation.ok && !observation.sectionAvailable &&
       observation.err == IOContract.IOErrorErrno(error) &&
       observation.operandClass == AccessFailure &&
       observation.afterStatus == observation.firstStatus +
@@ -1297,6 +1296,7 @@ module LsSpec {
               RecursiveDirectoryRelation(
                 cmd, fs, observation.operand, observation.path,
                 {}, tree) &&
+              tree.openOk &&
               tree.firstStatus == observation.firstStatus +
                 OperandStatusCallCountSpec(cmd, fs, observation.path,
                                            observation.firstStatus) &&
@@ -1330,9 +1330,10 @@ module LsSpec {
             OperandStatusCallCountSpec(cmd, fs, observation.path,
                                        observation.firstStatus) &&
           observation.body == [] &&
-          observation.sectionErrors == OpenDirectoryErrorMessageSpec(
-            observation.operand,
-            IOContract.OpenDirFailureErrFields(fs, observation.path)) &&
+          (exists openErr: int ::
+            IOContract.OpenDirOutcomeFields(fs, observation.path, false, openErr) &&
+            observation.sectionErrors == OpenDirectoryErrorMessageSpec(
+              observation.operand, openErr)) &&
           observation.failed && !observation.hasCycle
       else
         observation.operandClass == DirectOperand &&

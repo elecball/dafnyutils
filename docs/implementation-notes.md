@@ -154,6 +154,15 @@ result. The utility specification must also require the correct operand order,
 exact diagnostics
 and the final exit status.
 
+Give filesystem-processing loops their own narrow `modifies` clause. For example,
+[`MkdirCore.RunCore`](../bench/utils/mkdir/MkdirCore.dfy) gathers diagnostic bytes
+while its loop modifies only `io.fsRegion`; it flushes the streams afterwards.
+Without that loop clause, Dafny inherits the enclosing method's broader stream
+frame, so the final output relation loses its starting stream values. State this
+preservation through the loop frame rather than adding unchanged-output equalities.
+The creation, stream-result and final existential-composition lemmas remain
+separate proof obligations.
+
 **Test environment and comparisons**
 
 - Use a stable, isolated local Linux test tree, the evaluator's fixed non-root

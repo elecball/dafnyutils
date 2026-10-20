@@ -172,6 +172,10 @@ pub(crate) static UTILITY_CAPABILITIES: &[UtilityCapability] = &[
         ..capability!("ls", ls)
     },
     UtilityCapability {
+        generated_options: Some(&["-v", "--verbose", "--help", "--version"]),
+        ..capability!("mkdir", mkdir)
+    },
+    UtilityCapability {
         option_value_flags: &["-t", "--target-directory", "-S", "--suffix"],
         ..capability!("mv", mv)
     },
@@ -196,6 +200,28 @@ pub(crate) static UTILITY_CAPABILITIES: &[UtilityCapability] = &[
     capability!("printf", printf),
     capability!("pwd", pwd),
     capability!("readlink", readlink),
+    UtilityCapability {
+        requires_root_cwd: true,
+        generated_options: Some(&[
+            "-I",
+            "-f",
+            "--force",
+            "-v",
+            "--verbose",
+            "-d",
+            "--dir",
+            "-r",
+            "-R",
+            "--recursive",
+            "--one-file-system",
+            "--no-preserve-root",
+            "--preserve-root",
+            "--interactive",
+            "--help",
+            "--version",
+        ]),
+        ..capability!("rm", rm)
+    },
     UtilityCapability {
         generated_options: Some(&[
             "-s",
@@ -254,6 +280,10 @@ pub(crate) static UTILITY_CAPABILITIES: &[UtilityCapability] = &[
             "--version",
         ]),
         ..capability!("tr", tr)
+    },
+    UtilityCapability {
+        option_value_flags: &["-s", "--size", "-r", "--reference"],
+        ..capability!("truncate", truncate)
     },
     capability!("true", r#true),
     capability!("unlink", unlink),
@@ -387,8 +417,8 @@ mod tests {
             patterned,
             BTreeSet::from([
                 "cat", "chmod", "comm", "csplit", "cut", "du", "expand", "head", "link", "ln",
-                "ls", "mv", "nl", "paste", "readlink", "stat", "tail", "touch", "uniq", "unlink",
-                "wc",
+                "ls", "mkdir", "mv", "nl", "paste", "readlink", "rm", "stat", "tail", "touch",
+                "truncate", "uniq", "unlink", "wc",
             ])
         );
     }

@@ -288,6 +288,10 @@ module WorldRenameProof {
           segs[1..],
           InodeNamespaceIdPaths(subtree, id)
         );
+        assert InodeNamespaceIdPaths(
+          InodeTreeSetSubtreeSegments(tree.children[segs[0]], segs[1..], subtree), id
+        ) == InodeNamespaceIdPaths(tree.children[segs[0]], id) +
+             InodePrefixPaths(segs[1..], InodeNamespaceIdPaths(subtree, id));
       }
     }
   }
@@ -502,11 +506,32 @@ module WorldRenameProof {
                  withoutTarget.inodes[liveId];
         }
       }
-      assert InodeValidLinkObservations(result);
+      assert InodeValidLinkObservations(withoutTarget);
+      assert InodeValidLinkObservations(result) by {
+        forall liveId | liveId in result.inodes
+          ensures result.inodes[liveId].links.LinkCountKnown? &&
+                  0 < result.inodes[liveId].links.count &&
+                  InodeNamespaceRefCount(result.namespace, liveId) <=
+                    result.inodes[liveId].links.count
+        {
+          assert result.inodes[liveId] == withoutTarget.inodes[liveId];
+          assert InodeNamespaceRefCount(result.namespace, liveId) ==
+                 InodeNamespaceRefCount(withoutTarget.namespace, liveId);
+          assert withoutTarget.inodes[liveId].links.LinkCountKnown?;
+          assert 0 < withoutTarget.inodes[liveId].links.count;
+          assert InodeNamespaceRefCount(withoutTarget.namespace, liveId) <=
+                 withoutTarget.inodes[liveId].links.count;
+          hide *;
+        }
+      }
       assert result.namespace.id == withoutTarget.namespace.id;
       assert result.namespace.id in result.inodes;
       assert result.inodes[result.namespace.id].node.Directory?;
+      hide *;
+      reveal ValidInodeFileSystemData();
+      assert ValidInodeFileSystemData(result);
     }
+    hide *;
   }
 
   ghost method InodeFsRenameVerified(

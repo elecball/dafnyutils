@@ -35,7 +35,7 @@ module BenchIO {
     provides IO.stdoutTimestampRegion, IO.stdoutTimestamp
     provides IO.statusObservationsRegion, IO.statusObservations, IO.statusCursor
     provides IO.credentialsRegion, IO.credentials
-    provides IO.ReadFile, IO.ReadLink, IO.ReadStdin
+    provides IO.ReadFile, IO.ProbeReadFile, IO.ReadLink, IO.ReadStdin
     provides IO.WriteStdout, IO.WriteStderr
     provides IO.GetCLocaleErrnoText, IO.QuoteafPath, IO.QuoteArgument
     provides IO.GetCwd, IO.GetEnv, IO.GetEnvironment, IO.GetLoginName, IO.Now
@@ -436,9 +436,11 @@ module BenchIO {
     }
 
     // Reads a file and returns the committed prefix, errno and terminal stage.
-    method {:extern "NativeReadFile"} {:axiom} NativeReadFile(path: Path)
+    method {:extern "NativeReadFile"} {:axiom} NativeReadFile(path: Path, readContents: bool)
       returns (data: Bytes, err: int, stage: BenchWorld.FileReadStage)
-      ensures C.ReadFileSpec(
+      ensures readContents ==> C.ReadFileSpec(
+                old(fs()), old(trustedStreams()), path, data, err, stage)
+      ensures !readContents ==> C.OpenReadFileSpec(
                 old(fs()), old(trustedStreams()), path, data, err, stage)
 
     method ReadFile(path: Path) returns (result: IOResult<Bytes>)
@@ -446,7 +448,33 @@ module BenchIO {
                 old(fs()), old(trustedStreams()), path, C.ReadResultData(result), C.ResultErrno(result), C.ReadResultStage(result))
       ensures result == C.ObservedReadFileResultFields(old(fs()), old(trustedStreams()), path)
     {
-      var data, err, stage := NativeReadFile(path);
+      var data, err, stage := NativeReadFile(path, true);
+      assert err == 0 ==> stage == ReadSucceeded by {
+        hide *;
+        reveal C.ReadFileSpec(), C.TrustedReadFileContractFields();
+      }
+      assert C.ObservedReadFileResultFields(fs(), trustedStreams(), path) ==
+        C.FileReadResultFromOutcome(data, err, stage, C.CLocaleErrnoTextResult(err)) by {
+        hide *;
+        reveal C.ReadFileSpec(), C.TrustedReadFileContractFields();
+        reveal C.ObservedReadFileResultFields();
+      }
+      hide C.ReadFileSpec(), C.TrustedReadFileContractFields();
+      if err == 0 {
+        result := Result.Ok(data);
+      } else {
+        var message := GetCLocaleErrnoText(err);
+        result := Result.Err(ReadFailure(err, message, data, stage));
+      }
+    }
+
+    // Opens read-only and closes without consuming file contents.
+    method ProbeReadFile(path: Path) returns (result: IOResult<Bytes>)
+      ensures C.OpenReadFileSpec(
+                old(fs()), old(trustedStreams()), path, C.ReadResultData(result), C.ResultErrno(result), C.ReadResultStage(result))
+      ensures result == C.ObservedOpenReadFileResultFields(old(fs()), old(trustedStreams()), path)
+    {
+      var data, err, stage := NativeReadFile(path, false);
       if err == 0 {
         result := Result.Ok(data);
       } else {
@@ -595,6 +623,8 @@ module BenchIO {
       ensures C.PathExistsSpec(old(fs()), old(trustedFilesystem()), path, followSymlink, result.Ok?, C.ResultErrno(result))
     {
       var found, err := NativePathExists(path, followSymlink);
+      assert found ==> err == 0;
+      hide C.PathExistsSpec();
       if found {
         result := Result.Ok(Unit);
       } else {
@@ -613,6 +643,8 @@ module BenchIO {
       ensures C.CreateFileSpec(old(fs()), old(now()), old(trustedFilesystem()), fs(), path, result.Ok?, C.ResultErrno(result))
     {
       var ok, err := NativeCreateFile(path);
+      assert ok ==> err == 0;
+      hide C.CreateFileSpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -622,8 +654,9 @@ module BenchIO {
     }
 
     // Attempts to write bytes to a regular file, creating or truncating it.
-    method {:extern "NativeWriteFile"} {:axiom} NativeWriteFile(path: Path, data: Bytes)
+    method {:extern "NativeWriteFile"} {:axiom} NativeWriteFile(path: Path, data: Bytes, createMode: bv32)
       returns (ok: bool, err: int, committed: nat, stage: FileWriteStage)
+      requires (createMode & (511 as bv32)) == createMode
       modifies fsRegion
       ensures C.WriteFileSpec(
                 old(fs()),
@@ -637,10 +670,11 @@ module BenchIO {
                 ok,
                 err,
                 committed,
-                stage
+                stage, createMode
               )
 
-    method WriteFile(path: Path, data: Bytes) returns (result: IOResult<WriteReceipt>)
+    method WriteFile(path: Path, data: Bytes, createMode: bv32 := CREATE_FILE_MODE) returns (result: IOResult<WriteReceipt>)
+      requires (createMode & (511 as bv32)) == createMode
       modifies fsRegion
       ensures C.WriteFileSpec(
                 old(fs()),
@@ -654,10 +688,12 @@ module BenchIO {
                 result.Ok?,
                 C.ResultErrno(result),
                 C.WriteResultCommitted(result),
-                C.WriteResultStage(result)
+                C.WriteResultStage(result), createMode
               )
     {
-      var ok, err, committed, stage := NativeWriteFile(path, data);
+      var ok, err, committed, stage := NativeWriteFile(path, data, createMode);
+      assert ok ==> err == 0 && stage == WriteSucceeded;
+      hide C.WriteFileSpec();
       if ok {
         result := Result.Ok(WriteReceipt(committed));
       } else {
@@ -683,6 +719,8 @@ module BenchIO {
               )
     {
       var ok, err, committed, stage := NativeAppendFile(path, data);
+      assert ok ==> err == 0 && stage == WriteSucceeded;
+      hide C.AppendFileSpec();
       if ok {
         result := Result.Ok(WriteReceipt(committed));
       } else {
@@ -758,6 +796,8 @@ module BenchIO {
               )
     {
       var ok, err := NativeCreateDirectory(path, mode);
+      assert ok ==> err == 0;
+      hide C.CreateDirectorySpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -777,6 +817,8 @@ module BenchIO {
       ensures C.RemoveDirectorySpec(old(fs()), old(now()), old(trustedFilesystem()), fs(), path, result.Ok?, C.ResultErrno(result))
     {
       var ok, err := NativeRemoveDirectory(path);
+      assert ok ==> err == 0;
+      hide C.RemoveDirectorySpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -786,7 +828,7 @@ module BenchIO {
     }
 
     // Creates a hard-link alias for an existing filesystem object.
-    method {:extern "NativeCreateHardLink"} {:axiom} NativeCreateHardLink(source: Path, target: Path)
+    method {:extern "NativeCreateHardLink"} {:axiom} NativeCreateHardLink(source: Path, target: Path, followSource: bool)
       returns (ok: bool, err: int)
       modifies fsRegion
       ensures C.CreateHardLinkSpec(
@@ -797,10 +839,10 @@ module BenchIO {
                 source,
                 target,
                 ok,
-                err
+                err, followSource
               )
 
-    method CreateHardLink(source: Path, target: Path) returns (result: IOResult<Unit>)
+    method CreateHardLink(source: Path, target: Path, followSource: bool := false) returns (result: IOResult<Unit>)
       modifies fsRegion
       ensures C.CreateHardLinkSpec(
                 old(fs()),
@@ -810,10 +852,12 @@ module BenchIO {
                 source,
                 target,
                 result.Ok?,
-                C.ResultErrno(result)
+                C.ResultErrno(result), followSource
               )
     {
-      var ok, err := NativeCreateHardLink(source, target);
+      var ok, err := NativeCreateHardLink(source, target, followSource);
+      assert ok ==> err == 0;
+      hide C.CreateHardLinkSpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -833,6 +877,8 @@ module BenchIO {
       ensures C.UnlinkPathSpec(old(fs()), old(now()), old(trustedFilesystem()), fs(), path, result.Ok?, C.ResultErrno(result))
     {
       var ok, err := NativeUnlinkPath(path);
+      assert ok ==> err == 0;
+      hide C.UnlinkPathSpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -852,6 +898,8 @@ module BenchIO {
       ensures C.TruncateFileSpec(old(fs()), old(now()), old(trustedFilesystem()), fs(), path, size, result.Ok?, C.ResultErrno(result))
     {
       var ok, err := NativeTruncateFile(path, size);
+      assert ok ==> err == 0;
+      hide C.TruncateFileSpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -908,6 +956,8 @@ module BenchIO {
               )
     {
       var ok, err := NativeCreateSpecialNode(path, kind, mode, major, minor);
+      assert ok ==> err == 0;
+      hide C.CreateSpecialNodeSpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -962,6 +1012,8 @@ module BenchIO {
               )
     {
       var ok, err := NativeSetFileTimesNow(path, followSymlink);
+      assert ok ==> err == 0;
+      hide C.SetFileTimesNowSpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -999,6 +1051,8 @@ module BenchIO {
               )
     {
       var ok, err := NativeSetFileAccessTimeNow(path, followSymlink);
+      assert ok ==> err == 0;
+      hide C.SetFileAccessTimeNowSpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -1036,6 +1090,8 @@ module BenchIO {
               )
     {
       var ok, err := NativeSetFileModificationTimeNow(path, followSymlink);
+      assert ok ==> err == 0;
+      hide C.SetFileModificationTimeNowSpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -1092,6 +1148,16 @@ module BenchIO {
               )
     {
       var ok, atimeSec, atimeNsec, mtimeSec, mtimeNsec, isDir, isSymlink, device, inode, linkCount, err := NativeGetFileTimes(path, followSymlink);
+      assert ok ==> err == 0;
+      if !ok {
+        assert C.GetFileTimesSpec(fs(), trustedFilesystem(), path, followSymlink,
+          false, 0, 0, 0, 0, false, false, 0, 0, 0, err) by {
+          hide *;
+          reveal C.GetFileTimesSpec();
+          reveal C.TrustedFilesystemQueryContractFields();
+        }
+      }
+      hide C.GetFileTimesSpec();
       if ok {
         result := Result.Ok(FileTimeStatus(atimeSec, atimeNsec, mtimeSec, mtimeNsec, isDir, isSymlink, device, inode, linkCount));
       } else {
@@ -1150,6 +1216,8 @@ module BenchIO {
               )
     {
       var ok, err := NativeSetFileTimes(path, followSymlink, atimeSec, atimeNsec, mtimeSec, mtimeNsec);
+      assert ok ==> err == 0;
+      hide C.SetFileTimesSpec();
       if ok {
         result := Result.Ok(Unit);
       } else {
@@ -1366,21 +1434,26 @@ module BenchIO {
 
     // Reads the next native entry according to the handle's dot-entry mode.
     method {:extern "NativeReadDir"} {:axiom} NativeReadDir(handle: int)
-      returns (hasMore: bool, name: string, kind: DirectoryEntryKind, err: int)
+      returns (hasMore: bool, name: string, kind: DirectoryEntryKind, inode: int, err: int)
       modifies dirHandlesRegion
       ensures C.ReadDirSpec(
                 old(fs()), old(dirHandles()), dirHandles(), handle,
                 hasMore, name, kind, err)
+      ensures C.ReadDirInodeFields(old(fs()),old(dirHandles()),handle,name,hasMore,inode)
 
     method ReadDir(handle: int) returns (result: IOResult<DirectoryRead>)
       modifies dirHandlesRegion
       ensures C.ReadDirSpec(
                 old(fs()), old(dirHandles()), dirHandles(), handle,
                 (result.Ok? && result.v.DirectoryItem?), (if result.Ok? && result.v.DirectoryItem? then result.v.name else ""), (if result.Ok? && result.v.DirectoryItem? then result.v.kind else UnknownDirentKind), C.ResultErrno(result))
+      ensures C.ReadDirInodeFields(old(fs()),old(dirHandles()),handle,
+        if result.Ok? && result.v.DirectoryItem? then result.v.name else "",
+        result.Ok? && result.v.DirectoryItem?,
+        if result.Ok? && result.v.DirectoryItem? then result.v.inode else 0)
     {
-      var hasMore, name, kind, err := NativeReadDir(handle);
+      var hasMore, name, kind, inode, err := NativeReadDir(handle);
       if err == 0 {
-        result := Result.Ok((if hasMore then DirectoryItem(name, kind) else DirectoryEnd));
+        result := Result.Ok((if hasMore then DirectoryItem(name, kind, inode) else DirectoryEnd));
       } else {
         var message := GetCLocaleErrnoText(err);
         result := Result.Err(NativeFailure(err, message));
@@ -1434,6 +1507,8 @@ module BenchIO {
       ensures C.RenamePathSpec(old(fs()), old(now()), fs(), source, target, result.Ok?, C.ResultErrno(result))
     {
       var ok, err := NativeRenamePath(source, target);
+      assert ok ==> err == 0;
+      hide C.RenamePathSpec();
       if ok {
         result := Result.Ok(Unit);
       } else {

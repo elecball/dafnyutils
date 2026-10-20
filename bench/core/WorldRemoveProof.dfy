@@ -436,7 +436,29 @@ module WorldRemoveProof {
       }
       assert InodeNamespaceWellFormed(result);
 
-      assert InodeUniqueHostKeys(result);
+      assert InodeUniqueHostKeys(fs);
+      assert forall liveId :: liveId in result.inodes ==>
+        liveId in fs.inodes &&
+        result.inodes[liveId].hostKey == fs.inodes[liveId].hostKey by {
+        forall liveId | liveId in result.inodes
+          ensures liveId in fs.inodes &&
+                  result.inodes[liveId].hostKey == fs.inodes[liveId].hostKey
+        {
+          if liveId == id && oldRefs != 1 {
+            assert result.inodes[id] ==
+                   InodeRecordAfterUnlink(fs.inodes[id]);
+          } else {
+            assert result.inodes[liveId] == fs.inodes[liveId];
+          }
+        }
+      }
+      assert InodeUniqueHostKeys(result) by {
+        hide *;
+        reveal InodeUniqueHostKeys();
+      }
+      assert InodeValidLinkObservations(fs);
+      assert fs.inodes[id].links.LinkCountKnown?;
+      assert oldRefs <= fs.inodes[id].links.count;
       assert forall liveId :: liveId in result.inodes ==>
                                 InodeStorageConsistent(result.inodes[liveId]) &&
                                 InodeKindConsistent(result.inodes[liveId]) by {
@@ -466,16 +488,27 @@ module WorldRemoveProof {
             0 < result.inodes[liveId].links.count &&
             refs <= result.inodes[liveId].links.count
         {
+          assert liveId in fs.inodes;
+          assert fs.inodes[liveId].links.LinkCountKnown?;
+          assert 0 < fs.inodes[liveId].links.count;
+          assert InodeNamespaceRefCount(fs.namespace, liveId) <=
+                 fs.inodes[liveId].links.count;
           if liveId == id {
             assert oldRefs > 1;
-            assert fs.inodes[id].links.LinkCountKnown?;
-            assert fs.inodes[id].links.count >= oldRefs;
-            assert result.inodes[id].links.count ==
-                   fs.inodes[id].links.count - 1;
+            assert result.inodes[id] ==
+                   InodeRecordAfterUnlink(fs.inodes[id]);
+            assert InodeNamespaceRefCount(result.namespace, id) ==
+                   oldRefs - 1;
+            hide *;
+            reveal InodeRecordAfterUnlink();
           } else {
+            assert result.inodes[liveId] == fs.inodes[liveId];
             assert InodeNamespaceIdPaths(
                 result.namespace, liveId
               ) == InodeNamespaceIdPaths(fs.namespace, liveId);
+            assert InodeNamespaceRefCount(result.namespace, liveId) ==
+                   InodeNamespaceRefCount(fs.namespace, liveId);
+            hide *;
           }
         }
       }
@@ -490,7 +523,13 @@ module WorldRemoveProof {
       }
       assert result.namespace.id in result.inodes;
       assert result.inodes[result.namespace.id].node.Directory?;
+      hide *;
+      reveal ValidInodeFileSystemData();
+      assert ValidInodeFileSystemData(result);
+    } else {
+      assert InodeFsRemovePath(fs, path) == fs;
     }
+    hide *;
   }
 
   ghost method InodeFsRemovePathVerified(

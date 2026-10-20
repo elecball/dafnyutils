@@ -168,86 +168,17 @@ module MvCore {
 
   function DigitChar(d: nat): char
     requires d < 10
-  {
-    if d == 0 then '0'
-    else if d == 1 then '1'
-    else if d == 2 then '2'
-    else if d == 3 then '3'
-    else if d == 4 then '4'
-    else if d == 5 then '5'
-    else if d == 6 then '6'
-    else if d == 7 then '7'
-    else if d == 8 then '8'
-    else '9'
-  } by method {
-    if d == 0 {
-      return '0';
-    }
-    if d == 1 {
-      return '1';
-    }
-    if d == 2 {
-      return '2';
-    }
-    if d == 3 {
-      return '3';
-    }
-    if d == 4 {
-      return '4';
-    }
-    if d == 5 {
-      return '5';
-    }
-    if d == 6 {
-      return '6';
-    }
-    if d == 7 {
-      return '7';
-    }
-    if d == 8 {
-      return '8';
-    }
-    return '9';
-  }
+  { BasenameCore.DigitChar(d) } by method { return BasenameCore.DigitChar(d); }
 
   function DecimalNat(n: nat): string
-    decreases n
-  {
-    if n < 10 then
-      [DigitChar(n)]
-    else
-      DecimalNat(n / 10) + [DigitChar(n % 10)]
-  } by method {
-    var remaining: nat := n;
-    var suffix: string := [];
-    while remaining >= 10
-      invariant DecimalNat(n) == DecimalNat(remaining) + suffix
-      decreases remaining
-    {
-      assert 0 <= remaining % 10;
-      assert remaining % 10 < 10;
-      suffix := [DigitChar(remaining % 10)] + suffix;
-      assert 0 <= remaining / 10;
-      remaining := remaining / 10;
-    }
-    assert remaining < 10;
-    return [DigitChar(remaining)] + suffix;
-  }
+  { BasenameCore.DecimalNat(n) } by method { return BasenameCore.DecimalNat(n); }
 
   function NumberedBackupPath(target: string, index: nat): string
     requires index >= 1
-  {
-    target + ".~" + DecimalNat(index) + "~"
-  } by method {
-    return target + ".~" + DecimalNat(index) + "~";
-  }
+  { BasenameCore.NumberedBackupPath(target,index) } by method { return BasenameCore.NumberedBackupPath(target,index); }
 
   function SimpleBackupPath(target: string, suffix: string): string
-  {
-    target + suffix
-  } by method {
-    return target + suffix;
-  }
+  { BasenameCore.SimpleBackupPath(target,suffix) } by method { return BasenameCore.SimpleBackupPath(target,suffix); }
 
   function SourceNewer(
     srcSec: int, srcNsec: int, dstSec: int, dstNsec: int
@@ -3078,10 +3009,10 @@ module MvCore {
           assert step.outcome.failed == hadError;
           assert |batch.outcomes| == 1;
           assert batch.outcomes[0] == step.outcome;
-          assert (exists i: nat :: i < |batch.outcomes| &&
-            batch.outcomes[i].failed) <==> batch.outcomes[0].failed by {
-            if exists i: nat :: i < |batch.outcomes| &&
-              batch.outcomes[i].failed {
+          assert (exists i: nat :: (i < |batch.outcomes| &&
+                                   batch.outcomes[i].failed)) <==> batch.outcomes[0].failed by {
+            if exists i: nat :: (i < |batch.outcomes| &&
+                                batch.outcomes[i].failed) {
               var i: nat :| i < |batch.outcomes| &&
                 batch.outcomes[i].failed;
               assert i == 0;

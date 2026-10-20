@@ -4,6 +4,7 @@ include "LsSpec.dfy"
 include "LsCore.dfy"
 
 module LsProof {
+  import Result = Results
   import BenchIO
   import BenchWorld
   import IOContract
@@ -1147,6 +1148,37 @@ module LsProof {
     }
   }
 
+  lemma {:isolate_assertions} FlatOperandRelationWitness(
+    cmd: Schema.LsCmd, fs: BenchWorld.FileSystem, cwd: BenchWorld.Path,
+    observation: Spec.OperandObservation, entries: seq<Spec.EntryObservation>,
+    readErr: int, listingOutput: BenchWorld.Bytes
+  )
+    requires observation.index < |cmd.operands|
+    requires observation.operand == cmd.operands[observation.index]
+    requires observation.path == Spec.MakeAbsoluteSpec(cwd, observation.operand)
+    requires IOContract.OpenDirOutcomeFields(fs, observation.path, true, 0)
+    requires Spec.OperandStatusResultSpec(cmd, fs, observation.path,
+      observation.firstStatus) == Result.Ok(observation.status)
+    requires observation.status.kind == BenchWorld.DirectoryKind
+    requires !cmd.listDirectories && !cmd.recursive
+    requires observation.ok && observation.err == 0 && observation.accessErrors == []
+    requires observation.operandClass == Spec.ExpandedDirectory
+    requires observation.sectionAvailable && !observation.hasCycle
+    requires Spec.DirectoryListingRelation(
+      cmd, observation.operand, fs, observation.path,
+      observation.firstStatus + Spec.OperandStatusCallCountSpec(
+        cmd, fs, observation.path, observation.firstStatus),
+      observation.afterStatus, entries, readErr, listingOutput,
+      observation.sectionErrors, observation.failed)
+    requires observation.body ==
+      (if |cmd.operands| > 1 then Spec.DirectoryHeaderSpec(observation.operand) else []) +
+      listingOutput
+    ensures Spec.OperandObservationRelation(cmd, fs, cwd, observation)
+  {
+    hide *;
+    reveal Spec.OperandObservationRelation();
+  }
+
   lemma {:vcs_split_on_every_assert} OperandObservationSummaryImpliesSpec(
     cmd: Schema.LsCmd,
     fs: BenchWorld.FileSystem,
@@ -1156,6 +1188,7 @@ module LsProof {
     requires Core.OperandObservationSummary(cmd, fs, cwd, observation)
     ensures Spec.OperandObservationRelation(cmd, fs, cwd, observation)
   {
+    hide *;
     reveal Core.OperandObservationSummary();
     match Spec.OperandStatusResultSpec(cmd, fs, observation.path,
                                        observation.firstStatus)
@@ -1171,6 +1204,7 @@ module LsProof {
               Core.RecursiveDirectorySummary(
                 cmd, fs, observation.operand, observation.path,
                 {}, tree) &&
+              tree.openOk &&
               tree.firstStatus == observation.firstStatus +
                 Spec.OperandStatusCallCountSpec(cmd, fs, observation.path,
                                                 observation.firstStatus) &&
@@ -1186,6 +1220,7 @@ module LsProof {
               Spec.RecursiveDirectoryRelation(
                 cmd, fs, observation.operand, observation.path,
                 {}, candidateTree) &&
+              candidateTree.openOk &&
               candidateTree.firstStatus == observation.firstStatus +
                 Spec.OperandStatusCallCountSpec(cmd, fs, observation.path,
                                                 observation.firstStatus) &&
@@ -1197,6 +1232,9 @@ module LsProof {
               assert Spec.RecursiveDirectoryRelation(
                 cmd, fs, observation.operand, observation.path,
                 {}, tree);
+            }
+            assert Spec.OperandObservationRelation(cmd, fs, cwd, observation) by {
+              reveal Spec.OperandObservationRelation();
             }
           } else {
             var entries: seq<Spec.EntryObservation>, readErr: int,
@@ -1242,10 +1280,13 @@ module LsProof {
                 observation.afterStatus, entries, readErr,
                 listingOutput, observation.sectionErrors, observation.failed);
             }
+            FlatOperandRelationWitness(
+              cmd, fs, cwd, observation, entries, readErr, listingOutput);
           }
-        }
-        assert Spec.OperandObservationRelation(cmd, fs, cwd, observation) by {
-          reveal Spec.OperandObservationRelation();
+        } else {
+          assert Spec.OperandObservationRelation(cmd, fs, cwd, observation) by {
+            reveal Spec.OperandObservationRelation();
+          }
         }
       } else {
         RenderEntryBridge(

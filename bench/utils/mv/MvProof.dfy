@@ -51,20 +51,11 @@ module MvProof {
   lemma DigitCharSpecEqualsCore(d: nat)
     requires d < 10
     ensures Spec.DigitCharSpec(d) == Core.DigitChar(d)
-  {
-  }
+  { PathProof.DigitCharSpecEqualsCore(d); }
 
   lemma DecimalNatSpecEqualsCore(n: nat)
     ensures Spec.DecimalNatSpec(n) == Core.DecimalNat(n)
-    decreases n
-  {
-    if n < 10 {
-      DigitCharSpecEqualsCore(n);
-    } else {
-      DecimalNatSpecEqualsCore(n / 10);
-      DecimalNatSpecEqualsCore(n % 10);
-    }
-  }
+  { PathProof.DecimalNatSpecEqualsCore(n); }
 
   lemma BackupStatusSuffixCoreImpliesSpec(
     backupMode: Schema.BackupMode,

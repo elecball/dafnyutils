@@ -322,6 +322,9 @@ public static partial class IOExtern {
   [DllImport("libc", SetLastError = true)]
   private static extern IntPtr getlogin();
 
+  [DllImport("libc", EntryPoint = "linkat", SetLastError = true)]
+  private static extern int linkAt(int oldDirFd, string source, int newDirFd, string target, int flags);
+
   [DllImport("libc", SetLastError = true)]
   private static extern IntPtr opendir(string path);
 
@@ -951,6 +954,7 @@ public static partial class IOExtern {
 
   public static void ReadFile(
       ISequence<Dafny.Rune> path,
+      bool readContents,
       out ISequence<Dafny.Rune> content,
       out BigInteger err,
       out BenchWorld._IFileReadStage stage) {
@@ -969,7 +973,9 @@ public static partial class IOExtern {
       return;
     }
     stage = BenchWorld.FileReadStage.create_ReadFailed();
-    ReadAllFromFdWithOutcome(fd, out var bytes, out var readErr);
+    var bytes = Array.Empty<byte>();
+    var readErr = 0;
+    if (readContents) ReadAllFromFdWithOutcome(fd, out bytes, out readErr);
     var closeResult = close(fd);
     var closeErr = closeResult < 0 ? Marshal.GetLastPInvokeError() : 0;
     content = Sequence<Dafny.Rune>.UnicodeFromString(Encoding.Latin1.GetString(bytes));
@@ -1198,20 +1204,23 @@ public static partial class IOExtern {
     return ErrnoMessage(err);
   }
 
-  private static bool IsQuoteafDoubleQuoteCompatible(byte value) {
-    return value == (byte)' '
-      || value == (byte)'\''
-      || value == (byte)'%'
-      || value == (byte)'+'
-      || value == (byte)','
-      || value == (byte)'-'
-      || value == (byte)'.'
-      || value == (byte)'/'
-      || (value >= (byte)'0' && value <= (byte)':')
-      || (value >= (byte)'A' && value <= (byte)'Z')
-      || value == (byte)']'
-      || value == (byte)'_'
-      || (value >= (byte)'a' && value <= (byte)'z');
+  private static bool IsQuoteafDoubleQuoteCompatible(byte value, bool atStart, bool singleton) {
+    if (value < 0x20 || value >= 0x7f) return false;
+    switch (value) {
+      case (byte)'?': case (byte)'\\':
+        return false;
+      case (byte)'{': case (byte)'}':
+        return singleton;
+      case (byte)'#': case (byte)'~':
+        return atStart;
+      case (byte)'!': case (byte)'"': case (byte)'$': case (byte)'&':
+      case (byte)'(': case (byte)')': case (byte)'*': case (byte)';':
+      case (byte)'<': case (byte)'=': case (byte)'>': case (byte)'[':
+      case (byte)'^': case (byte)'`': case (byte)'|':
+        return false;
+      default:
+        return true;
+    }
   }
 
   private static char QuoteafEscape(byte value) {
@@ -1236,9 +1245,11 @@ public static partial class IOExtern {
     var pathBytes = Encoding.UTF8.GetBytes(pathText);
     var encounteredSingleQuote = false;
     var allDoubleQuoteCompatible = true;
-    foreach (var value in pathBytes) {
+    for (var index = 0; index < pathBytes.Length; index++) {
+      var value = pathBytes[index];
       encounteredSingleQuote |= value == (byte)'\'';
-      allDoubleQuoteCompatible &= IsQuoteafDoubleQuoteCompatible(value);
+      allDoubleQuoteCompatible &= IsQuoteafDoubleQuoteCompatible(
+        value, index == 0, pathBytes.Length == 1);
     }
 
     if (encounteredSingleQuote && allDoubleQuoteCompatible) {
@@ -1536,10 +1547,10 @@ public static partial class IOExtern {
   }
 
   public static void WriteFile(
-      ISequence<Dafny.Rune> path, ISequence<Dafny.Rune> data,
+      ISequence<Dafny.Rune> path, ISequence<Dafny.Rune> data, uint createMode,
       out bool ok, out BigInteger err, out BigInteger committed,
       out BenchWorld._IFileWriteStage stage) {
-    WriteFileWithFlags(path, data, O_WRONLY | O_CREAT | O_TRUNC | O_NOCTTY,
+    WriteFileWithFlags(path, data, O_WRONLY | O_CREAT | O_TRUNC | O_NOCTTY, createMode,
       out ok, out err, out committed, out stage);
   }
 
@@ -1547,12 +1558,12 @@ public static partial class IOExtern {
       ISequence<Dafny.Rune> path, ISequence<Dafny.Rune> data,
       out bool ok, out BigInteger err, out BigInteger committed,
       out BenchWorld._IFileWriteStage stage) {
-    WriteFileWithFlags(path, data, O_WRONLY | O_CREAT | O_APPEND | O_NOCTTY,
+    WriteFileWithFlags(path, data, O_WRONLY | O_CREAT | O_APPEND | O_NOCTTY, DefaultCreateMode,
       out ok, out err, out committed, out stage);
   }
 
   private static void WriteFileWithFlags(
-      ISequence<Dafny.Rune> path, ISequence<Dafny.Rune> data, int flags,
+      ISequence<Dafny.Rune> path, ISequence<Dafny.Rune> data, int flags, uint createMode,
       out bool ok, out BigInteger err, out BigInteger committed,
       out BenchWorld._IFileWriteStage stage) {
     ok = false;
@@ -1561,7 +1572,7 @@ public static partial class IOExtern {
     if (!TryPublicPath(path, out var pathStr, out err, allowEmpty: true)) return;
     var text = data?.ToVerbatimString(false) ?? string.Empty;
     var bytes = Encoding.Latin1.GetBytes(text);
-    var fd = open(pathStr, flags, DefaultCreateMode);
+    var fd = open(pathStr, flags, createMode & PermissionModeMask);
     if (fd < 0) {
       err = new BigInteger(Marshal.GetLastPInvokeError());
       return;
@@ -1798,6 +1809,7 @@ public static partial class IOExtern {
   public static void CreateHardLink(
       ISequence<Dafny.Rune> source,
       ISequence<Dafny.Rune> target,
+      bool followSource,
       out bool ok,
       out BigInteger err) {
     // Let native link select errno when an empty operand competes with another path error.
@@ -1806,7 +1818,9 @@ public static partial class IOExtern {
       ok = false;
       return;
     }
-    BoolResultFromNative(linkPath(sourceText, targetText), out ok, out err);
+    BoolResultFromNative(followSource
+      ? linkAt(AT_FDCWD, sourceText, AT_FDCWD, targetText, 0x400)
+      : linkPath(sourceText, targetText), out ok, out err);
   }
 
   public static void UnlinkPath(
@@ -2220,10 +2234,11 @@ public static partial class IOExtern {
     ok = true;
   }
 
-  private static void ReadDirRaw(BigInteger handle, out bool hasMore, out ISequence<Dafny.Rune> name, out byte dType, out BigInteger err) {
+  private static void ReadDirRaw(BigInteger handle, out bool hasMore, out ISequence<Dafny.Rune> name, out byte dType, out BigInteger inode, out BigInteger err) {
     hasMore = false;
     name = Sequence<Dafny.Rune>.Empty;
     dType = DT_UNKNOWN;
+    inode = BigInteger.Zero;
     err = new BigInteger(0);
     int id;
     try {
@@ -2275,10 +2290,11 @@ public static partial class IOExtern {
     // Skip "." and ".." entries
     if (!includeDots && (nameStr == "." || nameStr == "..")) {
       // Recursively read next entry
-      ReadDirRaw(handle, out hasMore, out name, out dType, out err);
+      ReadDirRaw(handle, out hasMore, out name, out dType, out inode, out err);
       return;
     }
     hasMore = true;
+    inode = new BigInteger(dirent.d_ino);
     name = Sequence<Dafny.Rune>.UnicodeFromString(nameStr);
     // Dot entries name an opened directory or its parent even on filesystems
     // that report DT_UNKNOWN for these synthetic entries.
@@ -2308,8 +2324,8 @@ public static partial class IOExtern {
     }
   }
 
-  public static void ReadDir(BigInteger handle, out bool hasMore, out ISequence<Dafny.Rune> name, out BenchWorld._IDirectoryEntryKind kind, out BigInteger err) {
-    ReadDirRaw(handle, out hasMore, out name, out var dType, out err);
+  public static void ReadDir(BigInteger handle, out bool hasMore, out ISequence<Dafny.Rune> name, out BenchWorld._IDirectoryEntryKind kind, out BigInteger inode, out BigInteger err) {
+    ReadDirRaw(handle, out hasMore, out name, out var dType, out inode, out err);
     kind = DirectoryEntryKindFromNative(dType);
   }
 
@@ -2377,10 +2393,11 @@ namespace BenchIO {
   public partial class IO {
     private void NativeReadFile(
         ISequence<Dafny.Rune> path,
+        bool readContents,
         out ISequence<Dafny.Rune> data,
         out BigInteger err,
         out BenchWorld._IFileReadStage stage) {
-      IOExtern.ReadFile(path, out data, out err, out stage);
+      IOExtern.ReadFile(path, readContents, out data, out err, out stage);
     }
 
     public Results._IResult<Dafny.ISequence<Dafny.Rune>, BenchWorld._IIOError> ReadLink(ISequence<Dafny.Rune> path) {
@@ -2533,10 +2550,10 @@ namespace BenchIO {
     }
 
     private void NativeWriteFile(
-        Dafny.ISequence<Dafny.Rune> path, Dafny.ISequence<Dafny.Rune> data,
+        Dafny.ISequence<Dafny.Rune> path, Dafny.ISequence<Dafny.Rune> data, uint createMode,
         out bool ok, out BigInteger err, out BigInteger committed,
         out BenchWorld._IFileWriteStage stage) {
-      IOExtern.WriteFile(path, data, out ok, out err, out committed, out stage);
+      IOExtern.WriteFile(path, data, createMode, out ok, out err, out committed, out stage);
     }
 
     private void NativeAppendFile(
@@ -2572,9 +2589,10 @@ namespace BenchIO {
     private void NativeCreateHardLink(
         Dafny.ISequence<Dafny.Rune> source,
         Dafny.ISequence<Dafny.Rune> target,
+        bool followSource,
         out bool ok,
         out BigInteger err) {
-      IOExtern.CreateHardLink(source, target, out ok, out err);
+      IOExtern.CreateHardLink(source, target, followSource, out ok, out err);
     }
 
     private void NativeUnlinkPath(
@@ -2662,8 +2680,8 @@ namespace BenchIO {
       IOExtern.ResolvePathIdentity(path, out ok, out resolvedPath, out err);
     }
 
-    private void NativeReadDir(BigInteger handle, out bool hasMore, out Dafny.ISequence<Dafny.Rune> name, out BenchWorld._IDirectoryEntryKind kind, out BigInteger err) {
-      IOExtern.ReadDir(handle, out hasMore, out name, out kind, out err);
+    private void NativeReadDir(BigInteger handle, out bool hasMore, out Dafny.ISequence<Dafny.Rune> name, out BenchWorld._IDirectoryEntryKind kind, out BigInteger inode, out BigInteger err) {
+      IOExtern.ReadDir(handle, out hasMore, out name, out kind, out inode, out err);
     }
 
     public void CloseDir(BigInteger handle) {

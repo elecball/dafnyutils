@@ -80,6 +80,33 @@ def assert_ls_parity(
     )
 
 
+# Search permission permits status lookup while absent read permission makes opendir fail.
+@pytest.mark.parametrize("args", [[], ["-R"]])
+def test_searchable_unreadable_directory_exact_gnu_bytes(args: list[str], tmp_path: Path) -> None:
+    # upstream: coreutils/tests/ls/ls-misc.pl - directory access diagnostics.
+    if os.geteuid() == 0:
+        pytest.skip("permission-denied fixture requires an unprivileged user")
+    directory = tmp_path / "search-only"
+    directory.mkdir()
+    (directory / "entry").write_bytes(b"x")
+    directory.chmod(0o111)
+    try:
+        reference = run_coreutils_utility(
+            COREUTILS_LS, "ls", [*args, "search-only"], tmp_path, env=parity_env()
+        )
+        candidate = run_bench_utility(
+            BENCH_LS_DLL, [*args, "search-only"], tmp_path, env=parity_env()
+        )
+        assert reference == (
+            b"",
+            b"ls: cannot open directory 'search-only': Permission denied\n",
+            2,
+        )
+        assert_result_matches_reference(reference, candidate, ignore_stderr_when_exit_nonzero=False)
+    finally:
+        directory.chmod(0o700)
+
+
 # File access diagnostics always shell quote path bytes, including control and UTF-8.
 @pytest.mark.parametrize("name", ["semi;colon", "apost'rophe", "tab\tname", "é"])
 def test_access_error_shell_quoting_matches_coreutils(name: str) -> None:

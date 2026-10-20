@@ -15,7 +15,7 @@ candidate,chroot,filesystem_and_paths,Filesystem and path behavior,model_prepara
 candidate,cksum,encoding_and_checksums,Default POSIX CRC with length and filename; ordered file/stdin operands.,open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
 benchmark,comm,text_and_streams,GNU-compatible supported subset,released,Existing benchmark,
 candidate,coreutils,multi_call,Multi-call command dispatch,model_preparation,Reviewed blocker: see remaining_preparation,Multi-call dispatch requires approved callable utility entries and executable-name mapping; all constituent commands are not prepared.
-candidate,cp,filesystem_and_paths,Follow-up filesystem utility,model_preparation,Reviewed blocker: see remaining_preparation,"WriteFile fixes creation mode and does not model ordinary permission/partial-write outcomes faithfully; no copy contract for mode preservation, overwrite/alias/error policy. Read-plus-write existence is insufficient."
+candidate,cp,filesystem_and_paths,Follow-up filesystem utility,model_preparation,Reviewed blocker: see remaining_preparation,"Stale after shared filesystem refinement: WriteFile now models creation modes and alias effects. Utility acceptance remains pending; ownership/xattr/context, sparse/reflink and interactive APIs remain unavailable."
 benchmark,csplit,text_and_streams,GNU-compatible supported subset,released,Existing benchmark,
 benchmark,cut,text_and_streams,GNU-compatible supported subset,released,Existing benchmark,
 candidate,date,system_information,"Explicit --reference=FILE, -u, and an explicit +%s, +%Y-%m-%d or +%H:%M:%S format.",open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
@@ -46,7 +46,7 @@ benchmark,ln,filesystem_and_paths,Symbolic-link subset,released,Existing benchma
 benchmark,logname,identity_and_permissions,GNU-compatible supported subset,released,Existing benchmark,
 benchmark,ls,filesystem_and_paths,GNU-compatible supported subset,released,Existing benchmark,
 candidate,md5sum,encoding_and_checksums,"Digest generation; -b, -t, -z; ordered file/stdin operands.",open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
-candidate,mkdir,filesystem_and_paths,Default one-directory creation; -v; ordered operands.,open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
+benchmark,mkdir,filesystem_and_paths,Default one-directory creation; -v; ordered operands and partial progress.,released,Filesystem benchmark: bench/utils/mkdir/mkdir.md,Parent creation and explicit modes need process umask mutation/restoration; security-context options need label APIs; see mkdir.md.
 candidate,mkfifo,filesystem_and_paths,Default FIFO creation with mode 0666 and process umask; ordered operands.,open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
 candidate,mknod,filesystem_and_paths,FIFO form NAME p (including GNU first-character type matching); default mode 0666 and umask.,open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
 candidate,mktemp,filesystem_and_paths,Filesystem and path behavior,model_preparation,Reviewed blocker: see remaining_preparation,No randomness/unique-name allocation observation and exclusive atomic creation contract; do not use a deterministic guessed name.
@@ -67,7 +67,7 @@ candidate,ptx,text_and_streams,"Default GNU keyword output; -w width and -g gap;
 benchmark,pwd,system_information,GNU-compatible supported subset,released,Existing benchmark,
 benchmark,readlink,filesystem_and_paths,GNU-compatible supported subset,released,Existing benchmark,
 candidate,realpath,filesystem_and_paths,Explicit -m -s; -z and -q; one or more nonempty/empty operands in the fixed Linux filesystem namespace.,open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
-candidate,rm,filesystem_and_paths,Explicit -f; optional -v; nonrecursive ordinary files/symlinks and directory-rejection cases; ordered operands.,open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
+benchmark,rm,filesystem_and_paths,"Noninteractive ordinary and recursive removal; force, verbose, directory, root and device safeguards; ordered operands and partial progress.",released,Filesystem benchmark: bench/utils/rm/rm.md,Prompt-dependent modes need isatty and incremental yes/no input; descriptor-relative traversal and filesystem-type query boundaries are documented in rm.md.
 candidate,rmdir,filesystem_and_paths,Default empty-directory removal; -v; ordered operands.,open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
 candidate,runcon,identity_and_permissions,Identity ownership permission and security-context behavior,model_preparation,Reviewed blocker: see remaining_preparation,"No security context transition, policy lookup or execution contract."
 benchmark,seq,numeric_and_sequences,GNU-compatible supported subset,released,Existing benchmark,
@@ -94,7 +94,7 @@ candidate,timeout,process_and_environment,Process execution and environment beha
 benchmark,touch,filesystem_and_paths,GNU-compatible supported subset,released,Existing benchmark,
 benchmark,tr,text_and_streams,GNU-compatible supported subset,released,Existing benchmark,
 benchmark,true,shell_and_control,GNU-compatible supported subset,released,Existing benchmark,
-candidate,truncate,filesystem_and_paths,"Explicit -c -s N with absolute nonnegative decimal size through signed 64-bit maximum; stable regular files/symlinks, directories and missing paths.",open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
+benchmark,truncate,filesystem_and_paths,"All GNU command-line options for the documented stable regular-file profile; creation, references, relative sizes, units and ordered partial progress.",released,Filesystem benchmark: bench/utils/truncate/truncate.md,Descriptor-specific faults/races and nonregular reference seeking need a descriptor API; overlong-reference errno mapping remains a documented boundary.
 candidate,tsort,text_and_streams,"Zero or one file/stdin operand; space/tab/newline-separated pairs; self pairs, duplicate edges and cycles; legacy -w no-op.",open_for_contribution,Contribution guide: CONTRIBUTING.md#define-the-observable-behavior,
 candidate,tty,system_information,System terminal user and filesystem-information reporting,model_preparation,Reviewed blocker: see remaining_preparation,No executable ttyname/isatty result and terminal error model.
 candidate,uname,system_information,System terminal user and filesystem-information reporting,model_preparation,Reviewed blocker: see remaining_preparation,No kernel/node/release/version/machine/platform observations.

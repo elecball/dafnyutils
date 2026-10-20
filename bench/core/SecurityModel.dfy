@@ -140,10 +140,47 @@ module SecurityModel {
     var viewed := DirectorySearchData(fs, security);
     SearchTreeWellFormed(fs.namespace, fs.inodes, security);
     assert viewed.inodes.Keys == fs.inodes.Keys;
-    assert forall id | id in fs.inodes ::
-        viewed.inodes[id].hostKey == fs.inodes[id].hostKey &&
-        viewed.inodes[id].links == fs.inodes[id].links &&
-        InodeSameNodeKind(viewed.inodes[id].node, fs.inodes[id].node);
+    forall id | id in fs.inodes
+      ensures viewed.inodes[id].hostKey == fs.inodes[id].hostKey
+      ensures viewed.inodes[id].links == fs.inodes[id].links
+      ensures InodeSameNodeKind(viewed.inodes[id].node, fs.inodes[id].node)
+      ensures InodeStorageConsistent(viewed.inodes[id])
+      ensures InodeKindConsistent(viewed.inodes[id])
+    {
+      assert InodeStorageConsistent(fs.inodes[id]);
+      assert InodeKindConsistent(fs.inodes[id]);
+    }
+    assert InodeNamespaceWellFormed(viewed) by {
+      assert InodeNamespaceWellFormed(fs);
+      forall id | id in viewed.inodes && FsNodeCanHaveChildren(viewed.inodes[id].node)
+        ensures InodeNamespaceRefCount(viewed.namespace, id) == 1
+      {
+        assert FsNodeCanHaveChildren(fs.inodes[id].node);
+      }
+    }
+    assert InodeUniqueHostKeys(viewed) by {
+      forall left, right | left in viewed.inodes && right in viewed.inodes &&
+        viewed.inodes[left].hostKey == viewed.inodes[right].hostKey
+        ensures left == right
+      {
+        assert fs.inodes[left].hostKey == fs.inodes[right].hostKey;
+      }
+    }
+    assert InodeValidLinkObservations(viewed) by {
+      forall id | id in viewed.inodes
+        ensures viewed.inodes[id].links.LinkCountKnown? &&
+          0 < viewed.inodes[id].links.count &&
+          InodeNamespaceRefCount(viewed.namespace, id) <= viewed.inodes[id].links.count
+      {
+        assert fs.inodes[id].links.LinkCountKnown?;
+        assert 0 < fs.inodes[id].links.count;
+        assert InodeNamespaceRefCount(fs.namespace, id) <= fs.inodes[id].links.count;
+      }
+    }
+    assert viewed.namespace.id in viewed.inodes;
+    assert viewed.inodes[viewed.namespace.id].node.Directory?;
+    hide *;
+    reveal ValidInodeFileSystemData();
   }
 
   ghost function DirectorySearchView(

@@ -31,6 +31,7 @@ not verified.
 | [CliTypes.dfy](../bench/core/CliTypes.dfy), [CliModel.dfy](../bench/core/CliModel.dfy), [CliExtern.dfy](../bench/core/CliExtern.dfy) | CLI helpers for making utility cli parsers. |
 | [Utf8.dfy](../bench/core/Utf8.dfy), [StringEscaping.dfy](../bench/core/StringEscaping.dfy) | String-related utilities |
 | [Functional.dfy](../bench/core/Functional.dfy) | Higher-order functions for functional-style programming |
+| [PathSpec.dfy](../bench/core/PathSpec.dfy), [PathCore.dfy](../bench/core/PathCore.dfy), [PathProof.dfy](../bench/core/PathProof.dfy) | GNU basename/dirname and decimal backup-name relations, terminating implementations and connecting proofs shared by file utilities |
 
 ## Copy stdin with explicit error results
 
@@ -153,6 +154,7 @@ standard descriptors are unbuffered.
 | Function | Return |
 | --- | --- |
 | `ReadFile(path)` → `IOResult<Bytes>` | `Ok`: the byte stream of whole file. `Err(ReadFailure(errno, message, partial, readStage))`: errno, message, bytes read, failed stage. |
+| `ProbeReadFile(path)` → `IOResult<Bytes>` | Opens read-only and closes without reading contents. Data is empty; the exact errno and `OpenFailed`/`CloseFailed` stage remain observable. |
 | `ReadStdin(ReturnError)` → `IOResult<Bytes>` | `StreamFailure` holds the bytes read; bytes read + remaining input = old stdin. |
 | `WriteStdout(data, ReturnError)` → `IOResult<WriteReceipt>` | Appends exactly the committed prefix; `StreamFailure` holds the count. |
 | `WriteStderr(data, ReturnError)` → `IOResult<WriteReceipt>` | Same, for stderr. |
@@ -166,6 +168,13 @@ bytes, and an empty write can fail with nothing committed.
   result from a native outcome or a stream observation. Utility code uses
   `ReadFile`'s result directly.
 
+`ProbeReadFile` uses its own `StreamOpenReadFile` request and
+`ObservedOpenReadFileResultFields`, so access and close observations remain
+separate from full reads. Its result contains no data and cannot have the
+`ReadFailed` stage. It supports commands such as `cp --attributes-only` that
+must open the source without consuming its bytes. The existing `ReadFileSpec`
+and whole-file `ReadFile` operation retain their behavior.
+
 Each utility decides what to do with partial data; `cat` prints the bytes read
 before the error. Read diagnostics come from the errno and failed stage, not a
 later metadata lookup.
@@ -173,6 +182,7 @@ later metadata lookup.
 | Method | Contract | Modifies |
 | --- | --- | --- |
 | `ReadFile` | `ReadFileSpec` | `none` |
+| `ProbeReadFile` | `OpenReadFileSpec` | `none` |
 | `ReadStdin` | `ReadStdinSpec` | `stdinRegion` |
 | `WriteStdout` | `WriteStdoutSpec` | `stdoutRegion` |
 | `WriteStderr` | `WriteStderrSpec` | `stderrRegion` |
@@ -228,6 +238,12 @@ later metadata lookup.
 
 ## Filesystem effects
 
+- `WriteFile(path, data, createMode := 0666)` accepts ordinary permission bits
+  `0000` through `0777`; native `open` applies the process umask. Existing callers
+  retain `0666`. The request binds this mode to the observed creation effect.
+  Special set-ID bits require a separate metadata-preservation operation because
+  Linux can clear them during a write; the new parameter's precondition excludes
+  those bits.
 - `WriteFile`, `AppendFile`: `IOResult<WriteReceipt>`. `WriteFailure` holds the
   errno, message, committed count and `FileWriteStage` (see
   [Write failures](#write-failures)).
@@ -237,9 +253,22 @@ later metadata lookup.
   filesystem after the call (also on failure), from a trusted observation
   (`TrustedFilesystemEffectContractFields`). This does not prove that the native
   filesystem matches the model.
+- Successful unlink and empty-directory removal delete exactly the resolved
+  namespace entry and preserve surviving aliases. Truncation preserves the
+  existing inode and aliases, with the old prefix followed by zero bytes on
+  extension. Successful hard-link creation adds an alias to the selected inode.
+  Parent metadata, allowed timestamp changes and native storage observations
+  remain part of the trusted result; these relations do not prove libc/kernel
+  correctness.
+- `CreateFile` retains its existing fixed observation contract. Fresh-file mode
+  and ownership come from that observation, rather than a new mathematical
+  ownership or umask guarantee. GNU differential oracles compare both fields.
 - `Sync` takes a trusted result and does not change the modeled filesystem.
-- `CreateHardLink` passes empty paths to native `link`, which picks the errno.
-  A path with NUL fails with `EINVAL`.
+- `CreateHardLink(source, target, followSource := false)` keeps the existing
+  native `link` behavior by default. `true` uses `linkat` with
+  `AT_SYMLINK_FOLLOW` to follow a terminal source symlink; destination creation
+  does not follow an existing terminal link. Empty paths retain native errno;
+  a path with NUL fails with `EINVAL`.
 - `DeletePath` computes its result from the model; `UnlinkPath` uses the trusted
   result. Their error models differ; do not swap them.
 - Recursion, parent creation, overwrite policy and diagnostics are up to the
@@ -284,11 +313,19 @@ other time. The current time is the modeled `now()`.
 ## Directory iteration
 
 - `OpenDir(path, includeDots)` → `IOResult<int>`, an opaque handle.
-- `ReadDir(handle)` → `IOResult<DirectoryRead>`: `DirectoryItem(name, kind)`,
+- `ReadDir(handle)` → `IOResult<DirectoryRead>`: `DirectoryItem(name, kind, inode)`,
   `DirectoryEnd` at EOF, or `Err` (e.g., an invalid handle). It advances the
-  handle and returns entries in native order.
+  handle and returns entries in native order. `inode` is the native `d_ino`
+  observation, so utilities can implement GNU's inode-based directory ordering
+  without adding metadata lookups. Existing name/kind and handle contracts remain.
+- `ReadDirContractFields` requires `0 <= err`: an entry or end-of-directory
+  returns zero, and failure returns a positive libc error number.
 - `CloseDir(handle)` closes the handle.
 - Recursion, ordering and filtering are up to the utility.
+- `OpenDirOutcomeFields` admits only a positive modeled lookup error or a
+  listed native access, I/O, memory, name-length or descriptor-allocation error
+  on failure. An existing directory can fail to open. Success still establishes
+  the exact resolved-directory handle and entry set, and failure preserves handles.
 
 Entry kinds (`BenchWorld.DirectoryEntryKind`): regular file, directory, symlink,
 FIFO, block device, character device, socket, or `UnknownDirentKind`. Never treat
@@ -324,6 +361,7 @@ for cycle detection without a separate status call before the open.
 | `CliExtern` | `Cli.Parse`, `Cli.ParsePortable` | Executable wrappers with the `ParseValue` result contract |
 | `BenchItem` | `BenchmarkItemTwostate<CmdRaw>`, `RunMain` | Shared plan/decode/run shell; hooks in [Entry and CLI contract](#entry-and-cli-contract) |
 | `Utf8Semantics` | `Encode`, `EncodeChar`, `EncodeFrom`, `ValidExternalText`, `UnicodeScalar`, `EncodeConcat`, `EncodeLength` | Text encoding and its proof helpers |
+| `MvPathSpec`, `MvPathCore`, `MvPathProof` | `BasenameSpec`, `DirnameSpec`, `DecimalNatSpec`, `NumberedBackupPathSpec`, `SimpleBackupPathSpec` and their executable/proof counterparts | Shared path and backup-name helpers used by `mv` and `cp`; the module names remain stable in `Path*.dfy` |
 | `BenchFunctional` | `Map`, `MapIdx`, `Enumerate`, `Gather`, `Filter`, `FilterIdx`, `FilterIndices`, `SelectedIndices`, `CountTrue` | Select and transform sequences |
 | `BenchFunctional` | `ScanLeft`, `ScanRight`, `ScanLeftIdx`, `ScanRightIdx`, `FoldLeft`, `FoldRight`, `FoldLeftIdx`, `FoldRightIdx` | Prefix/suffix state and folds |
 | `BenchFunctional` | `FoldLeftInvariantStep`, `FoldLeftIdxInvariantStep`, `FoldRightIdxInvariantStep`, `FoldLeftInvariant`, `FoldLeftIdxInvariant`, `FoldRightIdxInvariant`, `MapCongruence` | Reusable proofs; check preconditions and read frames in [Functional.dfy](../bench/core/Functional.dfy) |

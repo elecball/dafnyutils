@@ -39,6 +39,10 @@ This benchmark implements a deterministic, verification-oriented subset of GNU
   cycles.
 - Multiple operands and recursive directory sections use a blank line between
   sections and a `PATH:` heading where GNU `ls` would otherwise be ambiguous.
+- An existing directory can fail to open because of access permissions or another
+  native directory-open error. Its actual errno determines the diagnostic, the
+  command exits 2, and later operands are still processed. Recursive scans retain
+  completed sections when a later directory fails to open.
 - `--help` and `--version` exit successfully without touching the file system.
 
 The time zone is fixed to UTC and the locale is fixed to C so results do not

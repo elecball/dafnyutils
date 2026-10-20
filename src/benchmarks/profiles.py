@@ -34,6 +34,9 @@ COREUTILS_IMPLEMENTATION_SUPPORT_FILES = (
     "bench/core/CliModel.dfy",
     "bench/core/CliExtern.dfy",
     "bench/core/IOExtern.cs",
+    "bench/core/PathSpec.dfy",
+    "bench/core/PathCore.dfy",
+    "bench/core/PathProof.dfy",
     FUNCTIONAL_CORE_SOURCE,
 )
 COREUTILS_DAFNY_ANALYSIS_SUPPORT_FILES = tuple(

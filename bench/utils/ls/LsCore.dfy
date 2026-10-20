@@ -604,9 +604,8 @@ module LsCore {
     decreases tree
   {
     cmd.statusContext.BoundStatusObservations? &&
-    tree.openOk == (IOContract.OpenDirFailureErrFields(fs, accessPath) == 0) &&
+    IOContract.OpenDirOutcomeFields(fs, accessPath, tree.openOk, tree.openErr) &&
     (if !tree.openOk then
-       tree.openErr == IOContract.OpenDirFailureErrFields(fs, accessPath) &&
        tree.openErr > 0 && !tree.statusOk && !tree.cycle &&
        tree.listingFirstStatus == tree.firstStatus &&
        tree.listingAfterStatus == tree.firstStatus &&
@@ -687,12 +686,12 @@ module LsCore {
     observation.index < |cmd.operands| &&
     observation.operand == cmd.operands[observation.index] &&
     observation.path == Spec.MakeAbsoluteSpec(cwd, observation.operand) &&
-    observation.sectionAvailable ==
-    (observation.operandClass == Spec.ExpandedDirectory &&
-     IOContract.OpenDirFailureErrFields(fs, observation.path) == 0) &&
+    (observation.sectionAvailable ==>
+       observation.operandClass == Spec.ExpandedDirectory &&
+       IOContract.OpenDirOutcomeFields(fs, observation.path, true, 0)) &&
     match Spec.OperandStatusResultSpec(cmd, fs, observation.path, observation.firstStatus)
     case Err(error) =>
-      !observation.ok &&
+      !observation.ok && !observation.sectionAvailable &&
       observation.err == IOContract.IOErrorErrno(error) &&
       observation.operandClass == Spec.AccessFailure &&
       observation.afterStatus == observation.firstStatus +
@@ -713,6 +712,7 @@ module LsCore {
               RecursiveDirectorySummary(
                 cmd, fs, observation.operand, observation.path,
                 {}, tree) &&
+              tree.openOk &&
               tree.firstStatus == observation.firstStatus +
                 Spec.OperandStatusCallCountSpec(cmd, fs, observation.path,
                                                 observation.firstStatus) &&
@@ -746,9 +746,10 @@ module LsCore {
             Spec.OperandStatusCallCountSpec(cmd, fs, observation.path,
                                             observation.firstStatus) &&
           observation.body == [] &&
-          observation.sectionErrors == Spec.OpenDirectoryErrorMessageSpec(
-            observation.operand,
-            IOContract.OpenDirFailureErrFields(fs, observation.path)) &&
+          (exists openErr: int ::
+            IOContract.OpenDirOutcomeFields(fs, observation.path, false, openErr) &&
+            observation.sectionErrors == Spec.OpenDirectoryErrorMessageSpec(
+              observation.operand, openErr)) &&
           observation.failed && !observation.hasCycle
       else
         observation.operandClass == Spec.DirectOperand &&
@@ -775,8 +776,9 @@ module LsCore {
     requires observation.status.kind == BenchWorld.DirectoryKind &&
              !cmd.listDirectories && cmd.recursive
     requires observation.accessErrors == []
-    requires observation.sectionAvailable ==
-             (IOContract.OpenDirFailureErrFields(fs, observation.path) == 0)
+    requires observation.sectionAvailable == tree.openOk
+    requires IOContract.OpenDirOutcomeFields(
+               fs, observation.path, tree.openOk, tree.openErr)
     requires Spec.OperandStatusResultSpec(
                cmd, fs, observation.path, observation.firstStatus) ==
              Result.Ok(observation.status)
@@ -798,7 +800,7 @@ module LsCore {
                                         observation.firstStatus) &&
       observation.body == [] &&
       observation.sectionErrors == Spec.OpenDirectoryErrorMessageSpec(
-        observation.operand, IOContract.OpenDirFailureErrFields(fs, observation.path)) &&
+        observation.operand, tree.openErr) &&
       observation.failed && !observation.hasCycle
     ensures OperandObservationSummary(cmd, fs, cwd, observation)
   {
@@ -819,8 +821,9 @@ module LsCore {
     requires observation.status.kind == BenchWorld.DirectoryKind &&
              !cmd.listDirectories && !cmd.recursive
     requires observation.accessErrors == []
-    requires observation.sectionAvailable ==
-             (IOContract.OpenDirFailureErrFields(fs, observation.path) == 0)
+    requires IOContract.OpenDirOutcomeFields(
+               fs, observation.path, observation.sectionAvailable,
+               if observation.sectionAvailable then 0 else readErr)
     requires Spec.OperandStatusResultSpec(
                cmd, fs, observation.path, observation.firstStatus) ==
              Result.Ok(observation.status)
@@ -841,7 +844,7 @@ module LsCore {
                                         observation.firstStatus) &&
       observation.body == [] &&
       observation.sectionErrors == Spec.OpenDirectoryErrorMessageSpec(
-        observation.operand, IOContract.OpenDirFailureErrFields(fs, observation.path)) &&
+        observation.operand, readErr) &&
       observation.failed && !observation.hasCycle
     ensures OperandObservationSummary(cmd, fs, cwd, observation)
   {
@@ -1700,15 +1703,15 @@ module LsCore {
     requires cmd.statusContext.BoundStatusObservations?
     requires cmd.statusContext.observations == io.statusObservations()
     modifies io.dirHandlesRegion, io.statusObservationsRegion
-    ensures wasOpened ==
-            (IOContract.OpenDirFailureErrFields(old(io.fs()), path) == 0)
+    ensures IOContract.OpenDirOutcomeFields(
+              old(io.fs()), path, wasOpened, if wasOpened then 0 else readErr)
     ensures wasOpened ==> DirectoryListingSummary(
               cmd, displayPath, old(io.fs()), path,
               old(io.statusCursor()), io.statusCursor(),
               observations, readErr, output, errors, hadError)
     ensures !wasOpened ==>
               observations == [] &&
-              readErr == IOContract.OpenDirFailureErrFields(old(io.fs()), path) &&
+              readErr > 0 &&
               output == [] &&
               errors == Spec.OpenDirectoryErrorMessageSpec(displayPath, readErr) &&
               hadError && io.statusCursor() == old(io.statusCursor())
@@ -1832,6 +1835,8 @@ module LsCore {
     ensures RecursiveDirectorySummary(
               cmd, fs, displayPath, accessPath, ancestors, tree)
   {
+    assert IOContract.OpenDirOutcomeFields(fs, accessPath, true, 0);
+    hide *;
     reveal RecursivePrefixSummary(
            cmd, fs, displayPath, ancestors + {tree.openedStatus.hostKey},
            tree.observations, tree.listingOutput,
@@ -2066,11 +2071,12 @@ module LsCore {
     modifies io.dirHandlesRegion, io.statusObservationsRegion
     ensures RecursiveDirectorySummary(
               cmd, old(io.fs()), displayPath, accessPath, ancestors, tree)
-    ensures wasOpened ==
-            (IOContract.OpenDirFailureErrFields(old(io.fs()), accessPath) == 0)
+    ensures wasOpened == tree.openOk
+    ensures IOContract.OpenDirOutcomeFields(
+              old(io.fs()), accessPath, wasOpened, tree.openErr)
     ensures !wasOpened ==>
               errors == Spec.OpenDirectoryErrorMessageSpec(
-                displayPath, IOContract.OpenDirFailureErrFields(old(io.fs()), accessPath)) &&
+                displayPath, tree.openErr) &&
               hadError && io.statusCursor() == old(io.statusCursor())
     ensures !wasOpened ==> !hasCycle
     ensures hasCycle == Spec.RecursiveHasCycle(tree)
@@ -2446,8 +2452,7 @@ module LsCore {
           preStatus, io.statusCursor());
         assert recursiveTree.firstStatus == afterOperandStatus;
         assert recursiveTree.afterStatus == observation.afterStatus;
-        assert observation.sectionAvailable ==
-          (IOContract.OpenDirFailureErrFields(preFs, path) == 0);
+        assert observation.sectionAvailable == recursiveTree.openOk;
         ExpandedRecursiveOperandSummary(
           cmd, preFs, cwd, observation, recursiveTree);
       } else {
@@ -2464,8 +2469,9 @@ module LsCore {
           index, operand, operand, path, true, status, 0, Spec.ExpandedDirectory,
           wasOpened, if wasOpened then body else [], [], sectionErrors, failed, false,
           preStatus, io.statusCursor());
-        assert observation.sectionAvailable ==
-          (IOContract.OpenDirFailureErrFields(preFs, path) == 0);
+        assert IOContract.OpenDirOutcomeFields(
+          preFs, path, observation.sectionAvailable,
+          if observation.sectionAvailable then 0 else readErr);
         assert Spec.OperandStatusResultSpec(cmd, preFs, path, preStatus) ==
           Result.Ok(status);
         if wasOpened {
@@ -2483,7 +2489,7 @@ module LsCore {
           assert io.statusCursor() == afterOperandStatus;
           assert observation.body == [];
           assert observation.sectionErrors == Spec.OpenDirectoryErrorMessageSpec(
-            operand, IOContract.OpenDirFailureErrFields(preFs, path));
+            operand, readErr);
         }
         assert observation.index < |cmd.operands|;
         assert observation.operand == cmd.operands[observation.index];
@@ -2511,7 +2517,7 @@ module LsCore {
           observation.body == [] &&
           observation.sectionErrors == Spec.OpenDirectoryErrorMessageSpec(
             observation.operand,
-            IOContract.OpenDirFailureErrFields(preFs, observation.path)) &&
+            readErr) &&
           observation.failed by {
           if observation.sectionAvailable {
             assert wasOpened;

@@ -781,14 +781,9 @@ module ChmodRecursiveRuntime {
     var openErr := IOContract.ResultErrno(openDirResult);
     LookupProof.OpenDirFailureClassification(startFs, identity.accessPath);
     if !openOk {
-      assert openErr ==
-             IOContract.OpenDirFailureErrFields(
-               startFs, identity.accessPath
-             );
-      assert IOContract.OpenDirFailureErrFields(
-          startFs, identity.accessPath
-        ) != 0;
-      assert openErr != 0;
+      assert IOContract.OpenDirOutcomeFields(
+        startFs, identity.accessPath, false, openErr);
+      assert openErr > 0;
       AppendRuntimeReadFailure(cmd, identity.displayPath, openErr, io);
       allOk := false;
       children := [];
