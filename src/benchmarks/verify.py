@@ -16,7 +16,7 @@ from entry_contract import (
 from standard_library import DAFNY_ALLOW_WARNINGS_OPTION
 from verification import verification_options, verify_contract
 
-from .definition import BenchmarkDefinition, BenchmarkKind, class_name_for_task_id
+from .definition import BenchmarkDefinition, class_name_for_task_id
 
 
 def local_verification_contract(
@@ -25,10 +25,9 @@ def local_verification_contract(
     definition = BenchmarkDefinition.from_yaml_file(project / "benchmark.yaml")
     name = class_name_for_task_id(definition.task_id)
     support = {source for library in libraries for source in library.rglob("*.dfy")}
-    symbol = f"{name}.RunCore"
-    if definition.kind is BenchmarkKind.COREUTILS:
-        symbol = f"{name}.{name}BenchmarkItem.RunCore"
-        support.update((project / f"{name}Cli.dfy", project / f"{name}Schema.dfy"))
+    support.update((project.parent.parent / "core").rglob("*.dfy"))
+    symbol = f"{name}.{name}BenchmarkItem.RunCore"
+    support.update((project / f"{name}Cli.dfy", project / f"{name}Schema.dfy"))
     return project_verification_contract(project, DafnyEntry(f"{name}.dfy", symbol), support)
 
 

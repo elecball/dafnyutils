@@ -4,3 +4,5 @@ kind: algorithm
 source:
   status: incomplete
   name: TODO
+capabilities:
+  fixed_cases: true

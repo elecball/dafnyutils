@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from .definition import BenchmarkKind
+from .definition import BenchmarkEvaluation
 
 
 class EvaluationName(StrEnum):
@@ -24,28 +24,32 @@ class OracleExecutionLocation(StrEnum):
 class MandatoryCheck:
     name: str
     evaluation: EvaluationName
-    kinds: frozenset[BenchmarkKind] = frozenset(BenchmarkKind)
+    requires_fuzzer: bool = False
     location: OracleExecutionLocation = OracleExecutionLocation.EVALUATOR_CONTAINER
 
 
 MANDATORY_CHECKS = (
     MandatoryCheck("impl_layout", EvaluationName.LAYOUT),
-    MandatoryCheck(
-        "implementation_tests", EvaluationName.TESTCASE, frozenset({BenchmarkKind.COREUTILS})
-    ),
+    MandatoryCheck("implementation_tests", EvaluationName.TESTCASE),
     MandatoryCheck(
         "fuzzer",
         EvaluationName.FUZZING,
-        frozenset({BenchmarkKind.COREUTILS}),
-        OracleExecutionLocation.TRUSTED_HOST,
+        requires_fuzzer=True,
+        location=OracleExecutionLocation.TRUSTED_HOST,
     ),
     MandatoryCheck("proof_layout", EvaluationName.LAYOUT),
     MandatoryCheck("dafny_verify", EvaluationName.VERIFICATION),
 )
 
 
-def required_checks_for_kind(kind: BenchmarkKind) -> tuple[str, ...]:
-    return tuple(check.name for check in MANDATORY_CHECKS if kind in check.kinds)
+def required_checks_for_evaluation_capabilities(
+    evaluation: BenchmarkEvaluation,
+) -> tuple[str, ...]:
+    return tuple(
+        check.name
+        for check in MANDATORY_CHECKS
+        if not check.requires_fuzzer or evaluation.fuzzer_target is not None
+    )
 
 
 def location_for_check(name: str) -> OracleExecutionLocation:

@@ -32,6 +32,13 @@ class SourceStatus(str, Enum):
     INCOMPLETE = "incomplete"
 
 
+class OutputContract(str, Enum):
+    TOKENS = "tokens"
+    INTEGER = "integer"
+    COVERING_CELL = "covering-cell"
+    MINIMAL_FRAME = "minimal-frame"
+
+
 # These are the only pre-manifest-migration tasks allowed to retain unknown provenance.
 LEGACY_TASK_IDS = frozenset(
     {
@@ -151,9 +158,20 @@ class BenchmarkSource(_DefinitionModel):
 
 @dataclass(frozen=True)
 class BenchmarkEvaluation:
-    test_path: str | None
+    test_path: str
     cases_path: str | None
     fuzzer_target: str | None
+    reference_executable: str | None
+    output_contract: OutputContract
+
+
+class BenchmarkCapabilities(_DefinitionModel):
+    """Declare optional oracle providers without changing the candidate interface."""
+
+    fixed_cases: bool = False
+    gnu_reference: bool = False
+    fuzzer: bool = False
+    output_contract: OutputContract = OutputContract.TOKENS
 
 
 class BenchmarkDefinition(_DefinitionModel):
@@ -161,6 +179,7 @@ class BenchmarkDefinition(_DefinitionModel):
     task_id: str
     kind: BenchmarkKind
     source: BenchmarkSource
+    capabilities: BenchmarkCapabilities
 
     @field_validator("task_id")
     @classmethod
@@ -195,9 +214,15 @@ class BenchmarkDefinition(_DefinitionModel):
 
     @property
     def evaluation(self) -> BenchmarkEvaluation:
-        if self.kind is BenchmarkKind.COREUTILS:
-            return BenchmarkEvaluation(f"{self.item_directory}/Tests.py", None, self.task_id)
-        return BenchmarkEvaluation(None, None, None)
+        return BenchmarkEvaluation(
+            test_path=f"{self.item_directory}/Tests.py",
+            cases_path=(
+                f"{self.item_directory}/cases.json" if self.capabilities.fixed_cases else None
+            ),
+            fuzzer_target=self.task_id if self.capabilities.fuzzer else None,
+            reference_executable=self.task_id if self.capabilities.gnu_reference else None,
+            output_contract=self.capabilities.output_contract,
+        )
 
     @classmethod
     def from_yaml_file(cls, path: Path) -> BenchmarkDefinition:

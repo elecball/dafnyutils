@@ -50,32 +50,16 @@ Output
 In the first sample, Jamie needs to wake up at 11:23. So, he can set his alarm at 11:17. He would press the snooze button when the alarm rings at 11:17 and at 11:20.
 
 In the second sample, Jamie can set his alarm at exactly at 01:07 which is lucky.
-## Apps Parser
 
-The evaluator uses the following parser to convert each raw stdin/stdout positive test case into typed arguments. The implementation test compares `Solve(...)` return values against the output values returned by this parser.
+## Command-line interface
 
-```python
-def parser(input: str, output: str) -> tuple[int, int, int, int]:
-    """
-    Parses the problem input and output into (x, hh, mm, y).
-    """
-    s = input.strip()
-    if not s:
-        raise ValueError("Empty input")
-    lines = [line.strip() for line in s.splitlines() if line.strip() != ""]
-    first = lines[0].split()
-    x = int(first[0])
-    if len(lines) >= 2:
-        parts = lines[1].split()
-    else:
-        parts = first[1:]
-    if len(parts) < 2:
-        raise ValueError("Could not parse hh and mm")
-    hh = int(parts[0])
-    mm = int(parts[1])
-    out_tokens = output.strip().split()
-    if not out_tokens:
-        raise ValueError("Empty output")
-    y = int(out_tokens[0])
-    return (x, hh, mm, y)
-```
+Run the compiled executable with no arguments and supply the problem input on
+standard input. `Algorithm4Schema.dfy` parses that input before the shared runner
+invokes `Algorithm4.Algorithm4BenchmarkItem.RunCore(raw, io)`. Successful runs print
+the problem output and exit 0. Invalid input or arguments produce a diagnostic
+and exit 2; an input/output failure exits 1, including a partially committed write.
+
+The mathematical answer relation remains `Algorithm4Spec.Answer`; the principal
+`Algorithm4Spec.Spec` relates it to the observable standard output and exit status.
+Runtime evaluation executes every fixed input through this command-line interface.
+Where the problem permits several answers, the checker accepts each valid answer.

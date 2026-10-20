@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from benchmarks.definition import BenchmarkKind
 from benchmarks.repository import BenchmarkRepository
 
 
@@ -11,7 +10,11 @@ def affected_task_ids(
     changed_paths: tuple[str, ...],
 ) -> tuple[str, ...]:
     all_ids = set(repository.task_ids())
-    coreutils_ids = set(repository.task_ids(BenchmarkKind.COREUTILS))
+    fuzzer_ids = {
+        definition.task_id
+        for definition in repository.definitions()
+        if definition.evaluation.fuzzer_target is not None
+    }
     affected: set[str] = set()
     for raw_path in changed_paths:
         path = Path(raw_path)
@@ -21,7 +24,7 @@ def affected_task_ids(
         elif len(parts) >= 3 and parts[:2] == ("bench", "algorithm"):
             affected.add(f"algorithm-{parts[2]}")
         elif raw_path.startswith("tools/coreutils_fuzzer/"):
-            affected.update(coreutils_ids)
+            affected.update(fuzzer_ids)
         elif raw_path == "tools/bench_test_support.py":
             affected.update(all_ids)
         elif (

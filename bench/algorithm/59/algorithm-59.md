@@ -48,46 +48,16 @@ NO
 -----Note-----
 
 In the first example you may swap a_3 and a_4, and then swap a_4 and a_5.
-## Apps Parser
 
-The evaluator uses the following parser to convert each raw stdin/stdout positive test case into typed arguments. The implementation test compares `Solve(...)` return values against the output values returned by this parser.
+## Command-line interface
 
-```python
-def parser(input: str, output: str) -> tuple[int, list[int], str, str]:
-    lines = [ln.strip() for ln in input.strip().splitlines() if ln.strip() != ""]
-    if not lines:
-        raise ValueError("Empty input")
-    first_tokens = lines[0].split()
-    try:
-        n = int(first_tokens[0])
-    except Exception as e:
-        raise ValueError("First token is not an integer n") from e
-    a_tokens: list[str] = []
-    if len(first_tokens) > 1:
-        a_tokens.extend(first_tokens[1:])
-    if len(lines) >= 2:
-        for ln in lines[1:-1]:
-            a_tokens.extend(ln.split())
-    if len(a_tokens) < n:
-        all_tokens = input.strip().split()
-        collected: list[str] = []
-        for tok in all_tokens[1:]:
-            if tok.lstrip("-").isdigit():
-                collected.append(tok)
-                if len(collected) >= n:
-                    break
-        if len(collected) >= len(a_tokens):
-            a_tokens = collected
-    if len(a_tokens) < n:
-        raise ValueError("Malformed input: not enough array elements")
-    try:
-        a = [int(x) for x in a_tokens[:n]]
-    except Exception as e:
-        raise ValueError("Array elements are not all integers") from e
-    if len(lines) < 2:
-        raise ValueError("Malformed input: missing string s")
-    s_line = lines[-1]
-    s = "".join((ch for ch in s_line if ch in "01"))
-    out = output.strip()
-    return (n, a, s, out)
-```
+Run the compiled executable with no arguments and supply the problem input on
+standard input. `Algorithm59Schema.dfy` parses that input before the shared runner
+invokes `Algorithm59.Algorithm59BenchmarkItem.RunCore(raw, io)`. Successful runs print
+the problem output and exit 0. Invalid input or arguments produce a diagnostic
+and exit 2; an input/output failure exits 1, including a partially committed write.
+
+The mathematical answer relation remains `Algorithm59Spec.Answer`; the principal
+`Algorithm59Spec.Spec` relates it to the observable standard output and exit status.
+Runtime evaluation executes every fixed input through this command-line interface.
+Where the problem permits several answers, the checker accepts each valid answer.

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from benchmarks.generated_profile import generate_task_profile
-from benchmarks.profiles import coreutils_dafny_analysis_support_files
+from benchmarks.profiles import dafny_analysis_support_files
 from benchmarks.repository import BenchmarkRepository
 from entry_contract import (
     DafnyEntry,
@@ -26,7 +26,7 @@ def test_chmod_entry_contract_records_split_specification_sources() -> None:
         ),
         (
             root / "bench/utils/chmod/ChmodCli.dfy",
-            *(root / path for path in coreutils_dafny_analysis_support_files("chmod")),
+            *(root / path for path in dafny_analysis_support_files()),
         ),
     )
 

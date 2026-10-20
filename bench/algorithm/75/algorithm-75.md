@@ -58,73 +58,16 @@ Input
 Output
 YES
 3 3
-## Apps Parser
 
-The evaluator uses the following parser to convert each raw stdin/stdout positive test case into typed arguments. The implementation test compares `Solve(...)` return values against the output values returned by this parser.
+## Command-line interface
 
-```python
-def parser(input: str, output: str) -> tuple[int, int, list[str], str, int, int]:
-    in_lines = input.strip().splitlines()
-    idx = 0
-    while idx < len(in_lines) and in_lines[idx].strip() == "":
-        idx += 1
-    n = 0
-    m = 0
-    grid: list[str] = []
-    if idx < len(in_lines):
-        first = in_lines[idx].strip()
-        idx += 1
-        parts = first.split()
-        if len(parts) >= 2:
-            try:
-                n = int(parts[0])
-                m = int(parts[1])
-            except ValueError:
-                n = 0
-                m = 0
-        for _ in range(n):
-            row = ""
-            if idx < len(in_lines):
-                row = in_lines[idx].rstrip("\n").rstrip("\r")
-                idx += 1
-            if " " in row or "\t" in row:
-                row = "".join((ch for ch in row if ch not in (" ", "\t")))
-            grid.append(row)
-    out_status = "NO"
-    out_x = 0
-    out_y = 0
-    out_tokens = output.strip().split()
-    if out_tokens:
-        first_tok = out_tokens[0].upper()
-        if first_tok == "YES":
-            out_status = "YES"
-            nums = []
-            for tok in out_tokens[1:]:
-                try:
-                    nums.append(int(tok))
-                except ValueError:
-                    continue
-                if len(nums) == 2:
-                    break
-            if len(nums) == 2:
-                out_x, out_y = (nums[0], nums[1])
-        elif first_tok == "NO":
-            out_status = "NO"
-        else:
-            has_yes = any((tok.upper() == "YES" for tok in out_tokens))
-            if has_yes:
-                out_status = "YES"
-                nums = []
-                for tok in out_tokens:
-                    try:
-                        nums.append(int(tok))
-                    except ValueError:
-                        continue
-                    if len(nums) == 2:
-                        break
-                if len(nums) == 2:
-                    out_x, out_y = (nums[0], nums[1])
-            else:
-                out_status = "NO"
-    return (n, m, grid, out_status, out_x, out_y)
-```
+Run the compiled executable with no arguments and supply the problem input on
+standard input. `Algorithm75Schema.dfy` parses that input before the shared runner
+invokes `Algorithm75.Algorithm75BenchmarkItem.RunCore(raw, io)`. Successful runs print
+the problem output and exit 0. Invalid input or arguments produce a diagnostic
+and exit 2; an input/output failure exits 1, including a partially committed write.
+
+The mathematical answer relation remains `Algorithm75Spec.Answer`; the principal
+`Algorithm75Spec.Spec` relates it to the observable standard output and exit status.
+Runtime evaluation executes every fixed input through this command-line interface.
+Where the problem permits several answers, the checker accepts each valid answer.

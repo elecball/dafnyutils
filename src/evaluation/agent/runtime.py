@@ -458,8 +458,7 @@ def _prepare_agent_sandbox_context(
     agent_artifact_dir.mkdir(parents=True, exist_ok=True)
     oracle_block = prepare_oracle_executable_block(
         control_dir=control_dir,
-        task_domain=prepared_candidate.configuration.task_domain,
-        utility_name=utility_name,
+        reference_executable=prepared_candidate.configuration.evaluation.reference_executable,
     )
     task_payload = write_agent_task(prepared_candidate, release.manifest, roots.task_root)
     prompt = agent_prompt(task_payload)

@@ -62,31 +62,16 @@ Input
 
 Output
 3
-## Apps Parser
 
-The evaluator uses the following parser to convert each raw stdin/stdout positive test case into typed arguments. The implementation test compares `Solve(...)` return values against the output values returned by this parser.
+## Command-line interface
 
-```python
-def parser(input: str, output: str) -> tuple[int, list[int], int]:
-    """
-    Returns a tuple (n, a, out).
+Run the compiled executable with no arguments and supply the problem input on
+standard input. `Algorithm4004Schema.dfy` parses that input before the shared runner
+invokes `Algorithm4004.Algorithm4004BenchmarkItem.RunCore(raw, io)`. Successful runs print
+the problem output and exit 0. Invalid input or arguments produce a diagnostic
+and exit 2; an input/output failure exits 1, including a partially committed write.
 
-    - Robustly parses n from the first token of input.
-    - Collects exactly n integers for the array a (ignores any extras).
-    - Parses the first integer token from output (handles negatives and whitespace).
-    """
-    tokens = input.strip().split()
-    if not tokens:
-        n = 0
-        a = []
-    else:
-        n = int(tokens[0])
-        a = []
-        for tok in tokens[1:]:
-            if len(a) >= n:
-                break
-            a.append(int(tok))
-    out_tokens = output.strip().split()
-    out_val = int(out_tokens[0]) if out_tokens else 0
-    return (n, a, out_val)
-```
+The mathematical answer relation remains `Algorithm4004Spec.Answer`; the principal
+`Algorithm4004Spec.Spec` relates it to the observable standard output and exit status.
+Runtime evaluation executes every fixed input through this command-line interface.
+Where the problem permits several answers, the checker accepts each valid answer.

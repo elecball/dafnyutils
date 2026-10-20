@@ -54,25 +54,16 @@ YES
 -----Note-----
 
 The three examples are shown on the pictures below from left to right. The starting position of Misha is shown with green, the ending position is shown with pink. Note that the positions of the hands on the pictures are not exact, but are close to the exact and the answer is the same. $\oplus 0 \theta$
-## Apps Parser
 
-The evaluator uses the following parser to convert each raw stdin/stdout positive test case into typed arguments. The implementation test compares `Solve(...)` return values against the output values returned by this parser.
+## Command-line interface
 
-```python
-def parser(input: str, output: str) -> tuple[int, int, int, int, int, str]:
-    """
-    Parse the problem input and output into Python values.
-    Returns a tuple: (h, m, s, t1, t2, result)
-    """
-    tokens = input.strip().split()
-    if len(tokens) < 5:
-        import re
+Run the compiled executable with no arguments and supply the problem input on
+standard input. `Algorithm3690Schema.dfy` parses that input before the shared runner
+invokes `Algorithm3690.Algorithm3690BenchmarkItem.RunCore(raw, io)`. Successful runs print
+the problem output and exit 0. Invalid input or arguments produce a diagnostic
+and exit 2; an input/output failure exits 1, including a partially committed write.
 
-        nums = re.findall("-?\\d+", input)
-    else:
-        nums = tokens
-    nums = nums[:5]
-    h, m, s, t1, t2 = map(int, nums)
-    result = output.strip().upper()
-    return (h, m, s, t1, t2, result)
-```
+The mathematical answer relation remains `Algorithm3690Spec.Answer`; the principal
+`Algorithm3690Spec.Spec` relates it to the observable standard output and exit status.
+Runtime evaluation executes every fixed input through this command-line interface.
+Where the problem permits several answers, the checker accepts each valid answer.

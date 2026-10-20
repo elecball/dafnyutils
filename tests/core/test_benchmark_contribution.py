@@ -43,6 +43,7 @@ def test_new_definition_cannot_claim_legacy_provenance() -> None:
         "schema_version": "benchmark.definition.v2",
         "task_id": "new-task",
         "kind": "coreutils",
+        "capabilities": {"gnu_reference": True, "fuzzer": True},
         "source": {
             "status": "legacy-unverified",
             "name": "Unknown",
@@ -60,6 +61,7 @@ def test_definition_rejects_unsupported_schema_version(schema_version: str) -> N
         "schema_version": schema_version,
         "task_id": "sample",
         "kind": "coreutils",
+        "capabilities": {"gnu_reference": True, "fuzzer": True},
         "source": {
             "status": "verified",
             "name": "Sample source",
@@ -78,6 +80,7 @@ def test_definition_rejects_legacy_path_override() -> None:
         "schema_version": "benchmark.definition.v2",
         "task_id": "sample",
         "kind": "coreutils",
+        "capabilities": {"gnu_reference": True, "fuzzer": True},
         "source": {
             "status": "verified",
             "name": "Sample source",
@@ -112,7 +115,9 @@ def test_affected_task_selection_uses_manifest_families() -> None:
     repository = BenchmarkRepository.open(ROOT)
 
     assert affected_task_ids(repository, ("bench/utils/cat/CatSpec.dfy",)) == ("cat",)
-    assert affected_task_ids(repository, ("bench/algorithm/1/Spec.dfy",)) == ("algorithm-1",)
+    assert affected_task_ids(repository, ("bench/algorithm/1/Algorithm1Spec.dfy",)) == (
+        "algorithm-1",
+    )
     assert set(affected_task_ids(repository, ("tools/coreutils_fuzzer/src/lib.rs",))) == set(
         repository.task_ids(BenchmarkKind.COREUTILS)
     )
@@ -155,9 +160,9 @@ def test_affected_selection_retains_missing_deleted_or_renamed_ids() -> None:
     ) == ("algorithm-999", "deleted", "replacement")
 
 
-# Each family keeps its prerequisite, test, fuzz, and proof command order.
+# Every CLI task runs runtime and proof checks with its optional oracle capabilities.
 @pytest.mark.parametrize("task_id", ("cat", "algorithm-1"))
-def test_check_plan_keeps_required_family_checks(task_id: str) -> None:
+def test_check_plan_keeps_required_capability_checks(task_id: str) -> None:
     repository = BenchmarkRepository.open(ROOT)
     commands = check_commands(ROOT, repository.load_definition(task_id))
 
@@ -168,10 +173,10 @@ def test_check_plan_keeps_required_family_checks(task_id: str) -> None:
             "implementation-tests",
             "fuzzer",
             "dafny-verify",
-            "utility-proof-tests",
+            "benchmark-proof-tests",
         )
         if task_id == "cat"
-        else ("build", "dafny-verify")
+        else ("build", "implementation-tests", "dafny-verify", "benchmark-proof-tests")
     )
     assert tuple(command.name for command in commands) == expected
     proof = next(command for command in commands if command.name == "dafny-verify")
@@ -219,7 +224,7 @@ def test_verification_session_includes_algorithm_core_and_proof() -> None:
 
     sources = {path.name for path in contract.verification_sources}
 
-    assert {"Algorithm1.dfy", "Core.dfy", "Proof.dfy"} <= sources
+    assert {"Algorithm1.dfy", "Algorithm1Core.dfy", "Algorithm1Proof.dfy"} <= sources
 
 
 # A failed mandatory command stops the check and is never reported as success.

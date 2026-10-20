@@ -203,14 +203,12 @@ def seed_workspace_isolation_tools(run_root: Path) -> None:
 def prepare_oracle_executable_block(
     *,
     control_dir: Path,
-    task_domain: str | None,
-    utility_name: str,
+    reference_executable: str | None,
 ) -> OracleExecutableBlock | None:
     """Create the benchmark-owned bind mount that hides a coreutils oracle."""
-    if task_domain == "algorithm":
+    if reference_executable is None:
         return None
-    if task_domain is not None:
-        raise ValueError(f"unsupported task domain for oracle isolation: {task_domain}")
+    utility_name = reference_executable
     if re.fullmatch(r"[a-z0-9][a-z0-9-]*", utility_name) is None:
         raise ValueError(f"invalid coreutils oracle executable name: {utility_name}")
     block_dir = control_dir / "oracle-executable-block"

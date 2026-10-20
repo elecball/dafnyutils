@@ -8,8 +8,7 @@ from typing import Any
 from benchmarks.paths import REPO_ROOT
 from benchmarks.profiles import (
     ResolvedBenchmark,
-    coreutils_dafny_analysis_support_paths,
-    is_algorithm_utility,
+    benchmark_dafny_analysis_support_paths,
     utility_paths,
 )
 from entry_contract import DafnyEntry, EntryContractAnalysis, analyze_entry_contract
@@ -42,15 +41,11 @@ def dafny_analysis_support_paths_for_entry(
 ) -> tuple[Path, ...]:
     """Resolve the support boundary from profile entry data."""
     repository_root = REPO_ROOT if repository_root is None else repository_root
-    extra_paths = (
-        ()
-        if is_algorithm_utility(utility_name)
-        else (*(repository_root / path for path in support_source_paths),)
-    )
+    extra_paths = tuple(repository_root / path for path in support_source_paths)
     return tuple(
         sorted(
             {
-                *coreutils_dafny_analysis_support_paths(utility_name, repository_root),
+                *benchmark_dafny_analysis_support_paths(repository_root),
                 *extra_paths,
             }
         )

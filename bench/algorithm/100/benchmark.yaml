@@ -4,3 +4,6 @@ kind: algorithm
 source:
   status: legacy-unverified
   name: Existing algorithm benchmark material
+capabilities:
+  fixed_cases: true
+  output_contract: minimal-frame

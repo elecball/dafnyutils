@@ -12,7 +12,6 @@ from benchmarks.contracts import analyze_task_entry_contract
 from benchmarks.paths import REPO_ROOT
 from benchmarks.profiles import (
     ResolvedBenchmark,
-    is_algorithm_utility,
     utility_paths,
 )
 from benchmarks.task import TaskProfile, TaskResourceKind
@@ -27,7 +26,7 @@ from evaluation.task.specification_source import (
 )
 from runtime.filesystem import copy_entry, copy_tree_within_root, path_within_root, remove_entry
 
-EVALUATOR_ONLY_UTILITY_FILENAMES = ("Tests.dfy", "Tests.py", "Makefile")
+EVALUATOR_ONLY_FILENAMES = ("Tests.dfy", "Tests.py", "cases.json", "Makefile")
 
 
 class _ShellTemplate(Template):
@@ -91,8 +90,7 @@ def _generated_files(
         f"_build/bench/{utility_name}_bench.dll",
         project_config.as_posix(),
     ]
-    if not is_algorithm_utility(utility_name):
-        build_args.append("bench/core/IOExtern.cs")
+    build_args.append("bench/core/IOExtern.cs")
     script_values = {
         "BUILD_ENVIRONMENT": _shell_template(
             "build_environment.sh", {"DOTNET_HEAP_LIMIT": DAFNY_VERIFY_DOTNET_HEAP_LIMIT}
@@ -196,9 +194,7 @@ def task_workspace_spec(
     support_dir = _support_directory(public_task_id)
     read_only_sources.add(support_dir / "entry_contract.json")
     read_only_sources.update(support_dir / name for name in _SUPPORT_SCRIPT_NAMES)
-    hidden_files = (
-        ("Makefile",) if is_algorithm_utility(utility_name) else EVALUATOR_ONLY_UTILITY_FILENAMES
-    )
+    hidden_files = EVALUATOR_ONLY_FILENAMES
     return TaskWorkspaceSpec(
         utility=utility_name,
         utility_dir=utility_dir,

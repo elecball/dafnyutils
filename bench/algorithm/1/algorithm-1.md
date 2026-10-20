@@ -38,25 +38,16 @@ Input
 
 Output
 499
-## Apps Parser
 
-The evaluator uses the following parser to convert each raw stdin/stdout positive test case into typed arguments. The implementation test compares `Solve(...)` return values against the output values returned by this parser.
+## Command-line interface
 
-```python
-def parser(input: str, output: str) -> tuple[int, int]:
-    """
-    Parse the problem input and output into integers.
+Run the compiled executable with no arguments and supply the problem input on
+standard input. `Algorithm1Schema.dfy` parses that input before the shared runner
+invokes `Algorithm1.Algorithm1BenchmarkItem.RunCore(raw, io)`. Successful runs print
+the problem output and exit 0. Invalid input or arguments produce a diagnostic
+and exit 2; an input/output failure exits 1, including a partially committed write.
 
-    Returns:
-      (x, result)
-    """
-    inp = input.strip().split()
-    out = output.strip().split()
-    if not inp:
-        raise ValueError("Empty input")
-    if not out:
-        raise ValueError("Empty output")
-    x = int(inp[0])
-    result = int(out[0])
-    return (x, result)
-```
+The mathematical answer relation remains `Algorithm1Spec.Answer`; the principal
+`Algorithm1Spec.Spec` relates it to the observable standard output and exit status.
+Runtime evaluation executes every fixed input through this command-line interface.
+Where the problem permits several answers, the checker accepts each valid answer.

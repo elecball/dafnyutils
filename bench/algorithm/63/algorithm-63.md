@@ -48,24 +48,16 @@ Output
 In the first example the possible values of x and y are:
 
   x = 0, y = 0;  x = 1, y = 0;  x = 2, y = 0;  x = 0, y = 1.
-## Apps Parser
 
-The evaluator uses the following parser to convert each raw stdin/stdout positive test case into typed arguments. The implementation test compares `Solve(...)` return values against the output values returned by this parser.
+## Command-line interface
 
-```python
-def parser(input: str, output: str) -> tuple[int, int, list[int], int]:
-    import re
+Run the compiled executable with no arguments and supply the problem input on
+standard input. `Algorithm63Schema.dfy` parses that input before the shared runner
+invokes `Algorithm63.Algorithm63BenchmarkItem.RunCore(raw, io)`. Successful runs print
+the problem output and exit 0. Invalid input or arguments produce a diagnostic
+and exit 2; an input/output failure exits 1, including a partially committed write.
 
-    ints = list(map(int, re.findall("-?\\d+", input)))
-    if len(ints) < 2:
-        raise ValueError("Input does not contain enough integers for n and k.")
-    n, k = (ints[0], ints[1])
-    if len(ints) < 2 + n:
-        raise ValueError("Input does not contain enough integers for the array a.")
-    a = ints[2 : 2 + n]
-    m = re.search("-?\\d+", output)
-    if not m:
-        raise ValueError("Output does not contain a valid integer result.")
-    result = int(m.group(0))
-    return (n, k, a, result)
-```
+The mathematical answer relation remains `Algorithm63Spec.Answer`; the principal
+`Algorithm63Spec.Spec` relates it to the observable standard output and exit status.
+Runtime evaluation executes every fixed input through this command-line interface.
+Where the problem permits several answers, the checker accepts each valid answer.

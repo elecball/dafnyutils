@@ -4,3 +4,6 @@ kind: coreutils
 source:
   status: incomplete
   name: TODO
+capabilities:
+  gnu_reference: true
+  fuzzer: true

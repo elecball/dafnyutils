@@ -1,4 +1,4 @@
-includes = ["Algorithm75.dfy"]
+includes = ["Algorithm75Cli.dfy"]
 
 [options]
 target = "cs"

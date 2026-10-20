@@ -15,7 +15,6 @@ from benchmarks.definition import BenchmarkDefinition
 from benchmarks.profiles import (
     FUNCTIONAL_CORE_SOURCE,
     ResolvedBenchmark,
-    is_algorithm_utility,
     utility_paths,
 )
 from benchmarks.task import PublicRule, TaskProfile
@@ -61,7 +60,7 @@ def generate_task_profile(
 ) -> GeneratedTaskProfile:
     """Generate one v2 public contract from a checked source analysis."""
     task_id = definition.task_id
-    resolved = configuration or ResolvedBenchmark.for_task(task_id)
+    resolved = configuration or ResolvedBenchmark.from_definition(definition)
     if resolved.name != task_id:
         raise ValueError("resolved benchmark id does not match the definition")
     analysis = analyze_task_entry_contract(resolved, task_id, repository_root=repository_root)
@@ -170,7 +169,7 @@ def _profile_payload(
             },
             *(
                 []
-                if is_algorithm_utility(task_id)
+                if definition.evaluation.reference_executable is None
                 else [
                     {
                         "rule_id": "diagnostic-locale",

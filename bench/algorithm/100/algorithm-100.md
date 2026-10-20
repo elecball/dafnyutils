@@ -77,34 +77,16 @@ Output
 -----Note-----
 
 In the first sample the required size of the optimal frame equals 4. In the second sample the size of the optimal frame equals 3. In the third sample, the size of the optimal frame is 1. In the fourth sample, the required frame doesn't exist.
-## Apps Parser
 
-The evaluator uses the following parser to convert each raw stdin/stdout positive test case into typed arguments. The implementation test compares `Solve(...)` return values against the output values returned by this parser.
+## Command-line interface
 
-```python
-def parser(input: str, output: str) -> tuple[int, int, list[str], list[str]]:
-    in_lines = input.splitlines()
-    idx = 0
-    while idx < len(in_lines) and in_lines[idx].strip() == "":
-        idx += 1
-    n = 0
-    m = 0
-    if idx < len(in_lines):
-        header = in_lines[idx].lstrip("\ufeff").strip()
-        parts = header.split()
-        if len(parts) >= 2:
-            n, m = (int(parts[0]), int(parts[1]))
-        else:
-            nums = re.findall("-?\\d+", header)
-            if len(nums) >= 2:
-                n, m = (int(nums[0]), int(nums[1]))
-    screen: list[str] = []
-    for i in range(n):
-        line_index = idx + 1 + i
-        if line_index < len(in_lines):
-            screen.append(in_lines[line_index].rstrip("\r"))
-        else:
-            screen.append("")
-    output_lines = [line.rstrip("\r") for line in output.splitlines()]
-    return (n, m, screen, output_lines)
-```
+Run the compiled executable with no arguments and supply the problem input on
+standard input. `Algorithm100Schema.dfy` parses that input before the shared runner
+invokes `Algorithm100.Algorithm100BenchmarkItem.RunCore(raw, io)`. Successful runs print
+the problem output and exit 0. Invalid input or arguments produce a diagnostic
+and exit 2; an input/output failure exits 1, including a partially committed write.
+
+The mathematical answer relation remains `Algorithm100Spec.Answer`; the principal
+`Algorithm100Spec.Spec` relates it to the observable standard output and exit status.
+Runtime evaluation executes every fixed input through this command-line interface.
+Where the problem permits several answers, the checker accepts each valid answer.

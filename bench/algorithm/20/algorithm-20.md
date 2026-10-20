@@ -54,51 +54,16 @@ In the first test case, the minimum number of minutes Karen should sleep for is 
 In the second test case, Karen can wake up immediately, as the current time, 13:31, is already a palindrome.
 
 In the third test case, the minimum number of minutes Karen should sleep for is 1 minute. She can wake up at 00:00, when the time is a palindrome.
-## Apps Parser
 
-The evaluator uses the following parser to convert each raw stdin/stdout positive test case into typed arguments. The implementation test compares `Solve(...)` return values against the output values returned by this parser.
+## Command-line interface
 
-```python
-def parser(input: str, output: str) -> tuple[str, int]:
-    import re
+Run the compiled executable with no arguments and supply the problem input on
+standard input. `Algorithm20Schema.dfy` parses that input before the shared runner
+invokes `Algorithm20.Algorithm20BenchmarkItem.RunCore(raw, io)`. Successful runs print
+the problem output and exit 0. Invalid input or arguments produce a diagnostic
+and exit 2; an input/output failure exits 1, including a partially committed write.
 
-    time = ""
-    s_in = input or ""
-    for line in s_in.splitlines():
-        m = re.fullmatch("\\s*(\\d{2}):(\\d{2})\\s*", line)
-        if m:
-            time = f"{m.group(1)}:{m.group(2)}"
-            break
-    if not time:
-        m = re.search("(\\d{2}):(\\d{2})", s_in)
-        if m:
-            time = f"{m.group(1)}:{m.group(2)}"
-        else:
-            m = re.search("(\\d{1,2}):(\\d{1,2})", s_in)
-            if m:
-                hh = int(m.group(1))
-                mm = int(m.group(2))
-                time = f"{hh:02d}:{mm:02d}"
-            else:
-                time = ""
-                for line in s_in.splitlines():
-                    s = line.strip()
-                    if s:
-                        time = s
-                        break
-                time = time or s_in.strip()
-    s_out = output or ""
-    result: int | None = None
-    for line in s_out.splitlines():
-        t = line.strip()
-        if t.isdigit():
-            result = int(t)
-            break
-    if result is None:
-        m = re.search("\\d+", s_out)
-        if m:
-            result = int(m.group(0))
-        else:
-            result = 0
-    return (time, result)
-```
+The mathematical answer relation remains `Algorithm20Spec.Answer`; the principal
+`Algorithm20Spec.Spec` relates it to the observable standard output and exit status.
+Runtime evaluation executes every fixed input through this command-line interface.
+Where the problem permits several answers, the checker accepts each valid answer.

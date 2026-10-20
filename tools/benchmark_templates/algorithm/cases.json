@@ -1,6 +1,7 @@
-[
-  {
-    "input": "TODO",
-    "expected": "TODO"
-  }
-]
+{
+  "problem_id": "{{TASK_ID}}",
+  "parser": "Legacy parser metadata is inert; the executable parses stdin.",
+  "input_count": 0,
+  "parameters": [],
+  "positive": [{"input": "TODO", "output": "TODO"}]
+}

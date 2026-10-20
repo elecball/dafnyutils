@@ -8,13 +8,18 @@ from pathlib import Path
 
 from benchmarks.paths import REPO_ROOT
 
-from .checks import required_checks_for_kind
-from .definition import BenchmarkKind, benchmark_item_directory, class_name_for_task_id
+from .checks import required_checks_for_evaluation_capabilities
+from .definition import (
+    BenchmarkDefinition,
+    BenchmarkEvaluation,
+    BenchmarkKind,
+    class_name_for_task_id,
+)
 from .repository import BenchmarkRepository
 
 FUNCTIONAL_CORE_SOURCE = "bench/core/Functional.dfy"
 
-COREUTILS_IMPLEMENTATION_SUPPORT_FILES = (
+IMPLEMENTATION_SUPPORT_FILES = (
     "bench/core/Result.dfy",
     "bench/core/Errno.dfy",
     "bench/core/World.dfy",
@@ -39,8 +44,8 @@ COREUTILS_IMPLEMENTATION_SUPPORT_FILES = (
     "bench/core/PathProof.dfy",
     FUNCTIONAL_CORE_SOURCE,
 )
-COREUTILS_DAFNY_ANALYSIS_SUPPORT_FILES = tuple(
-    path for path in COREUTILS_IMPLEMENTATION_SUPPORT_FILES if path.endswith(".dfy")
+DAFNY_ANALYSIS_SUPPORT_FILES = tuple(
+    path for path in IMPLEMENTATION_SUPPORT_FILES if path.endswith(".dfy")
 )
 
 
@@ -75,19 +80,27 @@ class ResolvedBenchmark:
     class_name: str
     official_doc_node: str | None
     task_label: str | None
-    task_domain: str | None
+    item_directory: str
+    evaluation: BenchmarkEvaluation
     task_profile: ResolvedTaskProfile = field(init=False)
 
     @classmethod
     def for_task(cls, task_id: str) -> ResolvedBenchmark:
+        definition = BenchmarkRepository.open(REPO_ROOT).load_definition(task_id)
+        return cls.from_definition(definition)
+
+    @classmethod
+    def from_definition(cls, definition: BenchmarkDefinition) -> ResolvedBenchmark:
+        task_id = definition.task_id
         class_name = derived_utility_class_name(task_id)
-        algorithm = is_algorithm_utility(task_id)
+        algorithm = definition.kind is BenchmarkKind.ALGORITHM
         return cls(
             name=task_id,
             class_name=class_name,
             official_doc_node=None if algorithm else f"{task_id} invocation",
             task_label=f"problem {_algorithm_id(task_id)}" if algorithm else None,
-            task_domain="algorithm" if algorithm else None,
+            item_directory=definition.item_directory,
+            evaluation=definition.evaluation,
         )
 
     def __post_init__(self) -> None:
@@ -132,23 +145,16 @@ def utility_class_name(utility_cfg: ResolvedBenchmark) -> str:
     return utility_cfg.class_name
 
 
-def is_algorithm_utility(utility_name: str) -> bool:
-    return utility_name.startswith("algorithm-")
+def dafny_analysis_support_files() -> tuple[str, ...]:
+    return DAFNY_ANALYSIS_SUPPORT_FILES
 
 
-def coreutils_dafny_analysis_support_files(utility_name: str) -> tuple[str, ...]:
-    if is_algorithm_utility(utility_name):
-        return (FUNCTIONAL_CORE_SOURCE,)
-    return COREUTILS_DAFNY_ANALYSIS_SUPPORT_FILES
-
-
-def coreutils_dafny_analysis_support_paths(
-    utility_name: str,
+def benchmark_dafny_analysis_support_paths(
     root: Path = REPO_ROOT,
 ) -> tuple[Path, ...]:
     """Resolve the extra Dafny sources an entry-contract analysis must read for a task."""
 
-    return tuple(root / path for path in coreutils_dafny_analysis_support_files(utility_name))
+    return tuple(root / path for path in dafny_analysis_support_files())
 
 
 def _algorithm_id(utility_name: str) -> str:
@@ -164,31 +170,16 @@ def derived_dafny_entries(
     utility_name: str,
 ) -> ResolvedDafnyEntry:
     class_name = utility_class_name(utility_cfg)
-    if is_algorithm_utility(utility_name):
-        return ResolvedDafnyEntry(f"{class_name}.dfy", f"{class_name}.RunCore")
     return ResolvedDafnyEntry(
         f"{class_name}.dfy", f"{class_name}.{class_name}BenchmarkItem.RunCore"
     )
 
 
 def utility_paths(utility_cfg: ResolvedBenchmark, utility_name: str) -> dict[str, str]:
-    if is_algorithm_utility(utility_name):
-        utility_dir = benchmark_item_directory(BenchmarkKind.ALGORITHM, utility_name)
-        class_name = utility_cfg.class_name
-        return {
-            "utility_dir": utility_dir,
-            "project_config": f"{utility_dir}/dfyconfig.toml",
-            "schema": f"{utility_dir}/Schema.dfy",
-            "nl_spec": f"{utility_dir}/{utility_name}.md",
-            "spec": f"{utility_dir}/Spec.dfy",
-            "core": f"{utility_dir}/Core.dfy",
-            "proof": f"{utility_dir}/Proof.dfy",
-            "wrapper": f"{utility_dir}/{class_name}.dfy",
-            "cli": f"{utility_dir}/{class_name}Cli.dfy",
-        }
-
     class_name = utility_class_name(utility_cfg)
-    utility_dir = benchmark_item_directory(BenchmarkKind.COREUTILS, utility_name)
+    if utility_name != utility_cfg.name:
+        raise ValueError("benchmark name does not match the resolved configuration")
+    utility_dir = utility_cfg.item_directory
     base = f"{utility_dir}/{class_name}"
     return {
         "utility_dir": utility_dir,
@@ -208,49 +199,17 @@ def derived_task_profile(
     utility_name: str,
 ) -> ResolvedTaskProfile:
     paths = utility_paths(utility_cfg, utility_name)
-    if is_algorithm_utility(utility_name):
-        return _algorithm_task_profile(utility_cfg, utility_name, paths)
-    return _coreutils_task_profile(utility_cfg, utility_name, paths)
-
-
-def _coreutils_task_profile(
-    utility_cfg: ResolvedBenchmark,
-    utility_name: str,
-    paths: dict[str, str],
-) -> ResolvedTaskProfile:
     execution_entry = derived_dafny_entries(utility_cfg, utility_name)
     return _task_profile(
-        support_files=(*COREUTILS_IMPLEMENTATION_SUPPORT_FILES,),
-        required_checks=required_checks_for_kind(BenchmarkKind.COREUTILS),
-        required_outputs=_coreutils_required_outputs(
+        support_files=(*IMPLEMENTATION_SUPPORT_FILES,),
+        required_checks=required_checks_for_evaluation_capabilities(utility_cfg.evaluation),
+        required_outputs=_cli_required_outputs(
             paths,
             execution_entry=execution_entry,
             class_name=utility_class_name(utility_cfg),
         ),
         placeholder_outputs=(),
         execution_entry=execution_entry,
-        editable_outputs=(paths["utility_dir"],),
-    )
-
-
-def _algorithm_task_profile(
-    utility_cfg: ResolvedBenchmark,
-    utility_name: str,
-    paths: dict[str, str],
-) -> ResolvedTaskProfile:
-    return _task_profile(
-        support_files=(
-            paths["schema"],
-            paths["spec"],
-            paths["wrapper"],
-            FUNCTIONAL_CORE_SOURCE,
-        ),
-        required_checks=required_checks_for_kind(BenchmarkKind.ALGORITHM),
-        required_outputs=_required_outputs(
-            paths,
-        ),
-        placeholder_outputs=(paths["core"], paths["proof"]),
-        execution_entry=derived_dafny_entries(utility_cfg, utility_name),
         editable_outputs=(paths["utility_dir"],),
     )
 
@@ -274,7 +233,7 @@ def _task_profile(
     )
 
 
-def _coreutils_required_outputs(
+def _cli_required_outputs(
     paths: dict[str, str],
     *,
     execution_entry: ResolvedDafnyEntry,
@@ -288,14 +247,3 @@ def _coreutils_required_outputs(
             execution_entry.symbol,
         ),
     )
-
-
-def _required_outputs(paths: dict[str, str]) -> tuple[ResolvedOutput, ...]:
-    return (
-        _implementation_output(paths["core"], "proof_editable_core"),
-        ResolvedOutput("proof", paths["proof"], "proof_target"),
-    )
-
-
-def _implementation_output(path: str, role: str) -> ResolvedOutput:
-    return ResolvedOutput("implementation", path, role)

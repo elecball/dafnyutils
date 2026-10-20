@@ -10,8 +10,8 @@ import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
 from pathlib import Path
 
-from benchmarks.checks import required_checks_for_kind
-from benchmarks.definition import BenchmarkDefinition, BenchmarkKind
+from benchmarks.checks import required_checks_for_evaluation_capabilities
+from benchmarks.definition import BenchmarkDefinition
 from benchmarks.repository import BenchmarkRepository
 from benchmarks.validation import load_validated_benchmark
 
@@ -39,40 +39,42 @@ def check_commands(root: Path, definition: BenchmarkDefinition) -> tuple[CheckCo
             ),
         ),
     }
-    if definition.kind is BenchmarkKind.COREUTILS:
-        steps["dafny_verify"] += (
-            CheckCommand(
-                "utility-proof-tests",
-                (
-                    python,
-                    "-m",
-                    "pytest",
-                    "-q",
-                    "-n0",
-                    "--import-mode=importlib",
-                    "-m",
-                    "dafny_verify",
-                    f"{definition.item_directory}/Tests.py",
-                ),
+    steps["dafny_verify"] += (
+        CheckCommand(
+            "benchmark-proof-tests",
+            (
+                python,
+                "-m",
+                "pytest",
+                "-q",
+                "-n0",
+                "--import-mode=importlib",
+                "-m",
+                "dafny_verify",
+                f"{definition.item_directory}/Tests.py",
             ),
-        )
-        steps["implementation_tests"] = (
-            CheckCommand(
-                "coreutils-reference",
-                ("make", "build-coreutils"),
+        ),
+    )
+    reference = (
+        (CheckCommand("coreutils-reference", ("make", "build-coreutils")),)
+        if definition.evaluation.reference_executable is not None
+        else ()
+    )
+    steps["implementation_tests"] = (
+        *reference,
+        CheckCommand(
+            "implementation-tests",
+            (
+                "make",
+                "test",
+                f"TASK={definition.task_id}",
+                f"PYTEST_ARGS=--junitxml={root / pytest_report}",
             ),
-            CheckCommand(
-                "implementation-tests",
-                (
-                    "make",
-                    "test",
-                    f"TASK={definition.task_id}",
-                    f"PYTEST_ARGS=--junitxml={root / pytest_report}",
-                ),
-                test_env,
-                pytest_report,
-            ),
-        )
+            test_env,
+            pytest_report,
+        ),
+    )
+    if definition.evaluation.fuzzer_target is not None:
         steps["fuzzer"] = (
             CheckCommand(
                 "fuzzer",
@@ -88,7 +90,7 @@ def check_commands(root: Path, definition: BenchmarkDefinition) -> tuple[CheckCo
                 ),
             ),
         )
-    required = required_checks_for_kind(definition.kind)
+    required = required_checks_for_evaluation_capabilities(definition.evaluation)
     missing = sorted(set(required) - steps.keys())
     if missing:
         raise ValueError("missing contributor commands for required checks: " + ", ".join(missing))

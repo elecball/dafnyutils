@@ -6,3 +6,6 @@ source:
   name: GNU coreutils rmdir
   url: https://www.gnu.org/software/coreutils/
   license: GPL-3.0-or-later
+capabilities:
+  gnu_reference: true
+  fuzzer: true

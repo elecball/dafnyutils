@@ -12,10 +12,9 @@ from benchmarks.checks import (
     required_checks_for_evaluation,
 )
 from benchmarks.profiles import (
-    COREUTILS_IMPLEMENTATION_SUPPORT_FILES,
-    FUNCTIONAL_CORE_SOURCE,
+    IMPLEMENTATION_SUPPORT_FILES,
     ResolvedBenchmark,
-    coreutils_dafny_analysis_support_files,
+    dafny_analysis_support_files,
     required_checks_for_task,
 )
 from evaluation.submission.oracle_environment import (
@@ -33,18 +32,11 @@ from tests.evaluation.evaluation_test_support import (
 )
 
 
-# Coreutils definition analysis must explicitly target every Dafny support source.
-def test_coreutils_analysis_support_selects_only_dafny_sources() -> None:
-    selected = coreutils_dafny_analysis_support_files("cat")
+# Every command-line task uses the same explicit Dafny support source boundary.
+def test_analysis_support_selects_only_dafny_sources() -> None:
+    selected = dafny_analysis_support_files()
 
-    assert selected == tuple(
-        path for path in COREUTILS_IMPLEMENTATION_SUPPORT_FILES if path.endswith(".dfy")
-    )
-
-
-# Algorithm analysis adds only the shared functional source outside its utility root.
-def test_algorithm_analysis_adds_functional_core_support() -> None:
-    assert coreutils_dafny_analysis_support_files("algorithm-1") == (FUNCTIONAL_CORE_SOURCE,)
+    assert selected == tuple(path for path in IMPLEMENTATION_SUPPORT_FILES if path.endswith(".dfy"))
 
 
 def _utility_cfg(utility_name: str) -> ResolvedBenchmark:
@@ -118,7 +110,7 @@ def test_coreutils_fuzzer_stays_on_host_when_evaluator_checks_are_wrapped() -> N
     assert mapped_fuzzing.commands[0].cwd == fuzzing.commands[0].cwd
 
 
-# Algorithm evaluations schedule build and proof checks.
+# Algorithm evaluations schedule the same mandatory CLI runtime and proof gates.
 def test_algorithm_oracles_use_container_visible_repo_and_workspace_paths() -> None:
     utility_cfg = _utility_cfg("algorithm-63")
     commands = derived_oracle_commands(utility_cfg)
@@ -130,8 +122,8 @@ def test_algorithm_oracles_use_container_visible_repo_and_workspace_paths() -> N
     assert commands["impl_layout"] == "./eval_support/build.sh"
     assert commands["proof_layout"] == "./eval_support/check_proof_layout.sh"
     assert commands["dafny_verify"] == "./eval_support/verify.sh"
-    assert testcase.required_checks == ()
-    assert testcase.commands == ()
+    assert testcase.required_checks == ("implementation_tests",)
+    assert "bench/algorithm/63" in testcase.commands[0].command
     assert [command.name for command in layout.commands] == ["impl_layout", "proof_layout"]
     assert verification.commands[0].name == "dafny_verify"
     assert fuzzing.required_checks == ()

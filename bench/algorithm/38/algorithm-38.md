@@ -60,21 +60,16 @@ NO
 -----Note-----
 
 The first test is analyzed in the statement.
-## Apps Parser
 
-The evaluator uses the following parser to convert each raw stdin/stdout positive test case into typed arguments. The implementation test compares `Solve(...)` return values against the output values returned by this parser.
+## Command-line interface
 
-```python
-def parser(input: str, output: str) -> tuple[int, int, list[int], list[int], str]:
-    tokens = input.strip().split()
-    nums = [int(x) for x in tokens if x.strip()]
-    if len(nums) < 2:
-        return (0, 0, [], [], output.strip())
-    n = nums[0]
-    L = nums[1]
-    rest = nums[2:]
-    kefa = rest[:n]
-    sasha = rest[n : n + n]
-    result = output.strip()
-    return (n, L, kefa, sasha, result)
-```
+Run the compiled executable with no arguments and supply the problem input on
+standard input. `Algorithm38Schema.dfy` parses that input before the shared runner
+invokes `Algorithm38.Algorithm38BenchmarkItem.RunCore(raw, io)`. Successful runs print
+the problem output and exit 0. Invalid input or arguments produce a diagnostic
+and exit 2; an input/output failure exits 1, including a partially committed write.
+
+The mathematical answer relation remains `Algorithm38Spec.Answer`; the principal
+`Algorithm38Spec.Spec` relates it to the observable standard output and exit status.
+Runtime evaluation executes every fixed input through this command-line interface.
+Where the problem permits several answers, the checker accepts each valid answer.

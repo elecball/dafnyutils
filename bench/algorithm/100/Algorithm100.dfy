@@ -1,18 +1,50 @@
-include "Core.dfy"
-include "Proof.dfy"
+include "../../core/BenchmarkItem.dfy"
+include "Algorithm100Schema.dfy"
+include "Algorithm100Core.dfy"
+include "Algorithm100Proof.dfy"
 
 module Algorithm100 {
+  import BenchIO
+  import BenchItem
+  import CliTypes
+  import SchemaMod = Algorithm100Schema
   import Spec = Algorithm100Spec
   import Core = Algorithm100Core
   import Proof = Algorithm100Proof
 
-  method RunCore(n: int, m: int, screen: seq<string>) returns (output_lines: seq<string>)
-    requires Spec.ValidScreen(n, m, screen)
-    requires exists r, c :: 0 <= r < n && 0 <= c < m && screen[r][c] == 'w'
-    ensures Spec.Spec(n, m, screen, output_lines)
-  {
-    Proof.ValidScreenSpecToCore(n, m, screen);
-    output_lines := Core.RunCore(n, m, screen);
-    Proof.CoreSummaryImpliesSpec(n, m, screen, output_lines);
+  class {:termination false} Algorithm100BenchmarkItem extends BenchItem.BenchmarkItemTwostate<SchemaMod.Algorithm100CmdRaw> {
+    var input: string
+
+    constructor(input: string) { this.input := input; }
+
+    method Name() returns (name: string) { name := "algorithm-100"; }
+    method Schema() returns (schema: CliTypes.CliSchema) { schema := SchemaMod.Schema(); }
+    method ParseConfig() returns (cfg: CliTypes.ParseConfig) { cfg := SchemaMod.ParserConfig(); }
+    method Decode(parsed: CliTypes.ParsedArgs) returns (raw: SchemaMod.Algorithm100CmdRaw) {
+      raw := SchemaMod.FromInput(input);
+    }
+    method FormatParseError(err: CliTypes.ParseError) returns (msg: BenchIO.BenchWorld.Bytes) {
+      msg := Spec.InvalidInputText();
+    }
+    method PlanArgv(argv: seq<string>) returns (plan: CliTypes.CliPlan<SchemaMod.Algorithm100CmdRaw>)
+      decreases *
+    {
+      if |argv| != 1 {
+        plan := CliTypes.CliEarlyExit(2, [], Spec.InvalidInputText());
+      } else {
+        var raw := SchemaMod.FromInput(input);
+        plan := CliTypes.CliRun(raw);
+      }
+    }
+
+    method RunCore(raw: SchemaMod.Algorithm100CmdRaw, io: BenchIO.IO) returns (exit: int)
+      modifies io.stdoutRegion, io.stderrRegion
+      ensures Spec.Spec(raw, io, exit)
+      decreases *
+    {
+      if Spec.Valid(raw) { Proof.ValidScreenSpecToCore(raw.n, raw.m, raw.screen); }
+      exit := Core.RunCore(raw, io);
+      Proof.CoreSummaryImpliesSpec(raw, io, exit);
+    }
   }
 }

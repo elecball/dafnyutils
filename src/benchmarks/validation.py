@@ -40,7 +40,7 @@ def load_validated_benchmark(repository: BenchmarkRepository, task_id: str) -> V
         issues.append(ValidationIssue(task_id, "source details are incomplete"))
     if issues:
         raise BenchmarkValidationError(tuple(issues))
-    configuration = ResolvedBenchmark.for_task(task_id)
+    configuration = ResolvedBenchmark.from_definition(definition)
     try:
         validated = generate_task_profile(
             definition, repository_root=repository.root, configuration=configuration

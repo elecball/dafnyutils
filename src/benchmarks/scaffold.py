@@ -34,10 +34,15 @@ def scaffold_benchmark(*, root: Path, kind: BenchmarkKind, task_id: str) -> Scaf
     if directory.exists():
         raise FileExistsError(f"benchmark directory already exists: {directory}")
 
-    template_root = root / "tools" / "benchmark_templates" / kind.value
-    if not template_root.is_dir():
-        raise FileNotFoundError(f"benchmark template directory is missing: {template_root}")
-    shutil.copytree(template_root, directory)
+    template_root = root / "tools" / "benchmark_templates"
+    sources = (template_root / "common", template_root / kind.value)
+    for source in sources:
+        if not source.is_dir():
+            raise FileNotFoundError(f"benchmark template directory is missing: {source}")
+    directory.mkdir(parents=True)
+    for source in sources:
+        for template in sorted(source.iterdir()):
+            shutil.copyfile(template, directory / template.name)
     created = _specialize_files(directory, task_id)
     return ScaffoldResult(task_id=task_id, directory=directory, files=created)
 
@@ -60,7 +65,6 @@ def _specialize_files(directory: Path, task_id: str) -> tuple[Path, ...]:
         "UtilityProof.dfy": f"{class_name}Proof.dfy",
         "Utility.dfy": f"{class_name}.dfy",
         "UtilityCli.dfy": f"{class_name}Cli.dfy",
-        "Algorithm.dfy": f"{class_name}.dfy",
     }
     for source_name, destination_name in rename_map.items():
         source = directory / source_name

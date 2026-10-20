@@ -10,7 +10,7 @@ import sys
 from enum import StrEnum
 from pathlib import Path
 
-from benchmarks.definition import BenchmarkDefinition, BenchmarkKind
+from benchmarks.definition import BenchmarkDefinition
 from benchmarks.repository import BenchmarkRepository
 
 
@@ -76,8 +76,7 @@ def _build(root: Path, definition: BenchmarkDefinition) -> int:
         str(bench_dir / f"{definition.task_id}_bench.dll"),
         definition.project_config_path,
     ]
-    if definition.kind is BenchmarkKind.COREUTILS:
-        command.append("bench/core/IOExtern.cs")
+    command.append("bench/core/IOExtern.cs")
     return _run(command, cwd=root, env=env)
 
 
@@ -88,15 +87,7 @@ def _test(root: Path, definition: BenchmarkDefinition | None) -> int:
             cwd=root,
         )
 
-    if definition.kind is BenchmarkKind.ALGORITHM:
-        print(
-            f"{definition.task_id}: runtime testcase evaluation is not applicable", file=sys.stderr
-        )
-        return 2
-
     test_path = definition.evaluation.test_path
-    if test_path is None:
-        raise ValueError(f"{definition.task_id} has no implementation test module")
     return _run(
         [
             _python(),

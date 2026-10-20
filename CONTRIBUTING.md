@@ -50,7 +50,7 @@ inside that container, with `.venv/bin` on `PATH`.
 | `bench/utils/<utility>/` | Utility definition, description, Dafny modules and local Makefile |
 | `bench/core/` | Shared model, contracts, helpers and trusted runtime adapters |
 | `coreutils/` | Pinned upstream GNU source and tests; keep its revision fixed |
-| `tools/benchmark_templates/coreutils/` | Incomplete starting files used by the scaffold command |
+| `tools/benchmark_templates/common/` | Common incomplete Dafny layout used by both scaffold kinds |
 | `tools/coreutils_fuzzer/` | Differential runner, generators and comparison logic |
 | `src/benchmarks/` | Discovery, validation, builds and contribution checks |
 | `_build/` | Generated binaries and reports, created by build/check commands |
@@ -148,9 +148,12 @@ source:
   name: GNU coreutils base32
   url: https://www.gnu.org/software/coreutils/
   license: GPL-3.0-or-later
+capabilities:
+  gnu_reference: true
+  fuzzer: true
 ```
 
-Here `verified` means the source name, URL and license have been checked. It does not mean the utility or its proof has passed. New contributions cannot use `legacy-unverified`. Do not add invented fields for evaluator paths: the loader derives them from the task ID and family.
+Here `verified` means the source name, URL and license have been checked. It does not mean the utility or its proof has passed. New contributions cannot use `legacy-unverified`. Do not add invented fields for evaluator paths: the loader derives them from the task ID and directory. Capabilities select optional oracle providers; they do not change the candidate layout or execution interface.
 
 Complete these generated files:
 
@@ -172,6 +175,14 @@ IO handle through Core, the connecting lemma, and the entry postcondition.
 Replace the raw-command wrapper and parser TODOs with the utility's actual rules.
 Use only the IO regions it reads or changes; the supplied stream regions are a
 starting point, not permission to widen an existing task's frame.
+
+Algorithm items use this same class-prefixed file layout, `BenchmarkItem`
+interface, build target, runtime test stage and verification gate. Their CLI
+reads the problem input from standard input and parses it before calling
+`RunCore(raw, io)`. Keep the original mathematical answer relation in Spec and
+connect it to the observable output, explicit IO failures and exit status.
+See [the common benchmark layout](docs/benchmark-layout.md) for the complete
+interface and capability contract.
 
 The false Spec/CoreSummary relations and failing assertions deliberately block
 verification. Replace them with the specified behavior and its proofs, not `true`, `assume`,
@@ -206,6 +217,13 @@ no proof tests and exits 5, even if `make verify` succeeded.
 For a new utility, add its generator under `tools/coreutils_fuzzer/src/fuzz/input/generators/`, declare the module in `generators/mod.rs`, and register `GENERATOR` in `src/utils/capabilities.rs`. Reuse `PatternInputGenerator` and the shared argument-pattern engine. See [generator extension](docs/fuzzing.md#support-a-new-utility) for the concrete registration points. A case JSON file alone does not register a new utility.
 
 Keep evaluator cases, oracle code and reference answers out of public task resources. Authors can inspect public GNU tests during maintenance; an evaluated agent may only read material allowed by that run's protocol.
+
+For fixed stdin cases, declare `capabilities.fixed_cases: true` and retain the
+original raw input/output dataset in evaluator-owned `cases.json`. The generated
+`Tests.py` runs each input through the executable; legacy Python parser text in
+the dataset is inert. Select an `output_contract` when valid outputs have several
+representations or witnesses. All tasks execute `implementation_tests`; a missing
+or empty fixed case set is an error, not an inapplicable test stage.
 
 ### Validate and submit
 

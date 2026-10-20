@@ -402,7 +402,13 @@ def test_public_check_contract_unchanged(monkeypatch):
     monkeypatch.setattr(generated_profile, "dafny_entry_contract", lambda *args, **kwargs: contract)
 
     payload = generated_profile._profile_payload(
-        SimpleNamespace(), SimpleNamespace(task_id="algorithm-1", title="Toy"), analysis=None
+        SimpleNamespace(),
+        SimpleNamespace(
+            task_id="algorithm-1",
+            title="Toy",
+            evaluation=SimpleNamespace(reference_executable=None),
+        ),
+        analysis=None,
     )
 
     assert payload["public_checks"] == [
