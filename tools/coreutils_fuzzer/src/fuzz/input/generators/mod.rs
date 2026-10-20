@@ -3,6 +3,7 @@ pub(crate) mod basename;
 pub(crate) mod cat;
 pub(crate) mod chmod;
 pub(crate) mod comm;
+pub(crate) mod cp;
 pub(crate) mod csplit;
 pub(crate) mod cut;
 pub(crate) mod dirname;
