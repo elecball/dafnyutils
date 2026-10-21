@@ -6,12 +6,13 @@ a model of system state as well as program logic. This model lets us specify and
 verify effects on the system. We check the model through differential testing:
 we compare its behavior with the original GNU coreutils binaries.
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution process and required PR evidence. Use these four guides for detailed tasks:
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution process and required PR evidence. Use these guides for detailed tasks:
 
 | Your task | Guide |
 | --- | --- |
 | Add a utility from setup through review | [Add a utility](CONTRIBUTING.md#extending-benchmark) |
 | Understand shared contracts and what the proof assumes | [Use the core API](docs/core-api.md) |
+| Understand each utility's implementation and main proof idea | [Read the utility guide](docs/utility-guide.md) |
 | Run generated cases and reproduce mismatches | [Use the fuzzer](docs/fuzzing.md) |
 | Port upstream GNU scenarios into utility Python tests | [Add test cases](docs/adding-test-cases.md) |
 | Integrate an agent with the public task and result wire | [Use the agent protocol](docs/agent-protocol.md) |
