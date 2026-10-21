@@ -58,7 +58,7 @@ module LnSpec {
     err == IOContract.ResultErrno(result)
   }
 
-  ghost function DestinationReadCount(operands: seq<string>): nat
+  function DestinationReadCount(operands: seq<string>): nat
     requires 1 <= |operands| <= 2
   {
     if |operands| == 2 && operands[0] != "" then 1 else 0
@@ -73,9 +73,6 @@ module LnSpec {
            then (if cmd.symbolic then 0 else |cmd.operands| - 1) else 0)
     else DestinationReadCount(cmd.operands) + (if cmd.symbolic then 0 else 1)
   }
-
-
-
 
   function ErrnoTextSpec(err: int): string
   {
@@ -157,7 +154,7 @@ module LnSpec {
     "\n"
   }
 
-  ghost function FailedAccessMessageText(source: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  function FailedAccessMessageText(source: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
   {
     FailedAccessMessageTextPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(source)) +
     FailedAccessMessageTextPart2() + Utf8.Encode(reason) + FailedAccessMessageTextPart3()
@@ -178,7 +175,7 @@ module LnSpec {
     ": hard link not allowed for directory\n"
   }
 
-  ghost function HardDirectoryMessageSpec(source: BenchWorld.Path): BenchWorld.Bytes
+  function HardDirectoryMessageSpec(source: BenchWorld.Path): BenchWorld.Bytes
   {
     HardDirectoryMessageSpecPart1() + SE.SpecQuoteFBytes(Utf8.Encode(source)) +
     HardDirectoryMessageSpecPart2()
@@ -214,7 +211,7 @@ module LnSpec {
     "\n"
   }
 
-  ghost function CreateHardLinkErrorMessageText(source: BenchWorld.Path, linkName: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  function CreateHardLinkErrorMessageText(source: BenchWorld.Path, linkName: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
   {
     CreateHardLinkErrorMessageTextPart1() +
     (if err == Errno.EMLINK then
@@ -232,7 +229,7 @@ module LnSpec {
     CreateHardLinkErrorMessageText(source, linkName, err, IOContract.CLocaleErrnoTextResult(err))
   }
 
-  ghost function TrimTrailingSlashes(path: string): string
+  function TrimTrailingSlashes(path: string): string
     decreases |path|
   {
     if |path| > 0 && path[|path| - 1] == '/' then
@@ -241,7 +238,7 @@ module LnSpec {
       path
   }
 
-  ghost function LastSlash(path: string): int
+  function LastSlash(path: string): int
     ensures -1 <= LastSlash(path) < |path|
     decreases |path|
   {
@@ -250,14 +247,14 @@ module LnSpec {
     else LastSlash(path[..|path| - 1])
   }
 
-  ghost function BaseName(path: string): string
+  function BaseName(path: string): string
   {
     var trimmed := TrimTrailingSlashes(path);
     if |trimmed| == 0 then (if |path| == 0 then "" else "/")
     else trimmed[LastSlash(trimmed) + 1..]
   }
 
-  ghost function InDirectory(directory: string, source: string): string
+  function InDirectory(directory: string, source: string): string
   {
     directory + (if |directory| > 0 && directory[|directory| - 1] == '/' then "" else "/") +
     BaseName(source)
@@ -304,7 +301,7 @@ module LnSpec {
     "\n"
   }
 
-  ghost function CreateSymlinkErrorMessageText(linkName: BenchWorld.Path, source: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  function CreateSymlinkErrorMessageText(linkName: BenchWorld.Path, source: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
   {
     CreateSymlinkErrorMessageTextPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(linkName)) +
     (if source == CreateSymlinkErrorMessageTextPart2() then CreateSymlinkErrorMessageTextPart3() + SE.SpecQuoteAfBytes(Utf8.Encode(source)) else CreateSymlinkErrorMessageTextPart2()) +
@@ -331,7 +328,7 @@ module LnSpec {
     "\n"
   }
 
-  ghost function TargetDirectoryErrorMessageText(target: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
+  function TargetDirectoryErrorMessageText(target: BenchWorld.Path, err: int, reason: string): BenchWorld.Bytes
   {
     TargetDirectoryErrorMessageTextPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(target)) +
     TargetDirectoryErrorMessageTextPart2() + Utf8.Encode(reason) + TargetDirectoryErrorMessageTextPart3()
@@ -441,7 +438,7 @@ module LnSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

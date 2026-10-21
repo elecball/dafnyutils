@@ -18,7 +18,7 @@ module SecurityModel {
     fsetid: bool
   )
 
-  ghost predicate DirectoryAccessAllowed(
+  predicate DirectoryAccessAllowed(
     record: InodeRecord, security: FilesystemSecurityContext, requested: bv32
   )
   {
@@ -34,7 +34,7 @@ module SecurityModel {
       (permission & requested) == requested))
   }
 
-  ghost predicate StickyRemovalAllowed(
+  predicate StickyRemovalAllowed(
     parent: InodeRecord, target: InodeRecord, security: FilesystemSecurityContext
   )
   {
@@ -45,7 +45,7 @@ module SecurityModel {
 
   // Linux generic_permission for non-directories, without ACL/idmapped-mount
   // adjustments. Capabilities do not bypass an absent executable bit on files.
-  ghost predicate FileAccessAllowed(
+  predicate FileAccessAllowed(
     record: InodeRecord, security: FilesystemSecurityContext, requested: bv32
   )
   {
@@ -64,7 +64,7 @@ module SecurityModel {
   }
 
 
-  ghost function DirectorySearchRecord(
+  function DirectorySearchRecord(
     record: InodeRecord, security: FilesystemSecurityContext
   ): InodeRecord
   {

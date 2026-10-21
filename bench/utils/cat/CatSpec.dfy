@@ -1,8 +1,8 @@
+include "../../core/StringEscaping.dfy"
 include "../../core/World.dfy"
 include "../../core/Utf8.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
-include "CatQuoteSpec.dfy"
 include "CatSchema.dfy"
 
 module CatSpec {
@@ -14,11 +14,8 @@ module CatSpec {
   import BenchWorld
   import IOContract
   import Utf8 = Utf8Semantics
-  import Quote = CatQuoteSpec
+  import Quote = StringEscaping
   import CatSchema
-
-
-
 
   function HelpTextSpec(): BenchWorld.Bytes
   {
@@ -53,7 +50,7 @@ module CatSpec {
     + "or available locally via: info '(coreutils) cat invocation'\n"
   }
 
-  ghost function VersionTextSpec(): BenchWorld.Bytes
+  function VersionTextSpec(): BenchWorld.Bytes
   {
     Utf8.Encode(VersionTextValue())
   }
@@ -75,14 +72,14 @@ module CatSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  ghost function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     ErrorPrefix() + Quote.SpecQuoteFBytes(Utf8.Encode(path)) + ErrorSeparator() +
     Utf8.Encode(ErrnoText(err)) + DiagnosticSuffix()
   }
 
 
-  ghost function InputsFromOperands(operands: seq<string>): seq<CatSchema.Input>
+  function InputsFromOperands(operands: seq<string>): seq<CatSchema.Input>
   {
     if |operands| == 0 then
       []
@@ -90,7 +87,7 @@ module CatSpec {
       [(if operands[0] == "-" then CatSchema.Stdin else CatSchema.File(operands[0]))] + InputsFromOperands(operands[1..])
   }
 
-  ghost function Command(raw: CatSchema.CatCmdRaw): CatSchema.CatCmd
+  function Command(raw: CatSchema.CatCmdRaw): CatSchema.CatCmd
   {
     var mode :=
       if raw.seenHelp && (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) then
@@ -116,7 +113,7 @@ module CatSpec {
     )
   }
 
-  ghost function DigitChar(d: int): BenchWorld.RawByte
+  function DigitChar(d: int): BenchWorld.RawByte
   {
     if 0 <= d < 10 then
       (d + ('0' as int)) as char
@@ -124,7 +121,7 @@ module CatSpec {
       '0'
   }
 
-  ghost function Digits(n: int): BenchWorld.Bytes
+  function Digits(n: int): BenchWorld.Bytes
     decreases n
   {
     if n < 10 then
@@ -133,7 +130,7 @@ module CatSpec {
       Digits(n / 10) + [DigitChar(n % 10)]
   }
 
-  ghost function PadLeft(text: BenchWorld.Bytes, width: int): BenchWorld.Bytes
+  function PadLeft(text: BenchWorld.Bytes, width: int): BenchWorld.Bytes
     decreases width - |text|
   {
     if |text| >= width then
@@ -142,12 +139,12 @@ module CatSpec {
       PadLeft([' '] + text, width)
   }
 
-  ghost function LineNumberText(n: int): BenchWorld.Bytes
+  function LineNumberText(n: int): BenchWorld.Bytes
   {
     PadLeft(Digits(n), 6) + ['\t']
   }
 
-  ghost function ShowNonPrintingChar(ch: BenchWorld.RawByte, showTabs: bool): BenchWorld.Bytes
+  function ShowNonPrintingChar(ch: BenchWorld.RawByte, showTabs: bool): BenchWorld.Bytes
   {
     var code := ch as int;
     if code >= 32 then
@@ -170,7 +167,7 @@ module CatSpec {
       ['^', ((code + 64) as char)]
   }
 
-  ghost function TransformChar(cmd: CatSchema.CatCmd, ch: BenchWorld.RawByte, nextIsNewline: bool): BenchWorld.Bytes
+  function TransformChar(cmd: CatSchema.CatCmd, ch: BenchWorld.RawByte, nextIsNewline: bool): BenchWorld.Bytes
   {
     if cmd.showNonPrinting then
       ShowNonPrintingChar(ch, cmd.showTabs)
@@ -182,13 +179,13 @@ module CatSpec {
       [ch]
   }
 
-  ghost predicate LineStartAt(data: BenchWorld.Bytes, p: nat)
+  predicate LineStartAt(data: BenchWorld.Bytes, p: nat)
     requires p < |data|
   {
     p == 0 || data[p - 1] == '\n'
   }
 
-  ghost predicate KeptAt(cmd: CatSchema.CatCmd, data: BenchWorld.Bytes, p: nat)
+  predicate KeptAt(cmd: CatSchema.CatCmd, data: BenchWorld.Bytes, p: nat)
     requires p < |data|
   {
     !(cmd.squeezeBlank &&
@@ -198,7 +195,7 @@ module CatSpec {
       (p == 1 || data[p - 2] == '\n'))
   }
 
-  ghost predicate NumberedAt(cmd: CatSchema.CatCmd, data: BenchWorld.Bytes, p: nat)
+  predicate NumberedAt(cmd: CatSchema.CatCmd, data: BenchWorld.Bytes, p: nat)
     requires p < |data|
   {
     KeptAt(cmd, data, p) &&
@@ -207,7 +204,7 @@ module CatSpec {
      (cmd.number == CatSchema.NumberNonBlank && data[p] != '\n'))
   }
 
-  ghost function RenderFragment(
+  function RenderFragment(
     cmd: CatSchema.CatCmd,
     data: BenchWorld.Bytes,
     p: nat,
@@ -303,7 +300,7 @@ module CatSpec {
       result == IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
   }
 
-  ghost function InputDataPiece(
+  function InputDataPiece(
     result: BenchWorld.IOResult<BenchWorld.Bytes>
   ): BenchWorld.Bytes
   {
@@ -312,7 +309,7 @@ module CatSpec {
     case Err(error) => IOContract.ReadResultData(result)
   }
 
-  ghost function InputErrorPiece(
+  function InputErrorPiece(
     input: CatSchema.Input,
     result: BenchWorld.IOResult<BenchWorld.Bytes>
   ): BenchWorld.Bytes
@@ -325,7 +322,7 @@ module CatSpec {
       case Err(err) => ErrorMessageSpec(path, err)
   }
 
-  ghost predicate InputFailed(
+  predicate InputFailed(
     input: CatSchema.Input,
     result: BenchWorld.IOResult<BenchWorld.Bytes>
   )
@@ -452,7 +449,7 @@ module CatSpec {
     CompleteStdinTrace(cmd, preFs, preStreams, preStdin, results);
   }
 
-  ghost predicate PlainStdinCommand(cmd: CatSchema.CatCmd)
+  predicate PlainStdinCommand(cmd: CatSchema.CatCmd)
   {
     cmd.number == CatSchema.NoNumber && !cmd.squeezeBlank &&
     !cmd.showEnds && !cmd.showTabs && !cmd.showNonPrinting &&
@@ -490,6 +487,13 @@ module CatSpec {
         seq(|cmd.inputs| + 1, i => if i == 0 then 0 else |data|));
     assert FragmentsConcatenate(
         seq(|cmd.inputs|, i => []), [], seq(|cmd.inputs| + 1, i => 0));
+    assert InputTraceRelation(cmd, preFs, preStreams, data, [], data, [], false,
+                              seq(|cmd.inputs|, i => Result.Ok(if i == 0 then data else [])),
+                              seq(|cmd.inputs|, i => if i == 0 then data else []),
+                              seq(|cmd.inputs| + 1, i => if i == 0 then 0 else |data|),
+                              seq(|cmd.inputs|, i => []), seq(|cmd.inputs| + 1, i => 0)) by {
+      CompleteStdinTrace(cmd, preFs, preStreams, data, results);
+    }
     forall p: nat | p < |data|
       ensures !NumberedAt(cmd, data, p)
       ensures RenderFragment(cmd, data, p, 0) == [data[p]]
@@ -499,7 +503,6 @@ module CatSpec {
     assert RenderRelation(cmd, data, data,
                           seq(|data|, i requires 0 <= i < |data| => [data[i]]),
                           seq(|data| + 1, i => i), seq(|data|, i => 0));
-    CompleteStdinTrace(cmd, preFs, preStreams, data, results);
   }
 
   lemma SingleFragmentCuts(
@@ -641,6 +644,7 @@ module CatSpec {
         EmptyInputWitnesses(cmd, preFs, preStreams, preStdin);
       }
     }
+    hide InputTraceRelation(), RenderRelation();
     var valid := exists readResults: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
                    data: BenchWorld.Bytes,
                    dataFragments: seq<BenchWorld.Bytes>,
@@ -750,7 +754,7 @@ module CatSpec {
     true
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorText(message))
   }

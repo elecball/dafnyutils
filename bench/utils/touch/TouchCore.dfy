@@ -1,13 +1,11 @@
-include "TouchTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "TouchSpec.dfy"
 include "../../core/Errno.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
-include "../../core/Utf8.dfy"
 include "TouchSchema.dfy"
-include "TouchSpec.dfy"
 
 module TouchCore {
-  import Text = TouchTextCore
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -15,7 +13,7 @@ module TouchCore {
   import BenchIO
   import IOContract
   import BenchWorld
-  import Utf8 = TouchUtf8Core
+  import Utf8 = Utf8Semantics
   import Schema = TouchSchema
   import Spec = TouchSpec
 
@@ -252,8 +250,7 @@ module TouchCore {
   {
     var quoted := io.QuoteafPath(path);
     var errnoText := io.GetCLocaleErrnoText(err);
-    out := Utf8.Encode(Spec.TouchErrorMessageSpecPart1()) + quoted
-    + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
+    out := Spec.PathErrorMessageText(Spec.TouchErrorMessageSpecPart1(), quoted, errnoText);
   }
 
   method GetReferenceErrorMessage(path: BenchWorld.Path, err: int, io: BenchIO.IO)
@@ -262,8 +259,7 @@ module TouchCore {
   {
     var quoted := io.QuoteafPath(path);
     var errnoText := io.GetCLocaleErrnoText(err);
-    out := Utf8.Encode(Spec.ReferenceErrorMessageSpecPart1()) + quoted
-    + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
+    out := Spec.PathErrorMessageText(Spec.ReferenceErrorMessageSpecPart1(), quoted, errnoText);
   }
 
   method GetSetTimesErrorMessage(path: BenchWorld.Path, err: int, io: BenchIO.IO)
@@ -272,8 +268,7 @@ module TouchCore {
   {
     var quoted := io.QuoteafPath(path);
     var errnoText := io.GetCLocaleErrnoText(err);
-    out := Utf8.Encode(Spec.SetTimesErrorMessageSpecPart1()) + quoted
-    + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
+    out := Spec.PathErrorMessageText(Spec.SetTimesErrorMessageSpecPart1(), quoted, errnoText);
   }
 
   method GetStdoutErrorMessage(err: int, io: BenchIO.IO) returns (out: BenchWorld.Bytes)
@@ -282,8 +277,7 @@ module TouchCore {
     reveal Spec.StdoutErrorMessageSpec();
     var quoted := io.QuoteafPath("-");
     var errnoText := io.GetCLocaleErrnoText(err);
-    out := Utf8.Encode(Spec.SetTimesErrorMessageSpecPart1()) + quoted
-    + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
+    out := Spec.PathErrorMessageText(Spec.SetTimesErrorMessageSpecPart1(), quoted, errnoText);
   }
 
   method GetMissingOperandMessage() returns (out: string)
@@ -295,19 +289,19 @@ module TouchCore {
   method GetInvalidTimeMessage(value: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.InvalidTimeMessageSpec(value)
   {
-    out := Text.InvalidTimeMessageSpec(value);
+    out := Spec.InvalidTimeMessageSpec(value);
   }
 
   method GetAmbiguousTimeMessage(value: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.AmbiguousTimeMessageSpec(value)
   {
-    out := Text.AmbiguousTimeMessageSpec(value);
+    out := Spec.AmbiguousTimeMessageSpec(value);
   }
 
   method GetInvalidDateMessage(value: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.InvalidDateMessageSpec(value)
   {
-    out := Text.InvalidDateMessageSpec(value);
+    out := Spec.InvalidDateMessageSpec(value);
   }
 
   twostate predicate ResolvedRunSummaryFields(
@@ -525,7 +519,7 @@ module TouchCore {
           var mSec := referenceSec;
           var mNsec := referenceNsec;
         }
-        errOut := Text.InvalidDateMessageSpec(cmd.dateArg);
+        errOut := Spec.InvalidDateMessageSpec(cmd.dateArg);
         return;
       }
     }
@@ -550,7 +544,7 @@ module TouchCore {
           var mSec := referenceSec;
           var mNsec := referenceNsec;
         }
-        errOut := Text.InvalidDateMessageSpec(cmd.dateArg);
+        errOut := Spec.InvalidDateMessageSpec(cmd.dateArg);
         return;
       }
     }
@@ -791,7 +785,7 @@ module TouchCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
                                               else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

@@ -1,17 +1,15 @@
-include "EchoUtf8Core.dfy"
-include "EchoTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "EchoSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "EchoSchema.dfy"
-include "EchoSpec.dfy"
 
 module EchoCore {
   import StreamContract = IOContract
 
   import BenchIO
-  import Utf8 = EchoUtf8Core
-  import Text = EchoTextCore
+  import Utf8 = Utf8Semantics
   import BenchWorld
   import IOContract
   import EchoSchema
@@ -22,25 +20,6 @@ module EchoCore {
   datatype EchoOptions = EchoOptions(noNewline: bool, doV9: bool, next: nat)
   datatype RenderResult = RenderResult(out: BenchWorld.Bytes, stopped: bool)
   datatype EscapeParse = EscapeParse(value: int, next: nat)
-
-  function ValidEchoOptionChar(c: char): bool
-  {
-    c == 'n' || c == 'e' || c == 'E'
-  }
-
-  function AllValidEchoOptionChars(token: string, i: nat): bool
-    decreases |token| - i
-  {
-    if i >= |token| then
-      true
-    else
-      ValidEchoOptionChar(token[i]) && AllValidEchoOptionChars(token, i + 1)
-  }
-
-  function IsEchoOptionToken(token: string): bool
-  {
-    |token| > 1 && token[0] == '-' && AllValidEchoOptionChars(token, 1)
-  }
 
   function ApplyEchoOptionChars(token: string, i: nat, noNewline: bool, doV9: bool): (bool, bool)
     requires i <= |token|
@@ -62,7 +41,7 @@ module EchoCore {
     requires i <= |args|
     decreases |args| - i
   {
-    if i >= |args| || !IsEchoOptionToken(args[i]) then
+    if i >= |args| || !Spec.OptionToken(args[i]) then
       EchoOptions(noNewline, doV9, i)
     else
       var next := ApplyEchoOptionChars(args[i], 1, noNewline, doV9);
@@ -85,32 +64,16 @@ module EchoCore {
       EchoPlan(ModeRun, false, posixlyCorrect, args)
   }
 
-  function IsHexDigit(c: char): bool
-  {
-    ('0' <= c <= '9') || ('a' <= c <= 'f') || ('A' <= c <= 'F')
-  }
-
-  function HexValue(c: char): int
-    requires IsHexDigit(c)
-  {
-    if '0' <= c <= '9' then
-      (c as int) - ('0' as int)
-    else if 'a' <= c <= 'f' then
-      10 + (c as int) - ('a' as int)
-    else
-      10 + (c as int) - ('A' as int)
-  }
-
   function ParseHex(text: string, i: nat): EscapeParse
     requires i <= |text|
-    requires i < |text| && IsHexDigit(text[i])
+    requires i < |text| && Spec.IsHexDigit(text[i])
     ensures 0 <= ParseHex(text, i).value < 256
     ensures i < ParseHex(text, i).next <= |text|
   {
-    if i + 1 < |text| && IsHexDigit(text[i + 1]) then
-      EscapeParse(HexValue(text[i]) * 16 + HexValue(text[i + 1]), i + 2)
+    if i + 1 < |text| && Spec.IsHexDigit(text[i + 1]) then
+      EscapeParse(Spec.HexValue(text[i]) * 16 + Spec.HexValue(text[i + 1]), i + 2)
     else
-      EscapeParse(HexValue(text[i]), i + 1)
+      EscapeParse(Spec.HexValue(text[i]), i + 1)
   }
 
   function ParseOctalAfterZero(text: string, i: nat): EscapeParse
@@ -182,7 +145,7 @@ module EchoCore {
         var rest := RenderEscaped(text, i + 2);
         RenderResult(['\\'] + rest.out, rest.stopped)
       else if e == 'x' then
-        if i + 2 < |text| && IsHexDigit(text[i + 2]) then
+        if i + 2 < |text| && Spec.IsHexDigit(text[i + 2]) then
           var p := ParseHex(text, i + 2);
           var rest := RenderEscaped(text, p.next);
           RenderResult([(p.value % 256) as char] + rest.out, rest.stopped)
@@ -305,7 +268,7 @@ module EchoCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

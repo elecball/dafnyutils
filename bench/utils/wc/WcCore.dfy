@@ -1,12 +1,12 @@
-include "WcTextCore.dfy"
+include "../../core/StringEscaping.dfy"
+include "../../core/Utf8.dfy"
+include "WcSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "WcSchema.dfy"
-include "WcSpec.dfy"
 
 module WcCore {
-  import Text = WcTextCore
 
   import StreamContract = IOContract
 
@@ -16,8 +16,8 @@ module WcCore {
   import IOContract
   import Spec = WcSpec
   import WcSchema
-  import Utf8 = WcUtf8Core
-  import SE = WcEscapingCore
+  import Utf8 = Utf8Semantics
+  import SE = StringEscaping
 
   datatype Counts = Counts(lines: int, words: int, chars: int, bytes: int, maxLine: int)
   datatype ScanState = ScanState(counts: Counts, inWord: bool, lineLen: int)
@@ -52,13 +52,6 @@ module WcCore {
       []
     else
       [ToSpecEntry(entries[0])] + ToSpecEntries(entries[1..])
-  }
-
-  ghost function IsStdinInput(input: WcSchema.Input): bool
-  {
-    match input
-    case Stdin(_) => true
-    case File(_) => false
   }
 
   function InputName(input: WcSchema.Input): string
@@ -107,14 +100,14 @@ module WcCore {
 
   function AddCounts(a: Counts, b: Counts): Counts
   {
-    Counts(a.lines + b.lines, a.words + b.words, a.chars + b.chars, a.bytes + b.bytes, Max(a.maxLine, b.maxLine))
+    Counts(a.lines + b.lines, a.words + b.words, a.chars + b.chars, a.bytes + b.bytes, Spec.Max(a.maxLine, b.maxLine))
   } by method {
     return Counts(
         a.lines + b.lines,
         a.words + b.words,
         a.chars + b.chars,
         a.bytes + b.bytes,
-        Max(a.maxLine, b.maxLine)
+        Spec.Max(a.maxLine, b.maxLine)
       );
   }
 
@@ -132,48 +125,9 @@ module WcCore {
     forall i: nat | i < |entries| :: CountsNonnegative(entries[i].counts)
   }
 
-  function Max(a: int, b: int): int
+  function IsWordChar(ch: char): bool
   {
-    if a < b then b else a
-  } by method {
-    return if a < b then b else a;
-  }
-
-  function IsWordSpace(ch: char): bool
-  {
-    ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r' ||
-    ch == (11 as char) || ch == (12 as char) || ch == (160 as char)
-  } by method {
-    return ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r' ||
-           ch == (11 as char) || ch == (12 as char) || ch == (160 as char);
-  }
-
-  ghost function IsWordChar(ch: char): bool
-  {
-    !IsWordSpace(ch)
-  }
-
-  function NextLineLen(ch: char, current: int): int
-    requires 0 <= current
-  {
-    if ch == '\t' then
-      current + (8 - current % 8)
-    else if ch == '\r' || ch == (12 as char) then
-      0
-    else if 32 <= ch as int < 127 then
-      current + 1
-    else
-      current
-  } by method {
-    if ch == '\t' {
-      return current + (8 - current % 8);
-    } else if ch == '\r' || ch == (12 as char) {
-      return 0;
-    } else if 32 <= ch as int < 127 {
-      return current + 1;
-    } else {
-      return current;
-    }
+    !Spec.IsWordSpace(ch)
   }
 
   function InitScan(): ScanState
@@ -203,20 +157,20 @@ module WcCore {
         ScanBytes(
           rest,
           ScanState(
-            Counts(base.lines + 1, base.words, base.chars, base.bytes, Max(base.maxLine, state.lineLen)),
+            Counts(base.lines + 1, base.words, base.chars, base.bytes, Spec.Max(base.maxLine, state.lineLen)),
             false,
             0
           )
         )
       else
-        var space := IsWordSpace(ch);
-        var nextLen := NextLineLen(ch, state.lineLen);
+        var space := Spec.IsWordSpace(ch);
+        var nextLen := Spec.NextLineLen(ch, state.lineLen);
         var wordChar := IsWordChar(ch);
         var nextWords := base.words + (if !space && wordChar && !state.inWord then 1 else 0);
         ScanBytes(
           rest,
           ScanState(
-            Counts(base.lines, nextWords, base.chars, base.bytes, Max(base.maxLine, nextLen)),
+            Counts(base.lines, nextWords, base.chars, base.bytes, Spec.Max(base.maxLine, nextLen)),
             if space then false else state.inWord || wordChar,
             nextLen
           )
@@ -228,19 +182,6 @@ module WcCore {
     ScanBytes(data, InitScan()).counts
   }
 
-  ghost function NewlineIndices(data: BenchWorld.Bytes): set<nat>
-  {
-    set i: nat | i < |data| && data[i] == '\n'
-  }
-
-  ghost function WordStartIndices(data: BenchWorld.Bytes): set<nat>
-  {
-    set i: nat {:trigger data[i]} |
-    i < |data| &&
-    !IsWordSpace(data[i]) &&
-    (i == 0 || IsWordSpace(data[i - 1]))
-  }
-
   ghost predicate LineColumnTraceRelation(data: BenchWorld.Bytes, columns: seq<nat>)
   {
     |columns| == |data| + 1 &&
@@ -248,7 +189,7 @@ module WcCore {
     forall i: nat | i < |data| ::
       columns[i + 1] ==
       if data[i] == '\n' then 0
-      else NextLineLen(data[i], columns[i])
+      else Spec.NextLineLen(data[i], columns[i])
   }
 
   ghost predicate MaximumRelation(values: seq<nat>, maximum: int)
@@ -264,8 +205,8 @@ module WcCore {
     countTrace: CountWitness
   )
   {
-    countTrace.newlineIndices == NewlineIndices(data) &&
-    countTrace.wordStartIndices == WordStartIndices(data) &&
+    countTrace.newlineIndices == Spec.NewlineIndices(data) &&
+    countTrace.wordStartIndices == Spec.WordStartIndices(data) &&
     counts.bytes == |data| &&
     counts.chars == |data| &&
     counts.lines == |countTrace.newlineIndices| &&
@@ -299,7 +240,7 @@ module WcCore {
          exists counts: Counts, countTrace: CountWitness ::
            CountWitnessRelation(IOContract.ReadResultData(result), counts, countTrace) &&
            entries == [Entry(displayName, counts, true)] &&
-           errorOutput == Text.StdinReadErrorMessage(displayName, error) && failed &&
+           errorOutput == Spec.StdinReadErrorMessage(displayName, error) && failed &&
            countWitnesses == [countTrace])
     case File(path) =>
       (match result
@@ -315,7 +256,7 @@ module WcCore {
          (if IOContract.IOErrorIsDirectory(err)
           then [Entry(path, ZeroCounts(), true)]
           else []) &&
-         errorOutput == Text.ErrorMessage(path, err) &&
+         errorOutput == Spec.ErrorMessage(path, err) &&
          failed &&
          countWitnesses == [])
   }
@@ -438,21 +379,6 @@ module WcCore {
     }
   }
 
-  function SelectedFieldCount(cmd: WcSchema.WcCmd): int
-  {
-    (if cmd.showLines then 1 else 0) +
-    (if cmd.showWords then 1 else 0) +
-    (if cmd.showChars then 1 else 0) +
-    (if cmd.showBytes then 1 else 0) +
-    (if cmd.showMaxLineLength then 1 else 0)
-  } by method {
-    return (if cmd.showLines then 1 else 0) +
-      (if cmd.showWords then 1 else 0) +
-      (if cmd.showChars then 1 else 0) +
-      (if cmd.showBytes then 1 else 0) +
-      (if cmd.showMaxLineLength then 1 else 0);
-  }
-
   function SelectedValues(
     cmd: WcSchema.WcCmd,
     counts: Counts
@@ -476,21 +402,21 @@ module WcCore {
     counts: Counts
   ): int
   {
-    Max(
-      Max(if cmd.showLines then counts.lines else 0, if cmd.showWords then counts.words else 0),
-      Max(
-        Max(if cmd.showChars then counts.chars else 0, if cmd.showBytes then counts.bytes else 0),
+    Spec.Max(
+      Spec.Max(if cmd.showLines then counts.lines else 0, if cmd.showWords then counts.words else 0),
+      Spec.Max(
+        Spec.Max(if cmd.showChars then counts.chars else 0, if cmd.showBytes then counts.bytes else 0),
         if cmd.showMaxLineLength then counts.maxLine else 0
       )
     )
   } by method {
-    return Max(
-        Max(
+    return Spec.Max(
+        Spec.Max(
           if cmd.showLines then counts.lines else 0,
           if cmd.showWords then counts.words else 0
         ),
-        Max(
-          Max(
+        Spec.Max(
+          Spec.Max(
             if cmd.showChars then counts.chars else 0,
             if cmd.showBytes then counts.bytes else 0
           ),
@@ -508,12 +434,12 @@ module WcCore {
     if |entries| == 0 then
       0
     else
-      Max(MaxSelectedValue(cmd, entries[0].counts), MaxEntrySelectedValue(cmd, entries[1..]))
+      Spec.Max(MaxSelectedValue(cmd, entries[0].counts), MaxEntrySelectedValue(cmd, entries[1..]))
   } by method {
     if |entries| == 0 {
       return 0;
     } else {
-      return Max(
+      return Spec.Max(
           MaxSelectedValue(cmd, entries[0].counts),
           MaxEntrySelectedValue(cmd, entries[1..])
         );
@@ -526,12 +452,12 @@ module WcCore {
     if |entries| == 0 then
       0
     else
-      Max(entries[0].counts.bytes, MaxEntryBytes(entries[1..]))
+      Spec.Max(entries[0].counts.bytes, MaxEntryBytes(entries[1..]))
   } by method {
     if |entries| == 0 {
       return 0;
     } else {
-      return Max(
+      return Spec.Max(
           entries[0].counts.bytes,
           MaxEntryBytes(entries[1..])
         );
@@ -618,32 +544,32 @@ module WcCore {
     total: Counts
   ): int
   {
-    var maxValue := Max(
-                      Max(MaxSelectedValue(cmd, total), MaxEntrySelectedValue(cmd, entries)),
-                      Max(total.bytes, MaxEntryBytes(entries))
+    var maxValue := Spec.Max(
+                      Spec.Max(MaxSelectedValue(cmd, total), MaxEntrySelectedValue(cmd, entries)),
+                      Spec.Max(total.bytes, MaxEntryBytes(entries))
                     );
     var digits := DigitCount(maxValue);
-    if SelectedFieldCount(cmd) <= 1 && !ShouldPrintTotal(cmd) then
+    if Spec.SelectedFieldCount(cmd) <= 1 && !Spec.ShouldPrintTotal(cmd) then
       1
     else if HasWideEntry(entries) then
-      Max(7, digits)
+      Spec.Max(7, digits)
     else
-      Max(1, digits)
+      Spec.Max(1, digits)
   } by method {
-    var maxValue := Max(
-      Max(
+    var maxValue := Spec.Max(
+      Spec.Max(
         MaxSelectedValue(cmd, total),
         MaxEntrySelectedValue(cmd, entries)
       ),
-      Max(total.bytes, MaxEntryBytes(entries))
+      Spec.Max(total.bytes, MaxEntryBytes(entries))
     );
     var digits := DigitCount(maxValue);
-    if SelectedFieldCount(cmd) <= 1 && !ShouldPrintTotal(cmd) {
+    if Spec.SelectedFieldCount(cmd) <= 1 && !Spec.ShouldPrintTotal(cmd) {
       return 1;
     } else if HasWideEntry(entries) {
-      return Max(7, digits);
+      return Spec.Max(7, digits);
     } else {
-      return Max(1, digits);
+      return Spec.Max(1, digits);
     }
   }
 
@@ -711,13 +637,6 @@ module WcCore {
     }
   }
 
-  function ShouldPrintTotal(cmd: WcSchema.WcCmd): bool
-  {
-    |cmd.inputs| > 1
-  } by method {
-    return |cmd.inputs| > 1;
-  }
-
   function RunOutputFromEntriesCore(
     cmd: WcSchema.WcCmd,
     entries: seq<Entry>
@@ -726,7 +645,7 @@ module WcCore {
     var total := TotalCounts(entries);
     var width := FieldWidth(cmd, entries, total);
     RenderEntries(cmd, entries, width) +
-    (if ShouldPrintTotal(cmd) then
+    (if Spec.ShouldPrintTotal(cmd) then
        RenderCountsLine(cmd, total, Spec.TotalName(), width)
      else
        [])
@@ -734,7 +653,7 @@ module WcCore {
     var total := TotalCounts(entries);
     var width := FieldWidth(cmd, entries, total);
     var rendered := RenderEntries(cmd, entries, width);
-    if ShouldPrintTotal(cmd) {
+    if Spec.ShouldPrintTotal(cmd) {
       return rendered +
         RenderCountsLine(cmd, total, Spec.TotalName(), width);
     } else {
@@ -745,7 +664,7 @@ module WcCore {
   twostate predicate PreparedSummary(raw: WcSchema.WcCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
     reads io.stdinRegion
   {
-    var cmd := Command(raw);
+    var cmd := Spec.Command(raw);
     (if cmd.mode == WcSchema.ModeHelp then
        io.stdin() == old(io.stdin()) &&
        plannedStdout == Spec.HelpText() &&
@@ -827,92 +746,25 @@ module WcCore {
   }
 
   method ErrorMessageMethod(path: BenchWorld.Path, err: BenchWorld.IOError) returns (msg: BenchWorld.Bytes)
-    ensures msg == Text.ErrorMessage(path, err)
+    ensures msg == Spec.ErrorMessage(path, err)
   {
-    msg := Text.ErrorMessage(path, err);
-  }
-
-  function InputsFromOperands(operands: seq<string>): seq<WcSchema.Input>
-    decreases |operands|
-  {
-    if |operands| == 0 then
-      []
-    else
-      [(if operands[0] == "-" then WcSchema.Stdin("-") else WcSchema.File(operands[0]))] +
-      InputsFromOperands(operands[1..])
-  } by method {
-    if |operands| == 0 {
-      return [];
-    } else {
-      var head :=
-        if operands[0] == "-" then
-          WcSchema.Stdin("-")
-        else
-          WcSchema.File(operands[0]);
-      var tail := InputsFromOperands(operands[1..]);
-      return [head] + tail;
-    }
-  }
-
-  function Command(raw: WcSchema.WcCmdRaw): WcSchema.WcCmd
-  {
-    var mode :=
-      if raw.seenHelp && (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) then
-        WcSchema.ModeHelp
-      else if raw.seenVersion then
-        WcSchema.ModeVersion
-      else
-        WcSchema.ModeRun;
-    var selected :=
-      raw.seenLines || raw.seenWords || raw.seenChars || raw.seenBytes || raw.seenMaxLineLength;
-    var inputs := InputsFromOperands(raw.operands);
-    var runInputs := if mode == WcSchema.ModeRun && |inputs| == 0 then [WcSchema.Stdin("")] else inputs;
-    WcSchema.WcCmd(
-      mode,
-      if selected then raw.seenLines else true,
-      if selected then raw.seenWords else true,
-      if selected then raw.seenChars else false,
-      if selected then raw.seenBytes else true,
-      if selected then raw.seenMaxLineLength else false,
-      runInputs
-    )
-  } by method {
-    var mode :=
-      if raw.seenHelp && (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) then
-        WcSchema.ModeHelp
-      else if raw.seenVersion then
-        WcSchema.ModeVersion
-      else
-        WcSchema.ModeRun;
-    var selected :=
-      raw.seenLines || raw.seenWords || raw.seenChars || raw.seenBytes || raw.seenMaxLineLength;
-    var inputs := InputsFromOperands(raw.operands);
-    var runInputs := if mode == WcSchema.ModeRun && |inputs| == 0 then [WcSchema.Stdin("")] else inputs;
-    return WcSchema.WcCmd(
-        mode,
-        if selected then raw.seenLines else true,
-        if selected then raw.seenWords else true,
-        if selected then raw.seenChars else false,
-        if selected then raw.seenBytes else true,
-        if selected then raw.seenMaxLineLength else false,
-        runInputs
-      );
+    msg := Spec.ErrorMessage(path, err);
   }
 
   lemma NewlineIndicesExtend(data: BenchWorld.Bytes, i: nat)
     requires i < |data|
-    ensures NewlineIndices(data[..i + 1]) ==
-            NewlineIndices(data[..i]) +
+    ensures Spec.NewlineIndices(data[..i + 1]) ==
+            Spec.NewlineIndices(data[..i]) +
             (if data[i] == '\n' then {i} else {})
   {
-    assert forall j: nat {:trigger j in NewlineIndices(data[..i + 1])} ::
-        j in NewlineIndices(data[..i + 1]) <==>
-             j in NewlineIndices(data[..i]) +
+    assert forall j: nat {:trigger j in Spec.NewlineIndices(data[..i + 1])} ::
+        j in Spec.NewlineIndices(data[..i + 1]) <==>
+             j in Spec.NewlineIndices(data[..i]) +
                   (if data[i] == '\n' then {i} else {}) by {
-      forall j: nat {:trigger j in NewlineIndices(data[..i + 1])}
+      forall j: nat {:trigger j in Spec.NewlineIndices(data[..i + 1])}
         ensures
-          j in NewlineIndices(data[..i + 1]) <==>
-               j in NewlineIndices(data[..i]) +
+          j in Spec.NewlineIndices(data[..i + 1]) <==>
+               j in Spec.NewlineIndices(data[..i]) +
                     (if data[i] == '\n' then {i} else {})
       {
         if j < i {
@@ -924,26 +776,26 @@ module WcCore {
 
   lemma WordStartIndicesExtend(data: BenchWorld.Bytes, i: nat)
     requires i < |data|
-    ensures WordStartIndices(data[..i + 1]) ==
-            WordStartIndices(data[..i]) +
-            (if !IsWordSpace(data[i]) &&
-                (i == 0 || IsWordSpace(data[i - 1]))
+    ensures Spec.WordStartIndices(data[..i + 1]) ==
+            Spec.WordStartIndices(data[..i]) +
+            (if !Spec.IsWordSpace(data[i]) &&
+                (i == 0 || Spec.IsWordSpace(data[i - 1]))
              then {i}
              else {})
   {
-    assert forall j: nat {:trigger j in WordStartIndices(data[..i + 1])} ::
-        j in WordStartIndices(data[..i + 1]) <==>
-             j in WordStartIndices(data[..i]) +
-                  (if !IsWordSpace(data[i]) &&
-                      (i == 0 || IsWordSpace(data[i - 1]))
+    assert forall j: nat {:trigger j in Spec.WordStartIndices(data[..i + 1])} ::
+        j in Spec.WordStartIndices(data[..i + 1]) <==>
+             j in Spec.WordStartIndices(data[..i]) +
+                  (if !Spec.IsWordSpace(data[i]) &&
+                      (i == 0 || Spec.IsWordSpace(data[i - 1]))
                    then {i}
                    else {}) by {
-      forall j: nat {:trigger j in WordStartIndices(data[..i + 1])}
+      forall j: nat {:trigger j in Spec.WordStartIndices(data[..i + 1])}
         ensures
-          j in WordStartIndices(data[..i + 1]) <==>
-               j in WordStartIndices(data[..i]) +
-                    (if !IsWordSpace(data[i]) &&
-                        (i == 0 || IsWordSpace(data[i - 1]))
+          j in Spec.WordStartIndices(data[..i + 1]) <==>
+               j in Spec.WordStartIndices(data[..i]) +
+                    (if !Spec.IsWordSpace(data[i]) &&
+                        (i == 0 || Spec.IsWordSpace(data[i - 1]))
                      then {i}
                      else {})
       {
@@ -967,13 +819,13 @@ module WcCore {
     requires LineColumnTraceRelation(data[..i], columns)
     requires next ==
              if data[i] == '\n' then 0
-             else NextLineLen(data[i], columns[|columns| - 1])
+             else Spec.NextLineLen(data[i], columns[|columns| - 1])
     ensures LineColumnTraceRelation(data[..i + 1], columns + [next])
   {
     forall j: nat | j < |data[..i + 1]|
       ensures (columns + [next])[j + 1] ==
               if data[..i + 1][j] == '\n' then 0
-              else NextLineLen(data[..i + 1][j], (columns + [next])[j])
+              else Spec.NextLineLen(data[..i + 1][j], (columns + [next])[j])
     {
       if j < i {
         assert data[..i + 1][j] == data[..i][j];
@@ -1026,8 +878,8 @@ module WcCore {
       invariant 0 <= i <= |data|
       invariant 0 <= state.lineLen
       invariant ScanBytes(data[i..], state) == ScanBytes(data, initial)
-      invariant newlineIndices == NewlineIndices(data[..i])
-      invariant wordStartIndices == WordStartIndices(data[..i])
+      invariant newlineIndices == Spec.NewlineIndices(data[..i])
+      invariant wordStartIndices == Spec.WordStartIndices(data[..i])
       invariant state.counts.lines == |newlineIndices|
       invariant state.counts.words == |wordStartIndices|
       invariant state.counts.chars == i
@@ -1035,7 +887,7 @@ module WcCore {
       invariant LineColumnTraceRelation(data[..i], columns)
       invariant MaximumRelation(columns, state.counts.maxLine)
       invariant state.lineLen == columns[|columns| - 1]
-      invariant state.inWord == (i > 0 && !IsWordSpace(data[i - 1]))
+      invariant state.inWord == (i > 0 && !Spec.IsWordSpace(data[i - 1]))
       decreases |data| - i
     {
       var ch := data[i];
@@ -1052,7 +904,7 @@ module WcCore {
       if ch == '\n' {
         nextLineLen := 0;
         nextInWord := false;
-        var nextMax := Max(base.maxLine, state.lineLen);
+        var nextMax := Spec.Max(base.maxLine, state.lineLen);
         nextCounts := Counts(
           base.lines + 1,
           base.words,
@@ -1061,13 +913,13 @@ module WcCore {
           nextMax
         );
       } else {
-        var space := IsWordSpace(ch);
-        var computedLineLen := NextLineLen(ch, state.lineLen);
+        var space := Spec.IsWordSpace(ch);
+        var computedLineLen := Spec.NextLineLen(ch, state.lineLen);
         assert 0 <= computedLineLen;
         nextLineLen := computedLineLen as nat;
         nextInWord := !space;
         var startsWord := !space && !state.inWord;
-        var nextMax := Max(base.maxLine, nextLineLen);
+        var nextMax := Spec.Max(base.maxLine, nextLineLen);
         nextCounts := Counts(
           base.lines,
           base.words + (if startsWord then 1 else 0),
@@ -1091,8 +943,8 @@ module WcCore {
         newlineIndices + (if ch == '\n' then {i} else {});
       ghost var nextWordStartIndices :=
         wordStartIndices +
-        (if !IsWordSpace(ch) &&
-            (i == 0 || IsWordSpace(data[i - 1]))
+        (if !Spec.IsWordSpace(ch) &&
+            (i == 0 || Spec.IsWordSpace(data[i - 1]))
          then {i}
          else {});
       state := ScanState(nextCounts, nextInWord, nextLineLen);
@@ -1152,7 +1004,7 @@ module WcCore {
       if input.Stdin? {
         var counts, countTrace := CountDataMethod(IOContract.ReadResultData(result));
         entries := [Entry(name, counts, true)];
-        errorPiece := Text.StdinReadErrorMessage(name, err);
+        errorPiece := Spec.StdinReadErrorMessage(name, err);
         hadError := true;
         countWitnesses := [countTrace];
         return;
@@ -1333,7 +1185,7 @@ module WcCore {
                preStreams
              )
     requires nextStdin ==
-             if IsStdinInput(cmd.inputs[count]) then IOContract.ObservedReadStdinRemainingFields(currentStdin, preStreams) else currentStdin
+             if Spec.IsStdinInput(cmd.inputs[count]) then IOContract.ObservedReadStdinRemainingFields(currentStdin, preStreams) else currentStdin
     ensures InputTraceWitnessRelation(
               cmd,
               preFs,
@@ -1361,14 +1213,14 @@ module WcCore {
       preStreams
     );
     FailedObservationSnoc(observations, observation);
-    if IsStdinInput(cmd.inputs[count]) {
-      assert exists i: nat :: i < count + 1 && IsStdinInput(cmd.inputs[i]);
+    if Spec.IsStdinInput(cmd.inputs[count]) {
+      assert exists i: nat :: i < count + 1 && Spec.IsStdinInput(cmd.inputs[i]);
     } else if exists i: nat ::
-        i < count + 1 && IsStdinInput(cmd.inputs[i]) {
-      assert exists i: nat :: i < count && IsStdinInput(cmd.inputs[i]) by {
-        var i: nat :| i < count + 1 && IsStdinInput(cmd.inputs[i]);
+        i < count + 1 && Spec.IsStdinInput(cmd.inputs[i]) {
+      assert exists i: nat :: i < count && Spec.IsStdinInput(cmd.inputs[i]) by {
+        var i: nat :| i < count + 1 && Spec.IsStdinInput(cmd.inputs[i]);
         if i == count {
-          assert !IsStdinInput(cmd.inputs[i]);
+          assert !Spec.IsStdinInput(cmd.inputs[i]);
         }
       }
     }
@@ -1421,7 +1273,7 @@ module WcCore {
     ghost var preFs := io.fs();
     ghost var preStreams := io.trustedStreams();
     ghost var preStdin := io.stdin();
-    var cmd := Command(raw);
+    var cmd := Spec.Command(raw);
 
     if cmd.mode == WcSchema.ModeHelp {
       var help := GetHelpText();
@@ -1551,7 +1403,7 @@ module WcCore {
           old(io.trustedStreams())
         );
       assert io.stdin() ==
-             (if IsStdinInput(cmd.inputs[i]) then IOContract.ObservedReadStdinRemainingFields(inputStdin, preStreams) else inputStdin);
+             (if Spec.IsStdinInput(cmd.inputs[i]) then IOContract.ObservedReadStdinRemainingFields(inputStdin, preStreams) else inputStdin);
       ExtendInputTraceWitness(
         cmd,
         preFs,
@@ -1675,10 +1527,10 @@ module WcCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);

@@ -60,9 +60,6 @@ module TrSpec {
   import Utf8 = Utf8Semantics
   import SE = StringEscaping
 
-
-
-
   datatype TrMode =
     | ModeRun
     | ModeHelp
@@ -169,7 +166,7 @@ module TrSpec {
     "tr: missing operand\nTry 'tr --help' for more information.\n"
   }
 
-  ghost function MissingSet2MessageSpec(operand: string, deleteAndSqueeze: bool): BenchWorld.Bytes
+  function MissingSet2MessageSpec(operand: string, deleteAndSqueeze: bool): BenchWorld.Bytes
   {
     MissingSet2MessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
     (if deleteAndSqueeze then
@@ -179,7 +176,7 @@ module TrSpec {
     MissingSet2MessageSpecText3
   }
 
-  ghost function ExtraOperandMessageSpec(operand: string, explainDeleteLimit: bool): BenchWorld.Bytes
+  function ExtraOperandMessageSpec(operand: string, explainDeleteLimit: bool): BenchWorld.Bytes
   {
     ExtraOperandMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
     (if explainDeleteLimit then
@@ -189,7 +186,7 @@ module TrSpec {
     ExtraOperandMessageSpecText3
   }
 
-  ghost function UnsupportedSetMessageSpec(operand: string): BenchWorld.Bytes
+  function UnsupportedSetMessageSpec(operand: string): BenchWorld.Bytes
   {
     match FirstReverseRangeFrom(operand, 0)
     case FoundReverseRange(first, last) =>
@@ -206,7 +203,7 @@ module TrSpec {
     "tr: when not deleting, string2 must be non-empty in this benchmark\n"
   }
 
-  ghost function FirstReverseRangeFrom(text: string, i: nat): ReverseRange
+  function FirstReverseRangeFrom(text: string, i: nat): ReverseRange
     requires i <= |text|
     decreases |text| - i
   {
@@ -272,7 +269,7 @@ module TrSpec {
     else i + 2
   }
 
-  ghost function AtomBytes(text: string, i: nat): BenchWorld.Bytes
+  function AtomBytes(text: string, i: nat): BenchWorld.Bytes
     requires i < |text|
   {
     if text[i] != '\\' then Utf8.EncodeChar(text[i])
@@ -291,7 +288,7 @@ module TrSpec {
     else EscapeBytes(text[i + 1])
   }
 
-  ghost function AmbiguousOctalWarningSpec(text: string, i: nat): BenchWorld.Bytes
+  function AmbiguousOctalWarningSpec(text: string, i: nat): BenchWorld.Bytes
     requires i + 3 < |text|
   {
     AmbiguousOctalWarningSpecText0 +
@@ -306,7 +303,7 @@ module TrSpec {
     "tr: warning: an unescaped backslash at end of string is not portable\n"
   }
 
-  ghost function WarningAtSpec(text: string, i: nat): BenchWorld.Bytes
+  function WarningAtSpec(text: string, i: nat): BenchWorld.Bytes
     requires i < |text|
   {
     if text[i] != '\\' then []
@@ -318,7 +315,7 @@ module TrSpec {
     else []
   }
 
-  ghost function EscapeBytes(ch: char): BenchWorld.Bytes
+  function EscapeBytes(ch: char): BenchWorld.Bytes
   {
     if ch == 'a' || ch == 'b' || ch == 'f' || ch == 'n' ||
        ch == 'r' || ch == 't' || ch == 'v' then
@@ -327,15 +324,15 @@ module TrSpec {
       Utf8.EncodeChar(ch)
   }
 
-  // Ghost, so the adjacent-pair test can be the existential it actually is and
+  // The adjacent-pair test is a bounded existential, and
   // the single-character test can be plain membership. `ContainsCharFrom` is
   // gone entirely: it was sequence membership written as index recursion.
-  ghost predicate ContainsPair(text: string, first: char, second: char)
+  predicate ContainsPair(text: string, first: char, second: char)
   {
     exists k :: 0 <= k < |text| - 1 && text[k] == first && text[k + 1] == second
   }
 
-  ghost predicate StartsUnsupportedConstruct(text: string)
+  predicate StartsUnsupportedConstruct(text: string)
   {
     |text| > 0 && text[0] == '[' && (
       (1 < |text| && text[1] == ':' && ContainsPair(text[2..], ':', ']')) ||
@@ -603,7 +600,7 @@ module TrSpec {
       CommandDecodedRelation(raw, decoded, cmd)
   }
 
-  ghost predicate StrictlyIncreasing(indices: seq<nat>)
+  predicate StrictlyIncreasing(indices: seq<nat>)
   {
     forall i, j :: 0 <= i < j < |indices| ==>
                      indices[i] < indices[j]
@@ -673,7 +670,7 @@ module TrSpec {
                      output[k] == input[emitted[k]])
   }
 
-  ghost predicate SqueezeEmittedAt(
+  predicate SqueezeEmittedAt(
     input: BenchWorld.Bytes,
     squeezeSet: BenchWorld.Bytes,
     hasPrevious: bool,
@@ -712,7 +709,7 @@ module TrSpec {
         output == transformed
   }
 
-  ghost function ReadErrorText(reason: string): BenchWorld.Bytes
+  function ReadErrorText(reason: string): BenchWorld.Bytes
   {
     ReadErrorTextText0 + Utf8.Encode(reason) + ReadErrorTextText1
   }
@@ -723,7 +720,7 @@ module TrSpec {
   }
 
 
-  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
     WriteErrorTextText0 + Utf8.Encode(reason) + WriteErrorTextText1
   }

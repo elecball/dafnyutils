@@ -6,8 +6,6 @@ module ChmodDescriptorProof {
   import C = IOContract
   import R = Results
   import Base = ChmodSpec
-  import BaseCore = ChmodCore
-  import BaseProof = ChmodProof
   import Recursive = ChmodRecursiveSpec
   import RecursiveProof = ChmodRecursiveProof
   import Spec = ChmodDescriptorSpec
@@ -62,8 +60,8 @@ module ChmodDescriptorProof {
   lemma MakeAbsoluteShape(cwd: W.Path, path: W.Path)
     ensures Base.MakeAbsolute(cwd, path) == "" || W.IsAbsolutePath(Base.MakeAbsolute(cwd, path))
   {
-    BaseProof.BridgeMakeAbsolute(cwd, path);
-    reveal BaseCore.MakeAbsoluteCore(), W.IsAbsolutePath(), W.BuildPath(), W.AppendPath();
+
+    reveal Base.MakeAbsolute(), W.IsAbsolutePath(), W.BuildPath(), W.AppendPath();
   }
 
   lemma {:isolate_assertions} IntroduceLogicalCons(cmd: Schema.ChmodCmd, plan: Base.SpecModePlan,

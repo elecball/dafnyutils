@@ -1,9 +1,8 @@
-include "DuTextCore.dfy"
+include "DuSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "DuSchema.dfy"
-include "DuSpec.dfy"
 
 module DuCore {
   import StreamWorld = BenchWorld
@@ -15,57 +14,6 @@ module DuCore {
   import IOContract
   import Schema = DuSchema
   import Spec = DuSpec
-  import Utf8 = DuUtf8Core
-  import Text = DuTextCore
-
-  function DigitChar(d: nat): char
-    requires d < 10
-  {
-    if d == 0 then '0'
-    else if d == 1 then '1'
-    else if d == 2 then '2'
-    else if d == 3 then '3'
-    else if d == 4 then '4'
-    else if d == 5 then '5'
-    else if d == 6 then '6'
-    else if d == 7 then '7'
-    else if d == 8 then '8'
-    else '9'
-  }
-
-  function NatText(n: nat): string
-    decreases n
-  {
-    if n < 10 then
-      [DigitChar(n)]
-    else
-      NatText(n / 10) + [DigitChar(n % 10)]
-  }
-
-  function CountLine(size: nat, path: BenchWorld.Path): BenchWorld.Bytes
-  {
-    NatText(size) + "\t" + Utf8.Encode(path) + "\n"
-  }
-
-  function OutputPiece(
-    path: BenchWorld.Path,
-    result: BenchWorld.IOResult<BenchWorld.Bytes>
-  ): BenchWorld.Bytes
-  {
-    match result
-    case Ok(data) => CountLine(|data|, path)
-    case Err(_) => []
-  }
-
-  function ErrorPiece(
-    path: BenchWorld.Path,
-    result: BenchWorld.IOResult<BenchWorld.Bytes>
-  ): BenchWorld.Bytes
-  {
-    match result
-    case Ok(_) => []
-    case Err(err) => Text.ErrorMessageSpec(path, err)
-  }
 
   ghost function ReadResultCore(
     cmd: Schema.DuCmd,
@@ -89,7 +37,7 @@ module DuCore {
       []
     else
       PrefixOutputCore(cmd, preFs, preStreams, i - 1) +
-      OutputPiece(cmd.operands[i - 1], ReadResultCore(cmd, preFs, preStreams, i - 1))
+      Spec.OutputPieceSpec(cmd.operands[i - 1], ReadResultCore(cmd, preFs, preStreams, i - 1))
   }
 
   ghost function PrefixErrorsCore(
@@ -104,7 +52,7 @@ module DuCore {
       []
     else
       PrefixErrorsCore(cmd, preFs, preStreams, i - 1) +
-      ErrorPiece(cmd.operands[i - 1], ReadResultCore(cmd, preFs, preStreams, i - 1))
+      Spec.ErrorPieceSpec(cmd.operands[i - 1], ReadResultCore(cmd, preFs, preStreams, i - 1))
   }
 
   ghost predicate PrefixHadErrorCore(
@@ -215,9 +163,9 @@ module DuCore {
 
       match readResult {
         case Ok(data) =>
-          output := output + OutputPiece(path, readResult);
+          output := output + Spec.OutputPieceSpec(path, readResult);
         case Err(e) =>
-          err := err + ErrorPiece(path, readResult);
+          err := err + Spec.ErrorPieceSpec(path, readResult);
           hadError := true;
       }
       i := i + 1;
@@ -262,7 +210,7 @@ module DuCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
                                               else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

@@ -1,15 +1,12 @@
-include "ChmodTextCore.dfy"
-include "ChmodModeCore.dfy"
-include "../../core/Errno.dfy"
 include "../../core/World.dfy"
+include "ChmodSchema.dfy"
+include "ChmodSpec.dfy"
+include "../../core/Errno.dfy"
 include "../../core/Utf8.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
-include "ChmodSchema.dfy"
-include "ChmodSpec.dfy"
 
 module ChmodCore {
-  import Text = ChmodTextCore
   class Output {
     var stdout: BenchWorld.Bytes
     var stderr: BenchWorld.Bytes
@@ -22,156 +19,13 @@ module ChmodCore {
     }
   }
 
-
   import Errno = Errnos
   import BenchIO
   import IOContract
   import BenchWorld
   import Utf8 = Utf8Semantics
   import Schema = ChmodSchema
-  import Mode = ChmodModeCore
   import Spec = ChmodSpec
-
-  function HelpTextCore(): BenchWorld.Bytes
-  {
-    Spec.HelpTextSpec()
-  }
-
-  function VersionTextCore(): BenchWorld.Bytes
-  {
-    Spec.VersionTextSpec()
-  }
-
-  function ErrnoTextCore(err: int): string
-  {
-    Spec.ErrnoTextSpec(err)
-  }
-
-  function MissingOperandMessageCore(cmd: Schema.ChmodCmd): BenchWorld.Bytes
-  {
-    Text.MissingOperandMessageSpec(cmd)
-  }
-
-  function InvalidModeMessageCore(modeExpr: string): BenchWorld.Bytes
-  {
-    Text.InvalidModeMessageSpec(modeExpr)
-  }
-
-  function ReferenceErrorMessageCore(path: string, err: string): BenchWorld.Bytes
-  {
-    Text.ReferenceErrorMessageSpec(path, err)
-  }
-
-  function GettingNewAttributesMessageCore(path: string, err: string): BenchWorld.Bytes
-  {
-    Text.GettingNewAttributesMessageSpec(path, err)
-  }
-
-  function CombineModeReferenceMessageCore(): BenchWorld.Bytes
-  {
-    Spec.CombineModeReferenceMessageSpec()
-  }
-
-  function UnsupportedRecursiveMessageCore(): BenchWorld.Bytes
-  {
-    Spec.UnsupportedRecursiveMessageSpec()
-  }
-
-  function UnsupportedMultiFileMessageCore(): BenchWorld.Bytes
-  {
-    Spec.UnsupportedMultiFileMessageSpec()
-  }
-
-  function ChangeErrorMessageCore(path: string, err: string): BenchWorld.Bytes
-  {
-    Text.ChangeErrorMessageSpec(path, err)
-  }
-
-  function AccessErrorMessageCore(path: string, err: string): BenchWorld.Bytes
-  {
-    Text.AccessErrorMessageSpec(path, err)
-  }
-
-  function DanglingSymlinkMessageCore(path: string): BenchWorld.Bytes
-  {
-    Text.DanglingSymlinkMessageSpec(path)
-  }
-
-  function CannotDereferenceMessageCore(path: string, err: int): BenchWorld.Bytes
-  {
-    Text.CannotDereferenceMessageSpec(path, err)
-  }
-
-  function NeitherChangedMessageCore(path: string): BenchWorld.Bytes
-  {
-    Text.NeitherChangedMessageSpec(path)
-  }
-
-  function ChangedMessageCore(path: string, before: bv32, after: bv32): BenchWorld.Bytes
-  {
-    Text.ChangedMessageSpec(path, before, after)
-  }
-
-  function FailedChangeMessageCore(
-    path: string,
-    before: bv32,
-    desired: bv32
-  ): BenchWorld.Bytes
-  {
-    Text.FailedChangeMessageSpec(path, before, desired)
-  }
-
-  function RetainedMessageCore(path: string, mode: bv32): BenchWorld.Bytes
-  {
-    Text.RetainedMessageSpec(path, mode)
-  }
-
-  function AccessFailureMessageCore(path: string): BenchWorld.Bytes
-  {
-    Text.AccessFailureMessageSpec(path)
-  }
-
-  function SurpriseModeMessageCore(path: string, actual: bv32, naive: bv32): BenchWorld.Bytes
-  {
-    Text.SurpriseModeMessageSpec(path, actual, naive)
-  }
-
-  ghost function MakeAbsoluteCore(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
-  {
-    if path == "" then ""
-    else if BenchWorld.IsAbsolutePath(path) then path
-    else
-      var absoluteCwd := BenchWorld.BuildPath(
-                           true,
-                           BenchWorld.PathSegments(cwd)
-                         );
-      BenchWorld.AppendPath(absoluteCwd, path)
-  }
-
-  function ShouldDereferenceCore(cmd: Schema.ChmodCmd): bool
-  {
-    cmd.dereferenceMode != 0
-  }
-
-  function CoreUsesPhysicalTopLevelMetadata(cmd: Schema.ChmodCmd): bool
-  {
-    !cmd.recursive && cmd.dereferenceMode == -1 && cmd.traversalMode == 0
-  }
-
-  function CoreUsesExplicitPhysicalDereference(cmd: Schema.ChmodCmd): bool
-  {
-    !cmd.recursive && cmd.dereferenceMode == 1 && cmd.traversalMode == 0
-  }
-
-  function CoreUsesFollowedTopLevelNoDereference(cmd: Schema.ChmodCmd): bool
-  {
-    !cmd.recursive && cmd.dereferenceMode == 0 && cmd.traversalMode != 0
-  }
-
-  function CoreIsDanglingSymlinkFailure(isSymlink: bool, err: int): bool
-  {
-    isSymlink && err == Errno.ENOENT
-  }
 
   ghost function CorePathIsDanglingSymlinkFailure(
     fs: BenchWorld.FileSystem,
@@ -185,104 +39,12 @@ module ChmodCore {
     case Err(_) => false
     case Ok(resolved) =>
       BenchWorld.FsContainsPath(fs, resolved) &&
-      CoreIsDanglingSymlinkFailure(
+      Spec.SpecIsDanglingSymlinkFailure(
         match BenchWorld.FsNodeAt(fs, resolved)
         case Symlink(_, _, _, _) => true
         case _ => false,
         err
       )
-  }
-
-  function SupportedOctalModeCore(expr: string): bool
-  {
-    |expr| > 0 && BenchWorld.IsOctalDigit(expr[0]) &&
-    Mode.AllOctalDigits(expr, 0) && Mode.OctalValue(expr, 0, 0) <= 4095
-  }
-
-  function OctalModeCore(expr: string): bv32
-    requires SupportedOctalModeCore(expr)
-  {
-    BenchWorld.NormalizeMode(BenchWorld.ToBv32(Mode.OctalValue(expr, 0, 0)))
-  }
-
-  const CORE_READ_MASK: bv32 := Schema.READ_MASK
-  const CORE_WRITE_MASK: bv32 := Schema.WRITE_MASK
-  const CORE_EXEC_MASK: bv32 := Schema.EXEC_MASK
-
-  function CoreCopyExistingValue(value: bv32, current: bv32): bv32
-  {
-    var isolated := value & current;
-    isolated |
-    (if (isolated & CORE_READ_MASK) != 0 as bv32 then CORE_READ_MASK else 0 as bv32) |
-    (if (isolated & CORE_WRITE_MASK) != 0 as bv32 then CORE_WRITE_MASK else 0 as bv32) |
-    (if (isolated & CORE_EXEC_MASK) != 0 as bv32 then CORE_EXEC_MASK else 0 as bv32)
-  }
-
-  function CoreInvertModeBits(value: bv32): bv32
-  {
-    Schema.CHMOD_MODE_BITS ^ value
-  }
-
-  function CoreOmittedChangeBits(isDir: bool, mentioned: bv32): bv32
-  {
-    (if isDir then Schema.S_ISUID | Schema.S_ISGID else 0 as bv32) &
-    CoreInvertModeBits(mentioned)
-  }
-
-  function CoreChangeAffectedMask(affected: bv32, umask: bv32): bv32
-  {
-    if affected != 0 as bv32 then affected else CoreInvertModeBits(umask)
-  }
-
-  function CoreChangeValue(current: bv32, isDir: bool, change: Schema.ModeChange): bv32
-  {
-    match change.flag
-    case ModeCopyExisting => CoreCopyExistingValue(change.value, current)
-    case ModeXIfAnyX =>
-      if (current & CORE_EXEC_MASK) != 0 as bv32 || isDir then
-        change.value | CORE_EXEC_MASK
-      else
-        change.value
-    case ModeOrdinary => change.value
-  }
-
-  function CoreMaskedChangeValue(
-    current: bv32,
-    isDir: bool,
-    umask: bv32,
-    change: Schema.ModeChange
-  ): bv32
-  {
-    CoreChangeValue(current, isDir, change) &
-    CoreChangeAffectedMask(change.affected, umask) &
-    CoreInvertModeBits(CoreOmittedChangeBits(isDir, change.mentioned))
-  }
-
-  function CorePreservedAffectedBits(affected: bv32): bv32
-  {
-    if affected != 0 as bv32 then CoreInvertModeBits(affected) else 0 as bv32
-  }
-
-  function CorePreservedChangeBits(isDir: bool, change: Schema.ModeChange): bv32
-  {
-    CorePreservedAffectedBits(change.affected) |
-    CoreOmittedChangeBits(isDir, change.mentioned)
-  }
-
-  function CoreApplyChange(
-    current: bv32,
-    isDir: bool,
-    umask: bv32,
-    change: Schema.ModeChange
-  ): bv32
-  {
-    var masked := CoreMaskedChangeValue(current, isDir, umask, change);
-    if change.op == '=' then
-      BenchWorld.NormalizeMode((current & CorePreservedChangeBits(isDir, change)) | masked)
-    else if change.op == '+' then
-      BenchWorld.NormalizeMode(current | masked)
-    else
-      BenchWorld.NormalizeMode(current & CoreInvertModeBits(masked))
   }
 
   function CoreModeAdjustFrom(
@@ -301,7 +63,7 @@ module ChmodCore {
       CoreModeAdjustFrom(
         changes,
         i + 1,
-        CoreApplyChange(current, isDir, umask, changes[i]),
+        Spec.SpecApplyChange(current, isDir, umask, changes[i]),
         isDir,
         umask
       )
@@ -323,8 +85,8 @@ module ChmodCore {
     if |expr| == 0 then
       base
     else if BenchWorld.IsOctalDigit(expr[0]) then
-      if Mode.AllOctalDigits(expr, 0) then
-        var raw := Mode.OctalValue(expr, 0, 0);
+      if BenchWorld.AllOctalDigits(expr, 0) then
+        var raw := BenchWorld.OctalValue(expr, 0, 0);
         if raw > 4095 then
           base
         else
@@ -343,7 +105,7 @@ module ChmodCore {
       else
         base
     else
-      match Mode.ParseSymbolic(expr, 0)
+      match Schema.ParseSymbolic(expr, 0)
       case Invalid => base
       case Parsed(changes, endIdx) =>
         if endIdx == |expr| then CoreModeAdjust(base, isDir, umask, changes) else base
@@ -375,35 +137,12 @@ module ChmodCore {
     allOk: bool
   )
 
-  function CoreNodeIsDirectory(node: BenchWorld.FsNode): bool
-  {
-    match node
-    case Directory(_, _, _) => true
-    case _ => false
-  }
-
   function CorePlannedMode(plan: CoreModePlan, before: bv32, isDir: bool): bv32
   {
     match plan
     case CoreGeneralModePlan(expr, umask) =>
       CoreApplyModeExpr(expr, before, isDir, umask)
     case CoreReferenceModePlan(mode) => BenchWorld.NormalizeMode(mode)
-  }
-
-  function CoreSuccessStdout(
-    cmd: Schema.ChmodCmd,
-    path: string,
-    before: bv32,
-    after: bv32
-  ): BenchWorld.Bytes
-  {
-    if cmd.verbose then
-      if before == after then RetainedMessageCore(path, after)
-      else ChangedMessageCore(path, before, after)
-    else if cmd.changes && before != after then
-      ChangedMessageCore(path, before, after)
-    else
-      []
   }
 
   function CoreNaiveMode(plan: CoreModePlan, before: bv32, isDir: bool): bv32
@@ -422,16 +161,7 @@ module ChmodCore {
   ): bool
   {
     var naive := CoreNaiveMode(plan, before, isDir);
-    cmd.diagnoseSurprises && (after & CoreInvertModeBits(naive)) != 0 as bv32
-  }
-
-  function CorePostChangeLookupNeeded(
-    cmd: Schema.ChmodCmd,
-    after: bv32
-  ): bool
-  {
-    (cmd.verbose || cmd.changes) &&
-    (after & Schema.SPECIAL_BITS) != 0 as bv32
+    cmd.diagnoseSurprises && (after & Spec.SpecInvertModeBits(naive)) != 0 as bv32
   }
 
   ghost function CoreSuccessfulChangeResult(
@@ -446,7 +176,7 @@ module ChmodCore {
     fs: BenchWorld.FileSystem
   ): CorePathResult
   {
-    if CorePostChangeLookupNeeded(cmd, after) then
+    if Spec.SpecPostChangeLookupNeeded(cmd, after) then
       match IOContract.ResolvePathForMetadataFields(fs, actual, follow)
       case Err(_) =>
         var err := IOContract.MetadataFailureErrFields(fs, actual, follow);
@@ -454,10 +184,10 @@ module ChmodCore {
         var naive := CoreNaiveMode(plan, before, isDir);
         CorePathResult(
           fs,
-          if cmd.verbose then RetainedMessageCore(path, after) else [],
+          if cmd.verbose then Spec.RetainedMessageSpec(path, after) else [],
           (if cmd.silent then []
-           else GettingNewAttributesMessageCore(path, ErrnoTextCore(err))) +
-          (if surprise then SurpriseModeMessageCore(path, after, naive) else []),
+           else Spec.GettingNewAttributesMessageSpec(path, Spec.ErrnoTextSpec(err))) +
+          (if surprise then Spec.SurpriseModeMessageSpec(path, after, naive) else []),
           !surprise,
           CorePathRetained(after)
         )
@@ -468,10 +198,10 @@ module ChmodCore {
           var naive := CoreNaiveMode(plan, before, isDir);
           CorePathResult(
             fs,
-            if cmd.verbose then RetainedMessageCore(path, after) else [],
+            if cmd.verbose then Spec.RetainedMessageSpec(path, after) else [],
             (if cmd.silent then []
-             else GettingNewAttributesMessageCore(path, ErrnoTextCore(err))) +
-            (if surprise then SurpriseModeMessageCore(path, after, naive) else []),
+             else Spec.GettingNewAttributesMessageSpec(path, Spec.ErrnoTextSpec(err))) +
+            (if surprise then Spec.SurpriseModeMessageSpec(path, after, naive) else []),
             !surprise,
             CorePathRetained(after)
           )
@@ -481,8 +211,8 @@ module ChmodCore {
           var naive := CoreNaiveMode(plan, before, isDir);
           CorePathResult(
             fs,
-            CoreSuccessStdout(cmd, path, before, observed),
-            if surprise then SurpriseModeMessageCore(path, observed, naive) else [],
+            Spec.SpecSuccessStdout(cmd, path, before, observed),
+            if surprise then Spec.SurpriseModeMessageSpec(path, observed, naive) else [],
             !surprise,
             if surprise then CorePathSurprise(before, observed, naive)
             else if before == observed then CorePathRetained(observed)
@@ -493,8 +223,8 @@ module ChmodCore {
       var naive := CoreNaiveMode(plan, before, isDir);
       CorePathResult(
         fs,
-        CoreSuccessStdout(cmd, path, before, after),
-        if surprise then SurpriseModeMessageCore(path, after, naive) else [],
+        Spec.SpecSuccessStdout(cmd, path, before, after),
+        if surprise then Spec.SurpriseModeMessageSpec(path, after, naive) else [],
         !surprise,
         if surprise then CorePathSurprise(before, after, naive)
         else if before == after then CorePathRetained(after)
@@ -515,24 +245,24 @@ module ChmodCore {
     hide *;
     reveal SuccessfulChangeResultForPost();
     var after := requested;
-    if CorePostChangeLookupNeeded(cmd, requested) {
+    if Spec.SpecPostChangeLookupNeeded(cmd, requested) {
       if !postOk {
         if !cmd.silent {
-          output.stderr := output.stderr + GettingNewAttributesMessageCore(path, NativeErrnoTextCore(postErr, io));
+          output.stderr := output.stderr + Spec.GettingNewAttributesMessageSpec(path, NativeErrnoTextCore(postErr, io));
         }
-        if cmd.verbose { output.stdout := output.stdout + RetainedMessageCore(path, requested); }
+        if cmd.verbose { output.stdout := output.stdout + Spec.RetainedMessageSpec(path, requested); }
         var naive := CoreNaiveMode(plan, before, isDir);
         var surprise := CoreDiagnoseSurprise(cmd, plan, before, requested, isDir);
-        if surprise { output.stderr := output.stderr + SurpriseModeMessageCore(path, requested, naive); }
+        if surprise { output.stderr := output.stderr + Spec.SurpriseModeMessageSpec(path, requested, naive); }
         ok := !surprise;
         return;
       }
       after := postMode;
     }
-    output.stdout := output.stdout + CoreSuccessStdout(cmd, path, before, after);
+    output.stdout := output.stdout + Spec.SpecSuccessStdout(cmd, path, before, after);
     var naive := CoreNaiveMode(plan, before, isDir);
     var surprise := CoreDiagnoseSurprise(cmd, plan, before, after, isDir);
-    if surprise { output.stderr := output.stderr + SurpriseModeMessageCore(path, after, naive); }
+    if surprise { output.stderr := output.stderr + Spec.SurpriseModeMessageSpec(path, after, naive); }
     ok := !surprise;
   }
 
@@ -599,14 +329,14 @@ module ChmodCore {
   {
     CorePathResult(
       fs,
-      if cmd.verbose then AccessFailureMessageCore(path) else [],
+      if cmd.verbose then Spec.AccessFailureMessageSpec(path) else [],
       if cmd.silent then []
-      else if CoreUsesExplicitPhysicalDereference(cmd) &&
+      else if Spec.SpecUsesExplicitPhysicalDereference(cmd) &&
               CoreNoDereferenceSymlink(fs, actual, false) then
-        CannotDereferenceMessageCore(path, err)
+        Spec.CannotDereferenceMessageSpec(path, err)
       else if CorePathIsDanglingSymlinkFailure(fs, actual, follow, err) then
-        DanglingSymlinkMessageCore(path)
-      else AccessErrorMessageCore(path, ErrnoTextCore(err)),
+        Spec.DanglingSymlinkMessageSpec(path)
+      else Spec.AccessErrorMessageSpec(path, Spec.ErrnoTextSpec(err)),
       false,
       CorePathAccessFailed(err)
     )
@@ -621,9 +351,9 @@ module ChmodCore {
     now: int
   ): CorePathResult
   {
-    var actual := MakeAbsoluteCore(cwd, path);
-    var follow := ShouldDereferenceCore(cmd);
-    if CoreUsesPhysicalTopLevelMetadata(cmd) then
+    var actual := Spec.MakeAbsolute(cwd, path);
+    var follow := Spec.ShouldDereference(cmd);
+    if Spec.SpecUsesPhysicalTopLevelMetadata(cmd) then
       match IOContract.ResolvePathForMetadataFields(fs, actual, false)
       case Err(_) =>
         var err := IOContract.MetadataFailureErrFields(fs, actual, false);
@@ -635,16 +365,16 @@ module ChmodCore {
         else
           var node := BenchWorld.FsNodeAt(fs, metadataTarget);
           var before := BenchWorld.NodeMode(node);
-          var isDir := CoreNodeIsDirectory(node);
+          var isDir := Spec.SpecNodeIsDirectory(node);
           var desired := CorePlannedMode(plan, before, isDir);
           match IOContract.ResolvePathForMetadataFields(fs, actual, true)
           case Err(_) =>
             var err := IOContract.MetadataFailureErrFields(fs, actual, true);
             CorePathResult(
               fs,
-              if cmd.verbose then FailedChangeMessageCore(path, before, desired) else [],
+              if cmd.verbose then Spec.FailedChangeMessageSpec(path, before, desired) else [],
               if cmd.silent then []
-              else ChangeErrorMessageCore(path, ErrnoTextCore(err)),
+              else Spec.ChangeErrorMessageSpec(path, Spec.ErrnoTextSpec(err)),
               false,
               CorePathChangeFailed(before, desired, err)
             )
@@ -653,9 +383,9 @@ module ChmodCore {
               var err := IOContract.MetadataFailureErrFields(fs, actual, true);
               CorePathResult(
                 fs,
-                if cmd.verbose then FailedChangeMessageCore(path, before, desired) else [],
+                if cmd.verbose then Spec.FailedChangeMessageSpec(path, before, desired) else [],
                 if cmd.silent then []
-                else ChangeErrorMessageCore(path, ErrnoTextCore(err)),
+                else Spec.ChangeErrorMessageSpec(path, Spec.ErrnoTextSpec(err)),
                 false,
                 CorePathChangeFailed(before, desired, err)
               )
@@ -679,7 +409,7 @@ module ChmodCore {
         else
           var before := BenchWorld.NodeMode(BenchWorld.FsNodeAt(fs, target));
           if CoreNoDereferenceSymlink(fs, actual, follow) then
-            if CoreUsesFollowedTopLevelNoDereference(cmd) then
+            if Spec.SpecUsesFollowedTopLevelNoDereference(cmd) then
               var followed := IOContract.ResolvePathForMetadataFields(fs, actual, true);
               var followedOk :=
                 match followed
@@ -692,7 +422,7 @@ module ChmodCore {
               else
                 CorePathResult(
                   fs,
-                  if cmd.verbose then NeitherChangedMessageCore(path) else [],
+                  if cmd.verbose then Spec.NeitherChangedMessageSpec(path) else [],
                   [],
                   true,
                   CorePathRetained(before)
@@ -700,13 +430,13 @@ module ChmodCore {
             else
               CorePathResult(
                 fs,
-                if cmd.verbose then NeitherChangedMessageCore(path) else [],
+                if cmd.verbose then Spec.NeitherChangedMessageSpec(path) else [],
                 [],
                 true,
                 CorePathRetained(before)
               )
           else
-            var isDir := CoreNodeIsDirectory(BenchWorld.FsNodeAt(fs, target));
+            var isDir := Spec.SpecNodeIsDirectory(BenchWorld.FsNodeAt(fs, target));
             var desired := CorePlannedMode(plan, before, isDir);
             var fs2 := CoreModeSetFs(fs, follow, target, desired, now);
             var after :=
@@ -790,7 +520,7 @@ module ChmodCore {
     exists mode: bv32, err: int ::
       IOContract.GetFileModeContractFields(
         fs,
-        MakeAbsoluteCore(cwd, cmd.referenceFile),
+        Spec.MakeAbsolute(cwd, cmd.referenceFile),
         true,
         false,
         mode,
@@ -813,16 +543,16 @@ module ChmodCore {
     exists mode: bv32, err: int ::
       IOContract.GetFileModeContractFields(
         fs0,
-        MakeAbsoluteCore(cwd0, cmd.referenceFile),
+        Spec.MakeAbsolute(cwd0, cmd.referenceFile),
         true,
         false,
         mode,
         err
       ) &&
       fs2 == fs0 && stdout2 == stdout0 &&
-      stderr2 == stderr0 + ReferenceErrorMessageCore(
+      stderr2 == stderr0 + Spec.ReferenceErrorMessageSpec(
         cmd.referenceFile,
-        ErrnoTextCore(err)
+        Spec.ErrnoTextSpec(err)
       ) && exit == 1
   }
 
@@ -842,7 +572,7 @@ module ChmodCore {
     exists refMode: bv32 ::
       IOContract.GetFileModeContractFields(
         fs0,
-        MakeAbsoluteCore(cwd0, cmd.referenceFile),
+        Spec.MakeAbsolute(cwd0, cmd.referenceFile),
         true,
         true,
         refMode,
@@ -877,17 +607,17 @@ module ChmodCore {
   {
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeHelp then
-      io.fs() == old(io.fs()) && io.stdout() == old(io.stdout()) + HelpTextCore() &&
+      io.fs() == old(io.fs()) && io.stdout() == old(io.stdout()) + Spec.HelpTextSpec() &&
       io.stderr() == old(io.stderr()) && exit == 0
     else if cmd.mode == Schema.ModeVersion then
-      io.fs() == old(io.fs()) && io.stdout() == old(io.stdout()) + VersionTextCore() &&
+      io.fs() == old(io.fs()) && io.stdout() == old(io.stdout()) + Spec.VersionTextSpec() &&
       io.stderr() == old(io.stderr()) && exit == 0
     else if cmd.seenReference && cmd.diagnoseSurprises then
       io.fs() == old(io.fs()) && io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + CombineModeReferenceMessageCore() && exit == 1
+      io.stderr() == old(io.stderr()) + Spec.CombineModeReferenceMessageSpec() && exit == 1
     else if |cmd.files| == 0 then
       io.fs() == old(io.fs()) && io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + MissingOperandMessageCore(cmd) && exit == 1
+      io.stderr() == old(io.stderr()) + Spec.MissingOperandMessageSpec(cmd) && exit == 1
     else if cmd.seenReference &&
             CoreReferenceFailure(cmd, old(io.fs()), old(io.cwd())) then
       CoreReferenceFailureOutcome(
@@ -896,10 +626,10 @@ module ChmodCore {
       )
     else if !cmd.seenReference && !Schema.IsValidModeExpr(cmd.modeExpr) then
       io.fs() == old(io.fs()) && io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + InvalidModeMessageCore(cmd.modeExpr) && exit == 1
+      io.stderr() == old(io.stderr()) + Spec.InvalidModeMessageSpec(cmd.modeExpr) && exit == 1
     else if cmd.recursive then
       io.fs() == old(io.fs()) && io.stdout() == old(io.stdout()) &&
-      io.stderr() == old(io.stderr()) + UnsupportedRecursiveMessageCore() && exit == 1
+      io.stderr() == old(io.stderr()) + Spec.UnsupportedRecursiveMessageSpec() && exit == 1
     else if cmd.seenReference then
       CoreReferenceBatchOutcome(
         cmd, old(io.fs()), old(io.cwd()), io.fs(),
@@ -941,7 +671,7 @@ module ChmodCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
                                               else Spec.WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
@@ -959,7 +689,6 @@ module ChmodCore {
                                       io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
-
   function NativeErrnoTextCore(err: int, io: BenchIO.IO): (reason: string)
     ensures reason == IOContract.CLocaleErrnoTextResult(err)
   {
@@ -973,21 +702,21 @@ module ChmodCore {
                                                path: string, before: bv32,
                                                requested: bv32, isDir: bool, fs: BenchWorld.FileSystem, postOk: bool, postMode: bv32, postErr: int): CorePathResult
   {
-    if CorePostChangeLookupNeeded(cmd, requested) && !postOk then
+    if Spec.SpecPostChangeLookupNeeded(cmd, requested) && !postOk then
       var naive := CoreNaiveMode(plan, before, isDir);
       var surprise := CoreDiagnoseSurprise(cmd, plan, before, requested, isDir);
       CorePathResult(fs,
-                     if cmd.verbose then RetainedMessageCore(path, requested) else [],
-                     (if cmd.silent then [] else GettingNewAttributesMessageCore(path,
-                                                                                 IOContract.CLocaleErrnoTextResult(postErr))) +
-                     (if surprise then SurpriseModeMessageCore(path, requested, naive) else []),
+                     if cmd.verbose then Spec.RetainedMessageSpec(path, requested) else [],
+                     (if cmd.silent then [] else Spec.GettingNewAttributesMessageSpec(path,
+                                                                                      IOContract.CLocaleErrnoTextResult(postErr))) +
+                     (if surprise then Spec.SurpriseModeMessageSpec(path, requested, naive) else []),
                      !surprise, CorePathRetained(requested))
     else
-      var after := if CorePostChangeLookupNeeded(cmd, requested) && postOk then postMode else requested;
+      var after := if Spec.SpecPostChangeLookupNeeded(cmd, requested) && postOk then postMode else requested;
       var naive := CoreNaiveMode(plan, before, isDir);
       var surprise := CoreDiagnoseSurprise(cmd, plan, before, after, isDir);
-      CorePathResult(fs, CoreSuccessStdout(cmd, path, before, after),
-                     if surprise then SurpriseModeMessageCore(path, after, naive) else [], !surprise,
+      CorePathResult(fs, Spec.SpecSuccessStdout(cmd, path, before, after),
+                     if surprise then Spec.SurpriseModeMessageSpec(path, after, naive) else [], !surprise,
                      if surprise then CorePathSurprise(before, after, naive)
                      else if before == after then CorePathRetained(after) else CorePathChanged(before, after))
   }

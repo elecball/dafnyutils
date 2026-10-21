@@ -1,219 +1,27 @@
-include "MvTextCore.dfy"
-include "MvWorldPathCore.dfy"
+include "../../core/World.dfy"
+include "MvPathSpec.dfy"
+include "MvSpec.dfy"
 include "MvMetadataProof.dfy"
 include "../../core/Errno.dfy"
-include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "MvPathCore.dfy"
 include "MvSchema.dfy"
-include "MvSpec.dfy"
 
 module MvCore {
-  import Text = MvTextCore
-  import WorldPath = MvWorldPathCore
+  import MvPathSpec
+
+  import Text = MvSpec
   import MetadataProof = MvMetadataProof
   datatype PlannedOutput = PlannedOutput(stdout: BenchWorld.Bytes, stderr: BenchWorld.Bytes, normalExit: int)
 
   import Errno = Errnos
   import BenchIO
-  import Utf8 = MvUtf8Core
   import IOContract
   import BenchWorld
   import BasenameCore = MvPathCore
   import DirnameCore = MvPathCore
   import Schema = MvSchema
   import Spec = MvSpec
-
-
-  ghost function ShowActionMessage(verbose: bool, debug: bool): bool
-  {
-    verbose || debug
-  }
-
-  ghost function SkipStdout(target: string, debug: bool): BenchWorld.Bytes
-  {
-    if debug then Spec.DebugSkipMessageSpec(target) else []
-  }
-
-  function SourceRenameDiagnosticErr(
-    target: string,
-    sourceIsDir: bool,
-    renameErr: int
-  ): int
-  {
-    if target == "" then
-      if sourceIsDir then Errno.EBUSY else Errno.EISDIR
-    else
-      renameErr
-  }
-
-  function SourceLeafName(source: string): string
-  {
-    var leaf := BenchWorld.LeafName(source);
-    if leaf == "" then source else leaf
-  } by method {
-    var leaf := WorldPath.LeafName(source);
-    return if leaf == "" then source else leaf;
-  }
-
-  lemma AllSlashesFalseAt(text: string, i: nat, j: nat)
-    requires i <= j < |text|
-    requires forall k :: i <= k < j ==> text[k] == '/'
-    requires text[j] != '/'
-    ensures !AllSlashes(text, i)
-    decreases j - i
-  {
-    if i < j {
-      AllSlashesFalseAt(text, i + 1, j);
-    }
-  }
-
-  lemma AllSlashesTrueFrom(text: string, i: nat)
-    requires i <= |text|
-    requires forall k :: i <= k < |text| ==> text[k] == '/'
-    ensures AllSlashes(text, i)
-    decreases |text| - i
-  {
-    if i < |text| {
-      AllSlashesTrueFrom(text, i + 1);
-    }
-  }
-
-  function AllSlashes(text: string, i: nat): bool
-    decreases |text| - i
-  {
-    if i >= |text| then
-      true
-    else if text[i] != '/' then
-      false
-    else
-      AllSlashes(text, i + 1)
-  } by method {
-    if i >= |text| {
-      return true;
-    }
-    var j := i;
-    while j < |text|
-      invariant i <= j <= |text|
-      invariant forall k | i <= k < j :: text[k] == '/'
-      decreases |text| - j
-    {
-      if text[j] != '/' {
-        AllSlashesFalseAt(text, i, j);
-        return false;
-      }
-      j := j + 1;
-    }
-    AllSlashesTrueFrom(text, i);
-    return true;
-  }
-
-  lemma TrimTrailingSlashesLoop(text: string, end: nat, i: nat)
-    requires i <= end <= |text|
-    requires forall k :: i <= k < end ==> text[k] == '/'
-    requires i == 0 || text[i - 1] != '/'
-    ensures TrimTrailingSlashes(text, end) == text[..i]
-    decreases end - i
-  {
-    if end == i {
-    } else {
-      TrimTrailingSlashesLoop(text, end - 1, i);
-    }
-  }
-
-  function TrimTrailingSlashes(text: string, end: nat): string
-    requires end <= |text|
-    decreases end
-  {
-    if end == 0 then
-      ""
-    else if text[end - 1] == '/' then
-      TrimTrailingSlashes(text, end - 1)
-    else
-      text[..end]
-  } by method {
-    var i: nat := end;
-    while i > 0 && text[i - 1] == '/'
-      invariant i <= end <= |text|
-      invariant forall k | i <= k < end :: text[k] == '/'
-      decreases i
-    {
-      i := i - 1;
-    }
-    TrimTrailingSlashesLoop(text, end, i);
-    return text[..i];
-  }
-
-  function NormalizeSource(source: string, stripTrailingSlashes: bool): string
-  {
-    if !stripTrailingSlashes then
-      source
-    else if source == "" then
-      source
-    else if AllSlashes(source, 0) then
-      "/"
-    else
-      TrimTrailingSlashes(source, |source|)
-  } by method {
-    if !stripTrailingSlashes {
-      return source;
-    }
-    if source == "" {
-      return source;
-    }
-    if AllSlashes(source, 0) {
-      return "/";
-    }
-    return TrimTrailingSlashes(source, |source|);
-  }
-
-  function TargetInDirectory(directory: string, source: string): string
-  {
-    BenchWorld.AppendPath(directory, SourceLeafName(source))
-  } by method {
-    return WorldPath.AppendPath(directory, SourceLeafName(source));
-  }
-
-  function DigitChar(d: nat): char
-    requires d < 10
-  { BasenameCore.DigitChar(d) } by method { return BasenameCore.DigitChar(d); }
-
-  function DecimalNat(n: nat): string
-  { BasenameCore.DecimalNat(n) } by method { return BasenameCore.DecimalNat(n); }
-
-  function NumberedBackupPath(target: string, index: nat): string
-    requires index >= 1
-  { BasenameCore.NumberedBackupPath(target,index) } by method { return BasenameCore.NumberedBackupPath(target,index); }
-
-  function SimpleBackupPath(target: string, suffix: string): string
-  { BasenameCore.SimpleBackupPath(target,suffix) } by method { return BasenameCore.SimpleBackupPath(target,suffix); }
-
-  function SourceNewer(
-    srcSec: int, srcNsec: int, dstSec: int, dstNsec: int
-  ): bool
-  {
-    srcSec > dstSec || (srcSec == dstSec && srcNsec > dstNsec)
-  } by method {
-    return srcSec > dstSec || (srcSec == dstSec && srcNsec > dstNsec);
-  }
-
-  ghost function TargetDirectoryErr(statOk: bool, isDir: bool, statErr: int): int
-  {
-    if statOk then
-      if !isDir then Errno.ENOTDIR else statErr
-    else
-      statErr
-  }
-
-  ghost function StepSuccessStdout(source: string, target: string, backupPath: string, verbose: bool, debug: bool): BenchWorld.Bytes
-  {
-    if !ShowActionMessage(verbose, debug) then
-      []
-    else if backupPath == "" then
-      Spec.VerboseRenameMessageSpec(source, target)
-    else
-      Spec.VerboseRenameWithBackupMessageSpec(source, target, backupPath)
-  }
 
   datatype BackupCheckEvidence = BackupCheckEvidence(
     candidate: string,
@@ -694,10 +502,10 @@ module MvCore {
     |evidence.steps| == |sources| &&
     (forall i: nat | i < |sources| ::
        var normalizedSource :=
-         NormalizeSource(sources[i], cmd.stripTrailingSlashes);
+         Spec.NormalizeSourceSpec(sources[i], cmd.stripTrailingSlashes);
        StepStatusEvidenceFor(
          normalizedSource,
-         TargetInDirectory(directory, normalizedSource),
+         Spec.TargetInDirectorySpec(directory, normalizedSource),
          cmd,
          evidence.steps[i]
        ))
@@ -1021,7 +829,7 @@ module MvCore {
         sourceNoFollow == sourceMetadata &&
         MetadataEvidenceFor(
           fs,
-          SimpleBackupPath(target, cmd.backupSuffix),
+          MvPathSpec.SimpleBackupPathSpec(target, cmd.backupSuffix),
           true,
           candidateFollowed
         )
@@ -1047,7 +855,7 @@ module MvCore {
     start >= 1 &&
     |checks| > 0 &&
     (forall i: nat | i < |checks| ::
-       checks[i].candidate == NumberedBackupPath(target, start + i) &&
+       checks[i].candidate == MvPathSpec.NumberedBackupPathSpec(target, start + i) &&
        Spec.StatusExistsOutcomeFields(
          fs,
          checks[i].candidate,
@@ -1070,19 +878,19 @@ module MvCore {
       |calls| == 0
     else if backupMode == Schema.BackupExisting then
       |calls| >= 1 &&
-      Spec.StatusRequest(calls[0], fs, NumberedBackupPath(target, 1), false) &&
+      Spec.StatusRequest(calls[0], fs, MvPathSpec.NumberedBackupPathSpec(target, 1), false) &&
       (if !calls[0].ok then
          |calls| == 1
        else
          |calls| >= 2 &&
          (forall i: nat | 1 <= i < |calls| ::
-            Spec.StatusRequest(calls[i], fs, NumberedBackupPath(target, i), false)) &&
+            Spec.StatusRequest(calls[i], fs, MvPathSpec.NumberedBackupPathSpec(target, i), false)) &&
          (forall i: nat | 1 <= i + 1 < |calls| :: calls[i].ok) &&
          !calls[|calls| - 1].ok)
     else
       |calls| >= 1 &&
       (forall i: nat | i < |calls| ::
-         Spec.StatusRequest(calls[i], fs, NumberedBackupPath(target, i + 1), false)) &&
+         Spec.StatusRequest(calls[i], fs, MvPathSpec.NumberedBackupPathSpec(target, i + 1), false)) &&
       (forall i: nat | i + 1 < |calls| :: calls[i].ok) &&
       !calls[|calls| - 1].ok
   }
@@ -1097,10 +905,10 @@ module MvCore {
      else evidence.SelectedBackup? &&
           (if backupMode == Schema.BackupSimple ||
               (backupMode == Schema.BackupExisting && !calls[0].ok) then
-             evidence.backupPath == SimpleBackupPath(target, suffix)
+             evidence.backupPath == MvPathSpec.SimpleBackupPathSpec(target, suffix)
            else if backupMode == Schema.BackupExisting then
-             |calls| >= 2 && evidence.backupPath == NumberedBackupPath(target, |calls| - 1)
-           else |calls| >= 1 && evidence.backupPath == NumberedBackupPath(target, |calls|)))
+             |calls| >= 2 && evidence.backupPath == MvPathSpec.NumberedBackupPathSpec(target, |calls| - 1)
+           else |calls| >= 1 && evidence.backupPath == MvPathSpec.NumberedBackupPathSpec(target, |calls|)))
   }
 
   ghost predicate BackupSelectionEvidenceFor(
@@ -1122,14 +930,14 @@ module MvCore {
       existingFirstErr
       ) =>
       if backupMode == Schema.BackupSimple then
-        backupPath == SimpleBackupPath(target, suffix) &&
+        backupPath == MvPathSpec.SimpleBackupPathSpec(target, suffix) &&
         |checks| == 0 &&
         !existingFirstCheckCalled
       else if backupMode == Schema.BackupExisting then
         existingFirstCheckCalled &&
         Spec.StatusExistsOutcomeFields(
           fs,
-          NumberedBackupPath(target, 1),
+          MvPathSpec.NumberedBackupPathSpec(target, 1),
           false,
           existingFirstFound,
           existingFirstErr
@@ -1139,7 +947,7 @@ module MvCore {
           backupPath == checks[|checks| - 1].candidate
         else
           |checks| == 0 &&
-          backupPath == SimpleBackupPath(target, suffix)
+          backupPath == MvPathSpec.SimpleBackupPathSpec(target, suffix)
       else
         backupMode == Schema.BackupNumbered &&
         !existingFirstCheckCalled &&
@@ -1186,7 +994,7 @@ module MvCore {
       afterFs == calls[0].afterFs &&
       if calls[0].ok then
         outcome == Spec.MoveOutcome(
-          StepSuccessStdout(source, target, "", verbose, debug), [], false
+          Text.StepSuccessStdoutSpec(source, target, "", verbose, debug), [], false
         )
       else
         outcome == Spec.MoveOutcome(
@@ -1194,7 +1002,7 @@ module MvCore {
           Spec.SourceRenameFailureMessageSpec(
             source,
             target,
-            SourceRenameDiagnosticErr(
+            Spec.SourceRenameDiagnosticErrSpec(
               target, sourceIsDir, calls[0].err
             ),
             sourceIsDir && targetWasFound
@@ -1233,7 +1041,7 @@ module MvCore {
         afterFs == calls[1].afterFs &&
         if calls[1].ok then
           outcome == Spec.MoveOutcome(
-            StepSuccessStdout(
+            Text.StepSuccessStdoutSpec(
               source, target, backupPath, verbose, debug
             ),
             [],
@@ -1245,7 +1053,7 @@ module MvCore {
             Spec.SourceRenameFailureMessageSpec(
               source,
               target,
-              SourceRenameDiagnosticErr(
+              Spec.SourceRenameDiagnosticErrSpec(
                 target, sourceIsDir, calls[1].err
               ),
               false
@@ -1444,14 +1252,14 @@ module MvCore {
          |evidence.renames| == 0 &&
          evidence.afterFs == evidence.beforeFs &&
          evidence.outcome ==
-         Spec.MoveOutcome(SkipStdout(target, cmd.debug), [], false)
+         Spec.MoveOutcome(Text.SkipStdoutSpec(target, cmd.debug), [], false)
        else if cmd.updateMode == Schema.UpdateNone then
          evidence.sameFile == NoSameFileCheck &&
          evidence.backup == NoBackupSelection &&
          |evidence.renames| == 0 &&
          evidence.afterFs == evidence.beforeFs &&
          evidence.outcome ==
-         Spec.MoveOutcome(SkipStdout(target, cmd.debug), [], false)
+         Spec.MoveOutcome(Text.SkipStdoutSpec(target, cmd.debug), [], false)
        else if cmd.updateMode == Schema.UpdateNoneFail then
          evidence.sameFile == NoSameFileCheck &&
          evidence.backup == NoBackupSelection &&
@@ -1493,7 +1301,7 @@ module MvCore {
                [], Spec.SameFileMessageSpec(source, target), true
              )
            else if cmd.updateMode == Schema.UpdateOlder then
-             if !SourceNewer(
+             if !Spec.SourceNewerSpec(
                   sourceMetadata.times.mtimeSec,
                   sourceMetadata.times.mtimeNsec,
                   targetMetadata.times.mtimeSec,
@@ -1503,7 +1311,7 @@ module MvCore {
                |evidence.renames| == 0 &&
                evidence.afterFs == evidence.beforeFs &&
                evidence.outcome ==
-               Spec.MoveOutcome(SkipStdout(target, cmd.debug), [], false)
+               Spec.MoveOutcome(Text.SkipStdoutSpec(target, cmd.debug), [], false)
              else
                ExistingTargetRenameEvidenceFor(
                  source, target, cmd, preCwd, evidence
@@ -1583,7 +1391,7 @@ module MvCore {
                      true) &&
                   (if decision.FailedParentStat? || decision == Spec.RejectSameFile ||
                       (cmd.updateMode == Schema.UpdateOlder &&
-                       !SourceNewer(
+                       !Spec.SourceNewerSpec(
                          sourceMetadata.times.mtimeSec,
                          sourceMetadata.times.mtimeNsec,
                          targetMetadata.times.mtimeSec,
@@ -1602,7 +1410,7 @@ module MvCore {
                         (match collision
                          case CheckedBackupCollision(_, candidate) =>
                            calls[afterEntries] == MetadataStatusCall(
-                             fs, SimpleBackupPath(target, cmd.backupSuffix),
+                             fs, MvPathSpec.SimpleBackupPathSpec(target, cmd.backupSuffix),
                              true, candidate
                            )
                          case _ => false)) &&
@@ -1749,7 +1557,7 @@ module MvCore {
     requires |evidence.renames| == 0
     requires evidence.afterFs == evidence.beforeFs
     requires evidence.outcome ==
-             Spec.MoveOutcome(SkipStdout(target, cmd.debug), [], false)
+             Spec.MoveOutcome(Text.SkipStdoutSpec(target, cmd.debug), [], false)
     requires StatusCallsFor(evidence.inputs, evidence.firstStatus, evidence.statusCalls)
     requires StepStatusEvidenceFor(source, target, cmd, evidence)
     ensures StepEvidenceFor(source, target, cmd, preCwd, evidence)
@@ -1788,7 +1596,7 @@ module MvCore {
     requires |evidence.renames| == 0
     requires evidence.afterFs == evidence.beforeFs
     requires evidence.outcome ==
-             Spec.MoveOutcome(SkipStdout(target, cmd.debug), [], false)
+             Spec.MoveOutcome(Text.SkipStdoutSpec(target, cmd.debug), [], false)
     requires StatusCallsFor(evidence.inputs, evidence.firstStatus, evidence.statusCalls)
     requires StepStatusEvidenceFor(source, target, cmd, evidence)
     ensures StepEvidenceFor(source, target, cmd, preCwd, evidence)
@@ -1979,7 +1787,7 @@ module MvCore {
              )
     requires evidence.sameFile.CheckedSameFile?
     requires evidence.sameFile.decision == Spec.ContinueMove
-    requires !SourceNewer(
+    requires !Spec.SourceNewerSpec(
                evidence.sameFile.source.times.mtimeSec,
                evidence.sameFile.source.times.mtimeNsec,
                evidence.sameFile.target.times.mtimeSec,
@@ -1989,7 +1797,7 @@ module MvCore {
     requires |evidence.renames| == 0
     requires evidence.afterFs == evidence.beforeFs
     requires evidence.outcome ==
-             Spec.MoveOutcome(SkipStdout(target, cmd.debug), [], false)
+             Spec.MoveOutcome(Text.SkipStdoutSpec(target, cmd.debug), [], false)
     requires SourceResolutionObservationFor(source, preCwd, evidence)
     requires StatusCallsFor(evidence.inputs, evidence.firstStatus, evidence.statusCalls)
     requires StepStatusEvidenceFor(source, target, cmd, evidence)
@@ -2036,7 +1844,7 @@ module MvCore {
     requires evidence.sameFile.CheckedSameFile?
     requires evidence.sameFile.decision == Spec.ContinueMove
     requires cmd.updateMode != Schema.UpdateOlder ||
-             SourceNewer(
+             Spec.SourceNewerSpec(
                evidence.sameFile.source.times.mtimeSec,
                evidence.sameFile.source.times.mtimeNsec,
                evidence.sameFile.target.times.mtimeSec,
@@ -2068,10 +1876,10 @@ module MvCore {
   )
   {
     var normalizedSource :=
-      NormalizeSource(source, cmd.stripTrailingSlashes);
+      Spec.NormalizeSourceSpec(source, cmd.stripTrailingSlashes);
     StepEvidenceFor(
       normalizedSource,
-      TargetInDirectory(directory, normalizedSource),
+      Spec.TargetInDirectorySpec(directory, normalizedSource),
       cmd,
       preCwd,
       step
@@ -2228,10 +2036,10 @@ module MvCore {
     requires BatchEvidenceFor(sources, directory, cmd, beforeFs, cwd, step.beforeFs,
                               prefixError, prefixOut, prefixErr, prefix)
     requires BatchMoveStatusEvidenceFor(sources, directory, cmd, inputs, prefix)
-    requires StepEvidenceFor(NormalizeSource(source, cmd.stripTrailingSlashes),
-                             TargetInDirectory(directory, NormalizeSource(source, cmd.stripTrailingSlashes)), cmd, cwd, step)
-    requires StepStatusEvidenceFor(NormalizeSource(source, cmd.stripTrailingSlashes),
-                                   TargetInDirectory(directory, NormalizeSource(source, cmd.stripTrailingSlashes)), cmd, step)
+    requires StepEvidenceFor(Spec.NormalizeSourceSpec(source, cmd.stripTrailingSlashes),
+                             Spec.TargetInDirectorySpec(directory, Spec.NormalizeSourceSpec(source, cmd.stripTrailingSlashes)), cmd, cwd, step)
+    requires StepStatusEvidenceFor(Spec.NormalizeSourceSpec(source, cmd.stripTrailingSlashes),
+                                   Spec.TargetInDirectorySpec(directory, Spec.NormalizeSourceSpec(source, cmd.stripTrailingSlashes)), cmd, step)
     requires step.inputs == inputs
     requires step.firstStatus == prefix.firstStatus + |prefix.statusCalls|
     requires StatusCallsFor(inputs, step.firstStatus, step.statusCalls)
@@ -2265,8 +2073,8 @@ module MvCore {
                                    next.stdoutFragments[j], next.stderrFragments[j], next.steps[j])
       ensures next.steps[j].inputs == inputs
       ensures
-        var normalized := NormalizeSource((sources + [source])[j], cmd.stripTrailingSlashes);
-        StepStatusEvidenceFor(normalized, TargetInDirectory(directory, normalized), cmd, next.steps[j])
+        var normalized := Spec.NormalizeSourceSpec((sources + [source])[j], cmd.stripTrailingSlashes);
+        StepStatusEvidenceFor(normalized, Spec.TargetInDirectorySpec(directory, normalized), cmd, next.steps[j])
     {
       if j < |sources| {
         assert prefix.statusBounds[j] <= prefix.statusBounds[j + 1];
@@ -2285,143 +2093,6 @@ module MvCore {
     PackageBatchStatusEvidence(inputs, next);
   }
 
-  method GetErrnoText(err: int) returns (out: string)
-    ensures out == Spec.ErrnoTextSpec(err)
-  {
-    out := Spec.ErrnoTextSpec(err);
-  }
-
-  method GetHelpText() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.HelpTextSpec()
-  {
-    out := Spec.HelpTextSpec();
-  }
-
-  method GetVersionText() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.VersionTextSpec()
-  {
-    out := Spec.VersionTextSpec();
-  }
-
-  method GetMissingFileOperandMessage() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.MissingFileOperandMessageSpec()
-  {
-    out := Spec.MissingFileOperandMessageSpec();
-  }
-
-  method GetMissingDestinationMessage(source: string) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.MissingDestinationMessageSpec(source)
-  {
-    out := Text.MissingDestinationMessageSpec(source);
-  }
-
-  method GetExtraOperandMessage(operand: string) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.ExtraOperandMessageSpec(operand)
-  {
-    out := Text.ExtraOperandMessageSpec(operand);
-  }
-
-  method GetTargetDirectoryConflictMessage() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.TargetDirectoryConflictMessageSpec()
-  {
-    out := Spec.TargetDirectoryConflictMessageSpec();
-  }
-
-  method GetInvalidBackupArgumentMessage(value: string) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.InvalidBackupArgumentMessageSpec(value)
-  {
-    out := Text.InvalidBackupArgumentMessageSpec(value);
-  }
-
-  method GetInvalidUpdateArgumentMessage(value: string) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.InvalidUpdateArgumentMessageSpec(value)
-  {
-    out := Text.InvalidUpdateArgumentMessageSpec(value);
-  }
-
-  method GetTargetFailureMessage(path: string, explicitTargetDirectory: bool, err: int) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.TargetFailureMessageSpec(path, explicitTargetDirectory, err)
-  {
-    out := Text.TargetFailureMessageSpec(path, explicitTargetDirectory, err);
-  }
-
-  method GetSourceStatFailureMessage(source: string, err: int) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.SourceStatFailureMessageSpec(source, err)
-  {
-    out := Text.SourceStatFailureMessageSpec(source, err);
-  }
-
-  method GetRenameFailureMessage(source: string, target: string, err: int) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.RenameFailureMessageSpec(source, target, err)
-  {
-    out := Text.RenameFailureMessageSpec(source, target, err);
-  }
-
-  method GetSourceRenameFailureMessage(
-    source: string,
-    target: string,
-    sourceIsDir: bool,
-    targetFound: bool,
-    err: int
-  ) returns (out: BenchWorld.Bytes)
-    ensures out ==
-            Spec.SourceRenameFailureMessageSpec(
-              source,
-              target,
-              SourceRenameDiagnosticErr(target, sourceIsDir, err),
-              sourceIsDir && targetFound
-            )
-  {
-    out := Text.SourceRenameFailureMessageSpec(
-      source,
-      target,
-      SourceRenameDiagnosticErr(target, sourceIsDir, err),
-      sourceIsDir && targetFound
-    );
-  }
-
-  method GetSameFileMessage(
-    source: string,
-    target: string
-  ) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.SameFileMessageSpec(source, target)
-  {
-    out := Text.SameFileMessageSpec(source, target);
-  }
-
-  method GetBackupWouldDestroySourceMessage(
-    source: string,
-    target: string
-  ) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.BackupWouldDestroySourceMessageSpec(source, target)
-  {
-    out := Text.BackupWouldDestroySourceMessageSpec(source, target);
-  }
-
-  method GetVerboseRenameMessage(source: string, target: string) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.VerboseRenameMessageSpec(source, target)
-  {
-    out := Text.VerboseRenameMessageSpec(source, target);
-  }
-
-  method GetVerboseRenameWithBackupMessage(source: string, target: string, backup: string) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.VerboseRenameWithBackupMessageSpec(source, target, backup)
-  {
-    out := Text.VerboseRenameWithBackupMessageSpec(source, target, backup);
-  }
-
-  method GetDebugSkipMessage(target: string) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.DebugSkipMessageSpec(target)
-  {
-    out := Text.DebugSkipMessageSpec(target);
-  }
-
-  method GetNotReplacingMessage(target: string) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.NotReplacingMessageSpec(target)
-  {
-    out := Text.NotReplacingMessageSpec(target);
-  }
-
   method FindUnusedNumberedBackupPath(
     target: string,
     index: nat,
@@ -2436,7 +2107,7 @@ module MvCore {
     ensures |calls| == |checks|
     ensures forall i: nat | i < |calls| ::
               Spec.StatusRequest(
-                calls[i], old(io.fs()), NumberedBackupPath(target, index + i), false
+                calls[i], old(io.fs()), MvPathSpec.NumberedBackupPathSpec(target, index + i), false
               ) &&
               calls[i].ok == checks[i].found &&
               calls[i].err == checks[i].err
@@ -2446,7 +2117,7 @@ module MvCore {
     reveal BackupChecksFor();
     ghost var firstStatus := io.statusCursor();
     ghost var inputs := Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now());
-    var candidate := NumberedBackupPath(target, index);
+    var candidate := MvPathSpec.NumberedBackupPathSpec(target, index);
     var metadata := CaptureMetadata(candidate, false, io);
     var found := metadata.ok;
     var err := metadata.err;
@@ -2476,7 +2147,7 @@ module MvCore {
           old(io.fs()), candidate, false, true, err
         );
       assert forall i: nat | i < |checks| ::
-          checks[i].candidate == NumberedBackupPath(target, index + i) &&
+          checks[i].candidate == MvPathSpec.NumberedBackupPathSpec(target, index + i) &&
           Spec.StatusExistsOutcomeFields(
             old(io.fs()),
             checks[i].candidate,
@@ -2487,7 +2158,7 @@ module MvCore {
         forall i: nat | i < |checks|
           ensures
             checks[i].candidate ==
-            NumberedBackupPath(target, index + i) &&
+            MvPathSpec.NumberedBackupPathSpec(target, index + i) &&
             Spec.StatusExistsOutcomeFields(
               old(io.fs()),
               checks[i].candidate,
@@ -2502,7 +2173,7 @@ module MvCore {
         }
       }
       forall i: nat | i < |calls|
-        ensures Spec.StatusRequest(calls[i], old(io.fs()), NumberedBackupPath(target, index + i), false)
+        ensures Spec.StatusRequest(calls[i], old(io.fs()), MvPathSpec.NumberedBackupPathSpec(target, index + i), false)
         ensures calls[i].ok == checks[i].found && calls[i].err == checks[i].err
       {
         if i == 0 {
@@ -2562,11 +2233,11 @@ module MvCore {
       evidence := NoBackupSelection;
       calls := [];
     } else if backupMode == Schema.BackupSimple {
-      path := SimpleBackupPath(target, suffix);
+      path := MvPathSpec.SimpleBackupPathSpec(target, suffix);
       evidence := SelectedBackup(path, [], false, false, 0);
       calls := [];
     } else if backupMode == Schema.BackupExisting {
-      var numberedSeed := NumberedBackupPath(target, 1);
+      var numberedSeed := MvPathSpec.NumberedBackupPathSpec(target, 1);
       var getFileStatusResult2 := io.GetFileStatus(numberedSeed, false);
       var rawMetadataOk5 := getFileStatusResult2.Ok?;
       var rawMetadataStatus5 := IOContract.ResultValue(getFileStatusResult2, BenchWorld.DEFAULT_FILE_STATUS);
@@ -2581,7 +2252,7 @@ module MvCore {
         reveal StatusCallsFor(), Spec.StatusCallsFor();
       }
       if !found {
-        path := SimpleBackupPath(target, suffix);
+        path := MvPathSpec.SimpleBackupPathSpec(target, suffix);
         evidence := SelectedBackup(path, [], true, found, err);
         calls := [seedCall];
         assert Spec.StatusExistsOutcomeFields(old(io.fs()), numberedSeed, false, false, err);
@@ -2601,7 +2272,7 @@ module MvCore {
           );
         assert BackupStatusSuffixFor(backupMode, old(io.fs()), target, calls) by {
           forall i: nat | 1 <= i < |calls|
-            ensures Spec.StatusRequest(calls[i], old(io.fs()), NumberedBackupPath(target, i), false)
+            ensures Spec.StatusRequest(calls[i], old(io.fs()), MvPathSpec.NumberedBackupPathSpec(target, i), false)
           {
             StatusCallConsIndex(seedCall, numberedCalls, i);
             assert calls[i] == numberedCalls[i - 1];
@@ -2737,19 +2408,19 @@ module MvCore {
     (exists statErr: int ::
        IOContract.IsDirectoryContractFields(preFs, directory, true, true, true, statErr) &&
        ok == true &&
-       err == TargetDirectoryErr(true, true, statErr)) ||
+       err == Text.TargetDirectoryErrSpec(true, true, statErr)) ||
     (exists statErr: int ::
        IOContract.IsDirectoryContractFields(preFs, directory, true, true, false, statErr) &&
        ok == false &&
-       err == TargetDirectoryErr(true, false, statErr)) ||
+       err == Text.TargetDirectoryErrSpec(true, false, statErr)) ||
     (exists statErr: int ::
        IOContract.IsDirectoryContractFields(preFs, directory, true, false, false, statErr) &&
        ok == false &&
-       err == TargetDirectoryErr(false, false, statErr)) ||
+       err == Text.TargetDirectoryErrSpec(false, false, statErr)) ||
     (exists statErr: int ::
        IOContract.IsDirectoryContractFields(preFs, directory, true, false, true, statErr) &&
        ok == false &&
-       err == TargetDirectoryErr(false, true, statErr))
+       err == Text.TargetDirectoryErrSpec(false, true, statErr))
   }
 
   ghost predicate RunIntoDirectoryEvidenceFields(
@@ -2818,7 +2489,7 @@ module MvCore {
     requires |cmd.operands| == 2
   {
     var source :=
-      NormalizeSource(cmd.operands[0], cmd.stripTrailingSlashes);
+      Spec.NormalizeSourceSpec(cmd.operands[0], cmd.stripTrailingSlashes);
     var destination := cmd.operands[1];
     if cmd.noTargetDirectory then
       exists step: StepEvidence ::
@@ -2965,7 +2636,7 @@ module MvCore {
          )
        case _ => false
      else if |cmd.operands| == 2 then
-       var source := NormalizeSource(
+       var source := Spec.NormalizeSourceSpec(
                        cmd.operands[0], cmd.stripTrailingSlashes
                      );
        var destination := cmd.operands[1];
@@ -2992,7 +2663,7 @@ module MvCore {
            step.beforeFs == beforeFs && step.afterFs == afterFs &&
            var target :=
              if call.ok && call.status.kind == BenchWorld.DirectoryKind then
-               TargetInDirectory(destination, source)
+               Spec.TargetInDirectorySpec(destination, source)
              else destination;
            StepEvidenceFor(source, target, cmd, cwd, step) &&
            StepStatusEvidenceFor(source, target, cmd, step) &&
@@ -3136,7 +2807,7 @@ module MvCore {
                             firstStatus, io.statusCursor(), calls);
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeInvalidBackup {
-      var err := GetInvalidBackupArgumentMessage(cmd.invalidBackupArg);
+      var err := Spec.InvalidBackupArgumentMessageSpec(cmd.invalidBackupArg);
       plannedStderr := plannedStderr + err;
       exit := 1;
       assert PreparedSummaryIO(raw, preFs, preCwd, preStdout, preStderr, io, exit, plannedStdout, plannedStderr);
@@ -3144,7 +2815,7 @@ module MvCore {
     }
 
     if cmd.mode == Schema.ModeInvalidUpdate {
-      var err := GetInvalidUpdateArgumentMessage(cmd.invalidUpdateArg);
+      var err := Spec.InvalidUpdateArgumentMessageSpec(cmd.invalidUpdateArg);
       plannedStderr := plannedStderr + err;
       exit := 1;
       assert PreparedSummaryIO(raw, preFs, preCwd, preStdout, preStderr, io, exit, plannedStdout, plannedStderr);
@@ -3152,7 +2823,7 @@ module MvCore {
     }
 
     if cmd.mode == Schema.ModeHelp {
-      var out := GetHelpText();
+      var out := Spec.HelpTextSpec();
       plannedStdout := plannedStdout + out;
       exit := 0;
       assert PreparedSummaryIO(raw, preFs, preCwd, preStdout, preStderr, io, exit, plannedStdout, plannedStderr);
@@ -3160,7 +2831,7 @@ module MvCore {
     }
 
     if cmd.mode == Schema.ModeVersion {
-      var out := GetVersionText();
+      var out := Spec.VersionTextSpec();
       plannedStdout := plannedStdout + out;
       exit := 0;
       assert PreparedSummaryIO(raw, preFs, preCwd, preStdout, preStderr, io, exit, plannedStdout, plannedStderr);
@@ -3168,7 +2839,7 @@ module MvCore {
     }
 
     if cmd.targetDirectory != "" && cmd.noTargetDirectory {
-      var err := GetTargetDirectoryConflictMessage();
+      var err := Spec.TargetDirectoryConflictMessageSpec();
       plannedStderr := plannedStderr + err;
       exit := 1;
       assert PreparedSummaryIO(raw, preFs, preCwd, preStdout, preStderr, io, exit, plannedStdout, plannedStderr);
@@ -3176,7 +2847,7 @@ module MvCore {
     }
 
     if |cmd.operands| == 0 {
-      var err := GetMissingFileOperandMessage();
+      var err := Spec.MissingFileOperandMessageSpec();
       plannedStderr := plannedStderr + err;
       exit := 1;
       assert PreparedSummaryIO(raw, preFs, preCwd, preStdout, preStderr, io, exit, plannedStdout, plannedStderr);
@@ -3217,7 +2888,7 @@ module MvCore {
     }
 
     if |cmd.operands| == 1 {
-      var err := GetMissingDestinationMessage(cmd.operands[0]);
+      var err := Spec.MissingDestinationMessageSpec(cmd.operands[0]);
       plannedStderr := plannedStderr + err;
       exit := 1;
       assert PreparedSummaryIO(raw, preFs, preCwd, preStdout, preStderr, io, exit, plannedStdout, plannedStderr);
@@ -3225,7 +2896,7 @@ module MvCore {
     }
 
     if cmd.noTargetDirectory && |cmd.operands| > 2 {
-      var err := GetExtraOperandMessage(cmd.operands[2]);
+      var err := Spec.ExtraOperandMessageSpec(cmd.operands[2]);
       plannedStderr := plannedStderr + err;
       exit := 1;
       assert PreparedSummaryIO(raw, preFs, preCwd, preStdout, preStderr, io, exit, plannedStdout, plannedStderr);
@@ -3233,7 +2904,7 @@ module MvCore {
     }
 
     if |cmd.operands| == 2 {
-      var source := NormalizeSource(cmd.operands[0], cmd.stripTrailingSlashes);
+      var source := Spec.NormalizeSourceSpec(cmd.operands[0], cmd.stripTrailingSlashes);
       var dest := cmd.operands[1];
       var target := dest;
       var dirOk := false;
@@ -3251,7 +2922,7 @@ module MvCore {
           reveal MetadataStatusCall();
         }
         if dirOk && isDir {
-          target := TargetInDirectory(dest, source);
+          target := Spec.TargetInDirectorySpec(dest, source);
         }
       }
       assert StatusCallsFor(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus, calls) by {
@@ -3287,7 +2958,7 @@ module MvCore {
       assert plannedStderr == preStderr + errOut;
       if !cmd.noTargetDirectory {
         if dirOk && isDir {
-          assert target == TargetInDirectory(dest, source);
+          assert target == Spec.TargetInDirectorySpec(dest, source);
           assert IOContract.IsDirectoryContractFields(preFs, dest, true, true, true, dirErr);
           ghost var batch := BatchEvidence(
             [step],
@@ -3590,7 +3261,7 @@ module MvCore {
     assert StatusCallsFor(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus, calls);
     if !dirOk {
       evidence := FailedDirectoryStatus(dirCall);
-      var err := GetTargetFailureMessage(directory, explicitTargetDirectory, dirErr);
+      var err := Spec.TargetFailureMessageSpec(directory, explicitTargetDirectory, dirErr);
       plannedStderr := plannedStderr + err;
       exit := 1;
       assert TargetDirectoryCheckSummaryFields(directory, preFs, false, dirErr);
@@ -3666,7 +3337,7 @@ module MvCore {
   {
     hide *;
     reveal BackupSelectionEvidenceFor(), BackupChecksFor();
-    reveal SimpleBackupPath(), NumberedBackupPath(), BasenameCore.SimpleBackupPath(), BasenameCore.NumberedBackupPath();
+    reveal MvPathSpec.SimpleBackupPathSpec(), MvPathSpec.NumberedBackupPathSpec();
   }
 
   ghost opaque predicate RenameFrameReady(
@@ -3686,7 +3357,7 @@ module MvCore {
       cmd.updateMode != Schema.UpdateNoneFail &&
       SameFileEvidenceFor(cmd, frame.beforeFs, frame.cwd, source, target, frame.sameFile) &&
       frame.sameFile.CheckedSameFile? && frame.sameFile.decision == Spec.ContinueMove &&
-      (cmd.updateMode != Schema.UpdateOlder || SourceNewer(
+      (cmd.updateMode != Schema.UpdateOlder || Spec.SourceNewerSpec(
          frame.sameFile.source.times.mtimeSec, frame.sameFile.source.times.mtimeNsec,
          frame.sameFile.target.times.mtimeSec, frame.sameFile.target.times.mtimeNsec)) &&
       BackupCollisionEvidenceFor(cmd, frame.beforeFs, source, target, frame.sameFile.source,
@@ -3773,9 +3444,9 @@ module MvCore {
                                       io.fs(), source, target, call.ok, call.err)
     ensures IOContract.RenamePathContractFields(old(io.fs()), source, target, call.ok, call.err, io.fs())
     ensures if call.ok then outcome == Spec.MoveOutcome(
-                                         StepSuccessStdout(source, target, backupPath, cmd.verbose, cmd.debug), [], false)
+                                         Text.StepSuccessStdoutSpec(source, target, backupPath, cmd.verbose, cmd.debug), [], false)
             else outcome == Spec.MoveOutcome([], Spec.SourceRenameFailureMessageSpec(source, target,
-                                                                                     SourceRenameDiagnosticErr(target, sourceIsDir, call.err), sourceIsDir && targetWasFound), true)
+                                                                                     Spec.SourceRenameDiagnosticErrSpec(target, sourceIsDir, call.err), sourceIsDir && targetWasFound), true)
   {
     var ok, err, actual := AttemptRename(source, target, io);
     call := actual;
@@ -3784,13 +3455,15 @@ module MvCore {
     if ok {
       if cmd.verbose || cmd.debug {
         if backupPath == "" {
-          output := GetVerboseRenameMessage(source, target);
+          output := Spec.VerboseRenameMessageSpec(source, target);
         } else {
-          output := GetVerboseRenameWithBackupMessage(source, target, backupPath);
+          output := Spec.VerboseRenameWithBackupMessageSpec(source, target, backupPath);
         }
       }
     } else {
-      diagnostics := GetSourceRenameFailureMessage(source, target, sourceIsDir, targetWasFound, err);
+      diagnostics := Spec.SourceRenameFailureMessageSpec(source, target,
+                                                         Spec.SourceRenameDiagnosticErrSpec(target, sourceIsDir, err),
+                                                         sourceIsDir && targetWasFound);
     }
     outcome := Spec.MoveOutcome(output, diagnostics, !ok);
   }
@@ -3820,7 +3493,7 @@ module MvCore {
       var backupOk, backupErr, backupCall := AttemptRename(target, frame.backupPath, io);
       backupFs := io.fs();
       if !backupOk {
-        var diagnostics := GetRenameFailureMessage(source, target, backupErr);
+        var diagnostics := Spec.RenameFailureMessageSpec(source, target, backupErr);
         outcome := Spec.MoveOutcome([], diagnostics, true);
         calls := [backupCall];
       } else {
@@ -3930,7 +3603,7 @@ module MvCore {
       Spec.MoveOutcome([], Spec.ParentStatFailureMessageSpec(decision.path, decision.err), true)
     else if decision == Spec.RejectSameFile then
       Spec.MoveOutcome([], Spec.SameFileMessageSpec(source, target), true)
-    else Spec.MoveOutcome(SkipStdout(target, cmd.debug), [], false)
+    else Spec.MoveOutcome(Text.SkipStdoutSpec(target, cmd.debug), [], false)
   }
 
   lemma AssembleStoppedComparison(
@@ -3940,7 +3613,7 @@ module MvCore {
     requires ComparisonFrameFields(source, target, cmd, frame)
     requires frame.sameFile.CheckedSameFile?
     requires frame.sameFile.decision.FailedParentStat? || frame.sameFile.decision == Spec.RejectSameFile ||
-             (cmd.updateMode == Schema.UpdateOlder && !SourceNewer(
+             (cmd.updateMode == Schema.UpdateOlder && !Spec.SourceNewerSpec(
                 frame.sameFile.source.times.mtimeSec, frame.sameFile.source.times.mtimeNsec,
                 frame.sameFile.target.times.mtimeSec, frame.sameFile.target.times.mtimeNsec))
     requires outcome == StoppedComparisonOutcome(source, target, cmd, frame)
@@ -4121,7 +3794,7 @@ module MvCore {
       frame.statusCalls[1] == MetadataStatusCall(frame.beforeFs, target, false, targetMetadata.value) &&
       Spec.StatusExistsOutcomeFields(frame.beforeFs, target, false, true, 0) &&
       (if cmd.overwriteMode == Schema.OverwriteSkip || cmd.updateMode == Schema.UpdateNone then
-         outcome == Spec.MoveOutcome(SkipStdout(target, cmd.debug), [], false)
+         outcome == Spec.MoveOutcome(Text.SkipStdoutSpec(target, cmd.debug), [], false)
        else cmd.updateMode == Schema.UpdateNoneFail &&
             outcome == Spec.MoveOutcome([], Spec.NotReplacingMessageSpec(target), true))
   }
@@ -4198,7 +3871,7 @@ module MvCore {
     var sameFileDecision := comparison.decision;
     ghost var afterEntries := |statusCalls|;
     if sameFileDecision.FailedParentStat? || sameFileDecision == Spec.RejectSameFile ||
-       (cmd.updateMode == Schema.UpdateOlder && !SourceNewer(
+       (cmd.updateMode == Schema.UpdateOlder && !Spec.SourceNewerSpec(
           sourceMetadata.times.mtimeSec, sourceMetadata.times.mtimeNsec,
           targetMetadata.times.mtimeSec, targetMetadata.times.mtimeNsec)) {
       if sameFileDecision.FailedParentStat? {
@@ -4206,9 +3879,9 @@ module MvCore {
         errOut := Text.ParentStatFailureMessageSpec(sameFileDecision.path, sameFileDecision.err);
       } else if sameFileDecision == Spec.RejectSameFile {
         hadError := true;
-        errOut := GetSameFileMessage(source, target);
+        errOut := Spec.SameFileMessageSpec(source, target);
       } else if cmd.debug {
-        out := GetDebugSkipMessage(target);
+        out := Spec.DebugSkipMessageSpec(target);
       }
       step := AssembleStoppedComparison(source, target, cmd, comparisonFrame,
                                         Spec.MoveOutcome(out, errOut, hadError));
@@ -4225,10 +3898,10 @@ module MvCore {
        targetEntry.leaf + cmd.backupSuffix
     {
       var candidateMetadata := CaptureMetadata(
-        SimpleBackupPath(target, cmd.backupSuffix), true, io
+        MvPathSpec.SimpleBackupPathSpec(target, cmd.backupSuffix), true, io
       );
       nextStatusCall := MetadataStatusCall(
-        preFs, SimpleBackupPath(target, cmd.backupSuffix), true,
+        preFs, MvPathSpec.SimpleBackupPathSpec(target, cmd.backupSuffix), true,
         candidateMetadata);
       assert StatusCallsFor(comparisonFrame.inputs, firstStatus + |statusCalls|, [nextStatusCall]) by {
         hide *;
@@ -4240,7 +3913,7 @@ module MvCore {
       assert io.statusCursor() == firstStatus + |statusCalls|;
       assert |statusCalls| == afterEntries + 1;
       assert statusCalls[afterEntries] == MetadataStatusCall(
-                                            preFs, SimpleBackupPath(target, cmd.backupSuffix), true,
+                                            preFs, MvPathSpec.SimpleBackupPathSpec(target, cmd.backupSuffix), true,
                                             candidateMetadata
                                           );
       collisionEvidence := CheckedBackupCollision(
@@ -4256,7 +3929,7 @@ module MvCore {
         assert BackupCollisionDetected(collisionEvidence);
         hadError := true;
         errOut :=
-          GetBackupWouldDestroySourceMessage(source, target);
+          Spec.BackupWouldDestroySourceMessageSpec(source, target);
         step := MakeStepEvidence(
           preFs, io.fs(), out, errOut, hadError,
           sourceOk, sourceIsDir, sourceErr,
@@ -4426,13 +4099,13 @@ module MvCore {
     var sourceErr := sourceMetadata.err;
     if !sourceOk {
       hadError := true;
-      errOut := GetSourceStatFailureMessage(source, sourceErr);
+      errOut := Spec.SourceStatFailureMessageSpec(source, sourceErr);
       var frame := RenameFrame(sourceIsDir, false, 0, "", NoSameFileCheck, NoBackupSelection,
                                preFs, preCwd, firstStatus,
                                Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), statusCalls);
       assert InitialStepInputs(source, target, cmd, sourceMetadata, NoMetadataEvidence, frame,
                                Spec.MoveOutcome(out, errOut, hadError)) by {
-        reveal InitialStepInputs(), SkipStdout();
+        reveal InitialStepInputs(), Text.SkipStdoutSpec();
       }
       step := AssembleInitialMoveStep(source, target, cmd, sourceMetadata, NoMetadataEvidence, frame,
                                       Spec.MoveOutcome(out, errOut, hadError));
@@ -4453,16 +4126,16 @@ module MvCore {
          cmd.updateMode == Schema.UpdateNoneFail {
         if cmd.overwriteMode != Schema.OverwriteSkip && cmd.updateMode == Schema.UpdateNoneFail {
           hadError := true;
-          errOut := GetNotReplacingMessage(target);
+          errOut := Spec.NotReplacingMessageSpec(target);
         } else if cmd.debug {
-          out := GetDebugSkipMessage(target);
+          out := Spec.DebugSkipMessageSpec(target);
         }
         var frame := RenameFrame(sourceIsDir, found, existsErr, "", NoSameFileCheck, NoBackupSelection,
                                  preFs, preCwd, firstStatus,
                                  Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), statusCalls);
         assert InitialStepInputs(source, target, cmd, sourceMetadata, SomeMetadataEvidence(targetMetadata), frame,
                                  Spec.MoveOutcome(out, errOut, hadError)) by {
-          reveal InitialStepInputs(), SkipStdout();
+          reveal InitialStepInputs(), Text.SkipStdoutSpec();
         }
         step := AssembleInitialMoveStep(source, target, cmd, sourceMetadata, SomeMetadataEvidence(targetMetadata), frame,
                                         Spec.MoveOutcome(out, errOut, hadError));
@@ -4545,8 +4218,8 @@ module MvCore {
       decreases |sources| - i
     {
       var source := sources[i];
-      var normalizedSource := NormalizeSource(source, cmd.stripTrailingSlashes);
-      var target := TargetInDirectory(directory, normalizedSource);
+      var normalizedSource := Spec.NormalizeSourceSpec(source, cmd.stripTrailingSlashes);
+      var target := Spec.TargetInDirectorySpec(directory, normalizedSource);
       var stepError, stepOut, stepErr, step := MoveOne(normalizedSource, target, cmd, io);
       assert Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()) == inputs;
       ghost var next := AppendBatchEvidence(sources[..i], source, directory, cmd,

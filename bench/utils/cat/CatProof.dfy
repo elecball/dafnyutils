@@ -1,75 +1,8 @@
+include "CatSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "CatSchema.dfy"
 include "CatCore.dfy"
-include "CatSpec.dfy"
-
-module CatProofBridge {
-  import BenchWorld
-
-  import Result = Results
-  import BenchIO
-  import BW = BenchWorld
-  import Schema = CatSchema
-  import Core = CatCoreModel
-  import Spec = CatSpec
-
-  lemma InputsFromOperandsEq(operands: seq<string>)
-    ensures Core.InputsFromOperands(operands) == Spec.InputsFromOperands(operands)
-    decreases |operands|
-  {
-    if |operands| > 0 {
-      InputsFromOperandsEq(operands[1..]);
-    }
-  }
-
-  lemma CommandEq(raw: Schema.CatCmdRaw)
-    ensures Core.Command(raw) == Spec.Command(raw)
-  {
-    InputsFromOperandsEq(raw.operands);
-  }
-
-  lemma DigitsEq(n: int)
-    requires 0 <= n
-    ensures Core.Digits(n) == Spec.Digits(n)
-    decreases n
-  {
-    if n >= 10 {
-      DigitsEq(n / 10);
-    }
-  }
-
-  lemma PadLeftEq(text: BW.Bytes, width: int)
-    ensures Core.PadLeft(text, width) == Spec.PadLeft(text, width)
-    decreases if |text| < width then width - |text| else 0
-  {
-    if |text| < width {
-      PadLeftEq([' '] + text, width);
-    }
-  }
-
-  lemma LineNumberTextEq(n: int)
-    requires 0 <= n
-    ensures Core.LineNumberText(n) == Spec.LineNumberText(n)
-  {
-    DigitsEq(n);
-    PadLeftEq(Core.Digits(n), 6);
-  }
-
-  lemma ShowNonPrintingCharEq(ch: BW.RawByte, showTabs: bool)
-    ensures Core.ShowNonPrintingChar(ch, showTabs) == Spec.ShowNonPrintingChar(ch, showTabs)
-  {
-  }
-
-  lemma TransformCharEq(cmd: Schema.CatCmd, ch: BW.RawByte, nextIsNewline: bool)
-    ensures Core.TransformChar(cmd, ch, nextIsNewline) == Spec.TransformChar(cmd, ch, nextIsNewline)
-  {
-    if cmd.showNonPrinting {
-      ShowNonPrintingCharEq(ch, cmd.showTabs);
-    }
-  }
-
-}
 
 module CatProof {
   import IOContract
@@ -81,7 +14,6 @@ module CatProof {
   import Core = CatCore
   import Model = CatCoreModel
   import Spec = CatSpec
-  import Bridge = CatProofBridge
 
   ghost function ObservationResults(
     observations: seq<Core.InputObservation>
@@ -311,12 +243,6 @@ module CatProof {
       renderTrace,
       p
     );
-    Bridge.LineNumberTextEq(renderTrace.steps[p].number as int);
-    Bridge.TransformCharEq(
-      cmd,
-      data[p],
-      p + 1 < |data| && data[p + 1] == '\n'
-    );
     reveal Spec.RenderFragment();
     reveal Core.RenderStepRelation();
     if data[p] == '\n' {
@@ -472,6 +398,34 @@ module CatProof {
     reveal Spec.InputFailed();
   }
 
+  lemma ExpectedStdinTrace(
+    cmd: Schema.CatCmd,
+    preStdin: BW.Bytes,
+    preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult
+  ) returns (states: seq<BW.Bytes>)
+    ensures |states| == |cmd.inputs| + 1
+    ensures forall i: nat | i < |states| ::
+              states[i] == Core.ExpectedStdinAt(cmd, preStdin, i, preStreams)
+    ensures Spec.StdinTraceRelation(
+              cmd, preStdin,
+              Core.ExpectedStdinAt(cmd, preStdin, |cmd.inputs|, preStreams),
+              preStreams, states)
+  {
+    states := seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| =>
+      Core.ExpectedStdinAt(cmd, preStdin, i, preStreams));
+    forall i: nat | i < |cmd.inputs|
+      ensures states[i + 1] ==
+              (if cmd.inputs[i].Stdin? then
+                 IOContract.ObservedReadStdinRemainingFields(states[i], preStreams)
+               else states[i])
+    {
+      assert states[i] == Core.ExpectedStdinAt(cmd, preStdin, i, preStreams);
+      assert states[i + 1] == Core.ExpectedStdinAt(cmd, preStdin, i + 1, preStreams);
+      Core.ExpectedStdinAtExtend(cmd, preStdin, i, preStreams);
+    }
+    reveal Spec.StdinTraceRelation();
+  }
+
   lemma {:isolate_assertions} InputTraceWitnessRefines(
     cmd: Schema.CatCmd,
     preFs: BW.FileSystem, preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult,
@@ -514,13 +468,14 @@ module CatProof {
   {
     reveal Core.InputTraceWitnessRelation();
     reveal Spec.InputTraceRelation();
+    var states := ExpectedStdinTrace(cmd, preStdin, preStreams);
     assert |ObservationResults(observations)| == |cmd.inputs|;
     assert |Core.ObservationDataFragments(observations)| ==
            |cmd.inputs|;
     assert |Core.ObservationErrorFragments(observations)| ==
            |cmd.inputs|;
     assert forall i: nat | i < |cmd.inputs| ::
-        Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, Core.ExpectedStdinAt(cmd, preStdin, i, preStreams), i,
+        Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, states[i], i,
                                       ObservationResults(observations)[i]
         ) &&
         Core.ObservationDataFragments(observations)[i] ==
@@ -531,7 +486,7 @@ module CatProof {
           ObservationResults(observations)[i]
         ) by {
       forall i: nat | i < |cmd.inputs|
-        ensures Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, Core.ExpectedStdinAt(cmd, preStdin, i, preStreams), i,
+        ensures Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, states[i], i,
                                               ObservationResults(observations)[i]
                 ) &&
                 Core.ObservationDataFragments(observations)[i] ==
@@ -632,11 +587,6 @@ module CatProof {
         assert Core.HasFailedObservation(observations);
       }
     }
-    var states := seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.ExpectedStdinAt(cmd, preStdin, i, preStreams));
-    forall i: nat | i < |cmd.inputs|
-      ensures states[i + 1] == (if cmd.inputs[i].Stdin? then
-                                  IOContract.ObservedReadStdinRemainingFields(states[i], preStreams) else states[i])
-    { Core.ExpectedStdinAtExtend(cmd, preStdin, i, preStreams); }
     assert Spec.StdinTraceRelation(cmd, preStdin, currentStdin, preStreams, states);
   }
 
@@ -656,8 +606,7 @@ module CatProof {
         exit,
         trace
       , plannedStdout, plannedStderr);
-    Bridge.CommandEq(raw);
-    var cmd := Model.Command(raw);
+    var cmd := Spec.Command(raw);
     if cmd.mode == Schema.ModeHelp {
       assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr);
     } else if cmd.mode == Schema.ModeVersion {

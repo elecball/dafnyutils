@@ -29,7 +29,7 @@ module TruncateSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): W.Bytes
+  function WriteErrorText(reason: string): W.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
@@ -52,30 +52,9 @@ module TruncateSpec {
     "truncate: '--io-blocks' was specified but '--size' was not\n" + UsageHint()
   }
   function MissingFile(): W.Bytes { "truncate: missing file operand\n" + UsageHint() }
-  function InvalidNumberPart1(): W.Bytes
-  {
-    "truncate: Invalid number: "
-  }
-
-  function InvalidNumberPart2(): W.Bytes
-  {
-    ": Value too large for defined data type"
-  }
-
-  function InvalidNumberPart3(): W.Bytes
-  {
-    ""
-  }
-
-  function InvalidNumberPart4(): W.Bytes
-  {
-    "\n"
-  }
-
   ghost function InvalidNumber(text: string, overflow: bool): W.Bytes
   {
-    InvalidNumberPart1() + C.QuoteArgumentResult(Utf8.Encode(text)) +
-    (if overflow then InvalidNumberPart2() else InvalidNumberPart3()) + InvalidNumberPart4()
+    InvalidNumberText(C.QuoteArgumentResult(Utf8.Encode(text)), overflow)
   }
   function InvalidNumberText(quoted: W.Bytes, overflow: bool): W.Bytes {
     "truncate: Invalid number: " + quoted +
@@ -86,10 +65,10 @@ module TruncateSpec {
   function Digit(c: char): nat
     requires IsDigit(c)
   { ((c as int) - ('0' as int)) as nat }
-  ghost predicate Digits(text: string) {
+  predicate Digits(text: string) {
     forall i :: 0 <= i < |text| ==> IsDigit(text[i])
   }
-  ghost function Decimal(text: string): nat
+  function Decimal(text: string): nat
     requires Digits(text)
     decreases |text|
   {
@@ -186,7 +165,7 @@ module TruncateSpec {
     else if raw.blocks && |raw.sizes| == 0 then BlocksWithoutSize()
     else if |raw.files| == 0 then MissingFile() else []
   }
-  ghost opaque function NatText(n: nat): string
+  opaque function NatText(n: nat): string
     decreases n
   {
     if n < 10 then [('0' as int + n) as char]
@@ -197,7 +176,7 @@ module TruncateSpec {
     "-"
   }
 
-  ghost function IntText(n: int): string
+  function IntText(n: int): string
   { if n < 0 then IntTextPart1() + NatText(-n) else NatText(n) }
   function OpenTextPart1(): W.Bytes
   {
@@ -214,7 +193,7 @@ module TruncateSpec {
     "\n"
   }
 
-  ghost function OpenText(quoted: W.Bytes, reason: string): W.Bytes
+  function OpenText(quoted: W.Bytes, reason: string): W.Bytes
   {
     OpenTextPart1() + quoted + OpenTextPart2() + Utf8.Encode(reason) + OpenTextPart3()
   }
@@ -243,7 +222,7 @@ module TruncateSpec {
     "\n"
   }
 
-  ghost function StatText(quoted: W.Bytes, reason: string, reference: bool): W.Bytes
+  function StatText(quoted: W.Bytes, reason: string, reference: bool): W.Bytes
   {
     StatTextPart1() + (if reference then StatTextPart2() else StatTextPart3()) + quoted + StatTextPart4() +
     Utf8.Encode(reason) + StatTextPart5()
@@ -268,7 +247,7 @@ module TruncateSpec {
     "\n"
   }
 
-  ghost function ResizeText(quoted: W.Bytes, size: nat, reason: string): W.Bytes
+  function ResizeText(quoted: W.Bytes, size: nat, reason: string): W.Bytes
   {
     ResizeTextPart1() + quoted + ResizeTextPart2() + Utf8.Encode(NatText(size)) +
     ResizeTextPart3() + Utf8.Encode(reason) + ResizeTextPart4()
@@ -293,7 +272,7 @@ module TruncateSpec {
     "\n"
   }
 
-  ghost function BlockOverflowText(quoted: W.Bytes, delta: int, block: nat): W.Bytes
+  function BlockOverflowText(quoted: W.Bytes, delta: int, block: nat): W.Bytes
   {
     BlockOverflowTextPart1() + Utf8.Encode(IntText(delta)) + BlockOverflowTextPart2() + Utf8.Encode(NatText(block)) +
     BlockOverflowTextPart3() + quoted + BlockOverflowTextPart4()
@@ -301,108 +280,24 @@ module TruncateSpec {
   function ExtendOverflowText(quoted: W.Bytes): W.Bytes {
     "truncate: overflow extending size of file " + quoted + "\n"
   }
-  function CannotOpenPart1(): W.Bytes
-  {
-    "truncate: cannot open "
-  }
-
-  function CannotOpenPart2(): W.Bytes
-  {
-    " for writing: "
-  }
-
-  function CannotOpenPart3(): W.Bytes
-  {
-    "\n"
-  }
-
   ghost function CannotOpen(path: string, err: int): W.Bytes
   {
-    CannotOpenPart1() + C.QuoteafPathResult(path) + CannotOpenPart2() +
-    Utf8.Encode(C.CLocaleErrnoTextResult(err)) + CannotOpenPart3()
+    OpenText(C.QuoteafPathResult(path), C.CLocaleErrnoTextResult(err))
   }
-  function CannotStatPart1(): W.Bytes
-  {
-    "truncate: cannot "
-  }
-
-  function CannotStatPart2(): W.Bytes
-  {
-    "stat "
-  }
-
-  function CannotStatPart3(): W.Bytes
-  {
-    "fstat "
-  }
-
-  function CannotStatPart4(): W.Bytes
-  {
-    ": "
-  }
-
-  function CannotStatPart5(): W.Bytes
-  {
-    "\n"
-  }
-
   ghost function CannotStat(path: string, err: int, reference: bool): W.Bytes
   {
-    CannotStatPart1() + (if reference then CannotStatPart2() else CannotStatPart3()) + C.QuoteafPathResult(path) + CannotStatPart4() +
-    Utf8.Encode(C.CLocaleErrnoTextResult(err)) + CannotStatPart5()
+    StatText(C.QuoteafPathResult(path), C.CLocaleErrnoTextResult(err), reference)
   }
-  function TruncateErrorPart1(): W.Bytes
-  {
-    "truncate: failed to truncate "
-  }
-
-  function TruncateErrorPart2(): W.Bytes
-  {
-    " at "
-  }
-
-  function TruncateErrorPart3(): W.Bytes
-  {
-    " bytes: "
-  }
-
-  function TruncateErrorPart4(): W.Bytes
-  {
-    "\n"
-  }
-
   ghost function TruncateError(path: string, size: nat, err: int): W.Bytes
   {
-    TruncateErrorPart1() + C.QuoteafPathResult(path) + TruncateErrorPart2() +
-    Utf8.Encode(NatText(size)) + TruncateErrorPart3() + Utf8.Encode(C.CLocaleErrnoTextResult(err)) + TruncateErrorPart4()
+    ResizeText(C.QuoteafPathResult(path), size, C.CLocaleErrnoTextResult(err))
   }
-  function BlockOverflowPart1(): W.Bytes
-  {
-    "truncate: overflow in "
-  }
-
-  function BlockOverflowPart2(): W.Bytes
-  {
-    " * "
-  }
-
-  function BlockOverflowPart3(): W.Bytes
-  {
-    " byte blocks for file "
-  }
-
-  function BlockOverflowPart4(): W.Bytes
-  {
-    "\n"
-  }
-
   ghost function BlockOverflow(path: string, delta: int, block: nat): W.Bytes
   {
-    BlockOverflowPart1() + Utf8.Encode(IntText(delta)) + BlockOverflowPart2() + Utf8.Encode(NatText(block)) +
-    BlockOverflowPart3() + C.QuoteafPathResult(path) + BlockOverflowPart4()
+    BlockOverflowText(C.QuoteafPathResult(path), delta, block)
   }
   ghost function ExtendOverflow(path: string): W.Bytes {
-    "truncate: overflow extending size of file " + C.QuoteafPathResult(path) + "\n"
+    ExtendOverflowText(C.QuoteafPathResult(path))
   }
   opaque function AdjustedSize(mode: S.Modifier, base: nat, delta: int): int
   {
@@ -679,7 +574,7 @@ module TruncateSpec {
     "truncate: invalid option -- '"
   }
 
-  ghost function ParseErrorText(err: CliTypes.ParseError, invalidShort: char): W.Bytes
+  function ParseErrorText(err: CliTypes.ParseError, invalidShort: char): W.Bytes
     requires |err.rawToken| > 1 ==> UnknownShortRelation(err.rawToken[1..], invalidShort)
   {
     var long := |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-';

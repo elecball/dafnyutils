@@ -1,162 +1,20 @@
-include "CommTextCore.dfy"
+include "CommSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "CommSchema.dfy"
 include "CommRenderCore.dfy"
-include "CommSpec.dfy"
 
 module CommCore {
-  import Text = CommTextCore
-
   import StreamContract = IOContract
 
-  import Result = Results
   import BenchIO
-  import Utf8 = CommUtf8Core
   import BenchWorld
   import IOContract
   import Schema = CommSchema
   import Render = CommRenderCore
+  import RSpec = CommRenderSpec
   import Spec = CommSpec
-
-  ghost function FirstOperand(operands: seq<string>): string
-  {
-    if |operands| > 0 then operands[0] else ""
-  }
-
-  ghost function SecondOperand(operands: seq<string>): string
-  {
-    if |operands| > 1 then operands[1] else ""
-  }
-
-  function InputFromOperand(operand: string): Schema.CommInput
-  {
-    if operand == "-" then Schema.Stdin else Schema.File(operand)
-  } by method {
-    return if operand == "-" then Schema.Stdin else Schema.File(operand);
-  }
-
-  function Command(raw: Schema.CommCmdRaw): Schema.CommCmd
-  {
-    var first := FirstOperand(raw.operands);
-    var second := SecondOperand(raw.operands);
-    var mode :=
-      if raw.seenHelp && (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) then
-        Schema.ModeHelp
-      else if raw.seenVersion then
-        Schema.ModeVersion
-      else if Render.HasConflictingOutputDelimiters(raw.outputDelimiters) then
-        Schema.ModeMultipleOutputDelimiters
-      else if |raw.operands| == 0 then
-        Schema.ModeMissingOperand
-      else if |raw.operands| == 1 then
-        Schema.ModeMissingOperandAfter(raw.operands[0])
-      else if |raw.operands| > 2 then
-        Schema.ModeExtraOperand(raw.operands[2])
-      else if first == "-" && second == "-" then
-        Schema.ModeRepeatedStdinOperand
-      else
-        Schema.ModeRun;
-    Schema.CommCmd(
-      mode,
-      raw.suppress1,
-      raw.suppress2,
-      raw.suppress3,
-      raw.total,
-      raw.zeroTerminated,
-      Render.OutputDelimiterFromValues(raw.outputDelimiters),
-      InputFromOperand(first),
-      InputFromOperand(second)
-    )
-  } by method {
-    var first := if |raw.operands| > 0 then raw.operands[0] else "";
-    var second := if |raw.operands| > 1 then raw.operands[1] else "";
-    var conflicting := Render.HasConflictingOutputDelimiters(raw.outputDelimiters);
-    var delimiter := Render.OutputDelimiterFromValues(raw.outputDelimiters);
-    var input1 := InputFromOperand(first);
-    var input2 := InputFromOperand(second);
-    var mode :=
-      if raw.seenHelp && (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) then
-        Schema.ModeHelp
-      else if raw.seenVersion then
-        Schema.ModeVersion
-      else if conflicting then
-        Schema.ModeMultipleOutputDelimiters
-      else if |raw.operands| == 0 then
-        Schema.ModeMissingOperand
-      else if |raw.operands| == 1 then
-        Schema.ModeMissingOperandAfter(raw.operands[0])
-      else if |raw.operands| > 2 then
-        Schema.ModeExtraOperand(raw.operands[2])
-      else if first == "-" && second == "-" then
-        Schema.ModeRepeatedStdinOperand
-      else
-        Schema.ModeRun;
-    return Schema.CommCmd(
-        mode,
-        raw.suppress1,
-        raw.suppress2,
-        raw.suppress3,
-        raw.total,
-        raw.zeroTerminated,
-        delimiter,
-        input1,
-        input2
-      );
-  }
-
-  ghost function InputResult(
-    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
-    preStdin: BenchWorld.Bytes,
-    input: Schema.CommInput
-  ): BenchWorld.IOResult<BenchWorld.Bytes>
-  {
-    match input
-    case Stdin => IOContract.ObservedReadStdinResultFields(preStdin, preStreams)
-    case File(path) => IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
-  }
-
-  ghost function AfterInputRead(preStdin: BenchWorld.Bytes, input: Schema.CommInput, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
-  {
-    match input
-    case Stdin => IOContract.ObservedReadStdinRemainingFields(preStdin, preStreams)
-    case File(_) => preStdin
-  }
-
-  ghost function ReadFirstResult(
-    cmd: Schema.CommCmd,
-    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
-    preStdin: BenchWorld.Bytes
-  ): BenchWorld.IOResult<BenchWorld.Bytes>
-  {
-    if cmd.mode == Schema.ModeRun then
-      InputResult(preFs, preStreams, preStdin, cmd.input1)
-    else
-      Result.Ok([])
-  }
-
-  ghost function AfterFirstRead(cmd: Schema.CommCmd, preStdin: BenchWorld.Bytes, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
-  {
-    if cmd.mode == Schema.ModeRun then AfterInputRead(preStdin, cmd.input1, preStreams) else preStdin
-  }
-
-  ghost function ReadSecondResult(
-    cmd: Schema.CommCmd,
-    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
-    preStdin: BenchWorld.Bytes
-  ): BenchWorld.IOResult<BenchWorld.Bytes>
-  {
-    if cmd.mode == Schema.ModeRun then
-      InputResult(preFs, preStreams, AfterFirstRead(cmd, preStdin, preStreams), cmd.input2)
-    else
-      Result.Ok([])
-  }
-
-  ghost function AfterSecondRead(cmd: Schema.CommCmd, preStdin: BenchWorld.Bytes, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
-  {
-    if cmd.mode == Schema.ModeRun then AfterInputRead(AfterFirstRead(cmd, preStdin, preStreams), cmd.input2, preStreams) else preStdin
-  }
 
   function OutputForReads(cmd: Schema.CommCmd,
                           first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
@@ -171,7 +29,7 @@ module CommCore {
                          first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     if first.Err? || second.Err? then
-      Text.FailedReadMessage(cmd, first, second, FailedReadsPlan(cmd, first, second).leftFault)
+      Spec.FailedReadMessage(cmd, first, second, FailedReadsPlan(cmd, first, second).leftFault)
     else if Render.DataSorted(first.v, cmd.zeroTerminated) && Render.DataSorted(second.v, cmd.zeroTerminated)
     then [] else Spec.UnsortedInputMessageSpec()
   }
@@ -212,7 +70,7 @@ module CommCore {
   twostate predicate PreparedSummary(raw: Schema.CommCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
     reads io.stdinRegion
   {
-    var cmd := Command(raw);
+    var cmd := Spec.CommandRelation(raw);
     match cmd.mode
     case ModeHelp =>
       io.stdin() == old(io.stdin()) &&
@@ -232,12 +90,12 @@ module CommCore {
     case ModeMissingOperandAfter(operand) =>
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) &&
-      plannedStderr == old(io.stderr()) + Text.MissingOperandAfterMessageSpec(operand) &&
+      plannedStderr == old(io.stderr()) + Spec.MissingOperandAfterMessageSpec(operand) &&
       exit == 1
     case ModeExtraOperand(operand) =>
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) &&
-      plannedStderr == old(io.stderr()) + Text.ExtraOperandMessageSpec(operand) &&
+      plannedStderr == old(io.stderr()) + Spec.ExtraOperandMessageSpec(operand) &&
       exit == 1
     case ModeMultipleOutputDelimiters =>
       io.stdin() == old(io.stdin()) &&
@@ -250,14 +108,14 @@ module CommCore {
       plannedStderr == old(io.stderr()) + Spec.RepeatedStdinOperandMessageSpec() &&
       exit == 1
     case ModeRun =>
-      var first := ReadFirstResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
-      if FirstReadAborts(cmd, first) then
-        io.stdin() == AfterFirstRead(cmd, old(io.stdin()), old(io.trustedStreams())) &&
+      var first := Spec.ReadFirstResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
+      if Spec.FirstReadAborts(cmd, first) then
+        io.stdin() == Spec.AfterFirstRead(cmd, old(io.stdin()), old(io.trustedStreams())) &&
         plannedStdout == old(io.stdout()) &&
-        plannedStderr == old(io.stderr()) + Text.InputErrorMessageSpec(cmd.input1, first.e) && exit == 1
+        plannedStderr == old(io.stderr()) + Spec.InputErrorMessageSpec(cmd.input1, first.e) && exit == 1
       else
-        var second := ReadSecondResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
-        io.stdin() == AfterSecondRead(cmd, old(io.stdin()), old(io.trustedStreams())) &&
+        var second := Spec.ReadSecondResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
+        io.stdin() == Spec.AfterSecondRead(cmd, old(io.stdin()), old(io.trustedStreams())) &&
         plannedStdout == old(io.stdout()) + OutputForReads(cmd, first, second) &&
         plannedStderr == old(io.stderr()) + ErrorForReads(cmd, first, second) &&
         exit == (if HadRunError(cmd, first, second) then 1 else 0)
@@ -265,8 +123,8 @@ module CommCore {
 
   method ReadInputMethod(input: Schema.CommInput, io: BenchIO.IO) returns (result: BenchWorld.IOResult<BenchWorld.Bytes>)
     modifies io.stdinRegion
-    ensures result == InputResult(old(io.fs()), old(io.trustedStreams()), old(io.stdin()), input)
-    ensures io.stdin() == AfterInputRead(old(io.stdin()), input, old(io.trustedStreams()))
+    ensures result == Spec.InputResult(old(io.fs()), old(io.trustedStreams()), old(io.stdin()), input)
+    ensures io.stdin() == Spec.AfterInputRead(old(io.stdin()), input, old(io.trustedStreams()))
   {
     match input
     case Stdin =>
@@ -290,7 +148,7 @@ module CommCore {
     ghost var preStdin := io.stdin();
     ghost var preStdout := (initialStdout + plannedOut);
     ghost var preStderr := (initialStderr + plannedErr);
-    var cmd := Command(raw);
+    var cmd := Spec.CommandRelation(raw);
 
     match cmd.mode {
       case ModeHelp =>
@@ -318,20 +176,20 @@ module CommCore {
         assert (initialStderr + plannedErr) == preStderr + Spec.MissingOperandMessageSpec();
         return;
       case ModeMissingOperandAfter(operand) =>
-        var msg := Text.MissingOperandAfterMessageSpec(operand);
+        var msg := Spec.MissingOperandAfterMessageSpec(operand);
         plannedErr := plannedErr + msg;
         exit := 1;
         assert io.stdin() == preStdin;
         assert (initialStdout + plannedOut) == preStdout;
-        assert (initialStderr + plannedErr) == preStderr + Text.MissingOperandAfterMessageSpec(operand);
+        assert (initialStderr + plannedErr) == preStderr + Spec.MissingOperandAfterMessageSpec(operand);
         return;
       case ModeExtraOperand(operand) =>
-        var msg := Text.ExtraOperandMessageSpec(operand);
+        var msg := Spec.ExtraOperandMessageSpec(operand);
         plannedErr := plannedErr + msg;
         exit := 1;
         assert io.stdin() == preStdin;
         assert (initialStdout + plannedOut) == preStdout;
-        assert (initialStderr + plannedErr) == preStderr + Text.ExtraOperandMessageSpec(operand);
+        assert (initialStderr + plannedErr) == preStderr + Spec.ExtraOperandMessageSpec(operand);
         return;
       case ModeMultipleOutputDelimiters =>
         var msg := Spec.MultipleOutputDelimitersMessageSpec();
@@ -351,23 +209,23 @@ module CommCore {
         return;
       case ModeRun =>
         var first := ReadInputMethod(cmd.input1, io);
-        assert first == ReadFirstResult(cmd, preFs, preStreams, preStdin);
-        assert io.stdin() == AfterFirstRead(cmd, preStdin, preStreams);
-        if FirstReadAborts(cmd, first) {
-          var err := Text.InputErrorMessageSpec(cmd.input1, first.e);
+        assert first == Spec.ReadFirstResult(cmd, preFs, preStreams, preStdin);
+        assert io.stdin() == Spec.AfterFirstRead(cmd, preStdin, preStreams);
+        if Spec.FirstReadAborts(cmd, first) {
+          var err := Spec.InputErrorMessageSpec(cmd.input1, first.e);
           plannedErr := plannedErr + err;
           exit := 1;
           assert (initialStdout + plannedOut) == preStdout;
-          assert (initialStderr + plannedErr) == preStderr + Text.InputErrorMessageSpec(cmd.input1, first.e);
+          assert (initialStderr + plannedErr) == preStderr + Spec.InputErrorMessageSpec(cmd.input1, first.e);
           return;
         } else {
           ghost var stdinAfterFirst := io.stdin();
           var second := ReadInputMethod(cmd.input2, io);
-          assert stdinAfterFirst == AfterFirstRead(cmd, preStdin, preStreams);
-          assert second == InputResult(preFs, preStreams, stdinAfterFirst, cmd.input2);
-          assert second == ReadSecondResult(cmd, preFs, preStreams, preStdin);
-          assert io.stdin() == AfterInputRead(stdinAfterFirst, cmd.input2, preStreams);
-          assert io.stdin() == AfterSecondRead(cmd, preStdin, preStreams);
+          assert stdinAfterFirst == Spec.AfterFirstRead(cmd, preStdin, preStreams);
+          assert second == Spec.InputResult(preFs, preStreams, stdinAfterFirst, cmd.input2);
+          assert second == Spec.ReadSecondResult(cmd, preFs, preStreams, preStdin);
+          assert io.stdin() == Spec.AfterInputRead(stdinAfterFirst, cmd.input2, preStreams);
+          assert io.stdin() == Spec.AfterSecondRead(cmd, preStdin, preStreams);
           var out := OutputForReads(cmd, first, second);
           var err := ErrorForReads(cmd, first, second);
           var hadError := HadRunError(cmd, first, second);
@@ -404,10 +262,10 @@ module CommCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
@@ -444,12 +302,6 @@ module CommCore {
     else CompleteRecordsData(data[..|data| - 1], delimiter)
   }
 
-  function FirstReadAborts(cmd: Schema.CommCmd, first: BenchWorld.IOResult<BenchWorld.Bytes>): bool
-    ensures FirstReadAborts(cmd, first) ==> first.Err?
-  {
-    first.Err? && CompleteRecordsData(IOContract.ReadResultData(first), Render.RecordDelimiter(cmd.zeroTerminated)) == []
-  }
-
   function ReadRecordsData(result: BenchWorld.IOResult<BenchWorld.Bytes>, delimiter: BenchWorld.RawByte): BenchWorld.Bytes
   {
     if result.Ok? then result.v else CompleteRecordsData(IOContract.ReadResultData(result), delimiter)
@@ -464,28 +316,28 @@ module CommCore {
     else if rightFailed && right == [] then FailedMergePlan([], false)
     else if right == [] then
       var tail := RenderBeforeReadFailure(cmd, left[1..], right, leftFailed, rightFailed);
-      FailedMergePlan(Render.RenderOnlyFirst(cmd, left[0]) + tail.output, tail.leftFault)
+      FailedMergePlan(RSpec.RenderFragment(cmd, RSpec.OnlyFirst, left[0]) + tail.output, tail.leftFault)
     else if left == [] then
       var tail := RenderBeforeReadFailure(cmd, left, right[1..], leftFailed, rightFailed);
-      FailedMergePlan(Render.RenderOnlySecond(cmd, right[0]) + tail.output, tail.leftFault)
+      FailedMergePlan(RSpec.RenderFragment(cmd, RSpec.OnlySecond, right[0]) + tail.output, tail.leftFault)
     else
       match Render.CompareRecords(left[0], right[0])
       case LineLess =>
         var tail := RenderBeforeReadFailure(cmd, left[1..], right, leftFailed, rightFailed);
-        FailedMergePlan(Render.RenderOnlyFirst(cmd, left[0]) + tail.output, tail.leftFault)
+        FailedMergePlan(RSpec.RenderFragment(cmd, RSpec.OnlyFirst, left[0]) + tail.output, tail.leftFault)
       case LineGreater =>
         var tail := RenderBeforeReadFailure(cmd, left, right[1..], leftFailed, rightFailed);
-        FailedMergePlan(Render.RenderOnlySecond(cmd, right[0]) + tail.output, tail.leftFault)
+        FailedMergePlan(RSpec.RenderFragment(cmd, RSpec.OnlySecond, right[0]) + tail.output, tail.leftFault)
       case LineEqual =>
         var tail := RenderBeforeReadFailure(cmd, left[1..], right[1..], leftFailed, rightFailed);
-        FailedMergePlan(Render.RenderBoth(cmd, left[0]) + tail.output, tail.leftFault)
+        FailedMergePlan(RSpec.RenderFragment(cmd, RSpec.Both, left[0]) + tail.output, tail.leftFault)
   }
 
   function FailedReadsPlan(cmd: Schema.CommCmd,
                            first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>): FailedMergePlan
     requires first.Err? || second.Err?
   {
-    var delimiter := Render.RecordDelimiter(cmd.zeroTerminated);
+    var delimiter := RSpec.RecordDelimiter(cmd.zeroTerminated);
     RenderBeforeReadFailure(cmd, Render.Records(ReadRecordsData(first, delimiter), delimiter),
                             Render.Records(ReadRecordsData(second, delimiter), delimiter), first.Err?, second.Err?)
   }

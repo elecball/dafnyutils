@@ -12,8 +12,6 @@ module EchoSpec {
   import BenchWorld
   import EchoSchema
 
-
-
   datatype EchoMode = ModeRun | ModeHelp | ModeVersion
 
   function PosixlyCorrect(env: map<string, string>): bool
@@ -97,21 +95,21 @@ module EchoSpec {
       10 + (c as int) - ('A' as int)
   }
 
-  ghost predicate OptionToken(token: string)
+  predicate OptionToken(token: string)
   {
     |token| > 1 &&
     token[0] == '-' &&
     forall i :: 1 <= i < |token| ==> ValidEchoOptionChar(token[i])
   }
 
-  ghost predicate MaximalOptionPrefix(args: seq<string>, next: nat)
+  predicate MaximalOptionPrefix(args: seq<string>, next: nat)
   {
     next <= |args| &&
     (forall i :: 0 <= i < next ==> OptionToken(args[i])) &&
     (next == |args| || !OptionToken(args[next]))
   }
 
-  ghost predicate NoNewlineInPrefix(args: seq<string>, next: nat, noNewline: bool)
+  predicate NoNewlineInPrefix(args: seq<string>, next: nat, noNewline: bool)
     requires next <= |args|
   {
     noNewline ==
@@ -121,7 +119,7 @@ module EchoSpec {
        'n' in args[i][1..])
   }
 
-  ghost predicate LastEscapeOptionEnables(args: seq<string>, next: nat, enabled: bool)
+  predicate LastEscapeOptionEnables(args: seq<string>, next: nat, enabled: bool)
     requires next <= |args|
   {
     enabled ==
@@ -174,7 +172,7 @@ module EchoSpec {
       operands == args
   }
 
-  ghost predicate OctalSpan(text: string, start: nat, count: nat, limit: nat)
+  predicate OctalSpan(text: string, start: nat, count: nat, limit: nat)
   {
     start <= |text| &&
     count <= limit &&
@@ -392,7 +390,7 @@ module EchoSpec {
     "echo: write error: " + message + "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorText(message))
   }

@@ -1,10 +1,10 @@
+include "../../core/StringEscaping.dfy"
 include "../../core/Errno.dfy"
 include "../../core/World.dfy"
 include "../../core/Utf8.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "ChmodSchema.dfy"
-include "ChmodQuoteSpec.dfy"
 
 module ChmodSpec {
   import Errno = Errnos
@@ -14,7 +14,7 @@ module ChmodSpec {
   import IOContract
   import Utf8 = Utf8Semantics
   import Schema = ChmodSchema
-  import Quote = ChmodQuoteSpec
+  import Quote = StringEscaping
 
   function HelpTextSpec(): BenchWorld.Bytes
   {
@@ -112,7 +112,7 @@ module ChmodSpec {
     "chmod: missing operand\nTry 'chmod --help' for more information.\n"
   }
 
-  ghost function MissingOperandMessageSpec(cmd: Schema.ChmodCmd): BenchWorld.Bytes
+  function MissingOperandMessageSpec(cmd: Schema.ChmodCmd): BenchWorld.Bytes
   {
     if cmd.modeExpr != MissingOperandMessageSpecPart1() && !cmd.diagnoseSurprises then
       MissingOperandMessageSpecPart2() +
@@ -132,7 +132,7 @@ module ChmodSpec {
     "\nTry 'chmod --help' for more information.\n"
   }
 
-  ghost function InvalidModeMessageSpec(modeExpr: string): BenchWorld.Bytes
+  function InvalidModeMessageSpec(modeExpr: string): BenchWorld.Bytes
   {
     InvalidModeMessageSpecPart1() + Quote.SpecLocaleQuoteBytes(Utf8.Encode(modeExpr)) +
     InvalidModeMessageSpecPart2()
@@ -153,7 +153,7 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function ReferenceErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
+  function ReferenceErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
   {
     ReferenceErrorMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
     ReferenceErrorMessageSpecPart2() + Utf8.Encode(err) + ReferenceErrorMessageSpecPart3()
@@ -174,7 +174,7 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function GettingNewAttributesMessageSpec(path: string, err: string): BenchWorld.Bytes
+  function GettingNewAttributesMessageSpec(path: string, err: string): BenchWorld.Bytes
   {
     GettingNewAttributesMessageSpecPart1() +
     Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + GettingNewAttributesMessageSpecPart2() + Utf8.Encode(err) + GettingNewAttributesMessageSpecPart3()
@@ -210,7 +210,7 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function ChangeErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
+  function ChangeErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
   {
     ChangeErrorMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
     ChangeErrorMessageSpecPart2() + Utf8.Encode(err) + ChangeErrorMessageSpecPart3()
@@ -231,7 +231,7 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function AccessErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
+  function AccessErrorMessageSpec(path: string, err: string): BenchWorld.Bytes
   {
     AccessErrorMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
     AccessErrorMessageSpecPart2() + Utf8.Encode(err) + AccessErrorMessageSpecPart3()
@@ -247,7 +247,7 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function DanglingSymlinkMessageSpec(path: string): BenchWorld.Bytes
+  function DanglingSymlinkMessageSpec(path: string): BenchWorld.Bytes
   {
     DanglingSymlinkMessageSpecPart1() +
     Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + DanglingSymlinkMessageSpecPart2()
@@ -268,13 +268,13 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function CannotDereferenceText(path: string, reason: string): BenchWorld.Bytes
+  function CannotDereferenceText(path: string, reason: string): BenchWorld.Bytes
   {
     CannotDereferenceTextPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
     CannotDereferenceTextPart2() + Utf8.Encode(reason) + CannotDereferenceTextPart3()
   }
 
-  ghost function CannotDereferenceMessageSpec(path: string, err: int): BenchWorld.Bytes
+  function CannotDereferenceMessageSpec(path: string, err: int): BenchWorld.Bytes
   {
     CannotDereferenceText(path, ErrnoTextSpec(err))
   }
@@ -289,7 +289,7 @@ module ChmodSpec {
     " nor referent has been changed\n"
   }
 
-  ghost function NeitherChangedMessageSpec(path: string): BenchWorld.Bytes
+  function NeitherChangedMessageSpec(path: string): BenchWorld.Bytes
   {
     NeitherChangedMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
     NeitherChangedMessageSpecPart2()
@@ -326,7 +326,7 @@ module ChmodSpec {
     else '7'
   }
 
-  ghost function SpecOctalText(mode: bv32): BenchWorld.Bytes
+  function SpecOctalText(mode: bv32): BenchWorld.Bytes
   {
     [SpecOctDigitChar(((mode >> 9) & (7 as bv32)) as int)] +
     [SpecOctDigitChar(((mode >> 6) & (7 as bv32)) as int)] +
@@ -334,7 +334,7 @@ module ChmodSpec {
     [SpecOctDigitChar((mode & (7 as bv32)) as int)]
   }
 
-  ghost function SpecPermissionText(mode: bv32): BenchWorld.Bytes
+  function SpecPermissionText(mode: bv32): BenchWorld.Bytes
   {
     [if (mode & Schema.S_IRUSR) != 0 as bv32 then 'r' else '-'] +
     [if (mode & Schema.S_IWUSR) != 0 as bv32 then 'w' else '-'] +
@@ -363,7 +363,7 @@ module ChmodSpec {
     ")"
   }
 
-  ghost function SpecModeDisplay(mode: bv32): BenchWorld.Bytes
+  function SpecModeDisplay(mode: bv32): BenchWorld.Bytes
   {
     SpecOctalText(mode) + SpecModeDisplayPart1() + SpecPermissionText(mode) + SpecModeDisplayPart2()
   }
@@ -388,7 +388,7 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function ChangedMessageSpec(path: string, before: bv32, after: bv32): BenchWorld.Bytes
+  function ChangedMessageSpec(path: string, before: bv32, after: bv32): BenchWorld.Bytes
   {
     ChangedMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
     ChangedMessageSpecPart2() + SpecModeDisplay(before) +
@@ -415,7 +415,7 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function FailedChangeMessageSpec(
+  function FailedChangeMessageSpec(
     path: string,
     before: bv32,
     desired: bv32
@@ -441,7 +441,7 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function RetainedMessageSpec(path: string, mode: bv32): BenchWorld.Bytes
+  function RetainedMessageSpec(path: string, mode: bv32): BenchWorld.Bytes
   {
     RetainedMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
     RetainedMessageSpecPart2() + SpecModeDisplay(mode) + RetainedMessageSpecPart3()
@@ -452,7 +452,7 @@ module ChmodSpec {
     " could not be accessed\n"
   }
 
-  ghost function AccessFailureMessageSpec(path: string): BenchWorld.Bytes
+  function AccessFailureMessageSpec(path: string): BenchWorld.Bytes
   {
     Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + AccessFailureMessageSpecPart1()
   }
@@ -477,14 +477,14 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function SurpriseModeMessageSpec(path: string, actual: bv32, naive: bv32): BenchWorld.Bytes
+  function SurpriseModeMessageSpec(path: string, actual: bv32, naive: bv32): BenchWorld.Bytes
   {
     SurpriseModeMessageSpecPart1() + Quote.SpecQuoteFBytes(Utf8.Encode(path)) +
     SurpriseModeMessageSpecPart2() + SpecPermissionText(actual) +
     SurpriseModeMessageSpecPart3() + SpecPermissionText(naive) + SurpriseModeMessageSpecPart4()
   }
 
-  ghost function MakeAbsolute(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
+  function MakeAbsolute(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
   {
     if path == "" then ""
     else if BenchWorld.IsAbsolutePath(path) then path
@@ -541,13 +541,13 @@ module ChmodSpec {
       )
   }
 
-  ghost function SupportedOctalMode(expr: string): bool
+  function SupportedOctalMode(expr: string): bool
   {
     |expr| > 0 && BenchWorld.IsOctalDigit(expr[0]) &&
     BenchWorld.AllOctalDigits(expr, 0) && BenchWorld.OctalValue(expr, 0, 0) <= 4095
   }
 
-  ghost function OctalMode(expr: string): bv32
+  function OctalMode(expr: string): bv32
     requires SupportedOctalMode(expr)
   {
     BenchWorld.NormalizeMode(BenchWorld.ToBv32(BenchWorld.OctalValue(expr, 0, 0)))
@@ -953,7 +953,7 @@ module ChmodSpec {
       after == BenchWorld.NormalizeMode(mode)
   }
 
-  ghost function SpecSuccessStdout(
+  function SpecSuccessStdout(
     cmd: Schema.ChmodCmd,
     path: string,
     before: bv32,
@@ -1536,7 +1536,7 @@ module ChmodSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): BenchWorld.Bytes
+  function WriteErrorText(reason: string): BenchWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

@@ -11,7 +11,7 @@ module PwdEmissionSpec {
     "\n"
   }
 
-  ghost function CurrentDirectoryTextSpec(directory: string): W.Bytes
+  function CurrentDirectoryTextSpec(directory: string): W.Bytes
   {
     Utf8.Encode(directory)+CurrentDirectoryTextSpecPart1()
   }

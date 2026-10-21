@@ -13,9 +13,6 @@ module PrintenvSpec {
   import IOContract
   import Utf8 = Utf8Semantics
 
-
-
-
   function HelpTextSpec(): BenchWorld.Bytes
   {
     "Usage: printenv [OPTION] [VARIABLE]...\n"
@@ -139,7 +136,7 @@ module PrintenvSpec {
     "printenv: write error: " + message + "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorText(message))
   }

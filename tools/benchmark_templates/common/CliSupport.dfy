@@ -1,6 +1,7 @@
 // Task-local CLI protocol scaffolding; not a library of utility algorithms.
 include "../../core/IO.dfy"
 include "../../core/CliTypes.dfy"
+include "../../core/Utf8.dfy"
 
 module CliModel {
   import opened CliTypes
@@ -323,8 +324,9 @@ module BenchItem {
   import opened CliTypes
   import opened CliExtern
   import C = IOContract
+  import Utf8Semantics
 
-  // CLI protocol code is fixed scaffolding. Its codec is not a public helper.
+  // CLI protocol code is fixed scaffolding.
   export
     provides BenchWorld, BenchIO, CliTypes
     reveals BenchmarkItemTwostate
@@ -333,47 +335,6 @@ module BenchItem {
     provides BenchmarkItemTwostate.FormatParseError, BenchmarkItemTwostate.PlanParsed
     provides BenchmarkItemTwostate.PlanParseFailure, BenchmarkItemTwostate.PlanArgv
     provides BenchmarkItemTwostate.RunCore, RunMain
-
-  function EncodeChar(ch: char): BenchWorld.Bytes
-    ensures |EncodeChar(ch)| == BenchWorld.Utf8ByteWidth(ch)
-    ensures 1 <= |EncodeChar(ch)| <= 4
-  {
-    var code := ch as int;
-    if code <= 0x7f then
-      [code as char]
-    else if code <= 0x7ff then
-      [
-        (0xc0 + code / 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else if code <= 0xffff then
-      [
-        (0xe0 + code / 0x1000) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else
-      [
-        (0xf0 + code / 0x40000) as char,
-        (0x80 + (code / 0x1000) % 0x40) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-  }
-
-  function EncodeFrom(text: string, i: nat): BenchWorld.Bytes
-    requires i <= |text|
-  {
-    Encode(text[i..])
-  }
-
-  function Encode(text: string): BenchWorld.Bytes
-    ensures |Encode(text)| >= |text|
-    decreases |text|
-  {
-    if text == [] then [] else EncodeChar(text[0]) + Encode(text[1..])
-  }
-
 
   trait {:termination false} BenchmarkItemTwostate<CmdRaw> {
     method Name() returns (name: string)
@@ -430,7 +391,7 @@ module BenchItem {
         if stdoutResult.Err? {
           var name := item.Name();
           var reason := io.GetCLocaleErrnoText(C.ResultErrno(stdoutResult));
-          diagnostic := diagnostic + Encode(name + ": write error: " + reason + "\n");
+          diagnostic := diagnostic + Utf8Semantics.Encode(name + ": write error: " + reason + "\n");
         }
         var stderrResult := io.WriteStderr(diagnostic);
         exit := if stdoutResult.Err? || stderrResult.Err? then 1 else code;

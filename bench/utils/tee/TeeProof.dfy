@@ -15,11 +15,6 @@ module TeeProof {
   import Core = TeeCore
   import Spec = TeeSpec
 
-  lemma CommandMatchesSpec(raw: Schema.TeeCmdRaw)
-    ensures Core.Command(raw) == Spec.CommandSpec(raw)
-  {
-  }
-
   lemma WriteOneSummaryFieldsImpliesSpec(
     append: bool,
     path: BenchWorld.Path,
@@ -261,8 +256,7 @@ module TeeProof {
     ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     reveal Core.PreparedSummary(), Spec.PreparedSpec();
-    CommandMatchesSpec(raw);
-    var cmd := Core.Command(raw);
+    var cmd := Spec.CommandSpec(raw);
     if cmd.mode == Schema.ModeRun {
       var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
       var input := IOContract.ReadResultData(read);

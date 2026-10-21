@@ -1,17 +1,16 @@
-include "ExprTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "ExprSpec.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "ExprSchema.dfy"
-include "ExprSpec.dfy"
 
 module ExprCore {
   import StreamContract = IOContract
 
   import BenchIO
   import BenchWorld
-  import Utf8 = ExprUtf8Core
-  import Text = ExprTextCore
+  import Utf8 = Utf8Semantics
   import ExprSchema
   import Spec = ExprSpec
 
@@ -35,36 +34,15 @@ module ExprCore {
     (false, "", message)
   }
 
-  function IsDigit(ch: char): bool
-  {
-    '0' <= ch <= '9'
-  }
-
-  function DigitValue(ch: char): int
-    requires IsDigit(ch)
-  {
-    (ch as int) - ('0' as int)
-  }
-
-  function AllDigitsFrom(text: string, i: nat): bool
-    requires i <= |text|
-    decreases |text| - i
-  {
-    if i >= |text| then
-      true
-    else
-      IsDigit(text[i]) && AllDigitsFrom(text, i + 1)
-  }
-
   function ParseUnsigned(text: string, i: nat, acc: int): int
     requires i <= |text|
-    requires AllDigitsFrom(text, i)
+    requires Spec.AllDigits(text[i..])
     decreases |text| - i
   {
     if i >= |text| then
       acc
     else
-      ParseUnsigned(text, i + 1, acc * 10 + DigitValue(text[i]))
+      ParseUnsigned(text, i + 1, acc * 10 + Spec.DigitValue(text[i]))
   }
 
   function IsInteger(text: string): bool
@@ -72,9 +50,9 @@ module ExprCore {
     if |text| == 0 then
       false
     else if text[0] == '-' then
-      1 < |text| && AllDigitsFrom(text, 1)
+      1 < |text| && Spec.AllDigits(text[1..])
     else
-      AllDigitsFrom(text, 0)
+      Spec.AllDigits(text)
   }
 
   function ParseInteger(text: string): int
@@ -137,28 +115,6 @@ module ExprCore {
     value != "" && (!IsInteger(value) || ParseInteger(value) != 0)
   }
 
-  function StringLessFrom(a: string, b: string, i: nat): bool
-    requires i <= |a|
-    requires i <= |b|
-    decreases |a| - i, |b| - i
-  {
-    if i >= |a| then
-      i < |b|
-    else if i >= |b| then
-      false
-    else if a[i] < b[i] then
-      true
-    else if b[i] < a[i] then
-      false
-    else
-      StringLessFrom(a, b, i + 1)
-  }
-
-  function StringLess(a: string, b: string): bool
-  {
-    StringLessFrom(a, b, 0)
-  }
-
   function BoolText(value: bool): string
   {
     if value then "1" else "0"
@@ -177,19 +133,13 @@ module ExprCore {
         else if op == "!=" then l != r
         else if op == ">=" then l >= r
         else l > r
-      else if op == "<" then StringLess(left, right)
-      else if op == "<=" then left == right || StringLess(left, right)
+      else if op == "<" then Spec.StringLess(left, right)
+      else if op == "<=" then left == right || Spec.StringLess(left, right)
       else if op == "=" || op == "==" then left == right
       else if op == "!=" then left != right
-      else if op == ">=" then left == right || StringLess(right, left)
-      else StringLess(right, left);
+      else if op == ">=" then left == right || Spec.StringLess(right, left)
+      else Spec.StringLess(right, left);
     BoolText(cmp)
-  }
-
-  function IsCompareOp(op: string): bool
-  {
-    op == "<" || op == "<=" || op == "=" || op == "==" ||
-    op == "!=" || op == ">=" || op == ">"
   }
 
   function ApplyArithmetic(op: string, left: string, right: string): (bool, string, BenchWorld.Bytes)
@@ -342,7 +292,7 @@ module ExprCore {
               i <= ParseCompareRest(tokens, left, i).2 <= |tokens|
     decreases |tokens| - i, 4
   {
-    if i < |tokens| && IsCompareOp(tokens[i]) then
+    if i < |tokens| && Spec.IsCompareOp(tokens[i]) then
       var right := ParseAdd(tokens, i + 1);
       if !right.0 then
         right
@@ -435,7 +385,7 @@ module ExprCore {
   {
     if i >= |tokens| then
       EvalErr(if i == 0 then Spec.MissingOperandMessage()
-              else Text.MissingAfterMessage(tokens[i - 1]))
+              else Spec.MissingAfterMessage(tokens[i - 1]))
     else if tokens[i] == "(" then
       var inner := ParseOr(tokens, i + 1);
       if !inner.0 then
@@ -443,16 +393,16 @@ module ExprCore {
       else if inner.2 < |tokens| && tokens[inner.2] == ")" then
         EvalOk(inner.1, inner.2 + 1)
       else if inner.2 < |tokens| then
-        EvalErr(Text.MissingCloseInsteadMessage(tokens[inner.2]))
+        EvalErr(Spec.MissingCloseInsteadMessage(tokens[inner.2]))
       else
-        EvalErr(Text.MissingCloseAfterMessage(tokens[|tokens| - 1]))
+        EvalErr(Spec.MissingCloseAfterMessage(tokens[|tokens| - 1]))
     else if tokens[i] == ")" then
       EvalErr(Spec.UnexpectedCloseMessage())
     else if tokens[i] == "+" then
       if i + 1 < |tokens| then
         EvalOk(tokens[i + 1], i + 2)
       else
-        EvalErr(Text.MissingAfterMessage("+"))
+        EvalErr(Spec.MissingAfterMessage("+"))
     else if tokens[i] == "length" then
       var arg := ParsePrimary(tokens, i + 1);
       if !arg.0 then arg else EvalOk(Digits(|arg.1|), arg.2)
@@ -506,7 +456,7 @@ module ExprCore {
         if !parsed.0 then
           ([], parsed.3, 2)
         else if parsed.2 != |exprArgs| then
-          ([], Text.UnexpectedArgumentMessage(exprArgs[parsed.2]), 2)
+          ([], Spec.UnexpectedArgumentMessage(exprArgs[parsed.2]), 2)
         else
           (Utf8.Encode(parsed.1) + ['\n'], [], if ValueIsTrue(parsed.1) then 0 else 1)
   }
@@ -559,7 +509,7 @@ module ExprCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

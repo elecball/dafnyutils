@@ -1,10 +1,10 @@
-include "LinkTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "LinkSpec.dfy"
 include "../../core/IO.dfy"
 include "LinkSchema.dfy"
-include "LinkSpec.dfy"
 
 module LinkCore {
-  import Text = LinkTextCore
+  import Text = LinkSpec
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -13,7 +13,7 @@ module LinkCore {
   import Schema = LinkSchema
   import Spec = LinkSpec
   import C = IOContract
-  import Utf8 = LinkUtf8Core
+  import Utf8 = Utf8Semantics
 
   opaque twostate predicate PreparedSummary(raw: Schema.LinkCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     reads io.fsRegion, io.nowRegion, io.trustedFilesystemRegion

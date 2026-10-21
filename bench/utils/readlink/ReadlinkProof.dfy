@@ -28,18 +28,18 @@ module ReadlinkProof {
                                          fs,
                                          cwd,
                                          path,
-                                         Core.ReadlinkResultFields(cmd, fs, cwd, path)
+                                         Spec.ReadlinkResultFieldsSpec(cmd, fs, cwd, path)
             )
     ensures Spec.ReadFragmentRelation(
               cmd,
               path,
-              Core.ReadlinkResultFields(cmd, fs, cwd, path),
+              Spec.ReadlinkResultFieldsSpec(cmd, fs, cwd, path),
               out,
               errOut
             )
-    ensures hadError == Core.ReadlinkResultFields(cmd, fs, cwd, path).Err?
+    ensures hadError == Spec.ReadlinkResultFieldsSpec(cmd, fs, cwd, path).Err?
   {
-    match Core.ReadlinkResultFields(cmd, fs, cwd, path)
+    match Spec.ReadlinkResultFieldsSpec(cmd, fs, cwd, path)
     case Ok(_) =>
     case Err(_) =>
   }
@@ -234,7 +234,7 @@ module ReadlinkProof {
         }
       }
       var path := files[|files| - 1];
-      var observation := Core.ReadlinkResultFields(stepCmd, fs, cwd, path);
+      var observation := Spec.ReadlinkResultFieldsSpec(stepCmd, fs, cwd, path);
       ReadOneSummaryImpliesFragment(
         stepCmd, path, fs, cwd, stepError, stepOut, stepErrOut
       );

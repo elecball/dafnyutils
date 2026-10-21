@@ -14,26 +14,6 @@ module FactorProof {
   import Spec = FactorSpec
   import IOContract
 
-  lemma IsWhitespaceEq(ch: char)
-    ensures Core.IsWhitespace(ch) == Spec.IsWhitespace(ch)
-  {
-  }
-
-  lemma IsDigitEq(ch: char)
-    ensures Core.IsDigit(ch) == Spec.IsDigit(ch)
-  {
-  }
-
-  lemma HelpSelectedEq(raw: Schema.FactorCmdRaw)
-    ensures Core.HelpSelected(raw) == Spec.HelpSelected(raw)
-  {
-  }
-
-  lemma VersionSelectedEq(raw: Schema.FactorCmdRaw)
-    ensures Core.VersionSelected(raw) == Spec.VersionSelected(raw)
-  {
-  }
-
   lemma TrimLeftWhitespaceRelation(text: string)
     ensures exists leading: string ::
               text == leading + Core.TrimLeftWhitespace(text) &&
@@ -45,8 +25,7 @@ module FactorProof {
     if |text| == 0 {
       assert Spec.WhitespaceOnly("");
     } else {
-      IsWhitespaceEq(text[0]);
-      if Core.IsWhitespace(text[0]) {
+      if Spec.IsWhitespace(text[0]) {
         TrimLeftWhitespaceRelation(text[1..]);
         var leading: string :|
           text[1..] == leading + Core.TrimLeftWhitespace(text[1..]) &&
@@ -75,8 +54,7 @@ module FactorProof {
     if |text| == 0 {
       assert Spec.WhitespaceOnly("");
     } else {
-      IsWhitespaceEq(text[|text| - 1]);
-      if Core.IsWhitespace(text[|text| - 1]) {
+      if Spec.IsWhitespace(text[|text| - 1]) {
         TrimRightWhitespaceRelation(text[..|text| - 1]);
         var trailing: string :|
           text[..|text| - 1] ==
@@ -166,8 +144,7 @@ module FactorProof {
     ensures Spec.DigitsFrom(text, start)
     decreases |text| - start
   {
-    assert Core.IsDigit(text[start]);
-    IsDigitEq(text[start]);
+    assert Spec.IsDigit(text[start]);
     if start + 1 < |text| {
       AllDigitsGivesDigitsFrom(text, start + 1);
     }
@@ -206,9 +183,8 @@ module FactorProof {
           );
     } else {
       assert Core.AllDigits(text, i);
-      assert Core.IsDigit(text[i]);
+      assert Spec.IsDigit(text[i]);
       assert Core.AllDigits(text, i + 1);
-      IsDigitEq(text[i]);
       var nextAcc := acc * 10 + (text[i] as int - '0' as int);
       var nextPrefixes := prefixes + [nextAcc];
       assert forall j {:trigger nextPrefixes[j + 1]} ::
@@ -1146,7 +1122,6 @@ module FactorProof {
     decreases |text| - start
   {
     reveal Spec.DigitsFrom();
-    IsDigitEq(text[start]);
     if start + 1 < |text| {
       assert Spec.DigitsFrom(text, start + 1);
       DigitsFromGivesAllDigits(text, start + 1);
@@ -1322,8 +1297,7 @@ module FactorProof {
     decreases |text| - i
   {
     if i < |text| {
-      IsWhitespaceEq(text[i]);
-      if !Core.IsWhitespace(text[i]) && text[i] != '\0' {
+      if !Spec.IsWhitespace(text[i]) && text[i] != '\0' {
         WordEndSatisfiesRelation(text, i + 1);
         assert forall j :: i <= j < Core.WordEnd(text, i) ==>
                              !Spec.IsWhitespace(text[j]) && text[j] != '\0' by {
@@ -1344,8 +1318,7 @@ module FactorProof {
     ensures Spec.NulTailRelation(text, i, Core.SkipAfterNul(text, i))
     decreases |text| - i
   {
-    IsWhitespaceEq(text[i]);
-    if Core.IsWhitespace(text[i]) {
+    if Spec.IsWhitespace(text[i]) {
       reveal Spec.NulTailRelation();
     } else if i + 1 == |text| {
       reveal Spec.NulTailRelation();
@@ -1537,8 +1510,7 @@ module FactorProof {
           text, i, [], [i], [], []
         );
     } else {
-      IsWhitespaceEq(text[i]);
-      if Core.IsWhitespace(text[i]) {
+      if Spec.IsWhitespace(text[i]) {
         SplitWordsFromSatisfiesRelation(text, i + 1);
         var cursors: seq<nat>, starts: seq<nat>, ends: seq<nat> :|
           Spec.InputTokenPartitionFrom(
@@ -1626,10 +1598,8 @@ module FactorProof {
     requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
     ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    HelpSelectedEq(raw);
-    VersionSelectedEq(raw);
-    if Core.HelpSelected(raw) {
-    } else if Core.VersionSelected(raw) {
+    if Spec.HelpSelected(raw) {
+    } else if Spec.VersionSelected(raw) {
     } else {
       var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
       var input := IOContract.ReadResultData(read);

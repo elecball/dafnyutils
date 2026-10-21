@@ -18,23 +18,6 @@ module ChmodRecursiveProof {
   import Spec = ChmodRecursiveSpec
   import Core = ChmodRecursiveCore
 
-  function SpecTerminalOfCore(terminal: Core.RecursiveTerminal): Spec.RecursiveTerminal
-  {
-    match terminal
-    case RecursiveEof => Spec.RecursiveEof
-    case RecursiveReadError(err) => Spec.RecursiveReadError(err)
-  }
-
-  function SpecFailureKindOfCore(
-    failureKind: Core.RecursiveFailureKind
-  ): Spec.RecursiveFailureKind
-  {
-    match failureKind
-    case RecursiveAccess => Spec.RecursiveAccess
-    case RecursiveDangling => Spec.RecursiveDangling
-    case RecursiveDereference => Spec.RecursiveDereference
-  }
-
   function SpecIdentityOfCore(identity: Core.RecursiveIdentity): Spec.RecursiveIdentity
   {
     Spec.RecursiveIdentity(
@@ -57,7 +40,7 @@ module ChmodRecursiveProof {
       Spec.RecursiveAccessFailure(
         SpecIdentityOfCore(identity),
         err,
-        SpecFailureKindOfCore(failureKind)
+        Core.SpecFailureKindOfCore(failureKind)
       )
     case RecursivePreserveRoot(identity, alias) =>
       Spec.RecursivePreserveRoot(SpecIdentityOfCore(identity), alias)
@@ -65,7 +48,7 @@ module ChmodRecursiveProof {
       Spec.RecursiveNode(
         SpecIdentityOfCore(identity),
         SpecVisitsOfCore(children),
-        SpecTerminalOfCore(terminal)
+        Core.SpecTerminalOfCore(terminal)
       )
   }
 
@@ -107,109 +90,19 @@ module ChmodRecursiveProof {
     }
   }
 
-  lemma BridgeTraversalFollow(cmd: Schema.ChmodCmd, isTopLevel: bool)
-    ensures Core.TraversalFollowCore(cmd, isTopLevel) ==
-            Spec.TraversalFollowSpec(cmd, isTopLevel)
-  {
-  }
-
-  lemma BridgeChmodFollow(cmd: Schema.ChmodCmd, isTopLevel: bool)
-    ensures Core.ChmodFollowCore(cmd, isTopLevel) ==
-            Spec.ChmodFollowSpec(cmd, isTopLevel)
-  {
-    BridgeTraversalFollow(cmd, isTopLevel);
-  }
-
-  lemma BridgeRootPreserveMessage(path: string, alias: bool)
-    ensures Core.RootPreserveMessageCore(path, alias) ==
-            Spec.RootPreserveMessageSpec(path, alias)
-  {
-  }
-
-  lemma BridgeReadDirectoryMessage(path: string, err: int)
-    ensures Core.ReadDirectoryMessageCore(path, err) ==
-            Spec.ReadDirectoryMessageSpec(path, err)
-  {
-    BaseProof.BridgeErrnoText(err);
-  }
-
-  lemma BridgeDanglingMessage(path: string)
-    ensures Core.DanglingSymlinkMessageCore(path) ==
-            Spec.DanglingSymlinkMessageSpec(path)
-  {
-    BaseProof.BridgeDanglingSymlinkMessage(path);
-  }
-
-  lemma BridgeCannotDereferenceMessage(path: string, err: int)
-    ensures Core.CannotDereferenceMessageCore(path, err) ==
-            Spec.CannotDereferenceMessageSpec(path, err)
-  {
-    BaseProof.BridgeErrnoText(err);
-  }
-
   lemma BridgeResolutionFailureKind(
     cmd: Schema.ChmodCmd,
     isTopLevel: bool,
     isSymlink: bool,
     err: int
   )
-    ensures SpecFailureKindOfCore(
+    ensures Core.SpecFailureKindOfCore(
               Core.ResolutionFailureKindCore(cmd, isTopLevel, isSymlink, err)
             ) == Spec.ResolutionFailureKindSpec(
                    cmd, isTopLevel, isSymlink, err
                  )
   {
-    BridgeTraversalFollow(cmd, isTopLevel);
-    BridgeChmodFollow(cmd, isTopLevel);
-    BaseProof.BridgeIsDanglingSymlinkFailure(isSymlink, err);
-  }
 
-  lemma BridgeNeitherChangedMessage(path: string)
-    ensures Core.NeitherChangedMessageCore(path) ==
-            Spec.NeitherChangedMessageSpec(path)
-  {
-    BaseProof.BridgeNeitherChangedMessage(path);
-  }
-
-  lemma BridgeRecursiveDereferenceRequirementMessage()
-    ensures Core.RecursiveDereferenceRequirementMessageCore() ==
-            Spec.RecursiveDereferenceRequirementMessageSpec()
-  {
-  }
-
-  lemma BridgeAccessStdout(cmd: Schema.ChmodCmd, path: string)
-    ensures Core.RecursiveAccessStdoutCore(cmd, path) ==
-            Spec.RecursiveAccessStdoutSpec(cmd, path)
-  {
-    BaseProof.BridgeAccessFailureMessage(path);
-  }
-
-  lemma BridgeAccessStderr(
-    cmd: Schema.ChmodCmd,
-    path: string,
-    err: int,
-    failureKind: Core.RecursiveFailureKind
-  )
-    ensures Core.RecursiveAccessStderrCore(cmd, path, err, failureKind) ==
-            Spec.RecursiveAccessStderrSpec(
-              cmd, path, err, SpecFailureKindOfCore(failureKind)
-            )
-  {
-    if failureKind.RecursiveDangling? {
-      BridgeDanglingMessage(path);
-    } else if failureKind.RecursiveDereference? {
-      BridgeCannotDereferenceMessage(path, err);
-    } else {
-      BaseProof.BridgeErrnoText(err);
-      BaseProof.BridgeAccessErrorMessage(path, err);
-    }
-  }
-
-  lemma BridgeSkipStdout(cmd: Schema.ChmodCmd, path: string)
-    ensures Core.RecursiveSkipStdoutCore(cmd, path) ==
-            Spec.RecursiveSkipStdoutSpec(cmd, path)
-  {
-    BridgeNeitherChangedMessage(path);
   }
 
   lemma BridgeApplyResolved(
@@ -230,14 +123,11 @@ module ChmodRecursiveProof {
               now
             )
   {
-    BridgeChmodFollow(cmd, identity.isTopLevel);
-    if identity.isSymlink && !Core.ChmodFollowCore(cmd, identity.isTopLevel) {
-      BridgeSkipStdout(cmd, identity.displayPath);
+
+    if identity.isSymlink && !Spec.ChmodFollowSpec(cmd, identity.isTopLevel) {
+
     } else if !BW.FsContainsPath(fs, identity.resolvedPath) {
-      BridgeAccessStdout(cmd, identity.displayPath);
-      BridgeAccessStderr(
-        cmd, identity.displayPath, 2, Core.RecursiveAccess
-      );
+
     } else {
       var node := BW.FsNodeAt(fs, identity.resolvedPath);
       var before := BW.NodeMode(node);
@@ -267,17 +157,7 @@ module ChmodRecursiveProof {
         BW.NormalizeMode(desired),
         identity.isDirectory
       );
-      BaseProof.BridgeSuccessStdout(
-        cmd,
-        identity.displayPath,
-        before,
-        BW.NormalizeMode(desired)
-      );
-      BaseProof.BridgeSurpriseModeMessage(
-        identity.displayPath,
-        BW.NormalizeMode(desired),
-        BaseCore.CoreNaiveMode(plan, before, identity.isDirectory)
-      );
+
     }
   }
 
@@ -304,15 +184,12 @@ module ChmodRecursiveProof {
     requires Core.SkipVisitCore(cmd, identity, fs)
     ensures Spec.SkipVisitSpec(cmd, SpecIdentityOfCore(identity), fs)
   {
-    BridgeTraversalFollow(cmd, identity.isTopLevel);
-    BridgeChmodFollow(cmd, identity.isTopLevel);
+
     var followed := IOC.ResolvePathForMetadataFields(
       fs, identity.accessPath, true
     );
     if followed.Err? {
-      BaseProof.BridgeIsDanglingSymlinkFailure(
-        identity.isSymlink, IOC.IOErrorErrno(followed.e)
-      );
+
     }
   }
 
@@ -330,13 +207,11 @@ module ChmodRecursiveProof {
               cmd,
               SpecIdentityOfCore(identity),
               err,
-              SpecFailureKindOfCore(failureKind),
+              Core.SpecFailureKindOfCore(failureKind),
               fs
             )
   {
-    BridgeTraversalFollow(cmd, identity.isTopLevel);
-    BridgeChmodFollow(cmd, identity.isTopLevel);
-    BaseProof.BridgeIsDanglingSymlinkFailure(identity.isSymlink, err);
+
     BridgeResolutionFailureKind(
       cmd, identity.isTopLevel, identity.isSymlink, err
     );
@@ -349,7 +224,7 @@ module ChmodRecursiveProof {
   )
     ensures Core.ValidOpenSchedule(snapshot, entries, terminal) ==
             Spec.ValidOpenSchedule(
-              snapshot, entries, SpecTerminalOfCore(terminal)
+              snapshot, entries, Core.SpecTerminalOfCore(terminal)
             )
   {
   }
@@ -457,7 +332,7 @@ module ChmodRecursiveProof {
   {
     hide *;
     reveal Core.EvalVisitCore(), Core.VisitIdentityCore(), Core.VisitSizeCore(), Core.VisitsSizeCore();
-    reveal SpecVisitOfCore(), SpecIdentityOfCore(), SpecTerminalOfCore(), Spec.VisitIdentitySpec();
+    reveal SpecVisitOfCore(), SpecIdentityOfCore(), Core.SpecTerminalOfCore(), Spec.VisitIdentitySpec();
     reveal Spec.VisitOutcomeBodySpec(), BaseProof.SpecPathResultOfCore();
     reveal Core.RecursiveReadStdoutCore(), Core.RecursiveReadStderrCore();
     reveal Spec.RecursiveReadStdoutSpec(), Spec.RecursiveReadStderrSpec();
@@ -467,7 +342,7 @@ module ChmodRecursiveProof {
     match visit
     case RecursiveSkip(_) =>
       BridgeSkipVisit(cmd, identity, fs);
-      BridgeSkipStdout(cmd, identity.displayPath);
+
       var result := Core.EvalVisitCore(
         cmd, plan, visit, activeResolved, fs, now
       );
@@ -496,45 +371,41 @@ module ChmodRecursiveProof {
         now
       );
     case RecursiveAccessFailure(_, err, failureKind) =>
-      BridgeAccessFailureVisit(
-        cmd, identity, err, failureKind, fs
-      );
-      BridgeAccessStdout(cmd, identity.displayPath);
-      BridgeAccessStderr(
-        cmd, identity.displayPath, err, failureKind
-      );
-      var result := Core.EvalVisitCore(
-        cmd, plan, visit, activeResolved, fs, now
-      );
-      assert Spec.VisitOutcomeBodySpec(
-          cmd,
-          BaseProof.SpecModePlanOfCore(plan),
-          SpecVisitOfCore(visit),
-          activeResolved,
-          fs,
-          result.fs,
-          result.stdoutChunk,
-          result.stderrChunk,
-          result.allOk,
-          now
-        );
-      Spec.IntroduceVisitOutcomeSpec(
-        cmd,
-        BaseProof.SpecModePlanOfCore(plan),
-        SpecVisitOfCore(visit),
-        activeResolved,
-        fs,
-        result.fs,
-        result.stdoutChunk,
-        result.stderrChunk,
-        result.allOk,
-        now
-      );
+      reveal Core.RecursiveAccessStderrCore();
+             BridgeAccessFailureVisit(
+               cmd, identity, err, failureKind, fs
+             );
+
+             var result := Core.EvalVisitCore(
+               cmd, plan, visit, activeResolved, fs, now
+             );
+             assert Spec.VisitOutcomeBodySpec(
+                 cmd,
+                 BaseProof.SpecModePlanOfCore(plan),
+                 SpecVisitOfCore(visit),
+                 activeResolved,
+                 fs,
+                 result.fs,
+                 result.stdoutChunk,
+                 result.stderrChunk,
+                 result.allOk,
+                 now
+               );
+             Spec.IntroduceVisitOutcomeSpec(
+               cmd,
+               BaseProof.SpecModePlanOfCore(plan),
+               SpecVisitOfCore(visit),
+               activeResolved,
+               fs,
+               result.fs,
+               result.stdoutChunk,
+               result.stderrChunk,
+               result.allOk,
+               now
+             );
     case RecursivePreserveRoot(_, alias) =>
       BridgeIdentityResolves(fs, identity);
-      BridgeTraversalFollow(cmd, identity.isTopLevel);
-      BridgeChmodFollow(cmd, identity.isTopLevel);
-      BridgeRootPreserveMessage(identity.displayPath, alias);
+
       var result := Core.EvalVisitCore(
         cmd, plan, visit, activeResolved, fs, now
       );
@@ -564,8 +435,7 @@ module ChmodRecursiveProof {
       );
     case RecursiveNode(_, children, terminal) =>
       BridgeIdentityResolves(fs, identity);
-      BridgeTraversalFollow(cmd, identity.isTopLevel);
-      BridgeChmodFollow(cmd, identity.isTopLevel);
+
       BridgeApplyResolved(cmd, plan, identity, fs, now);
       var parent := Core.ApplyResolvedCore(
         cmd, plan, identity, fs, now
@@ -574,7 +444,7 @@ module ChmodRecursiveProof {
         BaseProof.SpecPathResultOfCore(parent);
       ghost var specIdentity := SpecIdentityOfCore(identity);
       ghost var specChildren := SpecVisitsOfCore(children);
-      ghost var specTerminal := SpecTerminalOfCore(terminal);
+      ghost var specTerminal := Core.SpecTerminalOfCore(terminal);
       ghost var specPlan := BaseProof.SpecModePlanOfCore(plan);
       SpecVisitsShape(children);
       assert exists candidate: BaseSpec.SpecPathResult ::
@@ -591,7 +461,7 @@ module ChmodRecursiveProof {
       }
       if BW.PathSegments(identity.resolvedPath) !in activeResolved {
         if identity.isSymlink &&
-           !Core.TraversalFollowCore(
+           !Spec.TraversalFollowSpec(
              cmd, identity.isTopLevel
            ) {
           assert |children| == 0;
@@ -681,10 +551,7 @@ module ChmodRecursiveProof {
         );
         if terminal.RecursiveReadError? {
           var err := terminal.err;
-          BridgeReadDirectoryMessage(identity.displayPath, err);
-          BaseProof.BridgeAccessFailureMessage(
-            identity.displayPath
-          );
+
         }
         var result := Core.EvalVisitCore(
           cmd, plan, visit, activeResolved, fs, now
@@ -722,14 +589,14 @@ module ChmodRecursiveProof {
           ) == Spec.RecursiveReadStdoutSpec(
                       cmd,
                       SpecIdentityOfCore(identity).displayPath,
-                      SpecTerminalOfCore(terminal)
+                      Core.SpecTerminalOfCore(terminal)
                     );
         assert Core.RecursiveReadStderrCore(
             cmd, identity.displayPath, terminal
           ) == Spec.RecursiveReadStderrSpec(
                       cmd,
                       SpecIdentityOfCore(identity).displayPath,
-                      SpecTerminalOfCore(terminal)
+                      Core.SpecTerminalOfCore(terminal)
                     );
         assert specParent.fs == parent.fs;
         assert specParent.stdoutChunk == parent.stdoutChunk;
@@ -1050,7 +917,7 @@ module ChmodRecursiveProof {
             )
   {
     if cmd.seenReference {
-      BaseProof.BridgeMakeAbsolute(cwd, cmd.referenceFile);
+
     } else {
       BaseProof.ValidModeProgramSatisfiesRelation(cmd.modeExpr);
       var umask := IOC.GetUmaskResultFields(props);
@@ -1090,7 +957,7 @@ module ChmodRecursiveProof {
     if cmd.mode == Schema.ModeHelp || cmd.mode == Schema.ModeVersion {
       BaseProof.CoreSummaryImpliesSpec(raw, io, exit);
     } else if cmd.dereferenceMode == 1 && cmd.traversalMode == 0 {
-      BridgeRecursiveDereferenceRequirementMessage();
+
     } else if (cmd.seenReference && cmd.diagnoseSurprises) ||
               |cmd.files| == 0 ||
               ((cmd.seenReference &&
@@ -1137,9 +1004,7 @@ module ChmodRecursiveProof {
                 ).isTopLevel
       {
         BridgeVisitIdentity(visits[i]);
-        BaseProof.BridgeMakeAbsolute(
-          old(io.cwd()), cmd.files[i]
-        );
+
       }
       BridgeVisitsOutcome(
         cmd, plan, visits, 0, {}, old(io.fs()), old(io.now())

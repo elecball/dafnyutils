@@ -1,16 +1,14 @@
-include "ChmodTextCore.dfy"
-include "ChmodRecursiveTextCore.dfy"
+include "ChmodRecursiveSpec.dfy"
+include "ChmodSpec.dfy"
 include "../../core/World.dfy"
 include "ChmodWorldFileSystemProof.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "ChmodSchema.dfy"
 include "ChmodCore.dfy"
-include "ChmodRecursiveSpec.dfy"
 
 module ChmodRecursiveCore {
-  import Text = ChmodTextCore
-  import RecursiveText = ChmodRecursiveTextCore
+  import Text = ChmodSpec
   import BenchWorld
   import WorldProof = ChmodWorldFileSystemProof
   import BenchIO
@@ -24,6 +22,23 @@ module ChmodRecursiveCore {
 
   datatype RecursiveFailureKind =
     RecursiveAccess | RecursiveDangling | RecursiveDereference
+
+  function SpecTerminalOfCore(terminal: RecursiveTerminal): Spec.RecursiveTerminal
+  {
+    match terminal
+    case RecursiveEof => Spec.RecursiveEof
+    case RecursiveReadError(err) => Spec.RecursiveReadError(err)
+  }
+
+  function SpecFailureKindOfCore(
+    failureKind: RecursiveFailureKind
+  ): Spec.RecursiveFailureKind
+  {
+    match failureKind
+    case RecursiveAccess => Spec.RecursiveAccess
+    case RecursiveDangling => Spec.RecursiveDangling
+    case RecursiveDereference => Spec.RecursiveDereference
+  }
 
   datatype RecursiveIdentity = RecursiveIdentity(
     displayPath: string,
@@ -71,53 +86,6 @@ module ChmodRecursiveCore {
     else VisitSizeCore(visits[0]) + VisitsSizeCore(visits[1..])
   }
 
-  function TraversalFollowCore(cmd: Schema.ChmodCmd, isTopLevel: bool): bool
-  {
-    cmd.traversalMode == 2 || (cmd.traversalMode == 1 && isTopLevel)
-  }
-
-  function ChmodFollowCore(cmd: Schema.ChmodCmd, isTopLevel: bool): bool
-  {
-    if cmd.dereferenceMode == 1 then true
-    else if cmd.dereferenceMode == 0 then false
-    else TraversalFollowCore(cmd, isTopLevel)
-  }
-
-  function RootPreserveMessageCore(displayPath: string, alias: bool): BenchWorld.Bytes
-  {
-    RecursiveText.RootPreserveMessageSpec(displayPath, alias)
-  }
-
-  function ReadDirectoryMessageCore(path: string, err: int): BenchWorld.Bytes
-  {
-    RecursiveText.ReadDirectoryMessageSpec(path, err)
-  }
-
-  function DanglingSymlinkMessageCore(path: string): BenchWorld.Bytes
-  {
-    RecursiveText.DanglingSymlinkMessageSpec(path)
-  }
-
-  function CannotDereferenceMessageCore(path: string, err: int): BenchWorld.Bytes
-  {
-    RecursiveText.CannotDereferenceMessageSpec(path, err)
-  }
-
-  function NeitherChangedMessageCore(path: string): BenchWorld.Bytes
-  {
-    RecursiveText.NeitherChangedMessageSpec(path)
-  }
-
-  function RecursiveDereferenceRequirementMessageCore(): BenchWorld.Bytes
-  {
-    Spec.RecursiveDereferenceRequirementMessageSpec()
-  }
-
-  function RecursiveAccessStdoutCore(cmd: Schema.ChmodCmd, path: string): BenchWorld.Bytes
-  {
-    if cmd.verbose then Base.AccessFailureMessageCore(path) else []
-  }
-
   function RecursiveAccessStderrCore(
     cmd: Schema.ChmodCmd,
     path: string,
@@ -125,11 +93,7 @@ module ChmodRecursiveCore {
     failureKind: RecursiveFailureKind
   ): BenchWorld.Bytes
   {
-    if cmd.silent then []
-    else if failureKind.RecursiveDangling? then DanglingSymlinkMessageCore(path)
-    else if failureKind.RecursiveDereference? then
-      CannotDereferenceMessageCore(path, err)
-    else Base.AccessErrorMessageCore(path, Base.ErrnoTextCore(err))
+    Spec.RecursiveAccessStderrSpec(cmd, path, err, SpecFailureKindOfCore(failureKind))
   }
 
   function ResolutionFailureKindCore(
@@ -139,18 +103,10 @@ module ChmodRecursiveCore {
     err: int
   ): RecursiveFailureKind
   {
-    if isSymlink && !TraversalFollowCore(cmd, isTopLevel) &&
-       ChmodFollowCore(cmd, isTopLevel) then
-      RecursiveDereference
-    else if Base.CoreIsDanglingSymlinkFailure(isSymlink, err) then
-      RecursiveDangling
-    else
-      RecursiveAccess
-  }
-
-  function RecursiveSkipStdoutCore(cmd: Schema.ChmodCmd, path: string): BenchWorld.Bytes
-  {
-    if cmd.verbose then NeitherChangedMessageCore(path) else []
+    match Spec.ResolutionFailureKindSpec(cmd, isTopLevel, isSymlink, err)
+    case RecursiveAccess => RecursiveAccess
+    case RecursiveDangling => RecursiveDangling
+    case RecursiveDereference => RecursiveDereference
   }
 
   function RecursiveReadStdoutCore(
@@ -159,10 +115,7 @@ module ChmodRecursiveCore {
     terminal: RecursiveTerminal
   ): BenchWorld.Bytes
   {
-    match terminal
-    case RecursiveEof => []
-    case RecursiveReadError(_) =>
-      if cmd.verbose then Base.AccessFailureMessageCore(path) else []
+    Spec.RecursiveReadStdoutSpec(cmd, path, SpecTerminalOfCore(terminal))
   }
 
   function RecursiveReadStderrCore(
@@ -171,10 +124,7 @@ module ChmodRecursiveCore {
     terminal: RecursiveTerminal
   ): BenchWorld.Bytes
   {
-    match terminal
-    case RecursiveEof => []
-    case RecursiveReadError(err) =>
-      if cmd.silent then [] else ReadDirectoryMessageCore(path, err)
+    Spec.RecursiveReadStderrSpec(cmd, path, SpecTerminalOfCore(terminal))
   }
 
   ghost function ApplyResolvedCore(
@@ -185,10 +135,10 @@ module ChmodRecursiveCore {
     now: int
   ): Base.CorePathResult
   {
-    if identity.isSymlink && !ChmodFollowCore(cmd, identity.isTopLevel) then
+    if identity.isSymlink && !Spec.ChmodFollowSpec(cmd, identity.isTopLevel) then
       Base.CorePathResult(
         fs,
-        RecursiveSkipStdoutCore(cmd, identity.displayPath),
+        Spec.RecursiveSkipStdoutSpec(cmd, identity.displayPath),
         [],
         true,
         Base.CorePathRetained(0 as bv32)
@@ -196,7 +146,7 @@ module ChmodRecursiveCore {
     else if !BenchWorld.FsContainsPath(fs, identity.resolvedPath) then
       Base.CorePathResult(
         fs,
-        RecursiveAccessStdoutCore(cmd, identity.displayPath),
+        Spec.RecursiveAccessStdoutSpec(cmd, identity.displayPath),
         RecursiveAccessStderrCore(
           cmd, identity.displayPath, 2, RecursiveAccess
         ),
@@ -270,14 +220,14 @@ module ChmodRecursiveCore {
     case RecursiveSkip(identity) =>
       RecursiveResult(
         fs,
-        RecursiveSkipStdoutCore(cmd, identity.displayPath),
+        Spec.RecursiveSkipStdoutSpec(cmd, identity.displayPath),
         [],
         true
       )
     case RecursiveAccessFailure(identity, err, failureKind) =>
       RecursiveResult(
         fs,
-        RecursiveAccessStdoutCore(cmd, identity.displayPath),
+        Spec.RecursiveAccessStdoutSpec(cmd, identity.displayPath),
         RecursiveAccessStderrCore(cmd, identity.displayPath, err, failureKind),
         false
       )
@@ -285,7 +235,7 @@ module ChmodRecursiveCore {
       RecursiveResult(
         fs,
         [],
-        RootPreserveMessageCore(identity.displayPath, alias),
+        Spec.RootPreserveMessageSpec(identity.displayPath, alias),
         false
       )
     case RecursiveNode(identity, children, terminal) =>
@@ -490,7 +440,7 @@ module ChmodRecursiveCore {
     }
   }
 
-  ghost predicate ActiveAncestryCycle(
+  predicate ActiveAncestryCycle(
     activeResolved: set<seq<string>>,
     resolved: BenchWorld.Path
   )
@@ -592,12 +542,12 @@ module ChmodRecursiveCore {
       identity.isSymlink &&
       identity.resolvedPath == "" &&
       !identity.isDirectory &&
-      !ChmodFollowCore(cmd, identity.isTopLevel) &&
-      (!TraversalFollowCore(cmd, identity.isTopLevel) ||
+      !Spec.ChmodFollowSpec(cmd, identity.isTopLevel) &&
+      (!Spec.TraversalFollowSpec(cmd, identity.isTopLevel) ||
        match IOContract.ResolvePathForMetadataFields(
            fs, identity.accessPath, true
          )
-       case Err(error) => Base.CoreIsDanglingSymlinkFailure(
+       case Err(error) => Text.SpecIsDanglingSymlinkFailure(
          identity.isSymlink, IOContract.IOErrorErrno(error)
        )
        case Ok(_) => false)
@@ -654,9 +604,9 @@ module ChmodRecursiveCore {
         identity.isSymlink == isLink &&
         identity.resolvedPath == "" &&
         !identity.isDirectory &&
-        (!isLink || ChmodFollowCore(cmd, identity.isTopLevel) ||
-         (TraversalFollowCore(cmd, identity.isTopLevel) &&
-          !Base.CoreIsDanglingSymlinkFailure(isLink, err))) &&
+        (!isLink || Spec.ChmodFollowSpec(cmd, identity.isTopLevel) ||
+         (Spec.TraversalFollowSpec(cmd, identity.isTopLevel) &&
+          !Text.SpecIsDanglingSymlinkFailure(isLink, err))) &&
         FollowAccessFailureVisitCore(
           cmd, identity, isLink, err, failureKind, fs
         )
@@ -681,8 +631,8 @@ module ChmodRecursiveCore {
     case RecursivePreserveRoot(_, alias) =>
       IdentityResolvesCore(fs, identity) &&
       (!identity.isSymlink ||
-       TraversalFollowCore(cmd, identity.isTopLevel) ||
-       ChmodFollowCore(cmd, identity.isTopLevel)) &&
+       Spec.TraversalFollowSpec(cmd, identity.isTopLevel) ||
+       Spec.ChmodFollowSpec(cmd, identity.isTopLevel)) &&
       cmd.preserveRoot &&
       identity.isDirectory &&
       identity.resolvedPath == "/" &&
@@ -690,12 +640,12 @@ module ChmodRecursiveCore {
     case RecursiveNode(_, children, terminal) =>
       IdentityResolvesCore(fs, identity) &&
       (!identity.isSymlink ||
-       TraversalFollowCore(cmd, identity.isTopLevel) ||
-       ChmodFollowCore(cmd, identity.isTopLevel)) &&
+       Spec.TraversalFollowSpec(cmd, identity.isTopLevel) ||
+       Spec.ChmodFollowSpec(cmd, identity.isTopLevel)) &&
       !(cmd.preserveRoot && identity.isDirectory &&
         identity.resolvedPath == "/") &&
       if identity.isSymlink &&
-         !TraversalFollowCore(cmd, identity.isTopLevel) then
+         !Spec.TraversalFollowSpec(cmd, identity.isTopLevel) then
         |children| == 0 && terminal.RecursiveEof?
       else
       if BenchWorld.PathSegments(identity.resolvedPath) in activeResolved then
@@ -771,7 +721,7 @@ module ChmodRecursiveCore {
     (forall i :: 0 <= i < |visits| ==>
                    var identity := VisitIdentityCore(visits[i]);
                    identity.displayPath == cmd.files[i] &&
-                   identity.accessPath == Base.MakeAbsoluteCore(cwd, cmd.files[i]) &&
+                   identity.accessPath == Text.MakeAbsolute(cwd, cmd.files[i]) &&
                    identity.isTopLevel) &&
     ValidVisitsCore(cmd, plan, visits, 0, {}, fs, now)
   }
@@ -793,7 +743,7 @@ module ChmodRecursiveCore {
       exists referenceMode: bv32 ::
         IOContract.GetFileModeContractFields(
           fs,
-          Base.MakeAbsoluteCore(cwd, cmd.referenceFile),
+          Text.MakeAbsolute(cwd, cmd.referenceFile),
           true,
           true,
           referenceMode,
@@ -1240,7 +1190,7 @@ module ChmodRecursiveCore {
     requires IdentityResolvesCore(fs0, identity)
     requires identity.isDirectory
     requires !identity.isSymlink ||
-             TraversalFollowCore(cmd, identity.isTopLevel)
+             Spec.TraversalFollowSpec(cmd, identity.isTopLevel)
     requires !(cmd.preserveRoot && identity.resolvedPath == "/")
     requires BenchWorld.PathSegments(identity.resolvedPath) !in
              activeSegments
@@ -1410,7 +1360,7 @@ module ChmodRecursiveCore {
     (forall j :: 0 <= j < |visits| ==>
                    var identity := VisitIdentityCore(visits[j]);
                    identity.displayPath == files[i + j] &&
-                   identity.accessPath == Base.MakeAbsoluteCore(cwd, files[i + j]) &&
+                   identity.accessPath == Text.MakeAbsolute(cwd, files[i + j]) &&
                    identity.isTopLevel) &&
     ValidVisitsCore(cmd, plan, visits, 0, {}, fs0, now) &&
     var result := EvalChildrenCore(cmd, plan, visits, 0, {}, fs0, now);
@@ -1472,8 +1422,8 @@ module ChmodRecursiveCore {
     requires IdentityResolvesCore(fs, identity)
     requires !identity.isDirectory
     requires !identity.isSymlink ||
-             TraversalFollowCore(cmd, identity.isTopLevel) ||
-             ChmodFollowCore(cmd, identity.isTopLevel)
+             Spec.TraversalFollowSpec(cmd, identity.isTopLevel) ||
+             Spec.ChmodFollowSpec(cmd, identity.isTopLevel)
     ensures ValidVisitCore(
               cmd,
               plan,
@@ -1496,8 +1446,8 @@ module ChmodRecursiveCore {
   )
     requires IdentityResolvesCore(fs, identity)
     requires identity.isSymlink
-    requires !TraversalFollowCore(cmd, identity.isTopLevel)
-    requires ChmodFollowCore(cmd, identity.isTopLevel)
+    requires !Spec.TraversalFollowSpec(cmd, identity.isTopLevel)
+    requires Spec.ChmodFollowSpec(cmd, identity.isTopLevel)
     requires !(cmd.preserveRoot && identity.isDirectory &&
                identity.resolvedPath == "/")
     ensures ValidVisitCore(
@@ -1522,8 +1472,8 @@ module ChmodRecursiveCore {
   )
     requires IdentityResolvesCore(fs, identity)
     requires !identity.isSymlink ||
-             TraversalFollowCore(cmd, identity.isTopLevel) ||
-             ChmodFollowCore(cmd, identity.isTopLevel)
+             Spec.TraversalFollowSpec(cmd, identity.isTopLevel) ||
+             Spec.ChmodFollowSpec(cmd, identity.isTopLevel)
     requires !(cmd.preserveRoot && identity.isDirectory &&
                identity.resolvedPath == "/")
     requires BenchWorld.PathSegments(identity.resolvedPath) in activeSegments
@@ -1662,7 +1612,7 @@ module ChmodRecursiveCore {
             BenchWorld.FsNodeAt(result.fs, identity.resolvedPath).Directory?
   {
     if !(identity.isSymlink &&
-         !ChmodFollowCore(cmd, identity.isTopLevel)) {
+         !Spec.ChmodFollowSpec(cmd, identity.isTopLevel)) {
       var node := BenchWorld.FsNodeAt(fs, identity.resolvedPath);
       var desired := Base.CorePlannedMode(
         plan,
@@ -1712,7 +1662,7 @@ module ChmodRecursiveCore {
       io.fs() == old(io.fs()) &&
       io.stdout() == old(io.stdout()) &&
       io.stderr() == old(io.stderr()) +
-      RecursiveDereferenceRequirementMessageCore() &&
+      Spec.RecursiveDereferenceRequirementMessageSpec() &&
       exit == 1
     else if (cmd.seenReference && cmd.diagnoseSurprises) ||
             |cmd.files| == 0 ||

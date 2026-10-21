@@ -1,11 +1,13 @@
 include "../../core/Utf8.dfy"
 include "../../core/World.dfy"
 include "../../core/CliTypes.dfy"
+include "CliSupport.dfy"
 
 module BasenameSchema {
   import Utf8 = Utf8Semantics
   import BenchWorld
   import CliTypes
+  import CliModel
 
   datatype BasenameMode = ModeRun | ModeHelp | ModeVersion
 
@@ -59,18 +61,13 @@ module BasenameSchema {
     cfg := CliTypes.ParseConfig(CliTypes.POSIX_StopAtFirst, true, true, true);
   }
 
-  function HasPrefix(text: string, prefix: string): bool
-  {
-    |prefix| <= |text| && text[..|prefix|] == prefix
-  }
-
   function IsSuffixLongOptionNeedingValue(token: string): bool
   {
     |token| > 2 &&
     token[0] == '-' &&
     token[1] == '-' &&
     var name := token[2..];
-    0 < |name| && HasPrefix("suffix", name)
+    0 < |name| && CliModel.HasPrefix("suffix", name)
   }
 
   method DecodeEarlySpecial(argv: seq<string>, stopTokenIndex: int) returns (found: bool, raw: BasenameCmdRaw)
@@ -235,40 +232,7 @@ module BasenameSchema {
 
   method FormatParseError(e: CliTypes.ParseError) returns (b: BenchWorld.Bytes)
   {
-    var text := ParseErrorText(e);
-    b := [];
-    var i := |text|;
-    while 0 < i
-      invariant 0 <= i <= |text|
-      invariant b == Utf8.Encode(text[i..])
-      decreases i
-    {
-      i := i - 1;
-      var code := text[i] as int;
-      var piece: BenchWorld.Bytes :=
-        if code <= 0x7f then
-          [code as char]
-        else if code <= 0x7ff then
-          [
-            (0xc0 + code / 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ]
-        else if code <= 0xffff then
-          [
-            (0xe0 + code / 0x1000) as char,
-            (0x80 + (code / 0x40) % 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ]
-        else
-          [
-            (0xf0 + code / 0x40000) as char,
-            (0x80 + (code / 0x1000) % 0x40) as char,
-            (0x80 + (code / 0x40) % 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ];
-      b := piece + b;
-    }
-    assert b == Utf8.Encode(ParseErrorText(e));
+    b := Utf8.Encode(ParseErrorText(e));
   }
 
   method PlanParseFailure(

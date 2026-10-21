@@ -40,65 +40,6 @@ module WcProof {
       )
   }
 
-  lemma IsStdinInputEq(input: Schema.Input)
-    ensures Core.IsStdinInput(input) == Spec.IsStdinInput(input)
-  {
-  }
-
-  lemma InputsFromOperandsEq(operands: seq<string>)
-    ensures Core.InputsFromOperands(operands) ==
-            Spec.InputsFromOperands(operands)
-    decreases |operands|
-  {
-    if |operands| > 0 {
-      InputsFromOperandsEq(operands[1..]);
-    }
-  }
-
-  lemma CommandEq(raw: Schema.WcCmdRaw)
-    ensures Core.Command(raw) == Spec.Command(raw)
-  {
-    InputsFromOperandsEq(raw.operands);
-  }
-
-  lemma IsWordSpaceEq(ch: char)
-    ensures Core.IsWordSpace(ch) == Spec.IsWordSpace(ch)
-  {
-  }
-
-  lemma NextLineLenEq(ch: char, current: int)
-    requires 0 <= current
-    ensures Core.NextLineLen(ch, current) ==
-            Spec.NextLineLen(ch, current)
-  {
-  }
-
-  lemma NewlineIndicesEq(data: BW.Bytes)
-    ensures Core.NewlineIndices(data) == Spec.NewlineIndices(data)
-  {
-  }
-
-  lemma WordStartIndicesEq(data: BW.Bytes)
-    ensures Core.WordStartIndices(data) == Spec.WordStartIndices(data)
-  {
-    assert forall i: nat {:trigger i in Core.WordStartIndices(data)} ::
-        i in Core.WordStartIndices(data) <==>
-             i in Spec.WordStartIndices(data) by {
-      forall i: nat {:trigger i in Core.WordStartIndices(data)}
-        ensures
-          i in Core.WordStartIndices(data) <==>
-               i in Spec.WordStartIndices(data)
-      {
-        if i < |data| {
-          IsWordSpaceEq(data[i]);
-          if i > 0 {
-            IsWordSpaceEq(data[i - 1]);
-          }
-        }
-      }
-    }
-  }
-
   lemma LineColumnTraceRefines(
     data: BW.Bytes,
     columns: seq<nat>
@@ -108,13 +49,6 @@ module WcProof {
   {
     reveal Core.LineColumnTraceRelation();
     reveal Spec.LineColumnTraceRelation();
-    forall i: nat | i < |data|
-      ensures columns[i + 1] ==
-              if data[i] == '\n' then 0
-              else Spec.NextLineLen(data[i], columns[i])
-    {
-      NextLineLenEq(data[i], columns[i]);
-    }
   }
 
   lemma MaximumRelationRefines(values: seq<nat>, maximum: int)
@@ -135,8 +69,6 @@ module WcProof {
   {
     reveal Core.CountWitnessRelation();
     reveal Spec.CountRelation();
-    NewlineIndicesEq(data);
-    WordStartIndicesEq(data);
     LineColumnTraceRefines(data, countTrace.columns);
     MaximumRelationRefines(countTrace.columns, counts.maxLine);
   }
@@ -155,20 +87,6 @@ module WcProof {
             )
   {
     reveal Spec.ReadResultRelation();
-
-    match cmd.inputs[i]
-    case Stdin(_) =>
-      assert forall j: nat | j < i ::
-          Core.IsStdinInput(cmd.inputs[j]) ==
-          Spec.IsStdinInput(cmd.inputs[j]) by {
-        forall j: nat | j < i
-          ensures Core.IsStdinInput(cmd.inputs[j]) ==
-                  Spec.IsStdinInput(cmd.inputs[j])
-        {
-          IsStdinInputEq(cmd.inputs[j]);
-        }
-      }
-    case File(_) =>
   }
 
   lemma InputStepWitnessRefines(
@@ -291,20 +209,9 @@ module WcProof {
   {
   }
 
-  lemma MaxEq(a: int, b: int)
-    ensures Core.Max(a, b) == Spec.Max(a, b)
-  {
-  }
-
   lemma AddCountsEq(a: Core.Counts, b: Core.Counts)
     ensures Core.ToSpecCounts(Core.AddCounts(a, b)) ==
             Spec.AddCounts(Core.ToSpecCounts(a), Core.ToSpecCounts(b))
-  {
-    MaxEq(a.maxLine, b.maxLine);
-  }
-
-  lemma SelectedFieldCountEq(cmd: Schema.WcCmd)
-    ensures Core.SelectedFieldCount(cmd) == Spec.SelectedFieldCount(cmd)
   {
   }
 
@@ -317,11 +224,6 @@ module WcProof {
   lemma MaxSelectedValueEq(cmd: Schema.WcCmd, counts: Core.Counts)
     ensures Core.MaxSelectedValue(cmd, counts) ==
             Spec.MaxSelectedValue(cmd, Core.ToSpecCounts(counts))
-  {
-  }
-
-  lemma ShouldPrintTotalEq(cmd: Schema.WcCmd)
-    ensures Core.ShouldPrintTotal(cmd) == Spec.ShouldPrintTotal(cmd)
   {
   }
 
@@ -841,16 +743,14 @@ module WcProof {
   {
     ToSpecEntriesLength(entries);
     reveal Core.CountsNonnegative();
-    SelectedFieldCountEq(cmd);
     MaxSelectedValueEq(cmd, total);
     var selectedSuffixes, byteSuffixes :=
       EntryMaximumWitnessForCore(cmd, entries);
     HasWideEntryRelation(entries);
-    ShouldPrintTotalEq(cmd);
     var maximum :=
-      Core.Max(
-        Core.Max(Core.MaxSelectedValue(cmd, total), Core.MaxEntrySelectedValue(cmd, entries)),
-        Core.Max(total.bytes, Core.MaxEntryBytes(entries))
+      Spec.Max(
+        Spec.Max(Core.MaxSelectedValue(cmd, total), Core.MaxEntrySelectedValue(cmd, entries)),
+        Spec.Max(total.bytes, Core.MaxEntryBytes(entries))
       );
     assert 0 <= maximum;
     var maximumText, maximumDigits, maximumValues :=
@@ -926,9 +826,8 @@ module WcProof {
     var entryLines, entryCuts :=
       RenderEntriesRelationForCore(cmd, entries, width);
     var entryOutput := Core.RenderEntries(cmd, entries, width);
-    ShouldPrintTotalEq(cmd);
     var totalLine: BW.Bytes;
-    if Core.ShouldPrintTotal(cmd) {
+    if Spec.ShouldPrintTotal(cmd) {
       totalLine :=
         Core.RenderCountsLine(cmd, total, Spec.TotalName(), width);
       CountsLineRelationForCore(
@@ -1233,20 +1132,18 @@ module WcProof {
     ObservationErrorFragmentsEq(observations);
     FailedObservationsEq(observations);
     assert (exists i: nat ::
-              i < |cmd.inputs| && Core.IsStdinInput(cmd.inputs[i])) ==
+              i < |cmd.inputs| && Spec.IsStdinInput(cmd.inputs[i])) ==
            (exists i: nat ::
               i < |cmd.inputs| && Spec.IsStdinInput(cmd.inputs[i])) by {
       if exists i: nat ::
-          i < |cmd.inputs| && Core.IsStdinInput(cmd.inputs[i]) {
+          i < |cmd.inputs| && Spec.IsStdinInput(cmd.inputs[i]) {
         var i: nat :|
-          i < |cmd.inputs| && Core.IsStdinInput(cmd.inputs[i]);
-        IsStdinInputEq(cmd.inputs[i]);
+          i < |cmd.inputs| && Spec.IsStdinInput(cmd.inputs[i]);
       }
       if exists i: nat ::
           i < |cmd.inputs| && Spec.IsStdinInput(cmd.inputs[i]) {
         var i: nat :|
           i < |cmd.inputs| && Spec.IsStdinInput(cmd.inputs[i]);
-        IsStdinInputEq(cmd.inputs[i]);
       }
     }
   }
@@ -1257,8 +1154,7 @@ module WcProof {
   {
     reveal Core.PreparedSummary();
     reveal Spec.PreparedSpec();
-    CommandEq(raw);
-    var cmd := Core.Command(raw);
+    var cmd := Spec.Command(raw);
     if cmd.mode == Schema.ModeHelp {
     } else if cmd.mode == Schema.ModeVersion {
     } else {

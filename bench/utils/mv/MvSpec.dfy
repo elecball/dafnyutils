@@ -1,11 +1,10 @@
+include "../../core/StringEscaping.dfy"
+include "MvPathSpec.dfy"
 include "../../core/Errno.dfy"
 include "../../core/World.dfy"
 include "../../core/Utf8.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
-include "../../core/StringEscaping.dfy"
-include "MvPathSpec.dfy"
-include "MvQuoteSpec.dfy"
 include "MvSchema.dfy"
 
 module MvSpec {
@@ -15,15 +14,11 @@ module MvSpec {
   import IOContract
   import BenchWorld
   import Basename = MvPathSpec
-  import Quote = MvQuoteSpec
+  import Quote = StringEscaping
   import Dirname = MvPathSpec
   import Schema = MvSchema
   import Utf8 = Utf8Semantics
   import SE = StringEscaping
-
-
-
-
 
   function ErrnoTextSpec(err: int): string
   {
@@ -132,7 +127,7 @@ module MvSpec {
     "Try 'mv --help' for more information.\n"
   }
 
-  ghost function MissingDestinationMessageSpec(source: string): BenchWorld.Bytes
+  function MissingDestinationMessageSpec(source: string): BenchWorld.Bytes
   {
     MissingDestinationMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) + MissingDestinationMessageSpecPart2()
     + MissingDestinationMessageSpecPart3()
@@ -148,7 +143,7 @@ module MvSpec {
     "\nTry 'mv --help' for more information.\n"
   }
 
-  ghost function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
+  function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
   {
     ExtraOperandMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(operand)) +
     ExtraOperandMessageSpecPart2()
@@ -199,7 +194,7 @@ module MvSpec {
     "Try 'mv --help' for more information.\n"
   }
 
-  ghost function InvalidBackupArgumentMessageSpec(value: string): BenchWorld.Bytes
+  function InvalidBackupArgumentMessageSpec(value: string): BenchWorld.Bytes
   {
     InvalidBackupArgumentMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
     InvalidBackupArgumentMessageSpecPart2()
@@ -251,7 +246,7 @@ module MvSpec {
     "Try 'mv --help' for more information.\n"
   }
 
-  ghost function InvalidUpdateArgumentMessageSpec(value: string): BenchWorld.Bytes
+  function InvalidUpdateArgumentMessageSpec(value: string): BenchWorld.Bytes
   {
     InvalidUpdateArgumentMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
     InvalidUpdateArgumentMessageSpecPart2()
@@ -283,7 +278,7 @@ module MvSpec {
     "mv: target "
   }
 
-  ghost function TargetFailureMessageSpec(path: string, explicitTargetDirectory: bool, err: int): BenchWorld.Bytes
+  function TargetFailureMessageSpec(path: string, explicitTargetDirectory: bool, err: int): BenchWorld.Bytes
   {
     if explicitTargetDirectory then
       TargetFailureMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
@@ -308,7 +303,7 @@ module MvSpec {
     "\n"
   }
 
-  ghost function SourceStatFailureMessageSpec(source: string, err: int): BenchWorld.Bytes
+  function SourceStatFailureMessageSpec(source: string, err: int): BenchWorld.Bytes
   {
     SourceStatFailureMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
     SourceStatFailureMessageSpecPart2() + ErrnoTextSpec(err) + SourceStatFailureMessageSpecPart3()
@@ -329,7 +324,7 @@ module MvSpec {
     "\n"
   }
 
-  ghost function ParentStatFailureMessageSpec(path: string, err: int): BenchWorld.Bytes
+  function ParentStatFailureMessageSpec(path: string, err: int): BenchWorld.Bytes
   {
     ParentStatFailureMessageSpecPart1() + Utf8.Encode(path) + ParentStatFailureMessageSpecPart2() + ErrnoTextSpec(err) + ParentStatFailureMessageSpecPart3()
   }
@@ -369,7 +364,7 @@ module MvSpec {
     " to "
   }
 
-  ghost function RenameFailureMessageSpec(source: string, target: string, err: int): BenchWorld.Bytes
+  function RenameFailureMessageSpec(source: string, target: string, err: int): BenchWorld.Bytes
   {
     if err == Errno.EISDIR then
       RenameFailureMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
@@ -408,7 +403,7 @@ module MvSpec {
     " to a subdirectory of itself, "
   }
 
-  ghost function SourceRenameFailureMessageSpec(
+  function SourceRenameFailureMessageSpec(
     source: string,
     target: string,
     err: int,
@@ -452,7 +447,7 @@ module MvSpec {
     " are the same file\n"
   }
 
-  ghost function SameFileMessageSpec(source: string, target: string): BenchWorld.Bytes
+  function SameFileMessageSpec(source: string, target: string): BenchWorld.Bytes
   {
     SameFileMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
     SameFileMessageSpecPart2() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
@@ -474,7 +469,7 @@ module MvSpec {
     " not moved\n"
   }
 
-  ghost function BackupWouldDestroySourceMessageSpec(
+  function BackupWouldDestroySourceMessageSpec(
     source: string,
     target: string
   ): BenchWorld.Bytes
@@ -501,7 +496,7 @@ module MvSpec {
     "\n"
   }
 
-  ghost function VerboseRenameMessageSpec(source: string, target: string): BenchWorld.Bytes
+  function VerboseRenameMessageSpec(source: string, target: string): BenchWorld.Bytes
   {
     VerboseRenameMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
     VerboseRenameMessageSpecPart2() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + VerboseRenameMessageSpecPart3()
@@ -527,7 +522,7 @@ module MvSpec {
     ")\n"
   }
 
-  ghost function VerboseRenameWithBackupMessageSpec(source: string, target: string, backup: string): BenchWorld.Bytes
+  function VerboseRenameWithBackupMessageSpec(source: string, target: string, backup: string): BenchWorld.Bytes
   {
     VerboseRenameWithBackupMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(source)) +
     VerboseRenameWithBackupMessageSpecPart2() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) +
@@ -544,7 +539,7 @@ module MvSpec {
     "\n"
   }
 
-  ghost function DebugSkipMessageSpec(target: string): BenchWorld.Bytes
+  function DebugSkipMessageSpec(target: string): BenchWorld.Bytes
   {
     DebugSkipMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + DebugSkipMessageSpecPart2()
   }
@@ -559,41 +554,22 @@ module MvSpec {
     "\n"
   }
 
-  ghost function NotReplacingMessageSpec(target: string): BenchWorld.Bytes
+  function NotReplacingMessageSpec(target: string): BenchWorld.Bytes
   {
     NotReplacingMessageSpecPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(target)) + NotReplacingMessageSpecPart2()
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   function ShowActionMessageSpec(verbose: bool, debug: bool): bool
   {
     verbose || debug
   }
 
-  ghost function SkipStdoutSpec(target: string, debug: bool): BenchWorld.Bytes
+  function SkipStdoutSpec(target: string, debug: bool): BenchWorld.Bytes
   {
     if debug then DebugSkipMessageSpec(target) else []
   }
 
-  ghost function SourceLeafNameSpec(source: string): string
+  function SourceLeafNameSpec(source: string): string
   {
     var leaf := BenchWorld.LeafName(source);
     if leaf == "" then source else leaf
@@ -632,7 +608,7 @@ module MvSpec {
       TrimTrailingSlashesSpec(source)
   }
 
-  ghost function TargetInDirectorySpec(directory: string, source: string): string
+  function TargetInDirectorySpec(directory: string, source: string): string
   {
     BenchWorld.AppendPath(directory, SourceLeafNameSpec(source))
   }
@@ -776,20 +752,6 @@ module MvSpec {
   {
   }
 
-  ghost function DigitCharSpec(d: nat): char
-    requires d < 10
-  { Basename.DigitCharSpec(d) }
-
-  ghost function DecimalNatSpec(n: nat): string
-  { Basename.DecimalNatSpec(n) }
-
-  ghost function NumberedBackupPathSpec(target: string, index: nat): string
-    requires index >= 1
-  { Basename.NumberedBackupPathSpec(target,index) }
-
-  ghost function SimpleBackupPathSpec(target: string, suffix: string): string
-  { Basename.SimpleBackupPathSpec(target,suffix) }
-
   function SourceNewerSpec(srcSec: int, srcNsec: int, dstSec: int, dstNsec: int): bool
   {
     srcSec > dstSec || (srcSec == dstSec && srcNsec > dstNsec)
@@ -808,7 +770,7 @@ module MvSpec {
     ""
   }
 
-  ghost function StepSuccessStdoutSpec(source: string, target: string, backupPath: string, verbose: bool, debug: bool): BenchWorld.Bytes
+  function StepSuccessStdoutSpec(source: string, target: string, backupPath: string, verbose: bool, debug: bool): BenchWorld.Bytes
   {
     if !ShowActionMessageSpec(verbose, debug) then
       []
@@ -880,19 +842,19 @@ module MvSpec {
       |calls| == 0
     else if backupMode == Schema.BackupExisting then
       |calls| >= 1 &&
-      StatusRequest(calls[0], fs, NumberedBackupPathSpec(target, 1), false) &&
+      StatusRequest(calls[0], fs, Basename.NumberedBackupPathSpec(target, 1), false) &&
       (if !calls[0].ok then
          |calls| == 1
        else
          |calls| >= 2 &&
          (forall i: nat | 1 <= i < |calls| ::
-            StatusRequest(calls[i], fs, NumberedBackupPathSpec(target, i), false)) &&
+            StatusRequest(calls[i], fs, Basename.NumberedBackupPathSpec(target, i), false)) &&
          (forall i: nat | 1 <= i + 1 < |calls| :: calls[i].ok) &&
          !calls[|calls| - 1].ok)
     else
       |calls| >= 1 &&
       (forall i: nat | i < |calls| ::
-         StatusRequest(calls[i], fs, NumberedBackupPathSpec(target, i + 1), false)) &&
+         StatusRequest(calls[i], fs, Basename.NumberedBackupPathSpec(target, i + 1), false)) &&
       (forall i: nat | i + 1 < |calls| :: calls[i].ok) &&
       !calls[|calls| - 1].ok
   }
@@ -1050,7 +1012,7 @@ module MvSpec {
           (collisionNeeded ==>
              StatusRequest(
                calls[afterEntries], fs,
-               SimpleBackupPathSpec(target, cmd.backupSuffix), true
+               Basename.SimpleBackupPathSpec(target, cmd.backupSuffix), true
              )) &&
           (if collisionNeeded && calls[afterEntries].ok &&
               calls[afterEntries].status.hostKey == calls[0].status.hostKey then
@@ -1116,7 +1078,7 @@ module MvSpec {
             )))
   }
 
-  ghost function ConcatenateFragments(fragments: seq<BenchWorld.Bytes>): BenchWorld.Bytes
+  function ConcatenateFragments(fragments: seq<BenchWorld.Bytes>): BenchWorld.Bytes
     decreases |fragments|
   {
     if |fragments| == 0 then
@@ -1130,10 +1092,10 @@ module MvSpec {
     start >= 1 &&
     exists index: nat, missErr: int ::
       index >= start &&
-      backupPath == NumberedBackupPathSpec(target, index) &&
+      backupPath == Basename.NumberedBackupPathSpec(target, index) &&
       StatusExistsOutcomeFields(preFs, backupPath, false, false, missErr) &&
       forall j: nat | start <= j < index ::
-        StatusExistsOutcomeFields(preFs, NumberedBackupPathSpec(target, j), false, true, 0)
+        StatusExistsOutcomeFields(preFs, Basename.NumberedBackupPathSpec(target, j), false, true, 0)
   }
 
   ghost predicate NumberedBackupTargetSpecFields(preFs: BenchWorld.FileSystem, target: string, backupPath: string)
@@ -1146,14 +1108,14 @@ module MvSpec {
     if backupMode == Schema.BackupOff then
       backupPath == ""
     else if backupMode == Schema.BackupSimple then
-      backupPath == SimpleBackupPathSpec(target, suffix)
+      backupPath == Basename.SimpleBackupPathSpec(target, suffix)
     else if backupMode == Schema.BackupExisting then
       ((exists hitErr: int ::
-          StatusExistsOutcomeFields(preFs, NumberedBackupPathSpec(target, 1), false, true, hitErr) &&
+          StatusExistsOutcomeFields(preFs, Basename.NumberedBackupPathSpec(target, 1), false, true, hitErr) &&
           NumberedBackupTargetSpecFields(preFs, target, backupPath)) ||
        (exists missErr: int ::
-          StatusExistsOutcomeFields(preFs, NumberedBackupPathSpec(target, 1), false, false, missErr) &&
-          backupPath == SimpleBackupPathSpec(target, suffix)))
+          StatusExistsOutcomeFields(preFs, Basename.NumberedBackupPathSpec(target, 1), false, false, missErr) &&
+          backupPath == Basename.SimpleBackupPathSpec(target, suffix)))
     else
       NumberedBackupTargetSpecFields(preFs, target, backupPath)
   }
@@ -1179,7 +1141,7 @@ module MvSpec {
           fs, source, false
         ) == Result.Ok(resolvedSource) &&
         IOContract.ResolvePathForMetadataFields(
-          fs, SimpleBackupPathSpec(target, cmd.backupSuffix), true
+          fs, Basename.SimpleBackupPathSpec(target, cmd.backupSuffix), true
         ) == Result.Ok(resolvedBackup) &&
         BenchWorld.InodeSameObject(
           fs, resolvedSource, resolvedBackup
@@ -1315,12 +1277,12 @@ module MvSpec {
     BackupStatusSuffix(cmd.backupMode, fs, target, calls) &&
     (if cmd.backupMode == Schema.BackupOff then path == ""
      else if cmd.backupMode == Schema.BackupSimple then
-       path == SimpleBackupPathSpec(target, cmd.backupSuffix)
+       path == Basename.SimpleBackupPathSpec(target, cmd.backupSuffix)
      else if cmd.backupMode == Schema.BackupExisting && !calls[0].ok then
-       path == SimpleBackupPathSpec(target, cmd.backupSuffix)
+       path == Basename.SimpleBackupPathSpec(target, cmd.backupSuffix)
      else if cmd.backupMode == Schema.BackupExisting then
-       |calls| >= 2 && path == NumberedBackupPathSpec(target, |calls| - 1)
-     else |calls| >= 1 && path == NumberedBackupPathSpec(target, |calls|))
+       |calls| >= 2 && path == Basename.NumberedBackupPathSpec(target, |calls| - 1)
+     else |calls| >= 1 && path == Basename.NumberedBackupPathSpec(target, |calls|))
   }
 
   ghost predicate ExistingTargetRenameEffectRelation(
@@ -2025,7 +1987,7 @@ module MvSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): BenchWorld.Bytes
+  function WriteErrorText(reason: string): BenchWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

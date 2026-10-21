@@ -89,12 +89,12 @@ module IOContract {
   import LookupProof = KernelLookup
   import RenameProof = KernelRename
 
-  ghost function AtCwdPathFields(cwd: Path, path: Path): Path
+  function AtCwdPathFields(cwd: Path, path: Path): Path
   {
     if path == "" || IsAbsolutePath(path) then path else AppendPath(BuildPath(true, PathSegments(cwd)), path)
   }
 
-  ghost function AtDirPathFields(handles: map<int, DirHandleState>, handle: int, path: Path): Path
+  function AtDirPathFields(handles: map<int, DirHandleState>, handle: int, path: Path): Path
   {
     if path == "" || IsAbsolutePath(path) then path
     else if handle in handles then AppendPath(handles[handle].path, path)
@@ -510,7 +510,7 @@ module IOContract {
 
 
 
-  ghost function GetUmaskResultFields(props: map<string, string>): bv32 { ParsedUmaskFromProps(props) }
+  function GetUmaskResultFields(props: map<string, string>): bv32 { ParsedUmaskFromProps(props) }
 
   predicate GetEnvContractFields(env: map<string, string>, key: string, r: IOResult<string>)
   {
@@ -522,14 +522,14 @@ module IOContract {
       case Ok(_) => false
   }
 
-  ghost predicate EnvironmentKey(key: string)
+  predicate EnvironmentKey(key: string)
   {
     |key| > 0 &&
     (forall i :: 0 <= i < |key| ==>
                    key[i] != '=' && key[i] != (0 as char))
   }
 
-  ghost predicate ValidEnvironment(env: map<string, string>)
+  predicate ValidEnvironment(env: map<string, string>)
   {
     forall key :: key in env ==> EnvironmentKey(key)
   }
@@ -648,12 +648,12 @@ module IOContract {
       )
   }
 
-  ghost function RawPathSegmentsFields(path: Path): seq<string>
+  function RawPathSegmentsFields(path: Path): seq<string>
   {
     SplitSegments(StripLeadingSlash(path), 0, 0)
   }
 
-  ghost function HasRawTerminalSpecialFields(path: Path): bool
+  function HasRawTerminalSpecialFields(path: Path): bool
   {
     if HasTrailingSlash(path) then
       var segments := RawPathSegmentsFields(path);
@@ -671,7 +671,7 @@ module IOContract {
        (length == 2 || path[length - 3] == '/'))
   }
 
-  ghost function IsNonRootRawEntryPathFields(path: Path): bool
+  function IsNonRootRawEntryPathFields(path: Path): bool
   {
     |RawPathSegmentsFields(path)| > 0 &&
     !HasRawTerminalSpecialFields(path)
@@ -3078,12 +3078,12 @@ module IOContract {
               StdoutTimestampUpdateFields(before.times, afterTimes, atime, mtime, now))
   }
 
-  ghost predicate ValidLeafName(name: string)
+  predicate ValidLeafName(name: string)
   {
     name != "" && !IsAbsolutePath(name) && PathSegments(name) == [name]
   }
 
-  ghost function EntryForNode(path: Path, node: FsNode): DirEntry
+  function EntryForNode(path: Path, node: FsNode): DirEntry
   {
     match node
     case Directory(_, _, _) => DirEntry(LeafName(path), true, false)
@@ -3091,7 +3091,7 @@ module IOContract {
     case _ => DirEntry(LeafName(path), false, false)
   }
 
-  ghost function InodeTreeChildNodeFields(
+  function InodeTreeChildNodeFields(
     fs: FileSystem,
     tree: InodeTree,
     name: string
@@ -3103,7 +3103,7 @@ module IOContract {
     fs.inodes[tree.children[name].id].node
   }
 
-  ghost function DirectoryEntriesForTreeFields(
+  function DirectoryEntriesForTreeFields(
     fs: FileSystem,
     tree: InodeTree
   ): set<DirEntry>
@@ -3114,7 +3114,7 @@ module IOContract {
       EntryForNode(name, InodeTreeChildNodeFields(fs, tree, name))
   }
 
-  ghost function DirectoryEntriesForPathFields(
+  function DirectoryEntriesForPathFields(
     fs: FileSystem,
     path: Path
   ): set<DirEntry>
@@ -3129,7 +3129,7 @@ module IOContract {
     DirectoryEntriesForTreeFields(fs, tree)
   }
 
-  ghost function DirectoryEntriesIncludingDotsForPathFields(
+  function DirectoryEntriesIncludingDotsForPathFields(
     fs: FileSystem,
     path: Path
   ): set<DirEntry>
@@ -4937,7 +4937,7 @@ module IOContract {
   }
 
 
-  ghost function FilesystemObjectRecordsFields(fs: FileSystem): (objects: map<HostInodeKey, InodeRecord>)
+  function FilesystemObjectRecordsFields(fs: FileSystem): (objects: map<HostInodeKey, InodeRecord>)
     ensures forall id | id in fs.inodes :: fs.inodes[id].hostKey in objects && objects[fs.inodes[id].hostKey] == fs.inodes[id]
     ensures LiveObjectRecordsFields(fs,objects)
   {
@@ -4964,7 +4964,7 @@ module IOContract {
        fs.inodes[id].hostKey in objects && objects[fs.inodes[id].hostKey] == fs.inodes[id])
   }
 
-  ghost predicate LiveRecordStatusFields(objects: map<HostInodeKey, InodeRecord>, status: FileStatus)
+  predicate LiveRecordStatusFields(objects: map<HostInodeKey, InodeRecord>, status: FileStatus)
   {
     status.hostKey in objects &&
     DirectoryStatusSameStructure(FileStatusForRecord(objects[status.hostKey]), status)
@@ -5020,8 +5020,8 @@ module IOContract {
                 topology.nodes[node.entries[name].directory[0]].pathname == [AppendPath(path,name)]))))
   }
 
-  ghost function DirectoryCapabilityNamesFields(topology: LiveDirectoryTopology,
-                                                position: DirectoryPosition, includeDots: bool): set<string>
+  function DirectoryCapabilityNamesFields(topology: LiveDirectoryTopology,
+                                          position: DirectoryPosition, includeDots: bool): set<string>
     requires position in topology.nodes
   {
     topology.nodes[position].entries.Keys + (if includeDots then {".",".."} else {})
@@ -5070,7 +5070,7 @@ module IOContract {
        |capabilities[left].descriptor| == 1 && capabilities[left].descriptor == capabilities[right].descriptor ==> left == right)
   }
 
-  ghost function DirectoryOperationErrnos(operation: DirectoryOperation): set<int>
+  function DirectoryOperationErrnos(operation: DirectoryOperation): set<int>
   {
     match operation
     case DirectoryGetCwd =>
@@ -5098,7 +5098,7 @@ module IOContract {
                                                 request.operation,request.handle,request.fd)
   }
 
-  ghost predicate DirectoryStatusSameStructure(expected: FileStatus, observed: FileStatus)
+  predicate DirectoryStatusSameStructure(expected: FileStatus, observed: FileStatus)
   {
     observed.(times := expected.times) == expected
   }
@@ -5401,7 +5401,7 @@ module IOContract {
     legacy: map<int, DirHandleState>, origins: map<int, FileSystem>,
     live: ValidDirectoryState)
 
-  ghost predicate DirectoryResourcesFields(resources: DirectoryResources)
+  predicate DirectoryResourcesFields(resources: DirectoryResources)
   {
     resources.origins.Keys <= resources.legacy.Keys &&
     resources.legacy.Keys !! resources.live.capabilities.Keys
@@ -5653,7 +5653,7 @@ module IOContract {
     DirectoryState(model,state.position,state.capabilities,state.ordinal)
   }
 
-  ghost predicate SimpleSegments(segments: seq<string>)
+  predicate SimpleSegments(segments: seq<string>)
   {
     forall i: nat | i < |segments| :: InodeChildNameValid(segments[i])
   }
@@ -6126,7 +6126,7 @@ module IOContract {
     DirectoryState(model,state.position,state.capabilities,state.ordinal)
   }
 
-  ghost function CanonicalExistingPathFields(fs: FileSystem,path: Path): (canonical: Path)
+  function CanonicalExistingPathFields(fs: FileSystem,path: Path): (canonical: Path)
     requires FsContainsPath(fs,path)
     ensures canonical == BuildPath(true,PathSegments(path))
     ensures IsAbsolutePath(canonical)
@@ -6147,30 +6147,30 @@ module IOContract {
     canonical
   }
 
-  ghost function ModeChangedRecordFields(record:InodeRecord,mode:bv32,now:int):InodeRecord
+  function ModeChangedRecordFields(record:InodeRecord,mode:bv32,now:int):InodeRecord
   {
     InodeRecordWithNode(record,WithNodeChangeTime(WithNodeMode(record.node,mode),now,0))
   }
 
-  ghost function ModeChangedRecordsFields<K>(records:map<K,InodeRecord>,key:HostInodeKey,mode:bv32,now:int):map<K,InodeRecord>
+  function ModeChangedRecordsFields<K>(records:map<K,InodeRecord>,key:HostInodeKey,mode:bv32,now:int):map<K,InodeRecord>
   {
     map id | id in records ::
       if records[id].hostKey==key then ModeChangedRecordFields(records[id],mode,now) else records[id]
   }
 
-  ghost function ModeChangedStatusFields(status:FileStatus,key:HostInodeKey,mode:bv32,now:int):FileStatus
+  function ModeChangedStatusFields(status:FileStatus,key:HostInodeKey,mode:bv32,now:int):FileStatus
   {
     if status.hostKey==key then
       status.(mode:=NormalizeMode(mode),times:=status.times.(ctimeSec:=now,ctimeNsec:=0))
     else status
   }
 
-  ghost function ModeChangedEntryFields(entry:LiveDirectoryEntry,key:HostInodeKey,mode:bv32,now:int):LiveDirectoryEntry
+  function ModeChangedEntryFields(entry:LiveDirectoryEntry,key:HostInodeKey,mode:bv32,now:int):LiveDirectoryEntry
   {
     entry.(status:=ModeChangedStatusFields(entry.status,key,mode,now))
   }
 
-  ghost function ModeChangedDirectoryFields(node:LiveDirectoryNode,key:HostInodeKey,mode:bv32,now:int):LiveDirectoryNode
+  function ModeChangedDirectoryFields(node:LiveDirectoryNode,key:HostInodeKey,mode:bv32,now:int):LiveDirectoryNode
   {
     node.(status:=ModeChangedStatusFields(node.status,key,mode,now),
     entries:=map name | name in node.entries :: ModeChangedEntryFields(node.entries[name],key,mode,now))
@@ -6481,7 +6481,7 @@ module IOContract {
      else DirectoryParentAnchorCurrentFields(fs,context.legacyHandles,context.legacyOrigins,parent))
   }
 
-  ghost function UnknownDirectoryParentErrnoFields(parent: int): int
+  function UnknownDirectoryParentErrnoFields(parent: int): int
   {
     if parent < 0 then Errno.EBADF else Errno.EINVAL
   }
@@ -6516,7 +6516,7 @@ module IOContract {
     case Ok(target) => Result.Ok(FileStatusForRecord(CwdTargetRecordFields(fs,context,target)))
   }
 
-  ghost function CwdStatusObservationPathFields(context: CwdContext, path: Path): Path
+  function CwdStatusObservationPathFields(context: CwdContext, path: Path): Path
   {
     if path == "" || IsAbsolutePath(path) || context.position !in context.topology.nodes ||
        |context.topology.nodes[context.position].pathname| == 0 then path
@@ -6899,7 +6899,7 @@ module IOContract {
       context.topology.objects[context.topology.nodes[parent].entries[name].status.hostKey]
   }
 
-  ghost function CwdTargetNamedPathFields(context: CwdContext, target: CwdTarget): seq<Path>
+  function CwdTargetNamedPathFields(context: CwdContext, target: CwdTarget): seq<Path>
   {
     match target
     case CwdNamedTarget(path) => [path]
@@ -6910,7 +6910,7 @@ module IOContract {
       then [AppendPath(context.topology.nodes[parent].pathname[0],name)] else []
   }
 
-  ghost function CwdNamedResultFields(fs: FileSystem, context: CwdContext, result: IOResult<Path>): (target: IOResult<CwdTarget>)
+  function CwdNamedResultFields(fs: FileSystem, context: CwdContext, result: IOResult<Path>): (target: IOResult<CwdTarget>)
     requires result.Ok? ==> FsContainsPath(fs,result.v) && !FsNodeAt(fs,result.v).Inaccessible?
     ensures target.Ok? ==> CwdTargetFields(fs,context,target.v)
   {

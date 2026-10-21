@@ -82,8 +82,8 @@ module RmdirSpec {
     "\n"
   }
 
-  ghost function FailureText(parent: bool, err: int, custom: bool,
-                             quoted: Bytes, reason: string): Bytes
+  function FailureText(parent: bool, err: int, custom: bool,
+                       quoted: Bytes, reason: string): Bytes
   {
     FailureTextPart1() +
     (if parent && err != Errno.ENOTDIR then FailureTextPart2() else FailureTextPart3()) + quoted +
@@ -184,7 +184,7 @@ module RmdirSpec {
     "'\nTry 'rmdir --help' for more information.\n"
   }
 
-  ghost function ParseErrorText(e: CliTypes.ParseError): Bytes
+  function ParseErrorText(e: CliTypes.ParseError): Bytes
   {
     var end := CliModel.FindChar(e.rawToken, '=');
     var name := if end < 0 then e.rawToken else e.rawToken[..end];
@@ -225,7 +225,7 @@ module RmdirSpec {
            Path.PathWithoutTrailingSlashes(path, trimmed, trailing)
   }
 
-  ghost predicate HasParent(path: string) {
+  predicate HasParent(path: string) {
     exists i, j :: 0 <= i < j < |path| && path[i] == '/' && path[j] != '/'
   }
 
@@ -378,7 +378,7 @@ module RmdirSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): Bytes
+  function WriteErrorText(reason: string): Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

@@ -1,9 +1,9 @@
+include "../../core/StringEscaping.dfy"
 include "../../core/World.dfy"
 include "../../core/Utf8.dfy"
 include "../../core/IO.dfy"
 include "ChmodSchema.dfy"
 include "ChmodSpec.dfy"
-include "ChmodQuoteSpec.dfy"
 
 module ChmodRecursiveSpec {
   import BenchWorld
@@ -11,7 +11,7 @@ module ChmodRecursiveSpec {
   import Utf8 = Utf8Semantics
   import Schema = ChmodSchema
   import Base = ChmodSpec
-  import Quote = ChmodQuoteSpec
+  import Quote = StringEscaping
   import IOC = IOContract
 
   datatype RecursiveTerminal = RecursiveEof | RecursiveReadError(err: int)
@@ -90,7 +90,7 @@ module ChmodRecursiveSpec {
     "chmod: it is dangerous to operate recursively on '/'\n"
   }
 
-  ghost function RootPreserveMessageSpec(displayPath: string, alias: bool): BenchWorld.Bytes
+  function RootPreserveMessageSpec(displayPath: string, alias: bool): BenchWorld.Bytes
   {
     if alias then
       RootPreserveMessageSpecPart1() +
@@ -116,14 +116,14 @@ module ChmodRecursiveSpec {
     "\n"
   }
 
-  ghost function ReadDirectoryMessageSpec(path: string, err: int): BenchWorld.Bytes
+  function ReadDirectoryMessageSpec(path: string, err: int): BenchWorld.Bytes
   {
     ReadDirectoryMessageSpecPart1() +
     Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ReadDirectoryMessageSpecPart2() +
     Base.ErrnoTextSpec(err) + ReadDirectoryMessageSpecPart3()
   }
 
-  ghost function DanglingSymlinkMessageSpec(path: string): BenchWorld.Bytes
+  function DanglingSymlinkMessageSpec(path: string): BenchWorld.Bytes
   {
     Base.DanglingSymlinkMessageSpec(path)
   }
@@ -143,14 +143,14 @@ module ChmodRecursiveSpec {
     "\n"
   }
 
-  ghost function CannotDereferenceMessageSpec(path: string, err: int): BenchWorld.Bytes
+  function CannotDereferenceMessageSpec(path: string, err: int): BenchWorld.Bytes
   {
     CannotDereferenceMessageSpecPart1() +
     Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + CannotDereferenceMessageSpecPart2() +
     Base.ErrnoTextSpec(err) + CannotDereferenceMessageSpecPart3()
   }
 
-  ghost function NeitherChangedMessageSpec(path: string): BenchWorld.Bytes
+  function NeitherChangedMessageSpec(path: string): BenchWorld.Bytes
   {
     Base.NeitherChangedMessageSpec(path)
   }
@@ -160,12 +160,12 @@ module ChmodRecursiveSpec {
     "chmod: -R --dereference requires either -H or -L\n"
   }
 
-  ghost function RecursiveAccessStdoutSpec(cmd: Schema.ChmodCmd, path: string): BenchWorld.Bytes
+  function RecursiveAccessStdoutSpec(cmd: Schema.ChmodCmd, path: string): BenchWorld.Bytes
   {
     if cmd.verbose then Base.AccessFailureMessageSpec(path) else []
   }
 
-  ghost function RecursiveAccessStderrSpec(
+  function RecursiveAccessStderrSpec(
     cmd: Schema.ChmodCmd,
     path: string,
     err: int,
@@ -195,12 +195,12 @@ module ChmodRecursiveSpec {
       RecursiveAccess
   }
 
-  ghost function RecursiveSkipStdoutSpec(cmd: Schema.ChmodCmd, path: string): BenchWorld.Bytes
+  function RecursiveSkipStdoutSpec(cmd: Schema.ChmodCmd, path: string): BenchWorld.Bytes
   {
     if cmd.verbose then NeitherChangedMessageSpec(path) else []
   }
 
-  ghost function RecursiveReadStdoutSpec(
+  function RecursiveReadStdoutSpec(
     cmd: Schema.ChmodCmd,
     path: string,
     terminal: RecursiveTerminal
@@ -212,7 +212,7 @@ module ChmodRecursiveSpec {
       if cmd.verbose then Base.AccessFailureMessageSpec(path) else []
   }
 
-  ghost function RecursiveReadStderrSpec(
+  function RecursiveReadStderrSpec(
     cmd: Schema.ChmodCmd,
     path: string,
     terminal: RecursiveTerminal
@@ -805,7 +805,7 @@ module ChmodRecursiveSpec {
     "\n"
   }
 
-  ghost function ReadDirectoryText(path: string, reason: string): BenchWorld.Bytes
+  function ReadDirectoryText(path: string, reason: string): BenchWorld.Bytes
   {
     ReadDirectoryTextPart1() + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) + ReadDirectoryTextPart2() + Utf8.Encode(reason) + ReadDirectoryTextPart3()
   }
@@ -825,15 +825,15 @@ module ChmodRecursiveSpec {
     "\n"
   }
 
-  ghost function TerminalReadDirectoryText(path: string, hadEntries: bool, reason: string): BenchWorld.Bytes
+  function TerminalReadDirectoryText(path: string, hadEntries: bool, reason: string): BenchWorld.Bytes
   {
     if hadEntries then
       TerminalReadDirectoryTextPart1() + Quote.SpecQuoteFBytes(Utf8.Encode(path)) + TerminalReadDirectoryTextPart2() + Utf8.Encode(reason) + TerminalReadDirectoryTextPart3()
     else ReadDirectoryText(path, reason)
   }
 
-  ghost function NativeAccessText(cmd: Schema.ChmodCmd, path: string, kind: RecursiveFailureKind,
-                                  reason: string): BenchWorld.Bytes
+  function NativeAccessText(cmd: Schema.ChmodCmd, path: string, kind: RecursiveFailureKind,
+                            reason: string): BenchWorld.Bytes
   {
     if cmd.silent then []
     else if kind.RecursiveDangling? then DanglingSymlinkMessageSpec(path)

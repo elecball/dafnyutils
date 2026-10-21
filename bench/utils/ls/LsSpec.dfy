@@ -176,7 +176,7 @@ module LsSpec {
     ghost childNativeCuts: seq<nat> := []
   )
 
-  ghost predicate DirectoryOperationFailed(trace: DirectoryTrace, readErr: int)
+  predicate DirectoryOperationFailed(trace: DirectoryTrace, readErr: int)
   {
     trace.DirectoryTrace? && (!trace.openOk || readErr != 0 || trace.closeErr != 0)
   }
@@ -426,7 +426,7 @@ module LsSpec {
     "\n"
   }
 
-  ghost function AccessErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
+  function AccessErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     AccessErrorMessageSpecPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
     AccessErrorMessageSpecPart2() + ErrnoTextSpec(err) + AccessErrorMessageSpecPart3()
@@ -447,7 +447,7 @@ module LsSpec {
     "\n"
   }
 
-  ghost function ReadLinkErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
+  function ReadLinkErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     if err == 0 then []
     else
@@ -460,7 +460,7 @@ module LsSpec {
     !observation.ok || observation.linkErr != 0
   }
 
-  ghost function EntryErrorTextSpec(path: BenchWorld.Path, observation: EntryObservation): BenchWorld.Bytes
+  function EntryErrorTextSpec(path: BenchWorld.Path, observation: EntryObservation): BenchWorld.Bytes
   {
     if !observation.ok then AccessErrorMessageSpec(path, observation.err)
     else ReadLinkErrorMessageSpec(path, observation.linkErr)
@@ -481,7 +481,7 @@ module LsSpec {
     "\n"
   }
 
-  ghost function ReadDirectoryErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
+  function ReadDirectoryErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     ReadDirectoryErrorMessageSpecPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
     ReadDirectoryErrorMessageSpecPart2() + ErrnoTextSpec(err) + ReadDirectoryErrorMessageSpecPart3()
@@ -502,7 +502,7 @@ module LsSpec {
     "\n"
   }
 
-  ghost function CloseDirectoryErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
+  function CloseDirectoryErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     if err == 0 then []
     else
@@ -680,7 +680,7 @@ module LsSpec {
     "\n"
   }
 
-  ghost function OpenDirectoryErrorMessageSpec(displayPath: BenchWorld.Path, err: int): BenchWorld.Bytes
+  function OpenDirectoryErrorMessageSpec(displayPath: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     OpenDirectoryErrorMessageSpecPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(displayPath)) +
     OpenDirectoryErrorMessageSpecPart2() + ErrnoTextSpec(err) + OpenDirectoryErrorMessageSpecPart3()
@@ -701,7 +701,7 @@ module LsSpec {
     "\n"
   }
 
-  ghost function DirectoryIdentityErrorMessageSpec(displayPath: BenchWorld.Path, err: int): BenchWorld.Bytes
+  function DirectoryIdentityErrorMessageSpec(displayPath: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     DirectoryIdentityErrorMessageSpecPart1() +
     SE.SpecQuoteAfBytes(Utf8.Encode(displayPath)) +
@@ -713,7 +713,7 @@ module LsSpec {
     ":\n"
   }
 
-  ghost opaque function DirectoryHeaderSpec(displayPath: BenchWorld.Path): BenchWorld.Bytes
+  opaque function DirectoryHeaderSpec(displayPath: BenchWorld.Path): BenchWorld.Bytes
   {
     Utf8.Encode(displayPath) + DirectoryHeaderSpecPart1()
   }
@@ -798,7 +798,7 @@ module LsSpec {
     "  - +FORMAT (e.g., +%H:%M) for a 'date'-style format\n"
   }
 
-  ghost function InvalidModeMessageSpec(mode: Schema.LsMode): BenchWorld.Bytes
+  function InvalidModeMessageSpec(mode: Schema.LsMode): BenchWorld.Bytes
   {
     match mode
     case ModeInvalidBlockSize(value) =>
@@ -825,36 +825,14 @@ module LsSpec {
     case _ => []
   }
 
-  function DigitChar(d: nat): char
-    requires d < 10
-  {
-    if d == 0 then '0'
-    else if d == 1 then '1'
-    else if d == 2 then '2'
-    else if d == 3 then '3'
-    else if d == 4 then '4'
-    else if d == 5 then '5'
-    else if d == 6 then '6'
-    else if d == 7 then '7'
-    else if d == 8 then '8'
-    else '9'
-  }
-
-  ghost function NatTextSpec(n: nat): string
-    decreases n
-  {
-    if n < 10 then [DigitChar(n)]
-    else NatTextSpec(n / 10) + [DigitChar(n % 10)]
-  }
-
   function IntTextSpecPart1(): StreamWorld.Bytes
   {
     "-"
   }
 
-  ghost function IntTextSpec(n: int): string
+  function IntTextSpec(n: int): string
   {
-    if n < 0 then IntTextSpecPart1() + NatTextSpec((-n) as nat) else NatTextSpec(n as nat)
+    if n < 0 then IntTextSpecPart1() + Time.NatText((-n) as nat) else Time.NatText(n as nat)
   }
 
   function ParsedPositiveOrZeroSpec(text: string): nat
@@ -945,7 +923,7 @@ module LsSpec {
     case SocketKind => 's'
   }
 
-  ghost function ModeTextSpec(status: BenchWorld.FileStatus): string
+  function ModeTextSpec(status: BenchWorld.FileStatus): string
   {
     [KindCharSpec(status.kind),
      PermissionCharSpec(status.mode, 256 as bv32, 'r'),
@@ -969,7 +947,7 @@ module LsSpec {
     MaximumModel.MaximumWidth(values)
   }
 
-  ghost function PadColumn(text: string, width: nat, right: bool): string
+  function PadColumn(text: string, width: nat, right: bool): string
   {
     var blanks := seq((if width > |text| then width - |text| else 0), i => ' ');
     if right then blanks + text else text + blanks
@@ -978,11 +956,11 @@ module LsSpec {
   ghost function StatusWidthsSpec(cmd: Schema.LsCmd, statuses: set<BenchWorld.FileStatus>): ColumnWidths
   {
     ColumnWidths(
-      MaximumWidth(set status <- statuses :: |NatTextSpec(DisplayedBlocksSpec(status.storage.allocatedBlocks, cmd.cliBlockSize))|),
-      MaximumWidth(set status <- statuses :: |NatTextSpec(status.linkCount)|),
-      MaximumWidth(set status <- statuses :: |NatTextSpec(status.ownership.uid)|),
-      MaximumWidth(set status <- statuses :: |NatTextSpec(status.ownership.gid)|),
-      MaximumWidth(set status <- statuses :: |NatTextSpec(DisplayedFileSizeSpec(status.storage.size, cmd.fileSizeBlockSize))|))
+      MaximumWidth(set status <- statuses :: |Time.NatText(DisplayedBlocksSpec(status.storage.allocatedBlocks, cmd.cliBlockSize))|),
+      MaximumWidth(set status <- statuses :: |Time.NatText(status.linkCount)|),
+      MaximumWidth(set status <- statuses :: |Time.NatText(status.ownership.uid)|),
+      MaximumWidth(set status <- statuses :: |Time.NatText(status.ownership.gid)|),
+      MaximumWidth(set status <- statuses :: |Time.NatText(DisplayedFileSizeSpec(status.storage.size, cmd.fileSizeBlockSize))|))
   }
 
   ghost function ObservationWidthsSpec(cmd: Schema.LsCmd, observations: seq<EntryObservation>): ColumnWidths
@@ -1002,7 +980,7 @@ module LsSpec {
                            OperandWidthsSpec(cmd, observations))
   }
 
-  ghost function RenderEntrySpec(cmd: Schema.LsCmd, displayName: string, status: BenchWorld.FileStatus): BenchWorld.Bytes
+  function RenderEntrySpec(cmd: Schema.LsCmd, displayName: string, status: BenchWorld.FileStatus): BenchWorld.Bytes
   {
     RenderAlignedEntrySpec(cmd, displayName, status, ColumnWidths(0, 0, 0, 0, 0))
   }
@@ -1022,7 +1000,7 @@ module LsSpec {
     "\n"
   }
 
-  ghost function RenderAlignedEntrySpec(
+  function RenderAlignedEntrySpec(
     cmd: Schema.LsCmd,
     displayName: string,
     status: BenchWorld.FileStatus,
@@ -1030,17 +1008,17 @@ module LsSpec {
   ): BenchWorld.Bytes
   {
     var blockPrefix := if cmd.showBlocks then
-                         PadColumn(NatTextSpec(DisplayedBlocksSpec(status.storage.allocatedBlocks, cmd.cliBlockSize)), widths.blocks, true) + RenderAlignedEntrySpecPart1()
+                         PadColumn(Time.NatText(DisplayedBlocksSpec(status.storage.allocatedBlocks, cmd.cliBlockSize)), widths.blocks, true) + RenderAlignedEntrySpecPart1()
                        else RenderAlignedEntrySpecPart2();
     Utf8.Encode(blockPrefix + if !cmd.numericLong then
                   displayName + RenderAlignedEntrySpecPart3()
                 else
                   ModeTextSpec(status) + RenderAlignedEntrySpecPart1() +
-                  PadColumn(NatTextSpec(status.linkCount), widths.links, true) + RenderAlignedEntrySpecPart1() +
-                  PadColumn(NatTextSpec(status.ownership.uid), widths.owner, true) + RenderAlignedEntrySpecPart1() +
-                  PadColumn(NatTextSpec(status.ownership.gid), widths.group, true) + RenderAlignedEntrySpecPart1() +
-                  PadColumn(NatTextSpec(DisplayedFileSizeSpec(
-                                          status.storage.size, cmd.fileSizeBlockSize)), widths.size, true) + RenderAlignedEntrySpecPart1() +
+                  PadColumn(Time.NatText(status.linkCount), widths.links, true) + RenderAlignedEntrySpecPart1() +
+                  PadColumn(Time.NatText(status.ownership.uid), widths.owner, true) + RenderAlignedEntrySpecPart1() +
+                  PadColumn(Time.NatText(status.ownership.gid), widths.group, true) + RenderAlignedEntrySpecPart1() +
+                  PadColumn(Time.NatText(DisplayedFileSizeSpec(
+                                           status.storage.size, cmd.fileSizeBlockSize)), widths.size, true) + RenderAlignedEntrySpecPart1() +
                   TimeTextSpec(cmd, SelectedSecondsSpec(cmd, status),
                                SelectedNanosecondsSpec(cmd, status)) + RenderAlignedEntrySpecPart1() +
                   displayName + RenderAlignedEntrySpecPart3())
@@ -1103,7 +1081,7 @@ module LsSpec {
     "\n"
   }
 
-  ghost function RenderFailedEntrySpec(
+  function RenderFailedEntrySpec(
     cmd: Schema.LsCmd, observation: EntryObservation, widths: ColumnWidths
   ): BenchWorld.Bytes
   {
@@ -1118,7 +1096,7 @@ module LsSpec {
                           else RenderFailedEntrySpecPart3()) + observation.displayName + RenderFailedEntrySpecPart5())
   }
 
-  ghost function EntryDiagnosticPathSpec(displayPath: BenchWorld.Path, name: string): BenchWorld.Path
+  function EntryDiagnosticPathSpec(displayPath: BenchWorld.Path, name: string): BenchWorld.Path
   {
     if displayPath == "." then name
     else if |displayPath| > 0 && displayPath[|displayPath| - 1] == '/' then displayPath + name
@@ -1138,7 +1116,7 @@ module LsSpec {
     MaximumWidth(set i: nat | i < |observations| :: OperandFailureExitSpec(observations[i]))
   }
 
-  ghost function TimeTextSpec(cmd: Schema.LsCmd, seconds: int, nanoseconds: int): string
+  function TimeTextSpec(cmd: Schema.LsCmd, seconds: int, nanoseconds: int): string
   {
     match cmd.timeStyle
     case EpochSeconds => IntTextSpec(seconds)
@@ -1167,16 +1145,16 @@ module LsSpec {
     "\n"
   }
 
-  ghost function TotalLineSpec(cmd: Schema.LsCmd, observations: seq<EntryObservation>): BenchWorld.Bytes
+  function TotalLineSpec(cmd: Schema.LsCmd, observations: seq<EntryObservation>): BenchWorld.Bytes
   {
     if cmd.numericLong || cmd.showBlocks then
-      Utf8.Encode(TotalLineSpecPart1() + NatTextSpec(
+      Utf8.Encode(TotalLineSpecPart1() + Time.NatText(
                     DisplayedBlocksSpec(AllocatedBlocksSumSpec(observations), cmd.cliBlockSize)) + TotalLineSpecPart2())
     else
       []
   }
 
-  ghost function MakeAbsoluteSpec(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
+  function MakeAbsoluteSpec(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
   {
     if path == "" || BenchWorld.IsAbsolutePath(path) then path
     else BenchWorld.AppendPath(cwd, path)
@@ -1674,7 +1652,7 @@ module LsSpec {
                    exists i: nat :: i < |observations| && ObservationFailedSpec(observations[i]))
   }
 
-  ghost function ChildDisplayPath(displayPath: BenchWorld.Path, name: string): BenchWorld.Path
+  function ChildDisplayPath(displayPath: BenchWorld.Path, name: string): BenchWorld.Path
   {
     TrailingSlashCutExists(displayPath);
     var cut: nat :| cut <= |displayPath| && TrailingSlashCut(displayPath, cut);
@@ -1711,7 +1689,7 @@ module LsSpec {
     ": not listing already-listed directory\n"
   }
 
-  ghost function RecursiveCycleMessageSpec(displayPath: BenchWorld.Path): BenchWorld.Bytes
+  function RecursiveCycleMessageSpec(displayPath: BenchWorld.Path): BenchWorld.Bytes
   {
     RecursiveCycleMessageSpecPart1() + SE.SpecQuoteFBytes(Utf8.Encode(displayPath)) +
     RecursiveCycleMessageSpecPart2()
@@ -2239,7 +2217,7 @@ module LsSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

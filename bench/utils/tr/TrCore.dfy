@@ -1,13 +1,10 @@
-include "TrTextCore.dfy"
+include "TrSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "TrSchema.dfy"
-include "TrSpec.dfy"
 
 module TrCore {
-  import Text = TrTextCore
-
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -18,7 +15,6 @@ module TrCore {
   import TrSchema
   import Schema = TrSchema
   import Spec = TrSpec
-  import Utf8 = TrUtf8Core
 
   datatype TrMode =
     | ModeRun
@@ -42,80 +38,11 @@ module TrCore {
   type SetDecode = Result.Result<BenchWorld.Bytes, string>
   datatype SetAtom = SetAtom(next: nat, bytes: BenchWorld.Bytes)
 
-  function IsOctal(ch: char): bool
-  {
-    '0' <= ch <= '7'
-  }
-
-  function OctalValue(ch: char): int
-    requires IsOctal(ch)
-  {
-    ch as int - '0' as int
-  }
-
-  function SimpleEscape(ch: char): char
-  {
-    if ch == 'a' then 7 as char
-    else if ch == 'b' then 8 as char
-    else if ch == 'f' then 12 as char
-    else if ch == 'n' then '\n'
-    else if ch == 'r' then '\r'
-    else if ch == 't' then '\t'
-    else if ch == 'v' then 11 as char
-    else ch
-  }
-
-  function EscapeBytes(ch: char): BenchWorld.Bytes
-  {
-    if ch == 'a' || ch == 'b' || ch == 'f' || ch == 'n' ||
-       ch == 'r' || ch == 't' || ch == 'v' then
-      [SimpleEscape(ch)]
-    else
-      Utf8.EncodeChar(ch)
-  }
-
   function AtomAt(text: string, i: nat): SetAtom
     requires i < |text|
     ensures i < AtomAt(text, i).next <= |text|
   {
-    if text[i] != '\\' then
-      SetAtom(i + 1, Utf8.EncodeChar(text[i]))
-    else if i + 1 == |text| then
-      SetAtom(i + 1, ['\\'])
-    else if IsOctal(text[i + 1]) then
-      if i + 2 < |text| && IsOctal(text[i + 2]) then
-        if i + 3 < |text| && IsOctal(text[i + 3]) &&
-           OctalValue(text[i + 1]) < 4 then
-          SetAtom(i + 4, [((OctalValue(text[i + 1]) * 64 +
-                            OctalValue(text[i + 2]) * 8 +
-                            OctalValue(text[i + 3])) as char)])
-        else
-          SetAtom(i + 3, [((OctalValue(text[i + 1]) * 8 +
-                            OctalValue(text[i + 2])) as char)])
-      else
-        SetAtom(i + 2, [(OctalValue(text[i + 1]) as char)])
-    else
-      SetAtom(i + 2, EscapeBytes(text[i + 1]))
-  } by method {
-    if text[i] != '\\' {
-      return SetAtom(i + 1, Utf8.EncodeChar(text[i]));
-    }
-    if i + 1 == |text| {
-      return SetAtom(i + 1, ['\\']);
-    }
-    if IsOctal(text[i + 1]) {
-      var first := OctalValue(text[i + 1]);
-      if i + 2 < |text| && IsOctal(text[i + 2]) {
-        var second := OctalValue(text[i + 2]);
-        if i + 3 < |text| && IsOctal(text[i + 3]) && first < 4 {
-          return SetAtom(i + 4, [((first * 64 + second * 8 +
-                                   OctalValue(text[i + 3])) as char)]);
-        }
-        return SetAtom(i + 3, [((first * 8 + second) as char)]);
-      }
-      return SetAtom(i + 2, [(first as char)]);
-    }
-    return SetAtom(i + 2, EscapeBytes(text[i + 1]));
+    SetAtom(Spec.AtomNext(text, i), Spec.AtomBytes(text, i))
   }
 
   function WarningBytesFrom(text: string, i: nat): BenchWorld.Bytes
@@ -123,39 +50,14 @@ module TrCore {
     decreases |text| - i
   {
     if i == |text| then []
-    else Text.WarningAtSpec(text, i) +
+    else Spec.WarningAtSpec(text, i) +
          WarningBytesFrom(text, AtomAt(text, i).next)
   } by method {
     if i == |text| {
       return [];
     }
     var atom := AtomAt(text, i);
-    return Text.WarningAtSpec(text, i) + WarningBytesFrom(text, atom.next);
-  }
-
-  function ContainsPairFrom(text: string, i: nat, first: char, second: char): bool
-    requires i <= |text|
-    decreases |text| - i
-  {
-    (i + 1 < |text| && text[i] == first && text[i + 1] == second) ||
-    (i < |text| && ContainsPairFrom(text, i + 1, first, second))
-  }
-
-  function ContainsCharFrom(text: string, i: nat, target: char): bool
-    requires i <= |text|
-    decreases |text| - i
-  {
-    i < |text| && (text[i] == target || ContainsCharFrom(text, i + 1, target))
-  }
-
-  function StartsUnsupportedConstruct(text: string, i: nat): bool
-    requires i <= |text|
-  {
-    i < |text| && text[i] == '[' && (
-      (i + 1 < |text| && text[i + 1] == ':' && ContainsPairFrom(text, i + 2, ':', ']')) ||
-      (i + 1 < |text| && text[i + 1] == '=' && ContainsPairFrom(text, i + 2, '=', ']')) ||
-      (i + 2 < |text| && text[i + 2] == '*' && ContainsCharFrom(text, i + 3, ']'))
-    )
+    return Spec.WarningAtSpec(text, i) + WarningBytesFrom(text, atom.next);
   }
 
   function RangeChars(lo: char, hi: char): BenchWorld.Bytes
@@ -176,7 +78,7 @@ module TrCore {
   {
     if i == |text| then
       Result.Ok([])
-    else if StartsUnsupportedConstruct(text, i) then
+    else if Spec.StartsUnsupportedConstruct(text[i..]) then
       Result.Err(text)
     else
       var atom := AtomAt(text, i);
@@ -197,7 +99,7 @@ module TrCore {
   } by method {
     if i == |text| {
       return Result.Ok([]);
-    } else if StartsUnsupportedConstruct(text, i) {
+    } else if Spec.StartsUnsupportedConstruct(text[i..]) {
       return Result.Err(text);
     } else {
       var atom := AtomAt(text, i);
@@ -281,9 +183,9 @@ module TrCore {
       else if |raw.operands| == 0 then
         ModeMissingOperand(Spec.MissingOperandMessageSpec())
       else if !raw.seenDelete && !raw.seenSqueeze && |raw.operands| == 1 then
-        ModeMissingOperand(Text.MissingSet2MessageSpec(raw.operands[0], false))
+        ModeMissingOperand(Spec.MissingSet2MessageSpec(raw.operands[0], false))
       else if raw.seenDelete && raw.seenSqueeze && |raw.operands| == 1 then
-        ModeMissingOperand(Text.MissingSet2MessageSpec(raw.operands[0], true))
+        ModeMissingOperand(Spec.MissingSet2MessageSpec(raw.operands[0], true))
       else if raw.seenDelete && !raw.seenSqueeze && |raw.operands| > 1 then
         ModeExtraOperand(raw.operands[1])
       else if |raw.operands| > 2 then
@@ -321,9 +223,9 @@ module TrCore {
       else if |raw.operands| == 0 then
         ModeMissingOperand(Spec.MissingOperandMessageSpec())
       else if !raw.seenDelete && !raw.seenSqueeze && |raw.operands| == 1 then
-        ModeMissingOperand(Text.MissingSet2MessageSpec(raw.operands[0], false))
+        ModeMissingOperand(Spec.MissingSet2MessageSpec(raw.operands[0], false))
       else if raw.seenDelete && raw.seenSqueeze && |raw.operands| == 1 then
-        ModeMissingOperand(Text.MissingSet2MessageSpec(raw.operands[0], true))
+        ModeMissingOperand(Spec.MissingSet2MessageSpec(raw.operands[0], true))
       else if raw.seenDelete && !raw.seenSqueeze && |raw.operands| > 1 then
         ModeExtraOperand(raw.operands[1])
       else if |raw.operands| > 2 then
@@ -490,13 +392,13 @@ module TrCore {
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) &&
       plannedStderr == old(io.stderr()) +
-      Text.ExtraOperandMessageSpec(operand, |raw.operands| == 2) &&
+      Spec.ExtraOperandMessageSpec(operand, |raw.operands| == 2) &&
       exit == 1
     case ModeUnsupportedSet(operand) =>
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) &&
       plannedStderr == old(io.stderr()) + cmd.warnings +
-      Text.UnsupportedSetMessageSpec(operand) &&
+      Spec.UnsupportedSetMessageSpec(operand) &&
       exit == 1
     case ModeEmptySet2 =>
       io.stdin() == old(io.stdin()) &&
@@ -553,13 +455,13 @@ module TrCore {
         assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
         return;
       case ModeExtraOperand(operand) =>
-        plannedStderr := plannedStderr + (Text.ExtraOperandMessageSpec(operand, |raw.operands| == 2));
+        plannedStderr := plannedStderr + (Spec.ExtraOperandMessageSpec(operand, |raw.operands| == 2));
         exit := 1;
         assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
         return;
       case ModeUnsupportedSet(operand) =>
         plannedStderr := plannedStderr + (cmd.warnings);
-        plannedStderr := plannedStderr + (Text.UnsupportedSetMessageSpec(operand));
+        plannedStderr := plannedStderr + (Spec.UnsupportedSetMessageSpec(operand));
         exit := 1;
         assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
         return;
@@ -576,8 +478,8 @@ module TrCore {
         plannedStdout := plannedStdout + (out);
         if read.Err? {
           var reason := io.GetCLocaleErrnoText(IOContract.ResultErrno(read));
-          plannedStderr := plannedStderr + (Text.ReadErrorText(reason));
-          assert Text.ReadErrorText(reason) == Spec.ReadError(IOContract.ResultErrno(read)) by {
+          plannedStderr := plannedStderr + (Spec.ReadErrorText(reason));
+          assert Spec.ReadErrorText(reason) == Spec.ReadError(IOContract.ResultErrno(read)) by {
             reveal Spec.ReadError();
           }
         }
@@ -604,11 +506,11 @@ module TrCore {
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
       finalDiagnostics := diagnostics + (if normalExit != 0 then
-                                           Spec.WriteErrorAfterReadFailure() else Text.WriteErrorText(reason));
+                                           Spec.WriteErrorAfterReadFailure() else Spec.WriteErrorText(reason));
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
                                               else if normalExit != 0 then Spec.WriteErrorAfterReadFailure()
-                                              else Text.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {

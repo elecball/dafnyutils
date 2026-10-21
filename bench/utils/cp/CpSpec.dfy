@@ -48,7 +48,7 @@ module CpSpec {
     case InvalidBackup(value,_,_) => value
     case _ => ""
   }
-  ghost function ConfigurationDiagnostic(error: S.CpError): BW.Bytes
+  function ConfigurationDiagnostic(error: S.CpError): BW.Bytes
   {
     ConfigurationError(error,SE.SpecLocaleQuoteBytes(Utf8.Encode(ErrorArgument(error))))
   }
@@ -124,7 +124,7 @@ module CpSpec {
     "' is ambiguous\n"
   }
 
-  ghost function ParseErrorText(error: CliTypes.ParseError): BW.Bytes
+  function ParseErrorText(error: CliTypes.ParseError): BW.Bytes
   {
     if error.kind == CliTypes.UnknownOption then
       if |error.rawToken| > 2 && error.rawToken[..2] == ParseErrorTextPart1() then
@@ -157,7 +157,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function CannotStat(path: BW.Bytes, reason: string): BW.Bytes
+  function CannotStat(path: BW.Bytes, reason: string): BW.Bytes
   {
     CannotStatPart1() + path + CannotStatPart2() + Utf8.Encode(reason) + CannotStatPart3()
   }
@@ -180,7 +180,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function CannotCreate(target: BW.Bytes, reason: string): BW.Bytes
+  function CannotCreate(target: BW.Bytes, reason: string): BW.Bytes
   {
     CannotCreatePart1() + target + CannotCreatePart2() + Utf8.Encode(reason) + CannotCreatePart3()
   }
@@ -199,7 +199,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function CannotOpen(source: BW.Bytes, reason: string): BW.Bytes
+  function CannotOpen(source: BW.Bytes, reason: string): BW.Bytes
   {
     CannotOpenPart1() + source + CannotOpenPart2() + Utf8.Encode(reason) + CannotOpenPart3()
   }
@@ -218,7 +218,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function ReadError(source: BW.Bytes, reason: string): BW.Bytes
+  function ReadError(source: BW.Bytes, reason: string): BW.Bytes
   {
     ReadErrorPart1() + source + ReadErrorPart2() + Utf8.Encode(reason) + ReadErrorPart3()
   }
@@ -237,7 +237,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function WriteError(target: BW.Bytes, reason: string): BW.Bytes
+  function WriteError(target: BW.Bytes, reason: string): BW.Bytes
   {
     WriteErrorPart1() + target + WriteErrorPart2() + Utf8.Encode(reason) + WriteErrorPart3()
   }
@@ -256,7 +256,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function CloseError(target: BW.Bytes, reason: string): BW.Bytes
+  function CloseError(target: BW.Bytes, reason: string): BW.Bytes
   {
     CloseErrorPart1() + target + CloseErrorPart2() + Utf8.Encode(reason) + CloseErrorPart3()
   }
@@ -275,7 +275,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function CannotRemove(target: BW.Bytes, reason: string): BW.Bytes
+  function CannotRemove(target: BW.Bytes, reason: string): BW.Bytes
   {
     CannotRemovePart1() + target + CannotRemovePart2() + Utf8.Encode(reason) + CannotRemovePart3()
   }
@@ -303,7 +303,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function TargetError(target: BW.Bytes, reason: string): BW.Bytes
+  function TargetError(target: BW.Bytes, reason: string): BW.Bytes
   {
     TargetErrorPart1() + target + TargetErrorPart2() + Utf8.Encode(reason) + TargetErrorPart3()
   }
@@ -322,7 +322,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function DirectoryError(target: BW.Bytes, reason: string): BW.Bytes
+  function DirectoryError(target: BW.Bytes, reason: string): BW.Bytes
   {
     DirectoryErrorPart1() + target + DirectoryErrorPart2() + Utf8.Encode(reason) + DirectoryErrorPart3()
   }
@@ -345,7 +345,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function CreateDirectoryError(target: BW.Bytes, reason: string): BW.Bytes
+  function CreateDirectoryError(target: BW.Bytes, reason: string): BW.Bytes
   {
     CreateDirectoryErrorPart1() + target + CreateDirectoryErrorPart2() + Utf8.Encode(reason) + CreateDirectoryErrorPart3()
   }
@@ -364,7 +364,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function ReadDirectoryError(source: BW.Bytes, reason: string): BW.Bytes
+  function ReadDirectoryError(source: BW.Bytes, reason: string): BW.Bytes
   {
     ReadDirectoryErrorPart1() + source + ReadDirectoryErrorPart2() + Utf8.Encode(reason) + ReadDirectoryErrorPart3()
   }
@@ -393,7 +393,7 @@ module CpSpec {
     "cp: cannot create hard link "
   }
 
-  ghost function LinkError(source: BW.Bytes, target: BW.Bytes, reason: string, symbolic: bool): BW.Bytes
+  function LinkError(source: BW.Bytes, target: BW.Bytes, reason: string, symbolic: bool): BW.Bytes
   {
     if symbolic then LinkErrorPart1() + target + LinkErrorPart2() + source + LinkErrorPart3() + Utf8.Encode(reason) + LinkErrorPart4()
     else LinkErrorPart5() + target + LinkErrorPart2() + source + LinkErrorPart3() + Utf8.Encode(reason) + LinkErrorPart4()
@@ -413,7 +413,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function CopiedSymlinkError(target: BW.Bytes, reason: string): BW.Bytes
+  function CopiedSymlinkError(target: BW.Bytes, reason: string): BW.Bytes
   {
     CopiedSymlinkErrorPart1() + target + CopiedSymlinkErrorPart2() + Utf8.Encode(reason) + CopiedSymlinkErrorPart3()
   }
@@ -432,7 +432,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function ReadSymlinkError(source: BW.Bytes, reason: string): BW.Bytes
+  function ReadSymlinkError(source: BW.Bytes, reason: string): BW.Bytes
   {
     ReadSymlinkErrorPart1() + source + ReadSymlinkErrorPart2() + Utf8.Encode(reason) + ReadSymlinkErrorPart3()
   }
@@ -446,7 +446,7 @@ module CpSpec {
     ": can make relative symbolic links only in current directory\n"
   }
 
-  ghost function RelativeSymlinkError(target: string): BW.Bytes
+  function RelativeSymlinkError(target: string): BW.Bytes
   {
     RelativeSymlinkErrorPart1() + SE.SpecQuoteFBytes(Utf8.Encode(target)) + RelativeSymlinkErrorPart2()
   }
@@ -467,7 +467,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function ModeError(target: BW.Bytes, reason: string): BW.Bytes
+  function ModeError(target: BW.Bytes, reason: string): BW.Bytes
   {
     ModeErrorPart1() + target + ModeErrorPart2() + Utf8.Encode(reason) + ModeErrorPart3()
   }
@@ -486,7 +486,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function TimeError(target: BW.Bytes, reason: string): BW.Bytes
+  function TimeError(target: BW.Bytes, reason: string): BW.Bytes
   {
     TimeErrorPart1() + target + TimeErrorPart2() + Utf8.Encode(reason) + TimeErrorPart3()
   }
@@ -500,7 +500,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function StdoutError(reason: string): BW.Bytes
+  function StdoutError(reason: string): BW.Bytes
   { StdoutErrorPart1() + Utf8.Encode(reason) + StdoutErrorPart2() }
 
   function EnvironmentValue(env: map<string,string>, key: string): string { if key in env then env[key] else "" }
@@ -823,7 +823,7 @@ module CpSpec {
       LeafOutcome(raw,source,target,sm,tm,attributes,before,after,props,now,credentials,provider,streams,reported,observed)
   }
 
-  ghost predicate NumberedVersion(base: string, name: string, version: nat) {
+  predicate NumberedVersion(base: string, name: string, version: nat) {
     version > 0 && name == base + ".~" + Paths.DecimalNatSpec(version) + "~"
   }
 
@@ -868,7 +868,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function CannotBackup(target: BW.Bytes, reason: string): BW.Bytes
+  function CannotBackup(target: BW.Bytes, reason: string): BW.Bytes
   { CannotBackupPart1() + target + CannotBackupPart2() + Utf8.Encode(reason) + CannotBackupPart3() }
   function CannotUnbackupPart1(): BW.Bytes
   {
@@ -885,7 +885,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function CannotUnbackup(target: BW.Bytes, reason: string): BW.Bytes
+  function CannotUnbackup(target: BW.Bytes, reason: string): BW.Bytes
   { CannotUnbackupPart1() + target + CannotUnbackupPart2() + Utf8.Encode(reason) + CannotUnbackupPart3() }
   function BackupDestroysSource(source: BW.Bytes, target: BW.Bytes): BW.Bytes {
     "cp: backing up " + target + " might destroy source;  " + source + " not copied\n"
@@ -994,7 +994,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function ParentVerbose(source: string, target: string): BW.Bytes
+  function ParentVerbose(source: string, target: string): BW.Bytes
   {
     Utf8.Encode(source) + ParentVerbosePart1() + Utf8.Encode(target) + ParentVerbosePart2()
   }
@@ -1013,7 +1013,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function ParentAttributesError(path: BW.Bytes, reason: string): BW.Bytes
+  function ParentAttributesError(path: BW.Bytes, reason: string): BW.Bytes
   {
     ParentAttributesErrorPart1() + path + ParentAttributesErrorPart2() + Utf8.Encode(reason) + ParentAttributesErrorPart3()
   }
@@ -1032,7 +1032,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function ParentCreateError(path: BW.Bytes, reason: string): BW.Bytes
+  function ParentCreateError(path: BW.Bytes, reason: string): BW.Bytes
   {
     ParentCreateErrorPart1() + path + ParentCreateErrorPart2() + Utf8.Encode(reason) + ParentCreateErrorPart3()
   }
@@ -1052,7 +1052,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function ParentSetModeError(path: BW.Bytes, reason: string): BW.Bytes
+  function ParentSetModeError(path: BW.Bytes, reason: string): BW.Bytes
   {
     ParentSetModeErrorPart1() + path + ParentSetModeErrorPart2() + Utf8.Encode(reason) + ParentSetModeErrorPart3()
   }
@@ -1071,7 +1071,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function ParentTimeError(path: BW.Bytes, reason: string): BW.Bytes
+  function ParentTimeError(path: BW.Bytes, reason: string): BW.Bytes
   {
     ParentTimeErrorPart1() + path + ParentTimeErrorPart2() + Utf8.Encode(reason) + ParentTimeErrorPart3()
   }
@@ -1090,7 +1090,7 @@ module CpSpec {
     "\n"
   }
 
-  ghost function ParentModeError(path: BW.Bytes, reason: string): BW.Bytes
+  function ParentModeError(path: BW.Bytes, reason: string): BW.Bytes
   {
     ParentModeErrorPart1() + path + ParentModeErrorPart2() + Utf8.Encode(reason) + ParentModeErrorPart3()
   }

@@ -104,10 +104,16 @@ module TouchSpec {
     "\n"
   }
 
+  function PathErrorMessageText(prefix: string, quoted: BenchWorld.Bytes,
+                                reason: string): BenchWorld.Bytes
+  {
+    Utf8.Encode(prefix) + quoted +
+    Utf8.Encode(TouchErrorMessageSpecPart2() + reason + TouchErrorMessageSpecPart3())
+  }
+
   ghost function TouchErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
-    Utf8.Encode(TouchErrorMessageSpecPart1()) + QuotedPathSpec(path)
-    + Utf8.Encode(TouchErrorMessageSpecPart2() + ErrnoTextSpec(err) + TouchErrorMessageSpecPart3())
+    PathErrorMessageText(TouchErrorMessageSpecPart1(), QuotedPathSpec(path), ErrnoTextSpec(err))
   }
 
   function ReferenceErrorMessageSpecPart1(): StreamWorld.Bytes
@@ -115,20 +121,9 @@ module TouchSpec {
     "touch: failed to get attributes of "
   }
 
-  function ReferenceErrorMessageSpecPart2(): StreamWorld.Bytes
-  {
-    ": "
-  }
-
-  function ReferenceErrorMessageSpecPart3(): StreamWorld.Bytes
-  {
-    "\n"
-  }
-
   ghost function ReferenceErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
-    Utf8.Encode(ReferenceErrorMessageSpecPart1()) + QuotedPathSpec(path)
-    + Utf8.Encode(ReferenceErrorMessageSpecPart2() + ErrnoTextSpec(err) + ReferenceErrorMessageSpecPart3())
+    PathErrorMessageText(ReferenceErrorMessageSpecPart1(), QuotedPathSpec(path), ErrnoTextSpec(err))
   }
 
   function SetTimesErrorMessageSpecPart1(): StreamWorld.Bytes
@@ -136,26 +131,14 @@ module TouchSpec {
     "touch: setting times of "
   }
 
-  function SetTimesErrorMessageSpecPart2(): StreamWorld.Bytes
-  {
-    ": "
-  }
-
-  function SetTimesErrorMessageSpecPart3(): StreamWorld.Bytes
-  {
-    "\n"
-  }
-
   ghost function SetTimesErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
-    Utf8.Encode(SetTimesErrorMessageSpecPart1()) + QuotedPathSpec(path)
-    + Utf8.Encode(SetTimesErrorMessageSpecPart2() + ErrnoTextSpec(err) + SetTimesErrorMessageSpecPart3())
+    PathErrorMessageText(SetTimesErrorMessageSpecPart1(), QuotedPathSpec(path), ErrnoTextSpec(err))
   }
 
   opaque ghost function StdoutErrorMessageSpec(err: int): BenchWorld.Bytes
   {
-    Utf8.Encode("touch: setting times of ") + QuotedPathSpec("-")
-    + Utf8.Encode(": " + ErrnoTextSpec(err) + "\n")
+    PathErrorMessageText(SetTimesErrorMessageSpecPart1(), QuotedPathSpec("-"), ErrnoTextSpec(err))
   }
 
   function CloseErrorMessageSpecPart1(): StreamWorld.Bytes
@@ -163,20 +146,9 @@ module TouchSpec {
     "touch: failed to close "
   }
 
-  function CloseErrorMessageSpecPart2(): StreamWorld.Bytes
-  {
-    ": "
-  }
-
-  function CloseErrorMessageSpecPart3(): StreamWorld.Bytes
-  {
-    "\n"
-  }
-
   ghost function CloseErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
-    Utf8.Encode(CloseErrorMessageSpecPart1()) + QuotedPathSpec(path)
-    + Utf8.Encode(CloseErrorMessageSpecPart2() + ErrnoTextSpec(err) + CloseErrorMessageSpecPart3())
+    PathErrorMessageText(CloseErrorMessageSpecPart1(), QuotedPathSpec(path), ErrnoTextSpec(err))
   }
 
   function MissingOperandMessageSpec(): BenchWorld.Bytes
@@ -199,7 +171,7 @@ module TouchSpec {
     "Try 'touch --help' for more information.\n"
   }
 
-  ghost function MissingShortRequiredArgumentMessageSpec(option: char): BenchWorld.Bytes
+  function MissingShortRequiredArgumentMessageSpec(option: char): BenchWorld.Bytes
   {
     var prefix: string := MissingShortRequiredArgumentMessageSpecPart1();
     Utf8.Encode(prefix + [option] + MissingShortRequiredArgumentMessageSpecPart2() +
@@ -221,13 +193,13 @@ module TouchSpec {
     "Try 'touch --help' for more information.\n"
   }
 
-  ghost function MissingLongRequiredArgumentMessageSpec(option: string): BenchWorld.Bytes
+  function MissingLongRequiredArgumentMessageSpec(option: string): BenchWorld.Bytes
   {
     Utf8.Encode(MissingLongRequiredArgumentMessageSpecPart1() + option + MissingLongRequiredArgumentMessageSpecPart2() +
                 MissingLongRequiredArgumentMessageSpecPart3())
   }
 
-  ghost function ParseErrorMessageSpec(e: CliTypes.ParseError): BenchWorld.Bytes
+  function ParseErrorMessageSpec(e: CliTypes.ParseError): BenchWorld.Bytes
   {
     if Schema.IsMissingShortRequiredArgument(e) then
       MissingShortRequiredArgumentMessageSpec(e.rawToken[|e.rawToken| - 1])
@@ -275,7 +247,7 @@ module TouchSpec {
     "Try 'touch --help' for more information.\n"
   }
 
-  ghost function InvalidTimeMessageSpec(value: string): BenchWorld.Bytes
+  function InvalidTimeMessageSpec(value: string): BenchWorld.Bytes
   {
     InvalidTimeMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
     Utf8.Encode(InvalidTimeMessageSpecPart2() +
@@ -315,7 +287,7 @@ module TouchSpec {
     "Try 'touch --help' for more information.\n"
   }
 
-  ghost function AmbiguousTimeMessageSpec(value: string): BenchWorld.Bytes
+  function AmbiguousTimeMessageSpec(value: string): BenchWorld.Bytes
   {
     AmbiguousTimeMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
     Utf8.Encode(AmbiguousTimeMessageSpecPart2() +
@@ -335,7 +307,7 @@ module TouchSpec {
     "\n"
   }
 
-  ghost function InvalidDateMessageSpec(value: string): BenchWorld.Bytes
+  function InvalidDateMessageSpec(value: string): BenchWorld.Bytes
   {
     InvalidDateMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) + InvalidDateMessageSpecPart2()
   }
@@ -793,7 +765,7 @@ module TouchSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }
@@ -936,6 +908,8 @@ module TouchSpec {
     hadError: bool,
     errOut: BenchWorld.Bytes
   , plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
+    requires plannedStdout == io.stdout()
+    requires plannedStderr == io.stderr()
     requires Schema.Command(raw).mode == Schema.ModeRun
     requires !(Schema.Command(raw).timeArg != "" &&
                Schema.ClassifyTimeWord(Schema.Command(raw).timeArg) == Schema.TimeWordAmbiguous)

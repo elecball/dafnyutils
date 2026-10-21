@@ -1,18 +1,16 @@
-include "CutTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "CutSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "CutSchema.dfy"
-include "CutSpec.dfy"
 
 module CutCore {
-  import Text = CutTextCore
-
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = CutUtf8Core
+  import Utf8 = Utf8Semantics
   import BenchWorld
   import IOContract
   import CutSchema
@@ -21,28 +19,18 @@ module CutCore {
   // Deferred GNU behavior: field mode, input delimiters, -s suppression, -n
   // multibyte split suppression, and locale-sensitive multibyte characters are
   // outside this benchmark slice. In LC_ALL=C, -b and -c share byte semantics.
-  function RangeContains(range: CutSchema.Range, pos: int): bool
-  {
-    if range.openEnd then
-      range.first <= pos
-    else
-      range.first <= pos <= range.last
-  } by method {
-    return if range.openEnd then range.first <= pos else range.first <= pos <= range.last;
-  }
-
   function Selected(ranges: seq<CutSchema.Range>, pos: int): bool
     decreases |ranges|
   {
     if |ranges| == 0 then
       false
     else
-      RangeContains(ranges[0], pos) || Selected(ranges[1..], pos)
+      Spec.RangeContains(ranges[0], pos) || Selected(ranges[1..], pos)
   } by method {
     if |ranges| == 0 {
       return false;
     }
-    if RangeContains(ranges[0], pos) {
+    if Spec.RangeContains(ranges[0], pos) {
       return true;
     }
     return Selected(ranges[1..], pos);
@@ -55,26 +43,6 @@ module CutCore {
   } by method {
     var inList := Selected(selection.ranges, pos);
     return if selection.complement then !inList else inList;
-  }
-
-  function RecordDelimiter(zeroTerminated: bool): BenchWorld.RawByte
-  {
-    if zeroTerminated then '\0' else '\n'
-  } by method {
-    return if zeroTerminated then '\0' else '\n';
-  }
-
-  function OutputDelimiterBytes(delimiter: CutSchema.OutputDelimiter): BenchWorld.Bytes
-  {
-    match delimiter
-    case OutputDefault => []
-    case OutputCustom(text) => if |text| == 0 then ['\0'] else Utf8.Encode(text)
-  } by method {
-    match delimiter
-    case OutputDefault =>
-      return [];
-    case OutputCustom(text) =>
-      return if |text| == 0 then ['\0'] else Utf8.Encode(text);
   }
 
   function HasCustomOutputDelimiter(delimiter: CutSchema.OutputDelimiter): bool
@@ -122,13 +90,13 @@ module CutCore {
     if |ranges| == 0 then
       false
     else
-      (RangeContains(ranges[0], pos - 1) && RangeContains(ranges[0], pos)) ||
+      (Spec.RangeContains(ranges[0], pos - 1) && Spec.RangeContains(ranges[0], pos)) ||
       AdjacentCoveredByRange(ranges[1..], pos)
   } by method {
     if |ranges| == 0 {
       return false;
     }
-    if RangeContains(ranges[0], pos - 1) && RangeContains(ranges[0], pos) {
+    if Spec.RangeContains(ranges[0], pos - 1) && Spec.RangeContains(ranges[0], pos) {
       return true;
     }
     return AdjacentCoveredByRange(ranges[1..], pos);
@@ -191,13 +159,13 @@ module CutCore {
   ): BenchWorld.Bytes
   {
     if HasCustomOutputDelimiter(outputDelimiter) then
-      SelectPositionsDelimited(line, selection, OutputDelimiterBytes(outputDelimiter), 1, false)
+      SelectPositionsDelimited(line, selection, Spec.OutputDelimiterBytes(outputDelimiter), 1, false)
     else
       SelectPositions(line, selection, 1)
   } by method {
     if HasCustomOutputDelimiter(outputDelimiter) {
       return SelectPositionsDelimited(
-          line, selection, OutputDelimiterBytes(outputDelimiter), 1, false
+          line, selection, Spec.OutputDelimiterBytes(outputDelimiter), 1, false
         );
     }
     return SelectPositions(line, selection, 1);
@@ -214,7 +182,7 @@ module CutCore {
     if |data| == 0 then
       []
     else
-      var delimiter := RecordDelimiter(zeroTerminated);
+      var delimiter := Spec.RecordDelimiter(zeroTerminated);
       var lineLen := RecordLength(data, delimiter);
       var line := data[..lineLen];
       var rest := if lineLen < |data| then data[lineLen + 1..] else [];
@@ -224,7 +192,7 @@ module CutCore {
     if |data| == 0 {
       return [];
     }
-    var delimiter := RecordDelimiter(zeroTerminated);
+    var delimiter := Spec.RecordDelimiter(zeroTerminated);
     var lineLen := RecordLength(data, delimiter);
     var line := data[..lineLen];
     var rest := if lineLen < |data| then data[lineLen + 1..] else [];
@@ -249,21 +217,21 @@ module CutCore {
   function ErrorPiece(input: CutSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
-    case Stdin => if result.Err? then Text.ErrorMessage("-", result.e) else []
+    case Stdin => if result.Err? then Spec.ErrorMessage("-", result.e) else []
     case File(path) =>
       match result
       case Ok(_) => []
-      case Err(err) => Text.ErrorMessage(path, err)
+      case Err(err) => Spec.ErrorMessage(path, err)
   } by method {
     match input
     case Stdin =>
-      return if result.Err? then Text.ErrorMessage("-", result.e) else [];
+      return if result.Err? then Spec.ErrorMessage("-", result.e) else [];
     case File(path) =>
       match result
       case Ok(_) =>
         return [];
       case Err(err) =>
-        return Text.ErrorMessage(path, err);
+        return Spec.ErrorMessage(path, err);
   }
 
   function HadErrorPiece(input: CutSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
@@ -449,19 +417,13 @@ module CutCore {
       []
     else if SelectionIncludes(command.selection, position) then
       [(if emitted && GroupBoundaryBefore(command.selection, position)
-        then OutputDelimiterBytes(command.outputDelimiter)
+        then Spec.OutputDelimiterBytes(command.outputDelimiter)
         else []) + [record[0]]] +
       SelectionScanFragments(command, record[1..], position + 1, true)
     else
       SelectionScanFragments(
         command, record[1..], position + 1, emitted
       )
-  }
-
-  lemma RangeContainsMatchesSpec(range: CutSchema.Range, position: int)
-    ensures RangeContains(range, position) ==
-            Spec.RangeContains(range, position)
-  {
   }
 
   lemma SelectedMatchesExists(
@@ -473,7 +435,6 @@ module CutCore {
     decreases |ranges|
   {
     if |ranges| > 0 {
-      RangeContainsMatchesSpec(ranges[0], position);
       SelectedMatchesExists(ranges[1..], position);
       if Selected(ranges[1..], position) {
         var i :| 0 <= i < |ranges[1..]| &&
@@ -513,8 +474,6 @@ module CutCore {
     decreases |ranges|
   {
     if |ranges| > 0 {
-      RangeContainsMatchesSpec(ranges[0], position - 1);
-      RangeContainsMatchesSpec(ranges[0], position);
       AdjacentCoveredMatchesExists(ranges[1..], position);
       if AdjacentCoveredByRange(ranges[1..], position) {
         var i :| 0 <= i < |ranges[1..]| &&
@@ -572,7 +531,7 @@ module CutCore {
        then SelectPositionsDelimited(
                  record,
                  command.selection,
-                 OutputDelimiterBytes(command.outputDelimiter),
+                 Spec.OutputDelimiterBytes(command.outputDelimiter),
                  position,
                  emitted
                )
@@ -758,7 +717,7 @@ module CutCore {
                     command.selection, record, position
                   )[k] + 1
                 )
-             then Text.OutputDelimiterBytes(command.outputDelimiter)
+             then Spec.OutputDelimiterBytes(command.outputDelimiter)
              else []) +
             [record[
              SelectionScanIndices(
@@ -835,7 +794,7 @@ module CutCore {
     ensures SelectionScanFragments(command, record, 1, false)[k] ==
             (if k > 0 && Spec.DelimiterBeforeSelected(command,
                                                       SelectionScanIndices(command.selection, record, 1)[k] + 1)
-             then Text.OutputDelimiterBytes(command.outputDelimiter) else []) +
+             then Spec.OutputDelimiterBytes(command.outputDelimiter) else []) +
             [record[SelectionScanIndices(command.selection, record, 1)[k]]]
   {
     SelectionScanSelectedIndexSequence(command.selection, record);
@@ -879,7 +838,7 @@ module CutCore {
                                 (if k > 0 && Spec.DelimiterBeforeSelected(
                                       command, indices[k] + 1
                                     )
-                                 then Text.OutputDelimiterBytes(command.outputDelimiter)
+                                 then Spec.OutputDelimiterBytes(command.outputDelimiter)
                                  else []) +
                                 [record[indices[k]]] by {
         forall k: nat | k < |indices|
@@ -887,7 +846,7 @@ module CutCore {
                   (if k > 0 && Spec.DelimiterBeforeSelected(
                         command, indices[k] + 1
                       )
-                   then Text.OutputDelimiterBytes(command.outputDelimiter)
+                   then Spec.OutputDelimiterBytes(command.outputDelimiter)
                    else []) +
                   [record[indices[k]]]
         {
@@ -902,7 +861,7 @@ module CutCore {
                          (if k > 0 && Spec.DelimiterBeforeSelected(
                                command, indices[k] + 1
                              )
-                          then Text.OutputDelimiterBytes(command.outputDelimiter)
+                          then Spec.OutputDelimiterBytes(command.outputDelimiter)
                           else []) +
                          [record[indices[k]]]) &&
           Spec.FragmentsConcatenate(
@@ -914,7 +873,7 @@ module CutCore {
                              (if k > 0 && Spec.DelimiterBeforeSelected(
                                    command, indices[k] + 1
                                  )
-                              then Text.OutputDelimiterBytes(command.outputDelimiter)
+                              then Spec.OutputDelimiterBytes(command.outputDelimiter)
                               else []) +
                              [record[indices[k]]];
         assert Spec.FragmentsConcatenate(fragments, output, cuts);
@@ -971,7 +930,7 @@ module CutCore {
     if |data| == 0 then
       []
     else
-      var delimiter := RecordDelimiter(command.zeroTerminated);
+      var delimiter := Spec.RecordDelimiter(command.zeroTerminated);
       var n := RecordLength(data, delimiter);
       var rest := if n < |data| then data[n + 1..] else [];
       [SelectRecord(
@@ -988,7 +947,7 @@ module CutCore {
     if |data| == 0 then
       []
     else
-      var delimiter := RecordDelimiter(command.zeroTerminated);
+      var delimiter := Spec.RecordDelimiter(command.zeroTerminated);
       var n := RecordLength(data, delimiter);
       var rest := if n < |data| then data[n + 1..] else [];
       [SelectRecord(
@@ -1140,18 +1099,18 @@ module CutCore {
   )
     ensures |PartitionFragments(command, data)| ==
             |PartitionRecords(
-              data, RecordDelimiter(command.zeroTerminated)
+              data, Spec.RecordDelimiter(command.zeroTerminated)
             )|
     ensures |PartitionRenderedFragments(command, data)| ==
             |PartitionFragments(command, data)|
     ensures forall i: nat ::
               i < |PartitionRecords(
-                data, RecordDelimiter(command.zeroTerminated)
+                data, Spec.RecordDelimiter(command.zeroTerminated)
               )| ==>
                 Spec.RecordSelectionRelation(
                   command,
                   PartitionRecords(
-                    data, RecordDelimiter(command.zeroTerminated)
+                    data, Spec.RecordDelimiter(command.zeroTerminated)
                   )[i],
                   PartitionFragments(command, data)[i]
                 ) &&
@@ -1169,7 +1128,7 @@ module CutCore {
     decreases |data|
   {
     if |data| > 0 {
-      var delimiter := RecordDelimiter(command.zeroTerminated);
+      var delimiter := Spec.RecordDelimiter(command.zeroTerminated);
       var n := RecordLength(data, delimiter);
       var line := data[..n];
       var rest := if n < |data| then data[n + 1..] else [];
@@ -1230,7 +1189,7 @@ module CutCore {
               )
             )
   {
-    var delimiter := RecordDelimiter(command.zeroTerminated);
+    var delimiter := Spec.RecordDelimiter(command.zeroTerminated);
     var records := PartitionRecords(data, delimiter);
     var terminated := PartitionTerminated(data, delimiter);
     var fragments := PartitionFragments(command, data);
@@ -1542,10 +1501,10 @@ module CutCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);

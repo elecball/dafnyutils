@@ -1,172 +1,25 @@
-include "CatTextCore.dfy"
+include "CatSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "CatSchema.dfy"
-include "CatSpec.dfy"
 
-// Pure cat execution semantics used by the executable loop and proof helpers.
+// Execution state used by the cat loop and proof helpers.
 module CatCoreModel {
-  import StreamContract = IOContract
-
-  import Result = Results
   import BenchWorld
-  import CatSchema
 
   datatype RenderState = RenderState(nextLine: int, atLineStart: bool, blankStreak: int)
   datatype RenderResult = RenderResult(out: BenchWorld.Bytes, state: RenderState)
-
-  function InputsFromOperands(operands: seq<string>): seq<CatSchema.Input>
-    decreases |operands|
-  {
-    if |operands| == 0 then
-      []
-    else
-      [(if operands[0] == "-" then CatSchema.Stdin else CatSchema.File(operands[0]))] + InputsFromOperands(operands[1..])
-  } by method {
-    var inputs: seq<CatSchema.Input> := [];
-    var i := |operands|;
-    while 0 < i
-      invariant 0 <= i <= |operands|
-      invariant inputs == InputsFromOperands(operands[i..])
-      decreases i
-    {
-      i := i - 1;
-      var head := if operands[i] == "-" then CatSchema.Stdin else CatSchema.File(operands[i]);
-      assert operands[i..] == [operands[i]] + operands[i + 1..];
-      inputs := [head] + inputs;
-    }
-    assert operands[i..] == operands;
-    return inputs;
-  }
-
-  function Command(raw: CatSchema.CatCmdRaw): CatSchema.CatCmd
-  {
-    var mode :=
-      if raw.seenHelp && (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) then
-        CatSchema.ModeHelp
-      else if raw.seenVersion then
-        CatSchema.ModeVersion
-      else
-        CatSchema.ModeRun;
-    var number :=
-      if raw.seenB then CatSchema.NumberNonBlank
-      else if raw.seenN then CatSchema.NumberAll
-      else CatSchema.NoNumber;
-    var inputs := InputsFromOperands(raw.operands);
-    var runInputs := if mode == CatSchema.ModeRun && |inputs| == 0 then [CatSchema.Stdin] else inputs;
-    CatSchema.CatCmd(
-      mode,
-      number,
-      raw.seenS,
-      raw.seenA || raw.seenE || raw.seenShowEnds,
-      raw.seenA || raw.seenT || raw.seenShowTabs,
-      raw.seenA || raw.seenE || raw.seenT || raw.seenV,
-      runInputs
-    )
-  }
 
   function InitState(): RenderState
   {
     RenderState(1, true, 0)
   }
 
-  function DigitChar(d: int): BenchWorld.RawByte
-  {
-    if 0 <= d < 10 then
-      (d + ('0' as int)) as char
-    else
-      '0'
-  }
-
-  function Digits(n: int): BenchWorld.Bytes
-    decreases n
-  {
-    if n < 10 then
-      [DigitChar(n)]
-    else
-      Digits(n / 10) + [DigitChar(n % 10)]
-  } by method {
-    if n < 10 {
-      return [DigitChar(n)];
-    }
-    var current := n;
-    var suffix: BenchWorld.Bytes := [];
-    while 10 <= current
-      invariant 0 <= current
-      invariant Digits(current) + suffix == Digits(n)
-      decreases current
-    {
-      suffix := [DigitChar(current % 10)] + suffix;
-      current := current / 10;
-    }
-    return [DigitChar(current)] + suffix;
-  }
-
-  function PadLeft(text: BenchWorld.Bytes, width: int): BenchWorld.Bytes
-    decreases width - |text|
-  {
-    if |text| >= width then
-      text
-    else
-      PadLeft([' '] + text, width)
-  } by method {
-    var out := text;
-    while |out| < width
-      invariant PadLeft(out, width) == PadLeft(text, width)
-      decreases width - |out|
-    {
-      out := [' '] + out;
-    }
-    return out;
-  }
-
-  function LineNumberText(n: int): BenchWorld.Bytes
-  {
-    PadLeft(Digits(n), 6) + ['\t']
-  }
-
-  function ShowNonPrintingChar(ch: BenchWorld.RawByte, showTabs: bool): BenchWorld.Bytes
-  {
-    var code := ch as int;
-    if code >= 32 then
-      if code < 127 then
-        [ch]
-      else if code == 127 then
-        ['^', '?']
-      else
-        var base := code - 128;
-        if base >= 32 then
-          if base < 127 then
-            ['M', '-', (base as char)]
-          else
-            ['M', '-', '^', '?']
-        else
-          ['M', '-', '^', ((base + 64) as char)]
-    else if ch == '\t' && !showTabs then
-      ['\t']
-    else
-      ['^', ((code + 64) as char)]
-  }
-
-  function TransformChar(cmd: CatSchema.CatCmd, ch: BenchWorld.RawByte, nextIsNewline: bool): BenchWorld.Bytes
-  {
-    if cmd.showNonPrinting then
-      ShowNonPrintingChar(ch, cmd.showTabs)
-    else if ch == '\t' && cmd.showTabs then
-      ['^', ((ch as int) + 64) as char]
-    else if ch == '\r' && cmd.showEnds && nextIsNewline then
-      ['^', 'M']
-    else
-      [ch]
-  }
-
 }
 
-// Public core surface: executable loop plus summary predicates. The richer
-// pure model stays in `CatCoreModel`.
+// Public core surface: executable loop plus summary predicates.
 module CatCore {
-  import Text = CatTextCore
   import StreamContract = IOContract
   import Result = Results
   import BenchIO
@@ -241,7 +94,7 @@ module CatCore {
         (if numbered then step.before.nextLine as nat else 0) &&
         step.chunk ==
         (if numbered then
-           Model.LineNumberText(step.before.nextLine)
+           Spec.LineNumberText(step.before.nextLine)
          else
            []) +
         (if cmd.showEnds then ['$'] else []) +
@@ -260,10 +113,10 @@ module CatCore {
       (if numbered then step.before.nextLine as nat else 0) &&
       step.chunk ==
       (if numbered then
-         Model.LineNumberText(step.before.nextLine)
+         Spec.LineNumberText(step.before.nextLine)
        else
          []) +
-      Model.TransformChar(cmd, ch, nextIsNewline) &&
+      Spec.TransformChar(cmd, ch, nextIsNewline) &&
       step.after ==
       Model.RenderState(
         step.before.nextLine + (if numbered then 1 else 0),
@@ -353,8 +206,6 @@ module CatCore {
     var previous := ExpectedStdinAt(cmd, preStdin, count - 1, preStreams);
     if cmd.inputs[count - 1].Stdin? then IOContract.ObservedReadStdinRemainingFields(previous, preStreams) else previous
   }
-
-
 
   ghost predicate InputObservationRelation(
     cmd: CatSchema.CatCmd,
@@ -479,7 +330,7 @@ module CatCore {
   , plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
     reads io.stdinRegion
   {
-    var cmd := Model.Command(raw);
+    var cmd := Spec.Command(raw);
     if cmd.mode == CatSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == Spec.HelpTextSpec() &&
@@ -961,7 +812,7 @@ module CatCore {
           var prefix: BenchWorld.Bytes := [];
           var nextLine := currentState.nextLine;
           if cmd.number == CatSchema.NumberAll && currentState.atLineStart {
-            prefix := Model.LineNumberText(currentState.nextLine);
+            prefix := Spec.LineNumberText(currentState.nextLine);
             number := currentState.nextLine as nat;
             nextLine := currentState.nextLine + 1;
           }
@@ -972,11 +823,11 @@ module CatCore {
         var prefix: BenchWorld.Bytes := [];
         var nextLine := currentState.nextLine;
         if currentState.atLineStart && cmd.number != CatSchema.NoNumber {
-          prefix := Model.LineNumberText(currentState.nextLine);
+          prefix := Spec.LineNumberText(currentState.nextLine);
           number := currentState.nextLine as nat;
           nextLine := currentState.nextLine + 1;
         }
-        var transformed := Model.TransformChar(cmd, ch, |rest| > 0 && rest[0] == '\n');
+        var transformed := Spec.TransformChar(cmd, ch, |rest| > 0 && rest[0] == '\n');
         chunk := prefix + transformed;
         nextState := Model.RenderState(nextLine, false, 0);
       }
@@ -1091,7 +942,7 @@ module CatCore {
     ghost var preFs := io.fs();
     ghost var preStreams := io.trustedStreams();
     ghost var preStdin := io.stdin();
-    var cmd := Model.Command(raw);
+    var cmd := Spec.Command(raw);
 
     if cmd.mode == CatSchema.ModeHelp {
       var help := Spec.HelpTextSpec();
@@ -1111,7 +962,7 @@ module CatCore {
     }
 
     if cmd.mode == CatSchema.ModeVersion {
-      var version := Text.VersionTextSpec();
+      var version := Spec.VersionTextSpec();
       plannedOut := plannedOut + version;
       exit := 0;
       assert io.stdin() == preStdin;
@@ -1181,7 +1032,7 @@ module CatCore {
       }
       var data := IOContract.ReadResultData(read);
       var diagnostic := if read.Err? then
-        Text.ErrorMessageSpec(if input.Stdin? then "-" else input.path, read.e) else [];
+        Spec.ErrorMessageSpec(if input.Stdin? then "-" else input.path, read.e) else [];
       ghost var observation := InputObservation(input, read);
       assert InputObservationRelation(cmd, preFs, preStreams, preStdin, i, observation) by {
         reveal InputObservationRelation();
@@ -1264,7 +1115,7 @@ module CatCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

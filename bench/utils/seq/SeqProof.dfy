@@ -115,26 +115,6 @@ module SeqProof {
     }
   }
 
-  lemma DigitFacts(ch: char)
-    ensures Core.IsDigit(ch) == Spec.IsDigit(ch)
-  {
-  }
-
-  lemma DigitValueAtEq(ch: char)
-    requires Core.IsDigit(ch)
-    ensures Core.DigitValue(ch) == Spec.DigitAt(ch)
-  {
-  }
-
-  lemma Pow10Eq(n: nat)
-    ensures Core.Pow10(n) == Spec.Pow10(n)
-    decreases n
-  {
-    if n > 0 {
-      Pow10Eq(n - 1);
-    }
-  }
-
   lemma CalculatedApplyExponentEq(
     token: string,
     value: int,
@@ -146,9 +126,6 @@ module SeqProof {
                             token, value, scale, negativeZero, exponent
                           )) == Spec.ApplyExponent(token, value, scale, negativeZero, exponent)
   {
-    if exponent >= 0 && exponent as nat > scale {
-      Pow10Eq(exponent as nat - scale);
-    }
   }
 
   lemma FirstDotFacts(text: string, position: nat)
@@ -201,7 +178,7 @@ module SeqProof {
   )
     requires start <= |text|
     requires Core.ScanNat(text, start, sawDigit, accumulator).ok
-    ensures forall i: nat | start <= i < |text| :: Core.IsDigit(text[i])
+    ensures forall i: nat | start <= i < |text| :: Spec.IsDigit(text[i])
     decreases |text| - start
   {
     if start < |text| {
@@ -209,7 +186,7 @@ module SeqProof {
         text,
         start + 1,
         true,
-        (accumulator * 10 + Core.DigitValue(text[start])) as nat
+        (accumulator * 10 + Spec.DigitAt(text[start])) as nat
       );
     }
   }
@@ -221,7 +198,7 @@ module SeqProof {
     accumulator: nat
   )
     requires start <= |text|
-    requires forall i: nat | start <= i < |text| :: Core.IsDigit(text[i])
+    requires forall i: nat | start <= i < |text| :: Spec.IsDigit(text[i])
     ensures Core.ScanNat(text, start, sawDigit, accumulator).value ==
             accumulator * Spec.Pow10(|text| - start) +
             Spec.IntSequenceSum(ContributionSequence(text, start, |text|, -1))
@@ -230,13 +207,12 @@ module SeqProof {
     reveal ContributionSequence;
     reveal PositionContribution;
     if start < |text| {
-      DigitValueAtEq(text[start]);
       ContributionTail(text, start, |text|, -1);
       ScanNatValueRelation(
         text,
         start + 1,
         true,
-        accumulator * 10 + Core.DigitValue(text[start])
+        accumulator * 10 + Spec.DigitAt(text[start])
       );
       var remaining := |text| - start;
       assert 0 < remaining;
@@ -261,7 +237,7 @@ module SeqProof {
     var digitStart := if text[0] == '-' || text[0] == '+' then 1 else 0;
     var scan := Core.ScanNat(text, digitStart, false, 0);
     ScanNatSound(text, digitStart, false, 0);
-    assert forall i: nat | digitStart <= i < |text| :: Core.IsDigit(text[i]);
+    assert forall i: nat | digitStart <= i < |text| :: Spec.IsDigit(text[i]);
     ScanNatValueRelation(text, digitStart, false, 0);
     assert scan.value ==
            Spec.IntSequenceSum(ContributionSequence(text, digitStart, |text|, -1));
@@ -275,7 +251,6 @@ module SeqProof {
     | digitStart <= position < |text|
         ensures Spec.IsDigit(text[position])
       {
-        DigitFacts(text[position]);
       }
     }
   }
@@ -292,23 +267,23 @@ module SeqProof {
     requires 0 <= accumulator
     requires Core.ScanDecimal(text, start, sawDot, sawDigit, accumulator, scale).ok
     ensures sawDot ==>
-              forall i: nat | start <= i < |text| :: Core.IsDigit(text[i])
+              forall i: nat | start <= i < |text| :: Spec.IsDigit(text[i])
     ensures !sawDot ==>
               forall i: nat | start <= i < |text| ::
-                Core.IsDigit(text[i]) || text[i] == '.'
+                Spec.IsDigit(text[i]) || text[i] == '.'
     ensures !sawDot ==>
               forall i: nat, j: nat | start <= i < j < |text| ::
                 !(text[i] == '.' && text[j] == '.')
     decreases |text| - start
   {
     if start < |text| {
-      if Core.IsDigit(text[start]) {
+      if Spec.IsDigit(text[start]) {
         ScanDecimalSound(
           text,
           start + 1,
           sawDot,
           true,
-          accumulator * 10 + Core.DigitValue(text[start]),
+          accumulator * 10 + Spec.DigitAt(text[start]),
           if sawDot then scale + 1 else scale
         );
       } else {
@@ -327,7 +302,7 @@ module SeqProof {
   )
     requires start < |text|
     requires 0 <= accumulator
-    requires Core.IsDigit(text[start])
+    requires Spec.IsDigit(text[start])
     ensures Core.ScanDecimal(
               text, start, sawDot, sawDigit, accumulator, scale
             ) == Core.ScanDecimal(
@@ -335,7 +310,7 @@ module SeqProof {
                    start + 1,
                    sawDot,
                    true,
-                   accumulator * 10 + Core.DigitValue(text[start]),
+                   accumulator * 10 + Spec.DigitAt(text[start]),
                    if sawDot then scale + 1 else scale
                  )
   {
@@ -382,7 +357,7 @@ module SeqProof {
     requires dot == -1 || 0 <= dot < |text|
     requires sawDot == (dot != -1 && dot < start)
     requires forall i: nat | start <= i < |text| ::
-               if i == dot then text[i] == '.' else Core.IsDigit(text[i])
+               if i == dot then text[i] == '.' else Spec.IsDigit(text[i])
     ensures Core.ScanDecimal(text, start, sawDot, sawDigit, accumulator, scale).mantissa ==
             accumulator * Spec.Pow10(RemainingDigitCount(|text|, start, dot)) +
             Spec.IntSequenceSum(ContributionSequence(text, start, |text|, dot))
@@ -407,13 +382,12 @@ module SeqProof {
                accumulator * Spec.Pow10(RemainingDigitCount(|text|, start, dot)) +
                Spec.IntSequenceSum(ContributionSequence(text, start, |text|, dot));
       } else {
-        DigitValueAtEq(text[start]);
         ContributionTail(text, start, |text|, dot);
         ScanDecimalValueRelation(
           text,
           start + 1,
           dot,
-          accumulator * 10 + Core.DigitValue(text[start]),
+          accumulator * 10 + Spec.DigitAt(text[start]),
           if sawDot then scale + 1 else scale,
           sawDot,
           true
@@ -443,10 +417,10 @@ module SeqProof {
              start + 1,
              sawDot,
              true,
-             accumulator * 10 + Core.DigitValue(text[start]),
+             accumulator * 10 + Spec.DigitAt(text[start]),
              if sawDot then scale + 1 else scale
            ).mantissa;
-        == (accumulator * 10 + Core.DigitValue(text[start])) * power + tailSum;
+        == (accumulator * 10 + Spec.DigitAt(text[start])) * power + tailSum;
         == (accumulator * 10 + Spec.DigitAt(text[start])) * power + tailSum;
         == accumulator * (10 * power) +
            (Spec.DigitAt(text[start]) * power + tailSum);
@@ -471,7 +445,7 @@ module SeqProof {
     requires dot == -1 || 0 <= dot < |text|
     requires sawDot == (dot != -1 && dot < start)
     requires forall i: nat | start <= i < |text| ::
-               if i == dot then text[i] == '.' else Core.IsDigit(text[i])
+               if i == dot then text[i] == '.' else Spec.IsDigit(text[i])
     ensures Core.ScanDecimal(text, start, sawDot, sawDigit, accumulator, scale).scale ==
             scale +
             (if sawDot then |text| - start
@@ -491,7 +465,7 @@ module SeqProof {
           text,
           start + 1,
           dot,
-          accumulator * 10 + Core.DigitValue(text[start]),
+          accumulator * 10 + Spec.DigitAt(text[start]),
           if sawDot then scale + 1 else scale,
           sawDot,
           true
@@ -514,7 +488,7 @@ module SeqProof {
     var scan := Core.ScanDecimal(mantissaText, start, false, false, 0, 0);
     ScanDecimalSound(mantissaText, start, false, false, 0, 0);
     assert forall i: nat | start <= i < |mantissaText| ::
-        Core.IsDigit(mantissaText[i]) || mantissaText[i] == '.';
+        Spec.IsDigit(mantissaText[i]) || mantissaText[i] == '.';
     assert forall i: nat, j: nat | start <= i < j < |mantissaText| ::
         !(mantissaText[i] == '.' && mantissaText[j] == '.');
     var dot := FirstDot(mantissaText, start);
@@ -543,7 +517,6 @@ module SeqProof {
               assert false;
             }
           }
-          DigitFacts(mantissaText[position]);
         }
       }
     }
@@ -689,7 +662,7 @@ module SeqProof {
   )
     requires start <= |text|
     requires forall position: nat | start <= position < |text| ::
-               Core.IsDigit(text[position])
+               Spec.IsDigit(text[position])
     ensures Core.ScanNat(text, start, sawDigit, accumulator).ok
     ensures start < |text| ==> Core.ScanNat(text, start, sawDigit, accumulator).sawDigit
     decreases |text| - start
@@ -699,7 +672,7 @@ module SeqProof {
         text,
         start + 1,
         true,
-        (accumulator * 10 + Core.DigitValue(text[start])) as nat
+        (accumulator * 10 + Spec.DigitAt(text[start])) as nat
       );
     }
   }
@@ -718,7 +691,7 @@ module SeqProof {
     requires dot == -1 || 0 <= dot < |text|
     requires sawDot == (dot != -1 && dot < start)
     requires forall position: nat | start <= position < |text| ::
-               position == dot || Core.IsDigit(text[position])
+               position == dot || Spec.IsDigit(text[position])
     requires dot < start || dot == -1 || text[dot] == '.'
     ensures Core.ScanDecimal(
               text, start, sawDot, sawDigit, accumulator, scale
@@ -746,7 +719,7 @@ module SeqProof {
           dot,
           sawDot,
           true,
-          accumulator * 10 + Core.DigitValue(text[start]),
+          accumulator * 10 + Spec.DigitAt(text[start]),
           if sawDot then scale + 1 else scale
         );
       }
@@ -782,6 +755,8 @@ module SeqProof {
     reveal Spec.DecimalValueWitnessRelation;
     var start := if token[0] == '-' || token[0] == '+' then 1 else 0;
     var marker := evidence.exponentMarker;
+    assert start < |token|;
+    assert marker == -1 || 0 <= marker < |token|;
     WitnessMantissaSyntax(token, number, evidence);
     if marker == -1 {
       ExponentIndexAbsent(token, start);
@@ -798,14 +773,11 @@ module SeqProof {
         position == dot || Spec.IsDigit(mantissaText[position]);
     assert forall position: nat {:trigger mantissaText[position]}
         | start <= position < |mantissaText| ::
-        position == dot || Core.IsDigit(mantissaText[position]) by {
+        position == dot || Spec.IsDigit(mantissaText[position]) by {
       forall position: nat {:trigger mantissaText[position]}
     | start <= position < |mantissaText|
-        ensures position == dot || Core.IsDigit(mantissaText[position])
+        ensures position == dot || Spec.IsDigit(mantissaText[position])
       {
-        if position != dot {
-          DigitFacts(mantissaText[position]);
-        }
       }
     }
     ScanDecimalComplete(mantissaText, start, dot, false, false, 0, 0);
@@ -817,16 +789,19 @@ module SeqProof {
         if exponentText[0] == '-' || exponentText[0] == '+' then 1 else 0;
       assert forall position: nat {:trigger exponentText[position]}
           | digitStart <= position < |exponentText| ::
-          Core.IsDigit(exponentText[position]) by {
+          Spec.IsDigit(exponentText[position]) by {
         forall position: nat {:trigger exponentText[position]}
       | digitStart <= position < |exponentText|
-          ensures Core.IsDigit(exponentText[position])
+          ensures Spec.IsDigit(exponentText[position])
         {
-          DigitFacts(exponentText[position]);
         }
       }
       ScanNatComplete(exponentText, digitStart, false, 0);
       assert Core.ParseExponent(exponentText).ExponentOk?;
+    }
+    assert Core.ParseDecimal(token).Ok? by {
+      hide *;
+      reveal Core.ParseDecimal();
     }
   }
 
@@ -869,11 +844,6 @@ module SeqProof {
     }
   }
 
-  lemma DigitCharEq(d: int)
-    ensures Core.DigitChar(d) == Spec.DigitChar(d)
-  {
-  }
-
   lemma CalculatedMaxScaleEq(
     first: Core.Decimal,
     step: Core.Decimal,
@@ -888,13 +858,6 @@ module SeqProof {
     requires decimal.scale <= scale
     ensures Core.Rescale(decimal, scale) ==
             Spec.Rescale(ToSpecDecimal(decimal), scale)
-  {
-    Pow10Eq(scale - decimal.scale);
-  }
-
-  lemma TermCountEq(first: int, step: int, last: int)
-    requires step != 0
-    ensures Core.TermCount(first, step, last) == Spec.TermCount(first, step, last)
   {
   }
 
@@ -915,7 +878,7 @@ module SeqProof {
     ensures forall i: nat {:trigger Core.RenderValues(values, scale, firstNegativeZero)[i]}
               | i < |values| ::
               Core.RenderValues(values, scale, firstNegativeZero)[i] ==
-              Core.RenderFixed(values[i], scale, i == 0 && firstNegativeZero)
+              Spec.RenderFixed(values[i], scale, i == 0 && firstNegativeZero)
     decreases |values|
   {
     hide *;
@@ -924,7 +887,7 @@ module SeqProof {
       RenderValuesAt(values[1..], scale, false);
       forall i: nat | i < |values|
         ensures Core.RenderValues(values, scale, firstNegativeZero)[i] ==
-                Core.RenderFixed(values[i], scale, i == 0 && firstNegativeZero)
+                Spec.RenderFixed(values[i], scale, i == 0 && firstNegativeZero)
       {
         if i != 0 {
           assert values[1..][i - 1] == values[i];
@@ -932,65 +895,6 @@ module SeqProof {
                  Core.RenderValues(values[1..], scale, false)[i - 1];
         }
       }
-    }
-  }
-
-  lemma RenderFixedEq(value: int, scale: nat, negativeZero: bool)
-    ensures Core.RenderFixed(value, scale, negativeZero) ==
-            Spec.RenderFixed(value, scale, negativeZero)
-  {
-    if scale > 0 {
-      Pow10Eq(scale);
-    }
-    DigitsAndPaddingEq(value, scale, negativeZero);
-  }
-
-  lemma DigitsAndPaddingEq(value: int, scale: nat, negativeZero: bool)
-    ensures Core.RenderFixed(value, scale, negativeZero) ==
-            Spec.RenderFixed(value, scale, negativeZero)
-  {
-    RenderMagnitudeEq(if value < 0 then -value else value, scale);
-  }
-
-  lemma RenderMagnitudeEq(magnitude: int, scale: nat)
-    requires 0 <= magnitude
-    ensures Core.RenderMagnitude(magnitude, scale) == Spec.RenderMagnitude(magnitude, scale)
-  {
-    if scale == 0 {
-      DigitsUnsignedEq(magnitude);
-    } else {
-      Pow10Eq(scale);
-      Spec.DivNonnegative(magnitude, Core.Pow10(scale));
-      DigitsUnsignedEq(magnitude / Core.Pow10(scale));
-      DigitsUnsignedEq(magnitude % Core.Pow10(scale));
-      LeftPadZerosEq(Core.DigitsUnsigned(magnitude % Core.Pow10(scale)), scale);
-    }
-  }
-
-  lemma DigitsUnsignedEq(n: int)
-    requires 0 <= n
-    ensures Core.DigitsUnsigned(n) == Spec.DigitsUnsigned(n)
-    decreases n
-  {
-    if n >= 10 {
-      DigitsUnsignedEq(n / 10);
-    }
-  }
-
-  lemma ZerosEq(n: nat)
-    ensures Core.Zeros(n) == Spec.Zeros(n)
-    decreases n
-  {
-    if n > 0 {
-      ZerosEq(n - 1);
-    }
-  }
-
-  lemma LeftPadZerosEq(text: BW.Bytes, width: nat)
-    ensures Core.LeftPadZeros(text, width) == Spec.LeftPadZeros(text, width)
-  {
-    if width > |text| {
-      ZerosEq(width - |text|);
     }
   }
 
@@ -1003,14 +907,6 @@ module SeqProof {
     }
   }
 
-  lemma PadNumberEq(text: BW.Bytes, width: nat)
-    ensures Core.PadNumber(text, width) == Spec.PadNumber(text, width)
-  {
-    if width > |text| {
-      ZerosEq(width - |text|);
-    }
-  }
-
   lemma PadValuesAt(items: seq<BW.Bytes>, width: nat)
     ensures |Core.PadValues(items, width)| == |items|
     ensures forall i: nat {:trigger Core.PadValues(items, width)[i]} | i < |items| ::
@@ -1018,7 +914,6 @@ module SeqProof {
     decreases |items|
   {
     if |items| > 0 {
-      PadNumberEq(items[0], width);
       PadValuesAt(items[1..], width);
     }
   }
@@ -1167,8 +1062,7 @@ module SeqProof {
     var firstValue := Core.Rescale(first, scale);
     var stepValue := Core.Rescale(step, scale);
     var lastValue := Core.Rescale(last, scale);
-    TermCountEq(firstValue, stepValue, lastValue);
-    var count := Core.TermCount(firstValue, stepValue, lastValue);
+    var count := Spec.TermCount(firstValue, stepValue, lastValue);
     var values := Core.GenerateValues(firstValue, stepValue, count);
     GenerateValuesAt(firstValue, stepValue, count);
     var rendered := Core.RenderValues(values, scale, first.negativeZero && first.value == 0);
@@ -1186,8 +1080,6 @@ module SeqProof {
                                  i == 0 && first.negativeZero && first.value == 0
                                )
       {
-        RenderFixedEq(firstValue + i * stepValue, scale,
-                      i == 0 && first.negativeZero && first.value == 0);
       }
     }
     var width := Core.MaxWidth(rendered);
@@ -1232,7 +1124,7 @@ module SeqProof {
     ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     NumberPlanRelation(raw.operands);
-    if !Core.HelpSelected(raw) && !Core.VersionSelected(raw) {
+    if !Spec.HelpSelected(raw) && !Spec.VersionSelected(raw) {
       match Core.ParseNumbers(raw.operands)
       case NumbersErr(_) =>
       case NumbersOk(first, step, last) =>
@@ -1241,7 +1133,7 @@ module SeqProof {
           step,
           last,
           raw.equalWidth,
-          Core.Separator(raw)
+          Spec.Separator(raw)
         );
     }
   }

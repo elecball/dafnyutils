@@ -1,16 +1,15 @@
-include "TruncateTextCore.dfy"
+include "../../core/Utf8.dfy"
 include "TruncateSpec.dfy"
 include "TruncateProof.dfy"
 
 module TruncateCore {
-  import Text = TruncateTextCore
   import S = TruncateSchema
   import Spec = TruncateSpec
   import Proof = TruncateProof
   import BenchIO
   import W = BenchWorld
   import C = IOContract
-  import Utf8 = TruncateUtf8Core
+  import Utf8 = Utf8Semantics
 
   method SkipSpaces(text: string, start: nat) returns (end: nat)
     requires start <= |text|
@@ -114,21 +113,21 @@ module TruncateCore {
   {
     var quote := io.QuoteafPath(path);
     var reason := io.GetCLocaleErrnoText(err);
-    message := Text.OpenText(quote, reason);
+    message := Spec.OpenText(quote, reason);
   }
   method StatMessage(io: BenchIO.IO, path: string, err: int, reference: bool) returns (message: W.Bytes)
     ensures message == Spec.CannotStat(path, err, reference)
   {
     var quote := io.QuoteafPath(path);
     var reason := io.GetCLocaleErrnoText(err);
-    message := Text.StatText(quote, reason, reference);
+    message := Spec.StatText(quote, reason, reference);
   }
   method ResizeMessage(io: BenchIO.IO, path: string, size: nat, err: int) returns (message: W.Bytes)
     ensures message == Spec.TruncateError(path, size, err)
   {
     var quote := io.QuoteafPath(path);
     var reason := io.GetCLocaleErrnoText(err);
-    message := Text.ResizeText(quote, size, reason);
+    message := Spec.ResizeText(quote, size, reason);
   }
 
   method OpenOne(io: BenchIO.IO, path: string, noCreate: bool) returns (isOpen: bool, err: int)
@@ -212,7 +211,7 @@ module TruncateCore {
     var requested := Spec.AdjustedSize(mode, base, scaled);
     if scaled < Spec.MinSize || scaled > Spec.MaxSize {
       var quote := io.QuoteafPath(path);
-      error := Text.BlockOverflowText(quote, delta, Spec.BlockSize(status));
+      error := Spec.BlockOverflowText(quote, delta, Spec.BlockSize(status));
       assert error == Spec.BlockOverflow(path, delta, Spec.BlockSize(status));
       assert Spec.ResizeOutcome(observations, timeSamples, instant,
                                 path, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
@@ -366,6 +365,7 @@ module TruncateCore {
       Proof.NoReferenceRunWitness(raw, mode, value, observations, timeSamples, instant,
                                   before, cursor, io.fs(), io.statusCursor(), errors, exit);
     }
+    hide *;
   }
 
   method Diagnostic(message: W.Bytes, io: BenchIO.IO) returns (err: int)
@@ -394,7 +394,7 @@ module TruncateCore {
     if writeErr == 0 { exit := 0; }
     else {
       var reason := io.GetCLocaleErrnoText(writeErr);
-      diagnosticErr := Diagnostic(Text.WriteErrorText(reason), io);
+      diagnosticErr := Diagnostic(Spec.WriteErrorText(reason), io);
       exit := 1;
     }
     Proof.HelpOutputWitness(old(io.stdout()), io.trustedStreams(), io.stdout(), mode,

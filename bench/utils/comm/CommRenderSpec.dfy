@@ -14,12 +14,12 @@ module CommRenderSpec {
     if zeroTerminated then '\0' else '\n'
   }
 
-  ghost function OutputDelimiterFromValues(values: seq<string>): BenchWorld.Bytes
+  function OutputDelimiterFromValues(values: seq<string>): BenchWorld.Bytes
   {
     if |values| == 0 then ['\t'] else if values[0] == "" then ['\0'] else Utf8.Encode(values[0])
   }
 
-  ghost predicate HasConflictingOutputDelimitersRelation(values: seq<string>)
+  predicate HasConflictingOutputDelimitersRelation(values: seq<string>)
   {
     |values| > 0 &&
     exists i: nat :: 1 <= i < |values| && values[i] != values[0]
@@ -30,7 +30,7 @@ module CommRenderSpec {
     if i < |data| then data[i] as int else -1
   }
 
-  ghost predicate BytesLessAt(
+  predicate BytesLessAt(
     left: BenchWorld.Bytes,
     right: BenchWorld.Bytes,
     i: nat

@@ -1,12 +1,10 @@
-include "RmTextCore.dfy"
-include "RmWorldPathCore.dfy"
-include "RmSchema.dfy"
+include "../../core/Utf8.dfy"
+include "../../core/World.dfy"
 include "RmSpec.dfy"
+include "RmSchema.dfy"
 include "RmProof.dfy"
 
 module RmCore {
-  import Text = RmTextCore
-  import RawPath = RmWorldPathCore
   import opened BenchWorld
   import BenchIO
   import R = Results
@@ -15,7 +13,7 @@ module RmCore {
   import Facts = RmProof
   import Errno = Errnos
   import C = IOContract
-  import Utf8Semantics = RmUtf8Core
+  import Utf8Semantics
   import PathCore = RmPathCore
 
   class OutputBuffer {
@@ -34,7 +32,7 @@ module RmCore {
   {
     var quoted := io.QuoteafPath(path);
     var reason := io.GetCLocaleErrnoText(err);
-    text := Text.CannotRemoveMessage(quoted,reason);
+    text := Spec.CannotRemoveMessage(quoted,reason);
   }
 
   method RefusalMessage(io: BenchIO.IO, path: Path, why: Spec.Refusal) returns (text: Bytes)
@@ -42,7 +40,7 @@ module RmCore {
   {
     var quoted := io.QuoteafPath(path);
     var quotedParent := io.QuoteafPath(Spec.ChildPath(path,".."));
-    text := Text.RefusalMessage(path,why,quoted,quotedParent);
+    text := Spec.RefusalMessage(path,why,quoted,quotedParent);
   }
 
   method ModeErrorMessage(io: BenchIO.IO, mode: Schema.RmMode) returns (text: Bytes)
@@ -78,6 +76,8 @@ module RmCore {
     ensures Spec.Listed(Spec.ObservationContextFor(io), io.fs(),path,listing)
     ensures io.dirHandles() == old(io.dirHandles())
   {
+    hide Spec.ReadPrefix, Spec.ListingObservation;
+    hide C.ValidFilesystemObservation, BenchWorld.ValidInodeFileSystemData;
     ghost var beforeHandles := io.dirHandles();
     ghost var context := Spec.ObservationContextFor(io);
     var openResult := io.OpenDir(path,false);
@@ -123,6 +123,10 @@ module RmCore {
     ghost var seen: set<DirEntry> := {};
     var names: seq<string> := [];
     var readError := 0;
+    assert Spec.ReadPrefix(io.fs(), context, handle, initialHandles, names, steps, io.dirHandles()) by {
+      hide *;
+      reveal Spec.ReadPrefix();
+    }
     while true
       modifies io.dirHandlesRegion
       invariant handle in io.dirHandles()
@@ -286,7 +290,7 @@ module RmCore {
     Facts.StatusKey(io.fs(),io.trustedFilesystem(),path,status);
     // Preserve the established query relation without expanding its resolver.
     hide C.GetFileTimesSpec;
-    var why := BasicRefusalCore(raw,path,top,rootKey,rootDevice,seen,status.v);
+    var why := Spec.BasicRefusal(raw,path,top,rootKey,rootDevice,seen,status.v);
     var parent: IOResult<FileTimeStatus> := status;
     if why != Spec.NoRefusal {
       var text := RefusalMessage(io,path,why);
@@ -448,7 +452,7 @@ module RmCore {
     if listing.readError != 0 {
       var reason := io.GetCLocaleErrnoText(listing.readError);
       assert Spec.TraversalMessage(path,reason) == Spec.TraversalText(path,listing.readError);
-      buffer.diagnostics := buffer.diagnostics + Text.TraversalMessage(path,reason);
+      buffer.diagnostics := buffer.diagnostics + Spec.TraversalMessage(path,reason);
       failed := true;
     } else if anyFailure { failed := true; }
     else { failed, ok, err := Excise(raw,io,buffer,path,true,0); }
@@ -503,7 +507,7 @@ module RmCore {
       root := InspectPath(io,"/");
       if root.Err? {
         var reason := io.GetCLocaleErrnoText(C.ResultErrno(root));
-        buffer.diagnostics := Text.RootAttributesMessage(reason);
+        buffer.diagnostics := Spec.RootAttributesMessage(reason);
         exit := 1;
         return;
       }
@@ -583,7 +587,7 @@ module RmCore {
     var finalDiagnostic := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostic := diagnostics + Text.WriteErrorText(reason);
+      finalDiagnostic := diagnostics + Spec.WriteErrorText(reason);
     }
     assert finalDiagnostic == diagnostics + (if outObservation.err == 0 then []
                                              else Spec.WriteErrorText(C.CLocaleErrnoTextResult(outObservation.err)));
@@ -610,27 +614,4 @@ module RmCore {
     hide *; reveal Spec.ObservationContextFor();
     reveal CoreSummary;
   }
-  function DotOperandCore(path: Path): bool
-  {
-    Spec.DotOperand(path)
-  } by method {
-    var stripped := RawPath.StripLeadingSlash(path);
-    var parts := RawPath.SplitSegments(stripped, 0, 0);
-    return |parts| > 0 && parts[|parts| - 1] in {".", ".."};
-  }
-
-  function BasicRefusalCore(raw: Schema.RmCmdRaw, path: Path, top: bool,
-                            rootKey: HostInodeKey, rootDevice: int, seen: set<HostInodeKey>, status: FileTimeStatus): Spec.Refusal
-  {
-    Spec.BasicRefusal(raw, path, top, rootKey, rootDevice, seen, status)
-  } by method {
-    return if !raw.recursive && !raw.directory then Spec.DirectoryRefusal
-      else if !raw.recursive then Spec.NoRefusal
-      else if top && DotOperandCore(path) then Spec.DotRefusal
-      else if top && raw.preserveRoot && HostInodeKey(status.device, status.inode) == rootKey then Spec.RootRefusal
-      else if !top && raw.oneFileSystem && status.device != rootDevice then Spec.DeviceRefusal
-      else if HostInodeKey(status.device, status.inode) in seen then Spec.CycleRefusal
-      else Spec.NoRefusal;
-  }
-
 }

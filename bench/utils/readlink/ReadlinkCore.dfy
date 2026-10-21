@@ -1,85 +1,24 @@
-include "ReadlinkTextCore.dfy"
-include "ReadlinkWorldPathCore.dfy"
-include "../../core/Errno.dfy"
+include "../../core/Utf8.dfy"
 include "../../core/World.dfy"
+include "ReadlinkSpec.dfy"
+include "../../core/Errno.dfy"
 include "../../core/IO.dfy"
 include "ReadlinkSchema.dfy"
-include "ReadlinkSpec.dfy"
 include "ReadlinkContextProof.dfy"
 
 module ReadlinkCore {
-  import Text = ReadlinkTextCore
-  import WorldPath = ReadlinkWorldPathCore
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
   import Errno = Errnos
   import Result = Results
   import BenchIO
-  import Utf8 = ReadlinkUtf8Core
+  import Utf8 = Utf8Semantics
   import IOContract
   import BenchWorld
   import Schema = ReadlinkSchema
   import Spec = ReadlinkSpec
   import Context = ReadlinkContextProof
-
-
-
-
-
-  ghost function ReadlinkResultFields(
-    cmd: Schema.ReadlinkCmd,
-    fs: BenchWorld.FileSystem,
-    cwd: BenchWorld.Path,
-    path: BenchWorld.Path
-  ): BenchWorld.IOResult<BenchWorld.Path>
-  {
-    Spec.ReadlinkResultFieldsSpec(cmd, fs, cwd, path)
-  }
-
-
-
-  method GetErrnoText(err: BenchWorld.IOError) returns (out: string)
-    ensures out == Spec.ErrnoTextSpec(err)
-  {
-    out := Spec.ErrnoTextSpec(err);
-  }
-
-  method GetHelpText() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.HelpTextSpec()
-  {
-    out := Spec.HelpTextSpec();
-  }
-
-  method GetVersionText() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.VersionTextSpec()
-  {
-    out := Spec.VersionTextSpec();
-  }
-
-  method GetMissingOperandMessage() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.MissingOperandMessageSpec()
-  {
-    out := Spec.MissingOperandMessageSpec();
-  }
-
-  method GetUnsupportedCanonicalizeMessage() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.UnsupportedCanonicalizeMessageSpec()
-  {
-    out := Spec.UnsupportedCanonicalizeMessageSpec();
-  }
-
-  method GetNoNewlineWarning() returns (out: BenchWorld.Bytes)
-    ensures out == Spec.NoNewlineWarningSpec()
-  {
-    out := Spec.NoNewlineWarningSpec();
-  }
-
-  method IsShellQuoteTrigger(ch: char) returns (trigger: bool)
-    ensures trigger == Spec.ShellQuoteTriggerSpec(ch)
-  {
-    trigger := Spec.ShellQuoteTriggerSpec(ch);
-  }
 
   method ComputeNeedsShellQuote(path: BenchWorld.Path) returns (needs: bool)
     ensures needs == Spec.NeedsShellQuoteSpec(path)
@@ -92,7 +31,7 @@ module ReadlinkCore {
       invariant !needs ==> |path| != 0 && forall j :: 0 <= j < i ==> !Spec.ShellQuoteTriggerSpec(path[j])
       decreases |path| - i
     {
-      var trigger := IsShellQuoteTrigger(path[i]);
+      var trigger := Spec.ShellQuoteTriggerSpec(path[i]);
       if trigger {
         assert Spec.ShellQuoteTriggerSpec(path[i]);
         needs := true;
@@ -100,50 +39,6 @@ module ReadlinkCore {
       i := i + 1;
     }
     assert i == |path|;
-  }
-
-  method GetErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.ErrorMessageSpec(path, err)
-  {
-    out := Text.ErrorMessageSpec(path, err);
-  }
-
-  method GetOutputDelimiter(cmd: Schema.ReadlinkCmd) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.OutputDelimiterSpec(cmd)
-  {
-    if cmd.noNewline && |cmd.operands| == 1 {
-      out := "";
-    } else if cmd.zeroTerminated {
-      out := ['\0'];
-    } else {
-      out := "\n";
-    }
-  }
-
-  method GetInitialWarning(cmd: Schema.ReadlinkCmd) returns (out: BenchWorld.Bytes)
-    ensures out == Spec.InitialWarningSpec(cmd)
-  {
-    if cmd.noNewline && |cmd.operands| > 1 {
-      out := GetNoNewlineWarning();
-    } else {
-      out := "";
-    }
-  }
-
-  method ComputeMakeAbsolute(cwd: BenchWorld.Path, path: BenchWorld.Path) returns (out: BenchWorld.Path)
-    ensures out == Spec.MakeAbsoluteSpec(cwd, path)
-  {
-    if BenchWorld.IsAbsolutePath(path) {
-      out := path;
-    } else {
-      out := WorldPath.AppendPath(cwd, path);
-    }
-  }
-
-  method ComputeEndsInSlash(path: BenchWorld.Path) returns (out: bool)
-    ensures out == Spec.EndsInSlashSpec(path)
-  {
-    out := |path| > 0 && path[|path| - 1] == '/';
   }
 
   ghost predicate ReadOneSummaryFields(
@@ -156,8 +51,8 @@ module ReadlinkCore {
     errOut: BenchWorld.Bytes
   )
   {
-    Spec.ReadObservationRelation(cmd, fs, cwd, path, ReadlinkResultFields(cmd, fs, cwd, path)) &&
-    match ReadlinkResultFields(cmd, fs, cwd, path)
+    Spec.ReadObservationRelation(cmd, fs, cwd, path, Spec.ReadlinkResultFieldsSpec(cmd, fs, cwd, path)) &&
+    match Spec.ReadlinkResultFieldsSpec(cmd, fs, cwd, path)
     case Ok(target) =>
       !hadError &&
       out == Utf8.Encode(target) + Spec.OutputDelimiterSpec(cmd) &&
@@ -292,7 +187,7 @@ module ReadlinkCore {
     var cmd := Schema.WithNativeFailures(Schema.Command(raw), io.trustedNativeFailures(),preContext);
     assert Schema.NativeReadCount([]) == 0 by { reveal Schema.NativeReadCount(); }
     if cmd.mode == Schema.ModeHelp {
-      var out := GetHelpText();
+      var out := Spec.HelpTextSpec();
       plannedStdout := plannedStdout + (out);
       exit := 0;
       assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
@@ -300,7 +195,7 @@ module ReadlinkCore {
     }
 
     if cmd.mode == Schema.ModeVersion {
-      var out := GetVersionText();
+      var out := Spec.VersionTextSpec();
       plannedStdout := plannedStdout + (out);
       exit := 0;
       assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
@@ -308,7 +203,7 @@ module ReadlinkCore {
     }
 
     if |cmd.operands| == 0 {
-      var err := GetMissingOperandMessage();
+      var err := Spec.MissingOperandMessageSpec();
       plannedStderr := plannedStderr + (err);
       exit := 1;
       assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
@@ -316,7 +211,7 @@ module ReadlinkCore {
     }
 
     if cmd.mode == Schema.ModeUnsupportedCanonicalize {
-      var err := GetUnsupportedCanonicalizeMessage();
+      var err := Spec.UnsupportedCanonicalizeMessageSpec();
       plannedStderr := plannedStderr + (err);
       exit := 1;
       assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr);
@@ -358,8 +253,8 @@ module ReadlinkCore {
         r := io.ReadLinkAtCwd(path);
         assert IOContract.ReadLinkAtCwdSpec(preFs, beforeRead, io.trustedNativeFailures(), path, r);
       }
-      assert r == ReadlinkResultFields(stepCmd, preFs, preCwd, path) by {
-        reveal ReadlinkResultFields(),Spec.ReadlinkResultFieldsSpec(),IOContract.ReadLinkAtCwdSpec();
+      assert r == Spec.ReadlinkResultFieldsSpec(stepCmd, preFs, preCwd, path) by {
+        reveal Spec.ReadlinkResultFieldsSpec(),IOContract.ReadLinkAtCwdSpec();
       }
       assert Spec.ReadObservationRelation(stepCmd, preFs, preCwd, path, r) by {
         reveal Spec.ReadObservationRelation();
@@ -367,14 +262,14 @@ module ReadlinkCore {
       match r {
         case Ok(target) =>
           stepError := false;
-          var delimiter := GetOutputDelimiter(cmd);
+          var delimiter := Spec.OutputDelimiterSpec(cmd);
           stepOut := Utf8.Encode(target) + delimiter;
           stepErrOut := "";
         case Err(err) =>
           stepError := true;
           stepOut := "";
           if cmd.verbose {
-            stepErrOut := GetErrorMessage(path, err);
+            stepErrOut := Spec.ErrorMessageSpec(path, err);
           } else {
             stepErrOut := "";
           }
@@ -411,7 +306,7 @@ module ReadlinkCore {
     }
     assert cmd.operands[..i] == cmd.operands;
     plannedStdout := plannedStdout + (out);
-    var warning := GetInitialWarning(cmd);
+    var warning := Spec.InitialWarningSpec(cmd);
     plannedStderr := plannedStderr + (warning + errOut);
     exit := if hadError then 1 else 0;
     assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
@@ -437,7 +332,7 @@ module ReadlinkCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
                                               else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

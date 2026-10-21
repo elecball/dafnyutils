@@ -1,14 +1,14 @@
-include "ChmodTextCore.dfy"
-include "ChmodRecursiveTextCore.dfy"
-include "ChmodWorldPathCore.dfy"
+include "../../core/World.dfy"
+include "ChmodRecursiveSpec.dfy"
+include "ChmodSpec.dfy"
 include "ChmodModelProof.dfy"
 include "ChmodChangeRuntime.dfy"
 include "ChmodDirectoryRuntime.dfy"
 
 module ChmodDescriptorRuntime {
-  import Text = ChmodTextCore
-  import RecursiveText = ChmodRecursiveTextCore
-  import WorldPath = ChmodWorldPathCore
+  import Text = ChmodSpec
+  import RecursiveText = ChmodRecursiveSpec
+  import WorldPath = BenchWorld
   import ModelProof = ChmodModelProof
   import W = BenchWorld
   import BenchIO

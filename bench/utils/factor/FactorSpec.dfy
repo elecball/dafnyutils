@@ -15,9 +15,6 @@ module FactorSpec {
   import Utf8 = Utf8Semantics
   import SE = StringEscaping
 
-
-
-
   function HelpTextSpec(): BenchWorld.Bytes
   {
     "Usage: factor [OPTION] [NUMBER]...\n"
@@ -72,7 +69,7 @@ module FactorSpec {
     '0' <= ch && ch <= '9'
   }
 
-  ghost predicate WhitespaceOnly(text: string)
+  predicate WhitespaceOnly(text: string)
   {
     forall i :: 0 <= i < |text| ==> IsWhitespace(text[i])
   }
@@ -137,12 +134,12 @@ module FactorSpec {
                         !Divides(divisor, value)
   }
 
-  ghost predicate Nondecreasing(values: seq<int>)
+  predicate Nondecreasing(values: seq<int>)
   {
     forall i :: 0 <= i && i + 1 < |values| ==> values[i] <= values[i + 1]
   }
 
-  ghost predicate SuffixMinimums(values: seq<int>)
+  predicate SuffixMinimums(values: seq<int>)
   {
     forall i, j :: 0 <= i <= j < |values| ==> values[i] <= values[j]
   }
@@ -265,7 +262,7 @@ module FactorSpec {
     " is not a valid positive integer\n"
   }
 
-  ghost function InvalidTokenMessage(token: string): BenchWorld.Bytes
+  function InvalidTokenMessage(token: string): BenchWorld.Bytes
     requires token is BenchWorld.Bytes
   {
     InvalidTokenMessagePart1() + SE.SpecLocaleQuoteBytes(token) + InvalidTokenMessagePart2()
@@ -281,59 +278,13 @@ module FactorSpec {
     " is not a valid positive integer\n"
   }
 
-  ghost function InvalidArgvTokenMessage(token: string): BenchWorld.Bytes
+  function InvalidArgvTokenMessage(token: string): BenchWorld.Bytes
   {
     InvalidArgvTokenMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) +
     InvalidArgvTokenMessagePart2()
   }
 
-  function OctalDigit(d: int): char
-  {
-    if 0 <= d && d < 8 then
-      (d + ('0' as int)) as char
-    else
-      '0'
-  }
-
-  function OctalEscape(ch: char): BenchWorld.Bytes
-  {
-    var code := ch as int;
-    "\\" + [OctalDigit((code / 64) % 8), OctalDigit((code / 8) % 8), OctalDigit(code % 8)]
-  }
-
-  function ShouldOctalEscape(ch: char): bool
-  {
-    (ch as int) < 32 || 126 < (ch as int)
-  }
-
-  function HasNamedEscape(ch: char): bool
-  {
-    var code := ch as int;
-    7 <= code <= 13
-  }
-
-  function NamedEscape(ch: char): BenchWorld.Bytes
-  {
-    var code := ch as int;
-    if code == 7 then
-      "\\a"
-    else if code == 8 then
-      "\\b"
-    else if code == 9 then
-      "\\t"
-    else if code == 10 then
-      "\\n"
-    else if code == 11 then
-      "\\v"
-    else if code == 12 then
-      "\\f"
-    else if code == 13 then
-      "\\r"
-    else
-      []
-  }
-
-  ghost predicate DigitsFrom(text: string, start: nat)
+  predicate DigitsFrom(text: string, start: nat)
   {
     start < |text| &&
     forall i :: start <= i < |text| ==> IsDigit(text[i])
@@ -501,7 +452,7 @@ module FactorSpec {
     "\n"
   }
 
-  ghost function ReadErrorText(reason: string): BenchWorld.Bytes
+  function ReadErrorText(reason: string): BenchWorld.Bytes
   {
     ReadErrorTextPart1() + Utf8.Encode(reason) + ReadErrorTextPart2()
   }
@@ -522,7 +473,7 @@ module FactorSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

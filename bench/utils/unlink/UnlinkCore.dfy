@@ -1,10 +1,10 @@
-include "UnlinkTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "UnlinkSpec.dfy"
 include "../../core/IO.dfy"
 include "UnlinkSchema.dfy"
-include "UnlinkSpec.dfy"
 
 module UnlinkCore {
-  import Text = UnlinkTextCore
+  import Text = UnlinkSpec
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -14,7 +14,7 @@ module UnlinkCore {
   import Schema = UnlinkSchema
   import Spec = UnlinkSpec
   import C = IOContract
-  import Utf8 = UnlinkUtf8Core
+  import Utf8 = Utf8Semantics
 
   opaque twostate predicate PreparedSummary(raw: Schema.UnlinkCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     reads io.fsRegion, io.nowRegion, io.trustedFilesystemRegion

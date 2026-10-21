@@ -11,61 +11,6 @@ module ExpandProof {
   import Core = ExpandCore
   import Spec = ExpandSpec
 
-  lemma IsDigitEq(ch: char)
-    ensures Core.IsDigit(ch) == Spec.IsDigit(ch)
-  {
-  }
-
-  lemma MaxColumnEq()
-    ensures Core.MaxColumn() == Spec.MaxColumn()
-  {
-  }
-
-  lemma DigitValueEq(ch: char)
-    requires Core.IsDigit(ch)
-    ensures Core.DigitValue(ch) == Spec.DigitValue(ch)
-  {
-  }
-
-  lemma IsSeparatorEq(ch: char)
-    ensures Core.IsSeparator(ch) == Spec.IsSeparator(ch)
-  {
-  }
-
-  lemma IsMarkerEq(ch: char)
-    ensures Core.IsMarker(ch) == Spec.IsMarker(ch)
-  {
-  }
-
-  lemma MarkerOfEq(ch: char)
-    requires Core.IsMarker(ch)
-    ensures Core.MarkerOf(ch) == Spec.MarkerOf(ch)
-  {
-  }
-
-  lemma LastStopEq(stops: seq<nat>)
-    requires |stops| > 0
-    ensures Core.LastStop(stops) == Spec.LastStop(stops)
-  {
-  }
-
-  lemma HelpBeforeOtherEq(raw: Schema.ExpandCmdRaw)
-    ensures Core.HelpBeforeOther(raw) == Spec.HelpBeforeOther(raw)
-  {
-  }
-
-  lemma VersionBeforeInvalidEq(raw: Schema.ExpandCmdRaw)
-    ensures Core.VersionBeforeInvalid(raw) == Spec.VersionBeforeInvalid(raw)
-  {
-  }
-
-  lemma RequestTokenIndexEq(raw: Schema.ExpandCmdRaw)
-    ensures Core.RequestTokenIndex(raw) == Spec.RequestTokenIndex(raw)
-  {
-    HelpBeforeOtherEq(raw);
-    VersionBeforeInvalidEq(raw);
-  }
-
   lemma NatParseSatisfies(text: string, i: nat, acc: nat)
     requires i <= |text|
     ensures Spec.NatParseRelation(
@@ -74,14 +19,11 @@ module ExpandProof {
     decreases |text| - i
   {
     if i < |text| {
-      IsDigitEq(text[i]);
-      if Core.IsDigit(text[i]) {
-        DigitValueEq(text[i]);
-        MaxColumnEq();
-        if acc <= (Core.MaxColumn() - Core.DigitValue(text[i])) / 10 {
+      if Spec.IsDigit(text[i]) {
+        if acc <= (Spec.MaxColumn() - Spec.DigitValue(text[i])) / 10 {
           NatParseSatisfies(
             text, i + 1,
-            acc * 10 + Core.DigitValue(text[i])
+            acc * 10 + Spec.DigitValue(text[i])
           );
         }
       }
@@ -106,8 +48,7 @@ module ExpandProof {
     decreases |text| - start
   {
     if start < |text| {
-      IsSeparatorEq(text[start]);
-      if !Core.IsSeparator(text[start]) {
+      if !Spec.IsSeparator(text[start]) {
         TokenEndSatisfies(text, start + 1);
       }
     }
@@ -116,93 +57,15 @@ module ExpandProof {
   lemma DigitsEndSatisfies(text: string, start: nat)
     requires start <= |text|
     ensures Spec.DigitsEndRelation(
-              text, start, Core.FindDigitsEnd(text, start)
+              text, start, Spec.FindDigitsEnd(text, start)
             )
     decreases |text| - start
   {
     if start < |text| {
-      IsDigitEq(text[start]);
-      if Core.IsDigit(text[start]) {
+      if Spec.IsDigit(text[start]) {
         DigitsEndSatisfies(text, start + 1);
       }
     }
-  }
-
-  lemma FindDigitsEndEq(text: string, start: nat)
-    requires start <= |text|
-    ensures Core.FindDigitsEnd(text, start) ==
-            Spec.FindDigitsEnd(text, start)
-    decreases |text| - start
-  {
-    if start < |text| {
-      IsDigitEq(text[start]);
-      if Core.IsDigit(text[start]) {
-        FindDigitsEndEq(text, start + 1);
-      }
-    }
-  }
-
-  lemma SyntaxDiagnosticsFromEq(
-    text: string,
-    i: nat,
-    haveValue: bool,
-    numberStart: nat,
-    value: nat
-  )
-    requires i <= |text|
-    requires !haveValue || numberStart <= i
-    ensures Core.SyntaxDiagnosticsFrom(
-              text, i, haveValue, numberStart, value
-            ) == Spec.SyntaxDiagnosticsFrom(
-                   text, i, haveValue, numberStart, value
-                 )
-    decreases |text| - i
-  {
-    if i < |text| {
-      IsSeparatorEq(text[i]);
-      if Core.IsSeparator(text[i]) {
-        SyntaxDiagnosticsFromEq(text, i + 1, false, 0, 0);
-      } else {
-        IsMarkerEq(text[i]);
-        if Core.IsMarker(text[i]) {
-          MarkerOfEq(text[i]);
-          SyntaxDiagnosticsFromEq(
-            text, i + 1, haveValue, numberStart, value
-          );
-        } else {
-          IsDigitEq(text[i]);
-          if Core.IsDigit(text[i]) {
-            DigitValueEq(text[i]);
-            MaxColumnEq();
-            var start := if haveValue then numberStart else i;
-            var accumulated := if haveValue then value else 0;
-            if accumulated >
-               (Core.MaxColumn() - Core.DigitValue(text[i])) / 10 {
-              FindDigitsEndEq(text, i);
-              var end := Core.FindDigitsEnd(text, i);
-              assert i < end by {
-                reveal Core.FindDigitsEnd();
-              }
-              SyntaxDiagnosticsFromEq(
-                text, end, true, start, accumulated
-              );
-            } else {
-              SyntaxDiagnosticsFromEq(
-                text, i + 1, true, start,
-                accumulated * 10 + Core.DigitValue(text[i])
-              );
-            }
-          }
-        }
-      }
-    }
-  }
-
-  lemma SyntaxDiagnosticsEq(text: string)
-    ensures Core.SyntaxDiagnostics(text) ==
-            Spec.SyntaxDiagnostics(text)
-  {
-    SyntaxDiagnosticsFromEq(text, 0, false, 0, 0);
   }
 
   lemma MarkerScanSatisfies(
@@ -219,11 +82,9 @@ module ExpandProof {
     decreases |part| - i
   {
     if i < |part| {
-      IsMarkerEq(part[i]);
-      if Core.IsMarker(part[i]) {
-        MarkerOfEq(part[i]);
+      if Spec.IsMarker(part[i]) {
         MarkerScanSatisfies(
-          part, i + 1, Core.MarkerOf(part[i]), true
+          part, i + 1, Spec.MarkerOf(part[i]), true
         );
       }
     }
@@ -251,12 +112,10 @@ module ExpandProof {
         part, 0, Schema.MarkerNone, false
       );
       if scan.index < |part| {
-        var end := Core.FindDigitsEnd(part, scan.index);
+        var end := Spec.FindDigitsEnd(part, scan.index);
         DigitsEndSatisfies(part, scan.index);
         if end < |part| {
-          IsMarkerEq(part[end]);
-          if Core.IsMarker(part[end]) {
-            MarkerOfEq(part[end]);
+          if Spec.IsMarker(part[end]) {
           }
         } else {
           PositiveNatSatisfies(part[scan.index..end]);
@@ -282,8 +141,7 @@ module ExpandProof {
     decreases |text| - start
   {
     if start < |text| {
-      IsSeparatorEq(text[start]);
-      if Core.IsSeparator(text[start]) {
+      if Spec.IsSeparator(text[start]) {
         TabTextSatisfies(text, start + 1, acc);
       } else {
         var end := Core.FindTokenEnd(text, start);
@@ -317,8 +175,7 @@ module ExpandProof {
         acc.stops, acc.extendSize, acc.incrementSize,
         Schema.MarkerNone
       );
-      SyntaxDiagnosticsEq(args[i].text);
-      if Core.SyntaxDiagnostics(args[i].text) == "" {
+      if Spec.SyntaxDiagnostics(args[i].text) == "" {
         TabTextSatisfies(args[i].text, 0, argAcc);
         match Core.ParseTabTextFrom(args[i].text, 0, argAcc)
         case TabAccumErr(_) =>
@@ -328,25 +185,11 @@ module ExpandProof {
     }
   }
 
-  lemma StopsValidationErrorEq(
-    stops: seq<nat>, i: nat, previous: nat
-  )
-    requires i <= |stops|
-    ensures Core.StopsValidationError(stops, i, previous) ==
-            Spec.StopsValidationError(stops, i, previous)
-    decreases |stops| - i
-  {
-    if i < |stops| && stops[i] != 0 && stops[i] > previous {
-      StopsValidationErrorEq(stops, i + 1, stops[i]);
-    }
-  }
-
   lemma FinalizedTabsSatisfies(acc: Schema.TabAccum)
     ensures Spec.FinalizedTabsRelation(
               acc, Core.FinalizeTabAccum(acc)
             )
   {
-    StopsValidationErrorEq(acc.stops, 0, 0);
   }
 
   lemma OptionScanSatisfies(raw: Schema.ExpandCmdRaw)
@@ -354,18 +197,15 @@ module ExpandProof {
               raw, Core.ScanCommandOptions(raw)
             )
   {
-    RequestTokenIndexEq(raw);
     var initial := Schema.TabAccum([], 0, 0, Schema.MarkerNone);
     TabArgsFromSatisfies(
-      raw.tabArgs, 0, Core.RequestTokenIndex(raw), initial
+      raw.tabArgs, 0, Spec.RequestTokenIndex(raw), initial
     );
     match Core.ParseTabArgsFrom(
-        raw.tabArgs, 0, Core.RequestTokenIndex(raw), initial
+        raw.tabArgs, 0, Spec.RequestTokenIndex(raw), initial
       )
     case TabAccumErr(_) =>
     case TabAccumOk(_) =>
-      HelpBeforeOtherEq(raw);
-      VersionBeforeInvalidEq(raw);
   }
 
   lemma InputsFromOperandsElement(
@@ -516,9 +356,8 @@ module ExpandProof {
             FixedWidthRelationHolds(width, column);
           } else {
             IncrementalWidthRelationHolds(
-              Core.LastStop(stops), width, column
+              Spec.LastStop(stops), width, column
             );
-            LastStopEq(stops);
           }
       }
   }
@@ -540,15 +379,6 @@ module ExpandProof {
           }
         }
       }
-    }
-  }
-
-  lemma JoinPiecesEq(pieces: seq<BenchWorld.Bytes>)
-    ensures Core.JoinPieces(pieces) == Spec.JoinPieces(pieces)
-    decreases |pieces|
-  {
-    if |pieces| > 0 {
-      JoinPiecesEq(pieces[1..]);
     }
   }
 
@@ -615,7 +445,6 @@ module ExpandProof {
         pieces[i], columns[i + 1], leadings[i + 1]
       );
     }
-    JoinPiecesEq(pieces);
   }
 
   lemma ReadStepSummaryImpliesRelation(
@@ -767,8 +596,6 @@ module ExpandProof {
         errorPieces[i], errorFlags[i]
       );
     }
-    JoinPiecesEq(outputPieces);
-    JoinPiecesEq(errorPieces);
   }
 
   lemma InputTraceSummaryImpliesRelation(

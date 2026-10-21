@@ -1,6 +1,6 @@
-include "ChmodTextCore.dfy"
-include "ChmodRecursiveTextCore.dfy"
-include "ChmodModeCore.dfy"
+include "ChmodRecursiveSpec.dfy"
+include "ChmodSchema.dfy"
+include "ChmodSpec.dfy"
 include "ChmodDescriptorRuntime.dfy"
 include "ChmodDescriptorPrincipalSpec.dfy"
 include "ChmodDescriptorProof.dfy"
@@ -8,13 +8,11 @@ include "ChmodBatchProof.dfy"
 include "ChmodRecursiveFilesProof.dfy"
 
 module ChmodDescriptorCore {
-  import Text = ChmodTextCore
-  import RecursiveText = ChmodRecursiveTextCore
+  import Text = ChmodSpec
   import W = BenchWorld
   import BenchIO
   import C = IOContract
   import Schema = ChmodSchema
-  import Mode = ChmodModeCore
   import Base = ChmodCore
   import BaseSpec = ChmodSpec
   import BaseProof = ChmodProof
@@ -76,11 +74,7 @@ module ChmodDescriptorCore {
     ghost var context := BaseSpec.Context(io);
     ghost var native0 := io.cwdContext();
     ghost var directories := io.directoryObservations();
-    if cmd.mode == Schema.ModeHelp || cmd.mode == Schema.ModeVersion ||
-       (cmd.recursive && cmd.dereferenceMode == 1 && cmd.traversalMode == 0) ||
-       (cmd.seenReference && cmd.diagnoseSurprises) || |cmd.files| == 0 ||
-       (!cmd.seenReference && !Mode.IsValidModeExpr(cmd.modeExpr)) {
-      assert Spec.EarlyCase(cmd) by { reveal Spec.EarlyCase(); }
+    if Spec.EarlyCase(cmd) {
       exit := PrepareEarly(raw, io, output);
       return;
     }
@@ -92,12 +86,12 @@ module ChmodDescriptorCore {
       }
       var reference := Dispatch.ReadStatus(Operand.CwdOperand(cmd.referenceFile), true, io);
       if reference.Err? {
-        output.stderr := Base.ReferenceErrorMessageCore(cmd.referenceFile,
-                                                        Base.NativeErrnoTextCore(C.ResultErrno(reference), io));
+        output.stderr := BaseSpec.ReferenceErrorMessageSpec(cmd.referenceFile,
+                                                            Base.NativeErrnoTextCore(C.ResultErrno(reference), io));
         exit := 1;
         assert Spec.ReferenceFailureFields(cmd, fs0, context, native0,
                                            io.fs(), io.cwdContext(), io.statusCursor(), output.stdout, output.stderr, exit) by {
-          reveal Spec.ReferenceFailureFields(), Base.ReferenceErrorMessageCore();
+          reveal Spec.ReferenceFailureFields(), BaseSpec.ReferenceErrorMessageSpec();
         }
         assert Spec.PreparedSpec(raw, io, exit, output.stdout, output.stderr) by {
           reveal Spec.PreparedSpec();
@@ -133,12 +127,12 @@ module ChmodDescriptorCore {
       }
       var root := Dispatch.ReadStatus(Operand.CwdOperand("/"), false, io);
       if root.Err? {
-        output.stderr := Base.ReferenceErrorMessageCore("/",
-                                                        Base.NativeErrnoTextCore(C.ResultErrno(root), io));
+        output.stderr := BaseSpec.ReferenceErrorMessageSpec("/",
+                                                            Base.NativeErrnoTextCore(C.ResultErrno(root), io));
         exit := 1;
         assert Spec.RootFailureFields(cmd, fs0, context, planNative, planCursor,
                                       io.fs(), io.cwdContext(), io.statusCursor(), output.stdout, output.stderr, exit) by {
-          reveal Spec.RootFailureFields(), Base.ReferenceErrorMessageCore();
+          reveal Spec.RootFailureFields(), BaseSpec.ReferenceErrorMessageSpec();
         }
         assert Spec.PreparedSpec(raw, io, exit, output.stdout, output.stderr) by {
           reveal Spec.PreparedSpec();

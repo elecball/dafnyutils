@@ -396,33 +396,6 @@ module Base64Proof {
     }
   }
 
-  lemma AlphabetEq(index: nat)
-    requires index < 64
-    ensures Core.Alphabet(index) == Spec.Alphabet(index)
-  {
-  }
-
-  lemma ByteValueEq(ch: char)
-    ensures Core.ByteValue(ch) == Spec.ByteValue(ch)
-  {
-  }
-
-  lemma ByteCharEq(value: nat)
-    ensures Core.ByteChar(value) == Spec.ByteChar(value)
-  {
-  }
-
-  lemma DecodeValueEq(ch: char)
-    ensures Core.DecodeValue(ch) == Spec.DecodeValue(ch)
-  {
-  }
-
-  lemma Valid64Eq(ch: char)
-    ensures Core.Valid64(ch) == Spec.Valid64(ch)
-  {
-    DecodeValueEq(ch);
-  }
-
   lemma KeptInputRelationImpliesSpec(
     data: BW.Bytes,
     ignoreGarbage: bool,
@@ -440,12 +413,6 @@ module Base64Proof {
     reveal Spec.KeptInputRelation();
     reveal Core.StrictlyIncreasing();
     reveal Spec.StrictlyIncreasing();
-    forall i: nat | i < |data|
-      ensures Core.Valid64(data[i]) ==
-              Spec.Valid64(data[i])
-    {
-      Valid64Eq(data[i]);
-    }
   }
 
   lemma EncodeBlockRelationEquivalent(
@@ -460,14 +427,6 @@ module Base64Proof {
   {
     reveal Core.EncodeBlockRelation();
     reveal Spec.EncodeBlockRelation();
-    var input := 3 * block;
-    ByteValueEq(data[input]);
-    if input + 1 < |data| {
-      ByteValueEq(data[input + 1]);
-    }
-    if input + 2 < |data| {
-      ByteValueEq(data[input + 2]);
-    }
   }
 
   lemma EncodeRelationImpliesSpec(
@@ -625,14 +584,6 @@ module Base64Proof {
   {
     reveal Core.DecodeFullBlockRelation();
     reveal Spec.DecodeFullBlockRelation();
-    Valid64Eq(data[start]);
-    Valid64Eq(data[start + 1]);
-    Valid64Eq(data[start + 2]);
-    Valid64Eq(data[start + 3]);
-    DecodeValueEq(data[start]);
-    DecodeValueEq(data[start + 1]);
-    DecodeValueEq(data[start + 2]);
-    DecodeValueEq(data[start + 3]);
   }
 
   lemma DecodeTerminalRelationImpliesSpec(
@@ -657,16 +608,6 @@ module Base64Proof {
           data, 0, fullOutput
         );
       }
-    }
-    if |data| >= 2 {
-      Valid64Eq(data[0]);
-      Valid64Eq(data[1]);
-      DecodeValueEq(data[0]);
-      DecodeValueEq(data[1]);
-    }
-    if |data| >= 3 {
-      Valid64Eq(data[2]);
-      DecodeValueEq(data[2]);
     }
   }
 

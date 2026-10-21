@@ -105,198 +105,6 @@ module LsProof {
     reveal Spec.BaseEntryBeforeSpec();
   }
 
-  lemma DigitCharBridge(d: nat)
-    requires d < 10
-    ensures Core.DigitCharCore(d) == Spec.DigitChar(d)
-  {
-  }
-
-  lemma NatTextBridge(n: nat)
-    ensures Core.NatTextCore(n) == Spec.NatTextSpec(n)
-    decreases n
-  {
-    if n >= 10 {
-      NatTextBridge(n / 10);
-      DigitCharBridge(n % 10);
-    } else {
-      DigitCharBridge(n);
-    }
-  }
-
-  lemma IntTextBridge(n: int)
-    ensures Core.IntTextCore(n) == Spec.IntTextSpec(n)
-  {
-    if n < 0 {
-      NatTextBridge((-n) as nat);
-    } else {
-      NatTextBridge(n as nat);
-    }
-  }
-
-  lemma PermissionCharBridge(mode: bv32, bit: bv32, present: char)
-    ensures Core.PermissionCharCore(mode, bit, present) ==
-            Spec.PermissionCharSpec(mode, bit, present)
-  {
-  }
-
-  lemma KindCharBridge(kind: BenchWorld.FileKind)
-    ensures Core.KindCharCore(kind) == Spec.KindCharSpec(kind)
-  {
-    match kind
-    case RegularKind =>
-    case DirectoryKind =>
-    case SymlinkKind =>
-    case BlockDeviceKind =>
-    case CharacterDeviceKind =>
-    case FifoKind =>
-    case SocketKind =>
-  }
-
-  lemma ExecuteCharBridge(
-    mode: bv32,
-    executeBit: bv32,
-    specialBit: bv32,
-    specialExecute: char,
-    specialNoExecute: char
-  )
-    ensures Core.ExecuteCharCore(
-              mode, executeBit, specialBit, specialExecute, specialNoExecute) ==
-            Spec.ExecuteCharSpec(
-              mode, executeBit, specialBit, specialExecute, specialNoExecute)
-  {
-    PermissionCharBridge(mode, executeBit, 'x');
-  }
-
-  lemma SelectedTimeBridge(cmd: Schema.LsCmd, status: BenchWorld.FileStatus)
-    ensures Core.SelectedSecondsCore(cmd, status) ==
-            Spec.SelectedSecondsSpec(cmd, status)
-    ensures Core.SelectedNanosecondsCore(cmd, status) ==
-            Spec.SelectedNanosecondsSpec(cmd, status)
-  {
-    match cmd.timeField
-    case ModificationTime =>
-    case AccessTime =>
-    case ChangeTime =>
-  }
-
-  lemma ModeTextBridge(status: BenchWorld.FileStatus)
-    ensures Core.ModeTextCore(status) == Spec.ModeTextSpec(status)
-  {
-    KindCharBridge(status.kind);
-    PermissionCharBridge(status.mode, 256 as bv32, 'r');
-    PermissionCharBridge(status.mode, 128 as bv32, 'w');
-    ExecuteCharBridge(status.mode, 64 as bv32, 2048 as bv32, 's', 'S');
-    PermissionCharBridge(status.mode, 32 as bv32, 'r');
-    PermissionCharBridge(status.mode, 16 as bv32, 'w');
-    ExecuteCharBridge(status.mode, 8 as bv32, 1024 as bv32, 's', 'S');
-    PermissionCharBridge(status.mode, 4 as bv32, 'r');
-    PermissionCharBridge(status.mode, 2 as bv32, 'w');
-    ExecuteCharBridge(status.mode, 1 as bv32, 512 as bv32, 't', 'T');
-  }
-
-  lemma RenderEntryBridge(
-    cmd: Schema.LsCmd,
-    displayName: string,
-    status: BenchWorld.FileStatus
-  )
-    ensures Core.RenderEntryCore(cmd, displayName, status) ==
-            Spec.RenderEntrySpec(cmd, displayName, status)
-  {
-    RenderAlignedEntryBridge(cmd, displayName, status, Spec.ColumnWidths(0, 0, 0, 0, 0));
-  }
-
-  lemma RenderAlignedEntryBridge(
-    cmd: Schema.LsCmd,
-    displayName: string,
-    status: BenchWorld.FileStatus,
-    widths: Spec.ColumnWidths
-  )
-    ensures Core.RenderAlignedEntryCore(cmd, displayName, status, widths) ==
-            Spec.RenderAlignedEntrySpec(cmd, displayName, status, widths)
-  {
-    if cmd.showBlocks {
-      NatTextBridge(Spec.DisplayedBlocksSpec(
-                      status.storage.allocatedBlocks, cmd.cliBlockSize));
-    }
-    if cmd.numericLong {
-      ModeTextBridge(status);
-      NatTextBridge(status.linkCount);
-      NatTextBridge(status.ownership.uid);
-      NatTextBridge(status.ownership.gid);
-      NatTextBridge(Spec.DisplayedFileSizeSpec(
-                      status.storage.size, cmd.fileSizeBlockSize));
-      SelectedTimeBridge(cmd, status);
-      IntTextBridge(Core.SelectedSecondsCore(cmd, status));
-      IntTextBridge(Core.SelectedNanosecondsCore(cmd, status));
-    }
-  }
-
-  lemma AllocatedBlocksSumBridge(observations: seq<Spec.EntryObservation>)
-    ensures Core.AllocatedBlocksSumCore(observations) ==
-            Spec.AllocatedBlocksSumSpec(observations)
-    decreases |observations|
-  {
-    if |observations| > 0 {
-      AllocatedBlocksSumBridge(observations[1..]);
-    }
-  }
-
-  lemma TotalLineBridge(cmd: Schema.LsCmd, observations: seq<Spec.EntryObservation>)
-    ensures Core.TotalLineCore(cmd, observations) == Spec.TotalLineSpec(cmd, observations)
-  {
-    if cmd.numericLong || cmd.showBlocks {
-      AllocatedBlocksSumBridge(observations);
-      NatTextBridge(Spec.DisplayedBlocksSpec(
-                      Core.AllocatedBlocksSumCore(observations), cmd.cliBlockSize));
-    }
-  }
-
-  // Core keeps its index recursion, so the bridge carries the suffix
-  // generalisation the structural specification needs.
-  lemma StringLessFromBridge(left: string, right: string, i: nat)
-    requires i <= |left| && i <= |right|
-    ensures Core.StringLessFromCore(left, right, i) ==
-            Spec.StringLessSpec(left[i..], right[i..])
-    decreases |left| - i
-  {
-    reveal Core.StringLessFromCore();
-    reveal Spec.StringLessSpec();
-    if i < |left| && i < |right| {
-      assert left[i..][0] == left[i];
-      assert right[i..][0] == right[i];
-      assert left[i..][1..] == left[i + 1..];
-      assert right[i..][1..] == right[i + 1..];
-      if left[i] == right[i] {
-        StringLessFromBridge(left, right, i + 1);
-      }
-    }
-  }
-
-  lemma StringLessBridge(left: string, right: string)
-    ensures Core.StringLessFromCore(left, right, 0) ==
-            Spec.StringLessSpec(left, right)
-  {
-    StringLessFromBridge(left, right, 0);
-  }
-
-  lemma EntryBeforeBridge(
-    cmd: Schema.LsCmd,
-    left: Spec.EntryObservation,
-    right: Spec.EntryObservation
-  )
-    ensures Core.EntryBeforeCore(cmd, left, right) ==
-            Spec.EntryBeforeSpec(cmd, left, right)
-  {
-    reveal Core.EntryBeforeCore();
-    reveal Spec.EntryBeforeSpec();
-    reveal Core.BaseEntryBeforeCore();
-    reveal Spec.BaseEntryBeforeSpec();
-    reveal Core.StringLessCore();
-    reveal Spec.StringLessSpec();
-    StringLessBridge(left.displayName, right.displayName);
-    StringLessBridge(right.displayName, left.displayName);
-  }
-
   lemma StringLessIrreflexive(value: string)
     ensures !Spec.StringLessSpec(value, value)
     decreases |value|
@@ -382,8 +190,7 @@ module LsProof {
   {
     reveal Core.InsertSortedCore();
     if |sorted| > 0 {
-      EntryBeforeBridge(cmd, entry, sorted[0]);
-      if !Core.EntryBeforeCore(cmd, entry, sorted[0]) {
+      if !Spec.EntryBeforeSpec(cmd, entry, sorted[0]) {
         InsertSortedPreservesMultiset(cmd, entry, sorted[1..]);
         assert sorted == [sorted[0]] + sorted[1..];
         assert Core.InsertSortedCore(cmd, entry, sorted) ==
@@ -435,8 +242,7 @@ module LsProof {
     reveal Core.InsertSortedCore();
     reveal Spec.EntriesOrderedRelation();
     if |sorted| > 0 {
-      EntryBeforeBridge(cmd, entry, sorted[0]);
-      if Core.EntryBeforeCore(cmd, entry, sorted[0]) {
+      if Spec.EntryBeforeSpec(cmd, entry, sorted[0]) {
         EntryBeforeAsymmetric(cmd, entry, sorted[0]);
         forall j: nat | j < |sorted|
           ensures !Spec.EntryBeforeSpec(cmd, sorted[j], entry)
@@ -486,21 +292,6 @@ module LsProof {
     }
   }
 
-  lemma OperandBeforeBridge(
-    cmd: Schema.LsCmd,
-    left: Spec.OperandObservation,
-    right: Spec.OperandObservation
-  )
-    ensures Core.OperandBeforeCore(cmd, left, right) ==
-            Spec.OperandBeforeSpec(cmd, left, right)
-  {
-    reveal Core.OperandBeforeCore();
-    reveal Spec.OperandBeforeSpec();
-    if left.operandClass == right.operandClass {
-      EntryBeforeBridge(cmd, Spec.OperandAsEntry(left), Spec.OperandAsEntry(right));
-    }
-  }
-
   lemma OperandBeforeAsymmetric(
     cmd: Schema.LsCmd,
     left: Spec.OperandObservation,
@@ -545,7 +336,7 @@ module LsProof {
   {
     reveal Core.InsertOperandSortedCore();
     if |sorted| > 0 {
-      if !Core.OperandBeforeCore(cmd, observation, sorted[0]) {
+      if !Spec.OperandBeforeSpec(cmd, observation, sorted[0]) {
         InsertOperandPreservesMultiset(cmd, observation, sorted[1..]);
         assert sorted == [sorted[0]] + sorted[1..];
       }
@@ -596,8 +387,7 @@ module LsProof {
     reveal Core.InsertOperandSortedCore();
     reveal Spec.OperandObservationsOrdered();
     if |sorted| > 0 {
-      OperandBeforeBridge(cmd, observation, sorted[0]);
-      if Core.OperandBeforeCore(cmd, observation, sorted[0]) {
+      if Spec.OperandBeforeSpec(cmd, observation, sorted[0]) {
         OperandBeforeAsymmetric(cmd, observation, sorted[0]);
         forall j: nat | j < |sorted|
           ensures !Spec.OperandBeforeSpec(cmd, sorted[j], observation)
@@ -864,8 +654,6 @@ module LsProof {
     forall k: nat | k < |directPositions|
       ensures directFragments[k] == Spec.RenderOperandSpec(cmd, sorted, directPositions[k])
     {
-      RenderAlignedEntryBridge(cmd, sorted[directPositions[k]].renderName,
-                               sorted[directPositions[k]].status, Spec.OperandWidthsSpec(cmd, sorted));
     }
     assert Spec.OutputGroupsWitnessRelation(
         cmd, sorted, groups, directPositions, directoryPositions, directIndices,
@@ -989,7 +777,6 @@ module LsProof {
                else Spec.RenderFailedEntrySpec(cmd, observations[i], Spec.ObservationWidthsSpec(cmd, observations)))
     {
       if observations[i].ok {
-        RenderAlignedEntryBridge(cmd, observations[i].renderName, observations[i].status, Spec.ObservationWidthsSpec(cmd, observations));
       }
     }
   }
@@ -1030,7 +817,7 @@ module LsProof {
       Core.ObservationPiecesSummary(cmd, observations, outputFragments) &&
       Spec.ObservationErrorsRelation(displayPath, rawObservations, errorFragments) &&
       Spec.FragmentsConcatenate(outputFragments, entryOutput, outputCuts) &&
-      output == Core.TotalLineCore(cmd, rawObservations) + entryOutput &&
+      output == Spec.TotalLineSpec(cmd, rawObservations) + entryOutput &&
       Spec.FragmentsConcatenate(errorFragments, entryErrors, errorCuts) &&
       errors == entryErrors +
       (if readErr == 0 then [] else Spec.ReadDirectoryErrorMessageSpec(displayPath, readErr)) +
@@ -1038,7 +825,6 @@ module LsProof {
       hadError == (readErr != 0 || closeErr != 0 ||
                    exists i: nat :: i < |observations| && Spec.ObservationFailedSpec(observations[i]));
     SortEntriesCoreSatisfiesRelation(cmd, rawObservations);
-    TotalLineBridge(cmd, rawObservations);
     ObservationPiecesImpliesSpec(cmd, observations, outputFragments);
   }
 
@@ -1383,7 +1169,6 @@ module LsProof {
           }
         }
       } else {
-        RenderEntryBridge(cmd,observation.renderName,status);
         assert Spec.OperandObservationRelation(cmd, fs, cwd, observation) by {
           reveal Spec.OperandObservationRelation();
         }
@@ -1479,9 +1264,9 @@ module LsProof {
     requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
     ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    hide Core.RunSummary;
-    hide Spec.RunRelation;
-    reveal Core.PreparedSummary();
+    hide *;
+    reveal Core.PreparedSummary(), Spec.PreparedSpec(), Spec.ObservedSpec();
+    reveal NativeIO.Inputs(), NativeIO.State();
     var cmd := Schema.WithStatusObservations(
       Spec.EffectiveCommandSpec(raw, old(io.env()), old(io.now())),
       io.statusObservations(), old(io.statusCursor()), io.trustedNativeFailures(),old(io.dirHandles()),old(io.cwd()),[old(NativeIO.Inputs(io))],[old(NativeIO.State(io))]);

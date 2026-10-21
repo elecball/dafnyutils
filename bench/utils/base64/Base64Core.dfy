@@ -1,17 +1,14 @@
-include "Base64TextCore.dfy"
+include "Base64Spec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/CliTypes.dfy"
 include "Base64Schema.dfy"
-include "Base64Spec.dfy"
 
 module Base64Core {
   import StreamContract = IOContract
 
   import BenchIO
-  import Utf8 = Base64Utf8Core
-  import Text = Base64TextCore
   import BenchWorld
   import IOContract
   import CliTypes
@@ -191,53 +188,6 @@ module Base64Core {
     plan := CliTypes.CliEarlyExit(1, [], msg);
   }
 
-  function Alphabet(index: nat): char
-    requires index < 64
-  {
-    if index < 26 then
-      (('A' as int) + index as int) as char
-    else if index < 52 then
-      (('a' as int) + (index - 26) as int) as char
-    else if index < 62 then
-      (('0' as int) + (index - 52) as int) as char
-    else if index == 62 then
-      '+'
-    else
-      '/'
-  }
-
-  function ByteValue(ch: char): nat
-    ensures ByteValue(ch) < 256
-  {
-    ((ch as int) as nat) % 256
-  }
-
-  function ByteChar(value: nat): char
-  {
-    (value % 256) as char
-  }
-
-  function DecodeValue(ch: char): int
-  {
-    if 'A' <= ch <= 'Z' then
-      (ch as int) - ('A' as int)
-    else if 'a' <= ch <= 'z' then
-      26 + (ch as int) - ('a' as int)
-    else if '0' <= ch <= '9' then
-      52 + (ch as int) - ('0' as int)
-    else if ch == '+' then
-      62
-    else if ch == '/' then
-      63
-    else
-      -1
-  }
-
-  function Valid64(ch: char): bool
-  {
-    DecodeValue(ch) >= 0
-  }
-
   ghost predicate StrictlyIncreasing(indices: seq<nat>)
   {
     forall i, j ::
@@ -258,7 +208,7 @@ module Base64Core {
     (forall i :: 0 <= i < |data| ==>
                    ((i in indices) ==
                     (if ignoreGarbage
-                     then Valid64(data[i]) || data[i] == '='
+                     then Spec.Valid64(data[i]) || data[i] == '='
                      else data[i] != '\n')))
   }
 
@@ -272,27 +222,27 @@ module Base64Core {
   {
     var input := 3 * block;
     var output := 4 * block;
-    var b0 := ByteValue(data[input]);
-    encoded[output] == Alphabet(b0 / 4) &&
+    var b0 := Spec.ByteValue(data[input]);
+    encoded[output] == Spec.Alphabet(b0 / 4) &&
     encoded[output + 1] ==
-    Alphabet(
+    Spec.Alphabet(
       (b0 % 4) * 16 +
       (if input + 1 < |data|
-       then ByteValue(data[input + 1]) / 16
+       then Spec.ByteValue(data[input + 1]) / 16
        else 0)
     ) &&
     encoded[output + 2] ==
     (if input + 1 < |data|
-     then Alphabet(
-               (ByteValue(data[input + 1]) % 16) * 4 +
+     then Spec.Alphabet(
+               (Spec.ByteValue(data[input + 1]) % 16) * 4 +
                (if input + 2 < |data|
-                then ByteValue(data[input + 2]) / 64
+                then Spec.ByteValue(data[input + 2]) / 64
                 else 0)
              )
      else '=') &&
     encoded[output + 3] ==
     (if input + 2 < |data|
-     then Alphabet(ByteValue(data[input + 2]) % 64)
+     then Spec.Alphabet(Spec.ByteValue(data[input + 2]) % 64)
      else '=')
   }
 
@@ -359,37 +309,37 @@ module Base64Core {
     var c1 := data[start + 1];
     var c2 := data[start + 2];
     var c3 := data[start + 3];
-    Valid64(c0) && Valid64(c1) &&
-    ((Valid64(c2) && Valid64(c3) &&
+    Spec.Valid64(c0) && Spec.Valid64(c1) &&
+    ((Spec.Valid64(c2) && Spec.Valid64(c3) &&
       output == [
-        ByteChar(
-          (DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat
+        Spec.ByteChar(
+          (Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat
         ),
-        ByteChar(
-          (((DecodeValue(c1) % 16) * 16 +
-            DecodeValue(c2) / 4) as nat)
+        Spec.ByteChar(
+          (((Spec.DecodeValue(c1) % 16) * 16 +
+            Spec.DecodeValue(c2) / 4) as nat)
         ),
-        ByteChar(
-          ((((DecodeValue(c2) % 4) * 64) +
-            DecodeValue(c3)) as nat)
+        Spec.ByteChar(
+          ((((Spec.DecodeValue(c2) % 4) * 64) +
+            Spec.DecodeValue(c3)) as nat)
         )
       ]) ||
      (c2 == '=' && c3 == '=' &&
-      DecodeValue(c1) % 16 == 0 &&
+      Spec.DecodeValue(c1) % 16 == 0 &&
       output == [
-        ByteChar(
-          (DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat
+        Spec.ByteChar(
+          (Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat
         )
       ]) ||
-     (Valid64(c2) && c3 == '=' &&
-      DecodeValue(c2) % 4 == 0 &&
+     (Spec.Valid64(c2) && c3 == '=' &&
+      Spec.DecodeValue(c2) % 4 == 0 &&
       output == [
-        ByteChar(
-          (DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat
+        Spec.ByteChar(
+          (Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat
         ),
-        ByteChar(
-          (((DecodeValue(c1) % 16) * 16 +
-            DecodeValue(c2) / 4) as nat)
+        Spec.ByteChar(
+          (((Spec.DecodeValue(c1) % 16) * 16 +
+            Spec.DecodeValue(c2) / 4) as nat)
         )
       ]))
   }
@@ -411,57 +361,57 @@ module Base64Core {
     else
       var c0 := data[0];
       var c1 := data[1];
-      if !Valid64(c0) || !Valid64(c1) then
+      if !Spec.Valid64(c0) || !Spec.Valid64(c1) then
         output == [] && !ok
       else if remaining == 2 then
         output == [
-          ByteChar(
-            (DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat
+          Spec.ByteChar(
+            (Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat
           )
         ] &&
-        (ok == (DecodeValue(c1) % 16 == 0))
+        (ok == (Spec.DecodeValue(c1) % 16 == 0))
       else
         var c2 := data[2];
         if c2 == '=' then
           output == [
-            ByteChar(
-              (DecodeValue(c0) * 4 +
-               DecodeValue(c1) / 16) as nat
+            Spec.ByteChar(
+              (Spec.DecodeValue(c0) * 4 +
+               Spec.DecodeValue(c1) / 16) as nat
             )
           ] &&
           !ok
-        else if !Valid64(c2) then
-          output == [ByteChar((DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat)] && !ok
+        else if !Spec.Valid64(c2) then
+          output == [Spec.ByteChar((Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat)] && !ok
         else if remaining == 3 then
           output == [
-            ByteChar(
-              (DecodeValue(c0) * 4 +
-               DecodeValue(c1) / 16) as nat
+            Spec.ByteChar(
+              (Spec.DecodeValue(c0) * 4 +
+               Spec.DecodeValue(c1) / 16) as nat
             ),
-            ByteChar(
-              (((DecodeValue(c1) % 16) * 16 +
-                DecodeValue(c2) / 4) as nat)
+            Spec.ByteChar(
+              (((Spec.DecodeValue(c1) % 16) * 16 +
+                Spec.DecodeValue(c2) / 4) as nat)
             )
           ] &&
-          (ok == (DecodeValue(c2) % 4 == 0))
+          (ok == (Spec.DecodeValue(c2) % 4 == 0))
         else
           var c3 := data[3];
           if c3 == '=' then
             output == [
-              ByteChar(
-                (DecodeValue(c0) * 4 +
-                 DecodeValue(c1) / 16) as nat
+              Spec.ByteChar(
+                (Spec.DecodeValue(c0) * 4 +
+                 Spec.DecodeValue(c1) / 16) as nat
               ),
-              ByteChar(
-                (((DecodeValue(c1) % 16) * 16 +
-                  DecodeValue(c2) / 4) as nat)
+              Spec.ByteChar(
+                (((Spec.DecodeValue(c1) % 16) * 16 +
+                  Spec.DecodeValue(c2) / 4) as nat)
               )
             ] &&
             !ok
           else
             output == [
-              ByteChar((DecodeValue(c0) * 4 + DecodeValue(c1) / 16) as nat),
-              ByteChar((((DecodeValue(c1) % 16) * 16 + DecodeValue(c2) / 4) as nat))
+              Spec.ByteChar((Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat),
+              Spec.ByteChar((((Spec.DecodeValue(c1) % 16) * 16 + Spec.DecodeValue(c2) / 4) as nat))
             ] && !ok
   }
 
@@ -632,7 +582,7 @@ module Base64Core {
       ShiftIndicesFacts(tailIndices);
       var keep :=
         if ignoreGarbage
-        then Valid64(data[0]) || data[0] == '='
+        then Spec.Valid64(data[0]) || data[0] == '='
         else data[0] != '\n';
       kept := (if keep then [data[0]] else []) + tailKept;
       indices :=
@@ -663,13 +613,13 @@ module Base64Core {
       assert forall i :: 0 <= i < |data| ==>
                            ((i in indices) ==
                             (if ignoreGarbage
-                             then Valid64(data[i]) || data[i] == '='
+                             then Spec.Valid64(data[i]) || data[i] == '='
                              else data[i] != '\n')) by {
         forall i | 0 <= i < |data|
           ensures
             ((i in indices) ==
              (if ignoreGarbage
-              then Valid64(data[i]) || data[i] == '='
+              then Spec.Valid64(data[i]) || data[i] == '='
               else data[i] != '\n'))
         {
           ShiftIndicesMembership(tailIndices, i);
@@ -692,31 +642,31 @@ module Base64Core {
     if |data| == 0 {
       encoded := [];
     } else if |data| == 1 {
-      var b0 := ByteValue(data[0]);
+      var b0 := Spec.ByteValue(data[0]);
       encoded := [
-        Alphabet(b0 / 4),
-        Alphabet((b0 % 4) * 16),
+        Spec.Alphabet(b0 / 4),
+        Spec.Alphabet((b0 % 4) * 16),
         '=',
         '='
       ];
     } else if |data| == 2 {
-      var b0 := ByteValue(data[0]);
-      var b1 := ByteValue(data[1]);
+      var b0 := Spec.ByteValue(data[0]);
+      var b1 := Spec.ByteValue(data[1]);
       encoded := [
-        Alphabet(b0 / 4),
-        Alphabet((b0 % 4) * 16 + b1 / 16),
-        Alphabet((b1 % 16) * 4),
+        Spec.Alphabet(b0 / 4),
+        Spec.Alphabet((b0 % 4) * 16 + b1 / 16),
+        Spec.Alphabet((b1 % 16) * 4),
         '='
       ];
     } else if |data| == 3 {
-      var b0 := ByteValue(data[0]);
-      var b1 := ByteValue(data[1]);
-      var b2 := ByteValue(data[2]);
+      var b0 := Spec.ByteValue(data[0]);
+      var b1 := Spec.ByteValue(data[1]);
+      var b2 := Spec.ByteValue(data[2]);
       encoded := [
-        Alphabet(b0 / 4),
-        Alphabet((b0 % 4) * 16 + b1 / 16),
-        Alphabet((b1 % 16) * 4 + b2 / 64),
-        Alphabet(b2 % 64)
+        Spec.Alphabet(b0 / 4),
+        Spec.Alphabet((b0 % 4) * 16 + b1 / 16),
+        Spec.Alphabet((b1 % 16) * 4 + b2 / 64),
+        Spec.Alphabet(b2 % 64)
       ];
     } else {
       headEncoded := EncodeDataMethod(data[..3]);
@@ -937,6 +887,8 @@ module Base64Core {
   {
     hide *;
     reveal WrappedWitnessRelation();
+    reveal FragmentsConcatenate();
+    reveal ShiftCuts();
     var tail := text[width..];
     var head := text[..width] + ['\n'];
     var chunks := [head] + tailChunks;
@@ -1034,28 +986,28 @@ module Base64Core {
       result := TransformResult([], true);
     } else if |data| == 1 {
       result := TransformResult([], false);
-    } else if !Valid64(data[0]) || !Valid64(data[1]) {
+    } else if !Spec.Valid64(data[0]) || !Spec.Valid64(data[1]) {
       result := TransformResult([], false);
     } else {
-      var v0 := DecodeValue(data[0]);
-      var v1 := DecodeValue(data[1]);
+      var v0 := Spec.DecodeValue(data[0]);
+      var v1 := Spec.DecodeValue(data[1]);
       if |data| == 2 {
         result := TransformResult(
-          [ByteChar((v0 * 4 + v1 / 16) as nat)],
+          [Spec.ByteChar((v0 * 4 + v1 / 16) as nat)],
           v1 % 16 == 0
         );
       } else if data[2] == '=' {
         result := TransformResult(
-          [ByteChar((v0 * 4 + v1 / 16) as nat)],
+          [Spec.ByteChar((v0 * 4 + v1 / 16) as nat)],
           false
         );
-      } else if !Valid64(data[2]) {
-        result := TransformResult([ByteChar((v0 * 4 + v1 / 16) as nat)], false);
+      } else if !Spec.Valid64(data[2]) {
+        result := TransformResult([Spec.ByteChar((v0 * 4 + v1 / 16) as nat)], false);
       } else {
-        var v2 := DecodeValue(data[2]);
+        var v2 := Spec.DecodeValue(data[2]);
         var out := [
-          ByteChar((v0 * 4 + v1 / 16) as nat),
-          ByteChar((((v1 % 16) * 16 + v2 / 4) as nat))
+          Spec.ByteChar((v0 * 4 + v1 / 16) as nat),
+          Spec.ByteChar((((v1 % 16) * 16 + v2 / 4) as nat))
         ];
         if |data| == 3 {
           result := TransformResult(out, v2 % 4 == 0);
@@ -1107,32 +1059,32 @@ module Base64Core {
     var full := false;
     var blockOutput: BenchWorld.Bytes := [];
     if |data| >= 4 &&
-       Valid64(data[0]) && Valid64(data[1]) {
-      var v0 := DecodeValue(data[0]);
-      var v1 := DecodeValue(data[1]);
+       Spec.Valid64(data[0]) && Spec.Valid64(data[1]) {
+      var v0 := Spec.DecodeValue(data[0]);
+      var v1 := Spec.DecodeValue(data[1]);
       if data[2] == '=' {
         if data[3] == '=' && v1 % 16 == 0 {
           blockOutput := [
-            ByteChar((v0 * 4 + v1 / 16) as nat)
+            Spec.ByteChar((v0 * 4 + v1 / 16) as nat)
           ];
           full := true;
         }
-      } else if Valid64(data[2]) {
-        var v2 := DecodeValue(data[2]);
+      } else if Spec.Valid64(data[2]) {
+        var v2 := Spec.DecodeValue(data[2]);
         if data[3] == '=' {
           if v2 % 4 == 0 {
             blockOutput := [
-              ByteChar((v0 * 4 + v1 / 16) as nat),
-              ByteChar((((v1 % 16) * 16 + v2 / 4) as nat))
+              Spec.ByteChar((v0 * 4 + v1 / 16) as nat),
+              Spec.ByteChar((((v1 % 16) * 16 + v2 / 4) as nat))
             ];
             full := true;
           }
-        } else if Valid64(data[3]) {
-          var v3 := DecodeValue(data[3]);
+        } else if Spec.Valid64(data[3]) {
+          var v3 := Spec.DecodeValue(data[3]);
           blockOutput := [
-            ByteChar((v0 * 4 + v1 / 16) as nat),
-            ByteChar((((v1 % 16) * 16 + v2 / 4) as nat)),
-            ByteChar(((((v2 % 4) * 64) + v3) as nat))
+            Spec.ByteChar((v0 * 4 + v1 / 16) as nat),
+            Spec.ByteChar((((v1 % 16) * 16 + v2 / 4) as nat)),
+            Spec.ByteChar(((((v2 % 4) * 64) + v3) as nat))
           ];
           full := true;
         }
@@ -1417,7 +1369,7 @@ module Base64Core {
     case Stdin =>
       var read := io.ReadStdin();
       data := IOContract.ReadResultData(read);
-      errOut := if read.Err? then Text.StdinReadErrorMessage(read.e) else [];
+      errOut := if read.Err? then Spec.StdinReadErrorMessage(read.e) else [];
       hadReadError := read.Err?;
       stage := if read.Err? then BenchWorld.ReadFailed else BenchWorld.ReadSucceeded;
     case File(path) =>
@@ -1430,7 +1382,7 @@ module Base64Core {
         hadReadError := false;
       case Err(err) =>
         data := IOContract.ReadFailureData(err);
-        errOut := Text.ErrorMessage(path, err);
+        errOut := Spec.ErrorMessage(path, err);
         hadReadError := true;
   }
 
@@ -1543,7 +1495,7 @@ module Base64Core {
       return;
     }
     if cmd.mode == Schema.ModeInvalidWrap {
-      plannedErr := plannedErr + Text.InvalidWrapMessage(cmd.invalidWrapValue);
+      plannedErr := plannedErr + Spec.InvalidWrapMessage(cmd.invalidWrapValue);
       exit := 1;
       assert io.stdin() == preStdin;
       assert (initialStdout + plannedOut) == preStdout;
@@ -1551,7 +1503,7 @@ module Base64Core {
       return;
     }
     if cmd.mode.ModeExtraOperand? {
-      plannedErr := plannedErr + Text.ExtraOperandMessage(cmd.mode.operand);
+      plannedErr := plannedErr + Spec.ExtraOperandMessage(cmd.mode.operand);
       exit := 1;
       assert io.stdin() == preStdin;
       assert (initialStdout + plannedOut) == preStdout;
@@ -1642,7 +1594,7 @@ module Base64Core {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

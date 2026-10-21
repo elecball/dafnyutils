@@ -13,32 +13,6 @@ module PwdLogicalCore {
   import Trace = PwdRecoveryTraceProof
   import Spec = PwdLogicalSpec
 
-  lemma NoUnsafeComponentIffAllSafe(components: seq<string>, start: nat)
-    requires start <= |components|
-    ensures !RecoveryCore.ContainsUnsafeComponent(components,start) ==
-            (forall i: nat | start <= i < |components| :: components[i] != "." && components[i] != "..")
-    decreases |components|-start
-  {
-    if start < |components| && components[start] != "." && components[start] != ".." {
-      NoUnsafeComponentIffAllSafe(components,start+1);
-    }
-  }
-
-  lemma LogicalTextValidIffSpec(pwd: string)
-    ensures RecoveryCore.LogicalTextValid(pwd) <==> Recovery.LogicalTextFields(pwd)
-  {
-    var components := W.SplitSegments(W.StripLeadingSlash(pwd),0,0);
-    NoUnsafeComponentIffAllSafe(components,0);
-  }
-
-  lemma LogicalSelectionSummaryImpliesFields(pwd: string,
-                                             observations: seq<W.IOResult<W.FileStatus>>, selected: bool)
-    requires RecoveryCore.LogicalSelectionSummary(pwd,observations,selected)
-    ensures Recovery.LogicalSelectionFields(pwd,observations,selected)
-  {
-    LogicalTextValidIffSpec(pwd);
-  }
-
   method {:isolate_assertions} SelectLogical(pwd: string, io: BenchIO.IO)
     returns (selected: bool, ghost evidence: Spec.SelectionEvidence)
     modifies io.directoryStateRegion,io.statusObservationsRegion
@@ -50,8 +24,7 @@ module PwdLogicalCore {
     ghost var inputs := Model.Inputs(io);
     ghost var before := Model.State(io);
     Model.InputsMatchModel(io);
-    var valid := RecoveryCore.LogicalTextValid(pwd);
-    LogicalTextValidIffSpec(pwd);
+    var valid := Recovery.LogicalTextFields(pwd);
     if !valid {
       selected := false;
       evidence := Spec.SelectionEvidence([],[]);
@@ -91,7 +64,6 @@ module PwdLogicalCore {
       calls := calls+[second];
     }
     selected := RecoveryCore.ChooseLogicalFromStatuses(pwd,statuses);
-    LogicalSelectionSummaryImpliesFields(pwd,statuses,selected);
     evidence := Spec.SelectionEvidence(statuses,calls);
     assert Spec.NativeSelectionFields(inputs,before,Model.State(io),pwd,selected,evidence) by {
       reveal Spec.NativeSelectionFields(),Recovery.DirectoryActionFields();

@@ -8,18 +8,20 @@ include "World.dfy"
 // shell quoting, while `SpecQuoteFBytes` quotes conditionally and forces quotes
 // for a colon. Their `Af` and `F` names mirror GNU's `quoteaf` and `quotef`.
 // Byte-escape helpers build bodies; the rendering entry points add delimiters.
+// These pure definitions are executable so callers can reuse the same byte
+// transformations in specifications and implementations without a native API.
 module StringEscaping {
   import BW = BenchWorld
 
-  // Classifies printable ASCII bytes as 0x20 through 0x7e for C-locale escaping.
-  ghost function SpecCPrintableByte(byte: char): bool
+  /** Classifies printable ASCII bytes as 0x20 through 0x7e for C-locale escaping. */
+  function SpecCPrintableByte(byte: char): bool
   {
     0x20 <= byte as int <= 0x7e
   }
 
   // Converts an octal digit value to its character; callers use 0 through 7.
   // The final branch is the existing fallback to `'7'` for other values.
-  ghost function SpecOctDigit(value: int): char
+  function SpecOctDigit(value: int): char
   {
     if value == 0 then '0'
     else if value == 1 then '1'
@@ -33,7 +35,7 @@ module StringEscaping {
 
   // Writes one byte as a backslash and exactly three octal digits, e.g. 0x1b
   // becomes `\033`; fixed width keeps following digits from merging into it.
-  ghost function SpecOctalEscape(byte: char): BW.Bytes
+  function SpecOctalEscape(byte: char): BW.Bytes
   {
     var value := byte as int;
     ['\\', SpecOctDigit((value / 64) % 8), SpecOctDigit((value / 8) % 8), SpecOctDigit(value % 8)]
@@ -41,7 +43,7 @@ module StringEscaping {
 
   // Uses C-style short names for bell, backspace, form feed, newline, carriage
   // return, tab, and vertical tab; returns `[]` when no named escape applies.
-  ghost function SpecNamedEscape(byte: char): BW.Bytes
+  function SpecNamedEscape(byte: char): BW.Bytes
   {
     if byte == 7 as char then "\\a"
     else if byte == 8 as char then "\\b"
@@ -55,7 +57,7 @@ module StringEscaping {
 
   // Chooses a named control escape when available, otherwise the three-digit
   // octal form used inside ANSI-C shell quotes; this emits no quote delimiters.
-  ghost function SpecAnsiEscape(byte: char): BW.Bytes
+  function SpecAnsiEscape(byte: char): BW.Bytes
   {
     var named := SpecNamedEscape(byte);
     if named != [] then named else SpecOctalEscape(byte)
@@ -63,14 +65,14 @@ module StringEscaping {
 
   // Marks bytes outside printable ASCII for an ANSI-C shell segment; printable
   // apostrophes are handled separately by the shell-tail renderer.
-  ghost function SpecNeedsAnsiEscape(byte: char): bool
+  function SpecNeedsAnsiEscape(byte: char): bool
   {
     !SpecCPrintableByte(byte)
   }
 
   // Escapes one byte for a C-style double-quoted body, including quote and
   // backslash escapes; it does not add the surrounding double quotes.
-  ghost function SpecCQuoteByte(byte: char): BW.Bytes
+  function SpecCQuoteByte(byte: char): BW.Bytes
   {
     var named := SpecNamedEscape(byte);
     if named != [] then named
@@ -82,7 +84,7 @@ module StringEscaping {
 
   // Concatenates the C-style escaped body for a byte sequence without adding
   // delimiters; `SpecDoubleQuote` supplies those around this result.
-  ghost function SpecCQuoteBytes(bytes: BW.Bytes): BW.Bytes
+  function SpecCQuoteBytes(bytes: BW.Bytes): BW.Bytes
     decreases |bytes|
   {
     if |bytes| == 0 then
@@ -93,7 +95,7 @@ module StringEscaping {
 
   // Encloses a C-style escaped body in double quotes, as used by the GNU
   // shell-quoting shortcut when an apostrophe cannot stay in single quotes.
-  ghost function SpecDoubleQuote(bytes: BW.Bytes): BW.Bytes
+  function SpecDoubleQuote(bytes: BW.Bytes): BW.Bytes
   {
     "\"" + SpecCQuoteBytes(bytes) + "\""
   }
@@ -102,7 +104,7 @@ module StringEscaping {
   // for unquoted shell text: spaces and apostrophes pass this test. `atStart`
   // means first byte of the whole input; `singleton` means the whole input
   // has one byte.
-  ghost function SpecShellCompatibleByte(byte: char, atStart: bool, singleton: bool): bool
+  function SpecShellCompatibleByte(byte: char, atStart: bool, singleton: bool): bool
   {
     if byte == '?' || byte == '\\' then
       false
@@ -123,7 +125,7 @@ module StringEscaping {
 
   // Checks a suffix for shortcut eligibility, treating every byte as neither
   // the first byte nor the sole byte of the whole input; the empty suffix passes.
-  ghost function SpecShellCompatibleTail(bytes: BW.Bytes): bool
+  function SpecShellCompatibleTail(bytes: BW.Bytes): bool
     decreases |bytes|
   {
     |bytes| == 0 ||
@@ -133,7 +135,7 @@ module StringEscaping {
 
   // Checks all bytes for double-quote-shortcut eligibility, supplying the true
   // first-byte and whole-input-singleton facts only for the first byte.
-  ghost function SpecAllShellCompatible(bytes: BW.Bytes): bool
+  function SpecAllShellCompatible(bytes: BW.Bytes): bool
   {
     |bytes| == 0 ||
     (SpecShellCompatibleByte(bytes[0], true, |bytes| == 1) &&
@@ -142,7 +144,7 @@ module StringEscaping {
 
   // Reports whether the input contains an apostrophe; `SpecQuoteAfBytes` uses
   // this to decide whether the all-compatible double-quote shortcut applies.
-  ghost function SpecContainsApostrophe(bytes: BW.Bytes): bool
+  function SpecContainsApostrophe(bytes: BW.Bytes): bool
   {
     '\'' in bytes
   }
@@ -150,7 +152,7 @@ module StringEscaping {
   // Escapes the bytes after an opening single quote and appends the final quote.
   // `ansi` tracks whether an ANSI-C `$'...'` segment is active: controls enter
   // one, printable bytes leave it, and apostrophes splice as `'\''`.
-  ghost function SpecShellEscapeTail(bytes: BW.Bytes, ansi: bool): BW.Bytes
+  function SpecShellEscapeTail(bytes: BW.Bytes, ansi: bool): BW.Bytes
     decreases |bytes|
   {
     if |bytes| == 0 then
@@ -172,7 +174,7 @@ module StringEscaping {
   // quotes; otherwise it uses single quotes with ANSI-C segments as needed.
   // For example, `can't` becomes `"can't"`, and `a`, newline, `b` becomes
   // `'a'$'\n''b'`.
-  ghost function SpecQuoteAfBytes(bytes: BW.Bytes): BW.Bytes
+  function SpecQuoteAfBytes(bytes: BW.Bytes): BW.Bytes
   {
     if SpecContainsApostrophe(bytes) && SpecAllShellCompatible(bytes) then
       SpecDoubleQuote(bytes)
@@ -182,7 +184,7 @@ module StringEscaping {
 
   // Tests whether a byte forces conditional shell quoting; colon always does,
   // while `#`/`~` force only at the start and braces only for a singleton.
-  ghost function SpecShellQuoteTriggerByte(byte: char, atStart: bool, singleton: bool): bool
+  function SpecShellQuoteTriggerByte(byte: char, atStart: bool, singleton: bool): bool
   {
     !SpecCPrintableByte(byte) ||
     byte == '\\' || byte == '\'' || byte == '?' || byte == ':' ||
@@ -196,7 +198,7 @@ module StringEscaping {
 
   // Searches the suffix after the first byte for any conditional-quoting
   // trigger, with all suffix bytes treated as noninitial and nonsingleton.
-  ghost function SpecHasShellQuoteTriggerTail(bytes: BW.Bytes): bool
+  function SpecHasShellQuoteTriggerTail(bytes: BW.Bytes): bool
     decreases |bytes|
   {
     |bytes| != 0 &&
@@ -206,7 +208,7 @@ module StringEscaping {
 
   // Searches the whole input for conditional-quoting triggers, passing the
   // actual start and whole-input-singleton facts for its first byte.
-  ghost function SpecHasShellQuoteTrigger(bytes: BW.Bytes): bool
+  function SpecHasShellQuoteTrigger(bytes: BW.Bytes): bool
   {
     |bytes| != 0 &&
     (SpecShellQuoteTriggerByte(bytes[0], true, |bytes| == 1) ||
@@ -215,7 +217,7 @@ module StringEscaping {
 
   // Implements GNU-style `quotef` behavior: empty input or any trigger (such
   // as the colon in `a:b`) uses always-shell-quoting; otherwise bytes pass through.
-  ghost function SpecQuoteFBytes(bytes: BW.Bytes): BW.Bytes
+  function SpecQuoteFBytes(bytes: BW.Bytes): BW.Bytes
   {
     if |bytes| == 0 || SpecHasShellQuoteTrigger(bytes) then
       SpecQuoteAfBytes(bytes)
@@ -225,7 +227,7 @@ module StringEscaping {
 
   // Escapes one byte in the fixed C-locale display body: named controls,
   // apostrophes, backslashes, printable ASCII, then fixed-width octal bytes.
-  ghost function SpecLocaleQuoteByte(byte: char): BW.Bytes
+  function SpecLocaleQuoteByte(byte: char): BW.Bytes
   {
     var named := SpecNamedEscape(byte);
     if named != [] then named
@@ -237,7 +239,7 @@ module StringEscaping {
 
   // Builds only the fixed C-locale escaped display body; `SpecLocaleQuoteBytes`
   // adds its surrounding apostrophes.
-  ghost function SpecLocaleQuoteBody(bytes: BW.Bytes): BW.Bytes
+  function SpecLocaleQuoteBody(bytes: BW.Bytes): BW.Bytes
     decreases |bytes|
   {
     if |bytes| == 0 then
@@ -248,7 +250,7 @@ module StringEscaping {
 
   // Always encloses a fixed C-locale display body in apostrophes, including
   // plain text such as `abc`, which becomes `'abc'`.
-  ghost function SpecLocaleQuoteBytes(bytes: BW.Bytes): BW.Bytes
+  function SpecLocaleQuoteBytes(bytes: BW.Bytes): BW.Bytes
   {
     "'" + SpecLocaleQuoteBody(bytes) + "'"
   }

@@ -1,40 +1,23 @@
-include "PasteTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "PasteSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "PasteSchema.dfy"
-include "PasteSpec.dfy"
 
 module PasteCore {
-  import Text = PasteTextCore
-
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = PasteUtf8Core
+  import Utf8 = Utf8Semantics
   import BenchWorld
   import IOContract
   import PasteSchema
   import Spec = PasteSpec
 
   datatype LineRead = NoLine | SomeLine(line: BenchWorld.Bytes, rest: BenchWorld.Bytes)
-  datatype Entry = Entry(lines: seq<BenchWorld.Bytes>, readOk: bool)
   type DelimPlan = Result.Result<seq<BenchWorld.Bytes>, BenchWorld.Bytes>
-
-  function Command(raw: PasteSchema.PasteCmdRaw): PasteSchema.PasteCmd
-  {
-    PasteSchema.Command(raw)
-  } by method {
-    return PasteSchema.Command(raw);
-  }
-
-  function RecordDelimiter(zeroTerminated: bool): BenchWorld.RawByte
-  {
-    if zeroTerminated then '\0' else '\n'
-  } by method {
-    return if zeroTerminated then '\0' else '\n';
-  }
 
   ghost function PrefixStdinCore(cmd: PasteSchema.PasteCmd, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult, preStdin: BenchWorld.Bytes, i: nat): BenchWorld.Bytes
     requires i <= |cmd.inputs|
@@ -105,13 +88,13 @@ module PasteCore {
       return [line] + tail;
   }
 
-  function EntryForRead(result: BenchWorld.IOResult<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte): Entry
+  function EntryForRead(result: BenchWorld.IOResult<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte): Spec.Entry
   {
-    Entry(Lines(IOContract.ReadResultData(result), recordDelimiter),
-          result.Ok? || !Spec.BlockingReadFailure(result.e))
+    Spec.Entry(Lines(IOContract.ReadResultData(result), recordDelimiter),
+               result.Ok? || !Spec.BlockingReadFailure(result.e))
   } by method {
-    return Entry(Lines(IOContract.ReadResultData(result), recordDelimiter),
-                 result.Ok? || !Spec.BlockingReadFailure(result.e));
+    return Spec.Entry(Lines(IOContract.ReadResultData(result), recordDelimiter),
+                      result.Ok? || !Spec.BlockingReadFailure(result.e));
   }
 
   function IsStdinInput(input: PasteSchema.Input): bool
@@ -185,11 +168,11 @@ module PasteCore {
 
   function ParallelEntriesFrom(
     inputs: seq<PasteSchema.Input>,
-    entries: seq<Entry>,
+    entries: seq<Spec.Entry>,
     stdinLines: seq<BenchWorld.Bytes>,
     stdinCount: nat,
     i: nat
-  ): seq<Entry>
+  ): seq<Spec.Entry>
     requires |entries| == |inputs|
     requires i <= |inputs|
     ensures |ParallelEntriesFrom(
@@ -201,7 +184,7 @@ module PasteCore {
     else
       var head :=
         match inputs[i]
-        case Stdin => Entry(SelectStdinLines(stdinLines, CountStdinPrefix(inputs, i), stdinCount), true)
+        case Stdin => Spec.Entry(SelectStdinLines(stdinLines, CountStdinPrefix(inputs, i), stdinCount), true)
         case File(_) => entries[i];
       [head] + ParallelEntriesFrom(inputs, entries, stdinLines, stdinCount, i + 1)
   } by method {
@@ -211,7 +194,7 @@ module PasteCore {
       var head :=
         match inputs[i]
         case Stdin =>
-          Entry(
+          Spec.Entry(
             SelectStdinLines(stdinLines, CountStdinPrefix(inputs, i), stdinCount),
             true)
         case File(_) =>
@@ -221,20 +204,20 @@ module PasteCore {
     }
   }
 
-  function EntriesForOutputFromEntries(cmd: PasteSchema.PasteCmd, entries: seq<Entry>, stdinData: BenchWorld.Bytes): seq<Entry>
+  function EntriesForOutputFromEntries(cmd: PasteSchema.PasteCmd, entries: seq<Spec.Entry>, stdinData: BenchWorld.Bytes): seq<Spec.Entry>
     requires |entries| == |cmd.inputs|
   {
     if cmd.serial then
       entries
     else
-      var recordDelimiter := RecordDelimiter(cmd.zeroTerminated);
+      var recordDelimiter := Spec.RecordDelimiter(cmd.zeroTerminated);
       var stdinLines := Lines(stdinData, recordDelimiter);
       ParallelEntriesFrom(cmd.inputs, entries, stdinLines, CountStdinInputs(cmd.inputs), 0)
   } by method {
     if cmd.serial {
       return entries;
     } else {
-      var recordDelimiter := RecordDelimiter(cmd.zeroTerminated);
+      var recordDelimiter := Spec.RecordDelimiter(cmd.zeroTerminated);
       var stdinLines := Lines(stdinData, recordDelimiter);
       return ParallelEntriesFrom(
           cmd.inputs, entries, stdinLines, CountStdinInputs(cmd.inputs), 0);
@@ -264,19 +247,19 @@ module PasteCore {
   function ErrorPiece(input: PasteSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
-    case Stdin => if result.Ok? then [] else Text.ErrorMessage("-", result.e)
+    case Stdin => if result.Ok? then [] else Spec.ErrorMessage("-", result.e)
     case File(path) =>
       match result
       case Ok(_) => []
-      case Err(err) => Text.ErrorMessage(path, err)
+      case Err(err) => Spec.ErrorMessage(path, err)
   } by method {
     return
       match input
-      case Stdin => if result.Ok? then [] else Text.ErrorMessage("-", result.e)
+      case Stdin => if result.Ok? then [] else Spec.ErrorMessage("-", result.e)
       case File(path) =>
         match result
         case Ok(_) => []
-        case Err(err) => Text.ErrorMessage(path, err);
+        case Err(err) => Spec.ErrorMessage(path, err);
   }
 
   function HadErrorPiece(input: PasteSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
@@ -311,7 +294,7 @@ module PasteCore {
     preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
     preStdin: BenchWorld.Bytes,
     i: nat
-  ): seq<Entry>
+  ): seq<Spec.Entry>
     requires i <= |cmd.inputs|
     ensures |PrefixEntriesCore(cmd, preFs, preStreams, preStdin, i)| == i
     decreases i
@@ -320,14 +303,14 @@ module PasteCore {
       []
     else
       PrefixEntriesCore(cmd, preFs, preStreams, preStdin, i - 1) +
-      [EntryForRead(ReadResultCore(cmd, preFs, preStreams, preStdin, i - 1), RecordDelimiter(cmd.zeroTerminated))]
+      [EntryForRead(ReadResultCore(cmd, preFs, preStreams, preStdin, i - 1), Spec.RecordDelimiter(cmd.zeroTerminated))]
   }
 
   ghost function EntriesCore(
     cmd: PasteSchema.PasteCmd,
     preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
     preStdin: BenchWorld.Bytes
-  ): seq<Entry>
+  ): seq<Spec.Entry>
   {
     PrefixEntriesCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|)
   }
@@ -428,7 +411,7 @@ module PasteCore {
       Result.Ok([])
     else if text[i] == '\\' then
       if i + 1 >= |text| then
-        Result.Err(Text.DelimiterBackslashError(text))
+        Result.Err(Spec.DelimiterBackslashError(text))
       else
         match CollapseDelimitersFrom(text, i + 2)
         case Err(stderr) => Result.Err(stderr)
@@ -442,7 +425,7 @@ module PasteCore {
       return Result.Ok([]);
     } else if text[i] == '\\' {
       if i + 1 >= |text| {
-        return Result.Err(Text.DelimiterBackslashError(text));
+        return Result.Err(Spec.DelimiterBackslashError(text));
       } else {
         match CollapseDelimitersFrom(text, i + 2)
         case Err(stderr) =>
@@ -471,37 +454,7 @@ module PasteCore {
       else CollapseDelimitersFrom(Utf8.Encode(text), 0);
   }
 
-  function Max(a: nat, b: nat): nat
-  {
-    if a < b then b else a
-  } by method {
-    return if a < b then b else a;
-  }
-
-  function MaxLineCount(entries: seq<Entry>): nat
-    decreases |entries|
-  {
-    if |entries| == 0 then
-      0
-    else
-      Max(|entries[0].lines|, MaxLineCount(entries[1..]))
-  } by method {
-    if |entries| == 0 {
-      return 0;
-    } else {
-      return Max(|entries[0].lines|, MaxLineCount(entries[1..]));
-    }
-  }
-
-  function DelimAt(delims: seq<BenchWorld.Bytes>, i: nat): BenchWorld.Bytes
-    requires |delims| > 0
-  {
-    delims[i % |delims|]
-  } by method {
-    return delims[i % |delims|];
-  }
-
-  function RenderParallelRow(entries: seq<Entry>, delims: seq<BenchWorld.Bytes>, row: nat, i: nat, last: nat): BenchWorld.Bytes
+  function RenderParallelRow(entries: seq<Spec.Entry>, delims: seq<BenchWorld.Bytes>, row: nat, i: nat, last: nat): BenchWorld.Bytes
     requires |delims| > 0
     requires last < |entries|
     requires i <= last + 1
@@ -512,23 +465,23 @@ module PasteCore {
     else
       var field := if row < |entries[i].lines| then entries[i].lines[row] else [];
       field +
-      (if i < last then DelimAt(delims, i) else []) +
+      (if i < last then Spec.DelimAt(delims, i) else []) +
       RenderParallelRow(entries, delims, row, i + 1, last)
   } by method {
     if i > last {
       return [];
     } else {
       var field := if row < |entries[i].lines| then entries[i].lines[row] else [];
-      var delimiter := if i < last then DelimAt(delims, i) else [];
+      var delimiter := if i < last then Spec.DelimAt(delims, i) else [];
       return field + delimiter +
         RenderParallelRow(entries, delims, row, i + 1, last);
     }
   }
 
-  function RenderParallelRows(entries: seq<Entry>, delims: seq<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte, row: nat, limit: nat): BenchWorld.Bytes
+  function RenderParallelRows(entries: seq<Spec.Entry>, delims: seq<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte, row: nat, limit: nat): BenchWorld.Bytes
     requires |delims| > 0
     requires row <= limit
-    requires limit == MaxLineCount(entries)
+    requires limit == Spec.MaxLineCount(entries)
     decreases limit - row
   {
     if row >= limit then
@@ -550,13 +503,13 @@ module PasteCore {
     }
   }
 
-  function RenderParallel(entries: seq<Entry>, delims: seq<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte): BenchWorld.Bytes
+  function RenderParallel(entries: seq<Spec.Entry>, delims: seq<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte): BenchWorld.Bytes
     requires |delims| > 0
   {
-    RenderParallelRows(entries, delims, recordDelimiter, 0, MaxLineCount(entries))
+    RenderParallelRows(entries, delims, recordDelimiter, 0, Spec.MaxLineCount(entries))
   } by method {
     return RenderParallelRows(
-        entries, delims, recordDelimiter, 0, MaxLineCount(entries));
+        entries, delims, recordDelimiter, 0, Spec.MaxLineCount(entries));
   }
 
   function JoinLines(lines: seq<BenchWorld.Bytes>, delims: seq<BenchWorld.Bytes>, i: nat): BenchWorld.Bytes
@@ -568,18 +521,18 @@ module PasteCore {
       []
     else
       lines[i] +
-      (if i + 1 < |lines| then DelimAt(delims, i) else []) +
+      (if i + 1 < |lines| then Spec.DelimAt(delims, i) else []) +
       JoinLines(lines, delims, i + 1)
   } by method {
     if i >= |lines| {
       return [];
     } else {
-      var delimiter := if i + 1 < |lines| then DelimAt(delims, i) else [];
+      var delimiter := if i + 1 < |lines| then Spec.DelimAt(delims, i) else [];
       return lines[i] + delimiter + JoinLines(lines, delims, i + 1);
     }
   }
 
-  function RenderSerial(entries: seq<Entry>, delims: seq<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte): BenchWorld.Bytes
+  function RenderSerial(entries: seq<Spec.Entry>, delims: seq<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte): BenchWorld.Bytes
     requires |delims| > 0
     decreases |entries|
   {
@@ -602,7 +555,7 @@ module PasteCore {
     }
   }
 
-  function RenderOutput(serial: bool, delims: seq<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte, entries: seq<Entry>): BenchWorld.Bytes
+  function RenderOutput(serial: bool, delims: seq<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte, entries: seq<Spec.Entry>): BenchWorld.Bytes
     requires |delims| > 0
   {
     if serial then RenderSerial(entries, delims, recordDelimiter) else RenderParallel(entries, delims, recordDelimiter)
@@ -616,7 +569,7 @@ module PasteCore {
     cmd: PasteSchema.PasteCmd,
     preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
     preStdin: BenchWorld.Bytes
-  ): seq<Entry>
+  ): seq<Spec.Entry>
   {
     EntriesForOutputFromEntries(cmd, EntriesCore(cmd, preFs, preStreams, preStdin), StdinDataForOutputCore(cmd, preStreams, preStdin))
   }
@@ -629,7 +582,7 @@ module PasteCore {
   ): BenchWorld.Bytes
     requires |delims| > 0
   {
-    RenderOutput(cmd.serial, delims, RecordDelimiter(cmd.zeroTerminated), EntriesForOutputCore(cmd, preFs, preStreams, preStdin))
+    RenderOutput(cmd.serial, delims, Spec.RecordDelimiter(cmd.zeroTerminated), EntriesForOutputCore(cmd, preFs, preStreams, preStdin))
   }
 
   twostate predicate CoreSummaryCmd(cmd: PasteSchema.PasteCmd, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
@@ -667,7 +620,7 @@ module PasteCore {
     reads io.Footprint() - {
             io.stdoutRegion, io.stderrRegion}
   {
-    CoreSummaryCmd(Command(raw), io, exit, plannedStdout, plannedStderr)
+    CoreSummaryCmd(PasteSchema.Command(raw), io, exit, plannedStdout, plannedStderr)
   }
 
   lemma StdinDataPrefixCoreStep(cmd: PasteSchema.PasteCmd,
@@ -711,7 +664,7 @@ module PasteCore {
     requires i < |cmd.inputs|
     ensures PrefixEntriesCore(cmd, preFs, preStreams, preStdin, i + 1) ==
             PrefixEntriesCore(cmd, preFs, preStreams, preStdin, i) +
-            [EntryForRead(ReadResultCore(cmd, preFs, preStreams, preStdin, i), RecordDelimiter(cmd.zeroTerminated))]
+            [EntryForRead(ReadResultCore(cmd, preFs, preStreams, preStdin, i), Spec.RecordDelimiter(cmd.zeroTerminated))]
   {
   }
 
@@ -762,15 +715,15 @@ module PasteCore {
   method RunOutputFromEntriesMethod(
     cmd: PasteSchema.PasteCmd,
     delims: seq<BenchWorld.Bytes>,
-    entries: seq<Entry>,
+    entries: seq<Spec.Entry>,
     stdinData: BenchWorld.Bytes
   )
     returns (out: BenchWorld.Bytes)
     requires |delims| > 0
     requires |entries| == |cmd.inputs|
-    ensures out == RenderOutput(cmd.serial, delims, RecordDelimiter(cmd.zeroTerminated), EntriesForOutputFromEntries(cmd, entries, stdinData))
+    ensures out == RenderOutput(cmd.serial, delims, Spec.RecordDelimiter(cmd.zeroTerminated), EntriesForOutputFromEntries(cmd, entries, stdinData))
   {
-    var recordDelimiter := RecordDelimiter(cmd.zeroTerminated);
+    var recordDelimiter := Spec.RecordDelimiter(cmd.zeroTerminated);
     var outputEntries := EntriesForOutputFromEntries(cmd, entries, stdinData);
     out := RenderOutput(cmd.serial, delims, recordDelimiter, outputEntries);
   }
@@ -790,7 +743,9 @@ module PasteCore {
     ghost var preStdin := io.stdin();
     ghost var preStdout := (initialStdout + plannedOut);
     ghost var preStderr := (initialStderr + plannedErr);
-    var cmd := Command(raw);
+    var cmd := PasteSchema.Command(raw);
+    hide PasteSchema.Command();
+    hide PrefixStdinCore();
 
     if cmd.mode == PasteSchema.ModeHelp {
       var help := Spec.HelpText();
@@ -799,6 +754,10 @@ module PasteCore {
       assert io.stdin() == preStdin;
       assert (initialStderr + plannedErr) == preStderr;
       assert (initialStdout + plannedOut) == preStdout + Spec.HelpText();
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr) by {
+        hide *;
+        reveal PreparedSummary(), CoreSummaryCmd();
+      }
       return;
     }
 
@@ -809,6 +768,10 @@ module PasteCore {
       assert io.stdin() == preStdin;
       assert (initialStderr + plannedErr) == preStderr;
       assert (initialStdout + plannedOut) == preStdout + Spec.VersionText();
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr) by {
+        hide *;
+        reveal PreparedSummary(), CoreSummaryCmd();
+      }
       return;
     }
 
@@ -822,11 +785,11 @@ module PasteCore {
       assert (initialStderr + plannedErr) == preStderr + stderr;
       return;
     case Ok(delims) =>
-      var entries: seq<Entry> := [];
+      var entries: seq<Spec.Entry> := [];
       var err: BenchWorld.Bytes := [];
       var hadError := false;
       var hadBlockingError := false;
-      var recordDelimiter := RecordDelimiter(cmd.zeroTerminated);
+      var recordDelimiter := Spec.RecordDelimiter(cmd.zeroTerminated);
       var stdinData: BenchWorld.Bytes := [];
 
       var i: nat := 0;
@@ -843,6 +806,7 @@ module PasteCore {
         invariant io.stdin() == PrefixStdinCore(cmd, preStreams, preStdin, i)
         invariant (initialStdout + plannedOut) == preStdout
         invariant (initialStderr + plannedErr) == preStderr
+        invariant |entries| == i
         invariant entries == PrefixEntriesCore(cmd, preFs, preStreams, preStdin, i)
         invariant err == PrefixVisibleErrorOutputCore(cmd, preFs, preStreams, preStdin, i)
         invariant hadError == PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, i)
@@ -963,10 +927,10 @@ module PasteCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var diagnosed := io.WriteStderr(errors);
     assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
                                           errors, StreamContract.WriteResultCommitted(diagnosed), StreamContract.ResultErrno(diagnosed));

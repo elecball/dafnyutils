@@ -1,16 +1,15 @@
-include "MkdirTextCore.dfy"
+include "../../core/Utf8.dfy"
 include "MkdirSpec.dfy"
 include "MkdirProof.dfy"
 
 module MkdirCore {
-  import Text = MkdirTextCore
   import BenchIO
   import BW = BenchWorld
   import C = IOContract
   import Schema = MkdirSchema
   import Spec = MkdirSpec
   import Proof = MkdirProof
-  import Utf8 = MkdirUtf8Core
+  import Utf8 = Utf8Semantics
 
   method FormatResult(path: string, verbose: bool, ok: bool, err: int, io: BenchIO.IO)
     returns (output: BW.Bytes, diagnostic: BW.Bytes)
@@ -27,7 +26,7 @@ module MkdirCore {
     } else {
       var quoted := io.QuoteArgument(Utf8.Encode(path));
       var reason := io.GetCLocaleErrnoText(err);
-      diagnostic := Text.DiagnosticText(quoted, reason);
+      diagnostic := Spec.DiagnosticText(quoted, reason);
     }
   }
 
@@ -47,7 +46,7 @@ module MkdirCore {
     var finalDiagnostic := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostic := diagnostics + Text.WriteErrorText(reason);
+      finalDiagnostic := diagnostics + Spec.WriteErrorText(reason);
     }
     assert finalDiagnostic == diagnostics + (if outObservation.err == 0 then []
                                              else Spec.WriteErrorText(C.CLocaleErrnoTextResult(outObservation.err)));

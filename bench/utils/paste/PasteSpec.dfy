@@ -41,9 +41,6 @@ module PasteSpec {
     blocking: bool
   )
 
-
-
-
   function HelpText(): BenchWorld.Bytes
   {
     "Usage: paste [OPTION]... [FILE]...\n"
@@ -91,19 +88,19 @@ module PasteSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  ghost function NeedsErrorQuoting(path: string): bool
+  function NeedsErrorQuoting(path: string): bool
   {
     var bytes := Utf8.Encode(path);
     |bytes| == 0 || SE.SpecHasShellQuoteTrigger(bytes)
   }
 
-  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     ErrorMessageText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
     ErrorMessageText1 + Utf8.Encode(ErrnoText(err)) + ErrorMessageText2
   }
 
-  ghost function DelimiterBackslashError(text: BenchWorld.Bytes): BenchWorld.Bytes
+  function DelimiterBackslashError(text: BenchWorld.Bytes): BenchWorld.Bytes
   {
     var rendered :=
       if exists i: nat :: i < |text| &&
@@ -247,7 +244,7 @@ module PasteSpec {
        stdinIndex + |selected| * stdinCount >= |stdinLines|)
   }
 
-  ghost predicate HasStdinInput(inputs: seq<PasteSchema.Input>)
+  predicate HasStdinInput(inputs: seq<PasteSchema.Input>)
   {
     PasteSchema.Stdin in inputs
   }
@@ -739,7 +736,7 @@ module PasteSpec {
     true
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }

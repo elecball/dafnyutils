@@ -14,8 +14,6 @@ module ExprSpec {
   import Schema = ExprSchema
   import SE = StringEscaping
 
-
-
   function HelpText(): BenchWorld.Bytes
   {
     "Usage: expr EXPRESSION\n"
@@ -110,7 +108,7 @@ module ExprSpec {
     "\n"
   }
 
-  ghost function UnexpectedArgumentMessage(token: string): BenchWorld.Bytes
+  function UnexpectedArgumentMessage(token: string): BenchWorld.Bytes
   {
     UnexpectedArgumentMessagePart1() +
     SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + UnexpectedArgumentMessagePart2()
@@ -126,7 +124,7 @@ module ExprSpec {
     "\n"
   }
 
-  ghost function MissingAfterMessage(op: string): BenchWorld.Bytes
+  function MissingAfterMessage(op: string): BenchWorld.Bytes
   {
     MissingAfterMessagePart1() +
     SE.SpecLocaleQuoteBytes(Utf8.Encode(op)) + MissingAfterMessagePart2()
@@ -142,7 +140,7 @@ module ExprSpec {
     "\n"
   }
 
-  ghost function MissingCloseAfterMessage(token: string): BenchWorld.Bytes
+  function MissingCloseAfterMessage(token: string): BenchWorld.Bytes
   {
     MissingCloseAfterMessagePart1() +
     SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + MissingCloseAfterMessagePart2()
@@ -158,7 +156,7 @@ module ExprSpec {
     "\n"
   }
 
-  ghost function MissingCloseInsteadMessage(token: string): BenchWorld.Bytes
+  function MissingCloseInsteadMessage(token: string): BenchWorld.Bytes
   {
     MissingCloseInsteadMessagePart1() +
     SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + MissingCloseInsteadMessagePart2()
@@ -194,7 +192,7 @@ module ExprSpec {
     (ch as int) - ('0' as int)
   }
 
-  ghost predicate AllDigits(text: string)
+  predicate AllDigits(text: string)
   {
     forall i :: 0 <= i < |text| ==> IsDigit(text[i])
   }
@@ -203,7 +201,7 @@ module ExprSpec {
   // positional weights of the previous form are implicit in the recursion, so
   // no `Pow10` is needed here; the proof module keeps one to bridge Core's
   // left-folding accumulator.
-  ghost function DecimalValue(digits: string): int
+  function DecimalValue(digits: string): int
     requires AllDigits(digits)
     decreases |digits|
   {
@@ -214,7 +212,7 @@ module ExprSpec {
       DigitValue(digits[|digits| - 1])
   }
 
-  ghost predicate IntegerValue(text: string, value: int)
+  predicate IntegerValue(text: string, value: int)
   {
     if |text| == 0 then
       false
@@ -227,24 +225,24 @@ module ExprSpec {
       value == DecimalValue(text)
   }
 
-  ghost predicate CanonicalIntegerText(text: string)
+  predicate CanonicalIntegerText(text: string)
   {
     |text| == 1 ||
     (|text| > 1 && text[0] != '0' &&
      (text[0] != '-' || (|text| > 1 && text[1] != '0')))
   }
 
-  ghost predicate DecimalRepresentation(value: int, text: string)
+  predicate DecimalRepresentation(value: int, text: string)
   {
     IntegerValue(text, value) && CanonicalIntegerText(text)
   }
 
-  ghost predicate ValueTruth(value: string, truth: bool)
+  predicate ValueTruth(value: string, truth: bool)
   {
     truth == (value != "" && !IntegerValue(value, 0))
   }
 
-  ghost predicate StringLess(a: string, b: string)
+  predicate StringLess(a: string, b: string)
   {
     (exists first: nat ::
        first < |a| &&
@@ -680,7 +678,7 @@ module ExprSpec {
     "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorMessagePart1() + message + StreamWriteErrorMessagePart2())
   }

@@ -1,7 +1,7 @@
+include "DuSpec.dfy"
 include "../../core/World.dfy"
 include "DuSchema.dfy"
 include "DuCore.dfy"
-include "DuSpec.dfy"
 
 module DuProof {
   import StreamWorld = BenchWorld
@@ -13,35 +13,6 @@ module DuProof {
   import Schema = DuSchema
   import Core = DuCore
   import Spec = DuSpec
-
-  lemma NatTextRefines(n: nat)
-    ensures Core.NatText(n) == Spec.NatText(n)
-    decreases n
-  {
-    if n >= 10 {
-      NatTextRefines(n / 10);
-    }
-  }
-
-  lemma OutputPieceRefines(
-    path: BenchWorld.Path,
-    result: BenchWorld.IOResult<BenchWorld.Bytes>
-  )
-    ensures Core.OutputPiece(path, result) == Spec.OutputPieceSpec(path, result)
-  {
-    match result
-    case Ok(data) =>
-      NatTextRefines(|data|);
-    case Err(_) =>
-  }
-
-  lemma ErrorPieceRefines(
-    path: BenchWorld.Path,
-    result: BenchWorld.IOResult<BenchWorld.Bytes>
-  )
-    ensures Core.ErrorPiece(path, result) == Spec.ErrorPieceSpec(path, result)
-  {
-  }
 
   lemma OutputSegment(
     cmd: Schema.DuCmd,
@@ -58,11 +29,6 @@ module DuProof {
             ] == Spec.OutputPieceSpec(cmd.operands[i], Core.ReadResultCore(cmd, preFs, preStreams, i))
     decreases count - i
   {
-    OutputPieceRefines(
-      cmd.operands[count - 1],
-      Core.ReadResultCore(cmd, preFs, preStreams, count - 1)
-    );
-    OutputPieceRefines(cmd.operands[i], Core.ReadResultCore(cmd, preFs, preStreams, i));
     if i + 1 < count {
       OutputSegment(cmd, preFs, preStreams, count - 1, i);
       assert Core.PrefixOutputCore(cmd, preFs, preStreams, count) ==
@@ -94,11 +60,8 @@ module DuProof {
             ] == Spec.ErrorPieceSpec(cmd.operands[i], Core.ReadResultCore(cmd, preFs, preStreams, i))
     decreases count - i
   {
-    ErrorPieceRefines(
-      cmd.operands[count - 1],
-      Core.ReadResultCore(cmd, preFs, preStreams, count - 1)
-    );
-    ErrorPieceRefines(cmd.operands[i], Core.ReadResultCore(cmd, preFs, preStreams, i));
+    hide *;
+    reveal Core.PrefixErrorsCore();
     if i + 1 < count {
       ErrorSegment(cmd, preFs, preStreams, count - 1, i);
     }

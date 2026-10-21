@@ -47,11 +47,6 @@ module CommProof {
   {
   }
 
-  function SpecCounts(counts: RCore.ColumnCounts): RSpec.ColumnCounts
-  {
-    RSpec.ColumnCounts(counts.first, counts.second, counts.both)
-  }
-
   lemma {:isolate_assertions} PrependFragment(
     head: BW.Bytes,
     tailFragments: seq<BW.Bytes>,
@@ -85,51 +80,6 @@ module CommProof {
         PrependSlice(head, tail, tailCuts[k], tailCuts[k + 1]);
       }
     }
-  }
-
-  lemma RecordDelimiterEq(zeroTerminated: bool)
-    ensures RCore.RecordDelimiter(zeroTerminated) == RSpec.RecordDelimiter(zeroTerminated)
-  {
-  }
-
-  lemma DelimiterValuesMatchAll(first: string, rest: seq<string>)
-    ensures RCore.DelimiterValuesMatch(first, rest) ==
-            (forall i: nat :: i < |rest| ==> rest[i] == first)
-    decreases |rest|
-  {
-    if |rest| > 0 {
-      DelimiterValuesMatchAll(first, rest[1..]);
-      assert forall i: nat :: i < |rest| ==>
-                                (rest[i] == first) ==
-                                ((i == 0 && rest[0] == first) ||
-                                 (i > 0 && rest[1..][i - 1] == first));
-    }
-  }
-
-  lemma HasConflictingOutputDelimitersEq(values: seq<string>)
-    ensures RCore.HasConflictingOutputDelimiters(values) ==
-            RSpec.HasConflictingOutputDelimitersRelation(values)
-  {
-    if |values| > 0 {
-      DelimiterValuesMatchAll(values[0], values[1..]);
-      if RCore.HasConflictingOutputDelimiters(values) {
-        var i :| 0 <= i < |values[1..]| && values[1..][i] != values[0];
-        assert 1 <= i + 1 < |values|;
-      } else {
-        assert forall i: nat :: 1 <= i < |values| ==> values[i] == values[0] by {
-          forall i: nat | 1 <= i < |values|
-            ensures values[i] == values[0]
-          {
-            assert values[1..][i - 1] == values[0];
-          }
-        }
-      }
-    }
-  }
-
-  lemma OutputDelimiterFromValuesEq(values: seq<string>)
-    ensures RCore.OutputDelimiterFromValues(values) == RSpec.OutputDelimiterFromValues(values)
-  {
   }
 
   lemma {:isolate_assertions} RecordsFromWitness(
@@ -393,8 +343,8 @@ module CommProof {
     requires RCore.DataSorted(data, zeroTerminated)
     ensures RSpec.DataSortedRelation(data, zeroTerminated)
   {
-    var delimiter := RCore.RecordDelimiter(zeroTerminated);
-    RecordDelimiterEq(zeroTerminated);
+    var delimiter := RSpec.RecordDelimiter(zeroTerminated);
+
     var records, terminated, fragments, cuts := RecordsWitness(data, delimiter);
     RecordsSortedRelation(records);
     reveal RSpec.DataSortedRelation();
@@ -427,8 +377,8 @@ module CommProof {
     requires !RCore.DataSorted(data, zeroTerminated)
     ensures RSpec.DataUnsorted(data, zeroTerminated)
   {
-    var delimiter := RCore.RecordDelimiter(zeroTerminated);
-    RecordDelimiterEq(zeroTerminated);
+    var delimiter := RSpec.RecordDelimiter(zeroTerminated);
+
     var records, terminated, fragments, cuts := RecordsWitness(data, delimiter);
     RecordsUnsortedRelation(records);
     reveal RSpec.DataUnsorted();
@@ -523,7 +473,7 @@ module CommProof {
     right: seq<BW.Bytes>
   ) returns (
       body: BW.Bytes,
-      coreCounts: RCore.ColumnCounts,
+      coreCounts: RSpec.ColumnCounts,
       counts: RSpec.ColumnCounts,
       kinds: seq<RSpec.MergeKind>,
       leftStates: seq<seq<BW.Bytes>>,
@@ -534,7 +484,7 @@ module CommProof {
     )
     ensures body == RCore.RenderRecords(cmd, left, right)
     ensures coreCounts == RCore.CountRecords(left, right)
-    ensures counts == SpecCounts(coreCounts)
+    ensures counts == coreCounts
     ensures RSpec.MergeWitness(
               cmd, left, right, body, counts, kinds, leftStates, rightStates,
               suffixCounts, fragments, cuts
@@ -543,7 +493,7 @@ module CommProof {
   {
     if |left| == 0 && |right| == 0 {
       body := [];
-      coreCounts := RCore.ColumnCounts(0, 0, 0);
+      coreCounts := RSpec.ColumnCounts(0, 0, 0);
       counts := RSpec.ColumnCounts(0, 0, 0);
       kinds := [];
       leftStates := [left];
@@ -557,9 +507,9 @@ module CommProof {
       var tailBody, tailCoreCounts, tailCounts, tailKinds, tailLeftStates,
           tailRightStates, tailSuffixCounts, tailFragments, tailCuts :=
         MergeWitnessForCore(cmd, left, right[1..]);
-      var head := RCore.RenderOnlySecond(cmd, right[0]);
+      var head := RSpec.RenderFragment(cmd, RSpec.OnlySecond, right[0]);
       body := head + tailBody;
-      coreCounts := RCore.AddSecond(tailCoreCounts);
+      coreCounts := RSpec.AddKind(RSpec.OnlySecond, tailCoreCounts);
       counts := RSpec.AddKind(RSpec.OnlySecond, tailCounts);
       kinds := [RSpec.OnlySecond] + tailKinds;
       leftStates := [left] + tailLeftStates;
@@ -580,9 +530,9 @@ module CommProof {
       var tailBody, tailCoreCounts, tailCounts, tailKinds, tailLeftStates,
           tailRightStates, tailSuffixCounts, tailFragments, tailCuts :=
         MergeWitnessForCore(cmd, left[1..], right);
-      var head := RCore.RenderOnlyFirst(cmd, left[0]);
+      var head := RSpec.RenderFragment(cmd, RSpec.OnlyFirst, left[0]);
       body := head + tailBody;
-      coreCounts := RCore.AddFirst(tailCoreCounts);
+      coreCounts := RSpec.AddKind(RSpec.OnlyFirst, tailCoreCounts);
       counts := RSpec.AddKind(RSpec.OnlyFirst, tailCounts);
       kinds := [RSpec.OnlyFirst] + tailKinds;
       leftStates := [left] + tailLeftStates;
@@ -606,9 +556,9 @@ module CommProof {
         var tailBody, tailCoreCounts, tailCounts, tailKinds, tailLeftStates,
             tailRightStates, tailSuffixCounts, tailFragments, tailCuts :=
           MergeWitnessForCore(cmd, left[1..], right);
-        var head := RCore.RenderOnlyFirst(cmd, left[0]);
+        var head := RSpec.RenderFragment(cmd, RSpec.OnlyFirst, left[0]);
         body := head + tailBody;
-        coreCounts := RCore.AddFirst(tailCoreCounts);
+        coreCounts := RSpec.AddKind(RSpec.OnlyFirst, tailCoreCounts);
         counts := RSpec.AddKind(RSpec.OnlyFirst, tailCounts);
         kinds := [RSpec.OnlyFirst] + tailKinds;
         leftStates := [left] + tailLeftStates;
@@ -628,9 +578,9 @@ module CommProof {
         var tailBody, tailCoreCounts, tailCounts, tailKinds, tailLeftStates,
             tailRightStates, tailSuffixCounts, tailFragments, tailCuts :=
           MergeWitnessForCore(cmd, left, right[1..]);
-        var head := RCore.RenderOnlySecond(cmd, right[0]);
+        var head := RSpec.RenderFragment(cmd, RSpec.OnlySecond, right[0]);
         body := head + tailBody;
-        coreCounts := RCore.AddSecond(tailCoreCounts);
+        coreCounts := RSpec.AddKind(RSpec.OnlySecond, tailCoreCounts);
         counts := RSpec.AddKind(RSpec.OnlySecond, tailCounts);
         kinds := [RSpec.OnlySecond] + tailKinds;
         leftStates := [left] + tailLeftStates;
@@ -649,9 +599,9 @@ module CommProof {
         var tailBody, tailCoreCounts, tailCounts, tailKinds, tailLeftStates,
             tailRightStates, tailSuffixCounts, tailFragments, tailCuts :=
           MergeWitnessForCore(cmd, left[1..], right[1..]);
-        var head := RCore.RenderBoth(cmd, left[0]);
+        var head := RSpec.RenderFragment(cmd, RSpec.Both, left[0]);
         body := head + tailBody;
-        coreCounts := RCore.AddBoth(tailCoreCounts);
+        coreCounts := RSpec.AddKind(RSpec.Both, tailCoreCounts);
         counts := RSpec.AddKind(RSpec.Both, tailCounts);
         kinds := [RSpec.Both] + tailKinds;
         leftStates := [left] + tailLeftStates;
@@ -782,8 +732,8 @@ module CommProof {
               cmd, leftData, rightData, RCore.RenderData(cmd, leftData, rightData)
             )
   {
-    var delimiter := RCore.RecordDelimiter(cmd.zeroTerminated);
-    RecordDelimiterEq(cmd.zeroTerminated);
+    var delimiter := RSpec.RecordDelimiter(cmd.zeroTerminated);
+
     var left, leftTerminated, leftFragments, leftCuts :=
       RecordsWitness(leftData, delimiter);
     var right, rightTerminated, rightFragments, rightCuts :=
@@ -823,68 +773,6 @@ module CommProof {
       );
   }
 
-  lemma FirstOperandEq(operands: seq<string>)
-    ensures Core.FirstOperand(operands) == Spec.FirstOperand(operands)
-  {
-  }
-
-  lemma SecondOperandEq(operands: seq<string>)
-    ensures Core.SecondOperand(operands) == Spec.SecondOperand(operands)
-  {
-  }
-
-  lemma InputFromOperandEq(operand: string)
-    ensures Core.InputFromOperand(operand) == Spec.InputFromOperand(operand)
-  {
-  }
-
-  lemma CommandEq(raw: Schema.CommCmdRaw)
-    ensures Core.Command(raw) == Spec.CommandRelation(raw)
-  {
-    FirstOperandEq(raw.operands);
-    SecondOperandEq(raw.operands);
-    HasConflictingOutputDelimitersEq(raw.outputDelimiters);
-    OutputDelimiterFromValuesEq(raw.outputDelimiters);
-    InputFromOperandEq(Core.FirstOperand(raw.operands));
-    InputFromOperandEq(Core.SecondOperand(raw.operands));
-  }
-
-  lemma InputResultEq(preFs: BW.FileSystem, preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult, preStdin: BW.Bytes, input: Schema.CommInput)
-    ensures Core.InputResult(preFs, preStreams, preStdin, input) == Spec.InputResult(preFs, preStreams, preStdin, input)
-  {
-  }
-
-  lemma AfterInputReadEq(preStdin: BW.Bytes, input: Schema.CommInput, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
-    ensures Core.AfterInputRead(preStdin, input, preStreams) == Spec.AfterInputRead(preStdin, input, preStreams)
-  {
-  }
-
-  lemma ReadFirstResultEq(cmd: Schema.CommCmd, preFs: BW.FileSystem, preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult, preStdin: BW.Bytes)
-    ensures Core.ReadFirstResult(cmd, preFs, preStreams, preStdin) == Spec.ReadFirstResult(cmd, preFs, preStreams, preStdin)
-  {
-    InputResultEq(preFs, preStreams, preStdin, cmd.input1);
-  }
-
-  lemma AfterFirstReadEq(cmd: Schema.CommCmd, preStdin: BW.Bytes, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
-    ensures Core.AfterFirstRead(cmd, preStdin, preStreams) == Spec.AfterFirstRead(cmd, preStdin, preStreams)
-  {
-    AfterInputReadEq(preStdin, cmd.input1, preStreams);
-  }
-
-  lemma ReadSecondResultEq(cmd: Schema.CommCmd, preFs: BW.FileSystem, preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult, preStdin: BW.Bytes)
-    ensures Core.ReadSecondResult(cmd, preFs, preStreams, preStdin) == Spec.ReadSecondResult(cmd, preFs, preStreams, preStdin)
-  {
-    AfterFirstReadEq(cmd, preStdin, preStreams);
-    InputResultEq(preFs, preStreams, Core.AfterFirstRead(cmd, preStdin, preStreams), cmd.input2);
-  }
-
-  lemma AfterSecondReadEq(cmd: Schema.CommCmd, preStdin: BW.Bytes, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
-    ensures Core.AfterSecondRead(cmd, preStdin, preStreams) == Spec.AfterSecondRead(cmd, preStdin, preStreams)
-  {
-    AfterFirstReadEq(cmd, preStdin, preStreams);
-    AfterInputReadEq(Core.AfterFirstRead(cmd, preStdin, preStreams), cmd.input2, preStreams);
-  }
-
   twostate lemma PreparedSummaryImpliesPreparedSpec(
     raw: Schema.CommCmdRaw,
     io: BenchIO.IO,
@@ -893,8 +781,8 @@ module CommProof {
     requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
     ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    CommandEq(raw);
-    var cmd := Core.Command(raw);
+
+    var cmd := Spec.CommandRelation(raw);
     match cmd.mode
     case ModeHelp =>
     case ModeVersion =>
@@ -904,14 +792,12 @@ module CommProof {
     case ModeMultipleOutputDelimiters =>
     case ModeRepeatedStdinOperand =>
     case ModeRun =>
-      ReadFirstResultEq(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
-      AfterFirstReadEq(cmd, old(io.stdin()), old(io.trustedStreams()));
-      var first := Core.ReadFirstResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
-      FirstReadAbortsEq(cmd, first);
-      if !Core.FirstReadAborts(cmd, first) {
-        ReadSecondResultEq(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
-        AfterSecondReadEq(cmd, old(io.stdin()), old(io.trustedStreams()));
-        var second := Core.ReadSecondResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
+
+      var first := Spec.ReadFirstResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
+
+      if !Spec.FirstReadAborts(cmd, first) {
+
+        var second := Spec.ReadSecondResult(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
         if first.Err? || second.Err? {
           FailedReadOutputForCore(cmd, first, second);
           var plan := Core.FailedReadsPlan(cmd, first, second);
@@ -952,23 +838,6 @@ module CommProof {
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
                                        old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
-  lemma FirstReadAbortsEq(cmd: Schema.CommCmd, first: BW.IOResult<BW.Bytes>)
-    ensures Core.FirstReadAborts(cmd, first) == Spec.FirstReadAborts(cmd, first)
-  {
-    if first.Err? {
-      var data := IOContract.ReadResultData(first);
-      var delimiter := RCore.RecordDelimiter(cmd.zeroTerminated);
-      var complete := Core.CompleteRecordsData(data, delimiter);
-      assert Spec.CompleteInputPrefixRelation(data, delimiter, complete);
-      if complete != [] {
-        assert delimiter in complete;
-        assert delimiter in data;
-      } else {
-        assert delimiter !in data;
-      }
-    }
-  }
-
   lemma FailedMergeWitnessForCore(cmd: Schema.CommCmd,
                                   left: seq<BW.Bytes>, right: seq<BW.Bytes>, leftFailed: bool, rightFailed: bool)
     returns (kinds: seq<RSpec.MergeKind>, leftStates: seq<seq<BW.Bytes>>, rightStates: seq<seq<BW.Bytes>>,
@@ -996,29 +865,29 @@ module CommProof {
       if right == [] {
         nextLeft := left[1..]; nextRight := right;
         kind := RSpec.OnlyFirst;
-        head := RCore.RenderOnlyFirst(cmd, left[0]);
+        head := RSpec.RenderFragment(cmd, RSpec.OnlyFirst, left[0]);
       } else if left == [] {
         nextLeft := left; nextRight := right[1..];
         kind := RSpec.OnlySecond;
-        head := RCore.RenderOnlySecond(cmd, right[0]);
+        head := RSpec.RenderFragment(cmd, RSpec.OnlySecond, right[0]);
       } else {
         match RCore.CompareRecords(left[0], right[0])
         case LineLess =>
           CompareLessImpliesBytesLess(left[0], right[0]);
           nextLeft := left[1..]; nextRight := right;
           kind := RSpec.OnlyFirst;
-          head := RCore.RenderOnlyFirst(cmd, left[0]);
+          head := RSpec.RenderFragment(cmd, RSpec.OnlyFirst, left[0]);
         case LineGreater =>
           CompareGreaterReverseLess(left[0], right[0]);
           CompareLessImpliesBytesLess(right[0], left[0]);
           nextLeft := left; nextRight := right[1..];
           kind := RSpec.OnlySecond;
-          head := RCore.RenderOnlySecond(cmd, right[0]);
+          head := RSpec.RenderFragment(cmd, RSpec.OnlySecond, right[0]);
         case LineEqual =>
           CompareEqualImpliesEqual(left[0], right[0]);
           nextLeft := left[1..]; nextRight := right[1..];
           kind := RSpec.Both;
-          head := RCore.RenderBoth(cmd, left[0]);
+          head := RSpec.RenderFragment(cmd, RSpec.Both, left[0]);
       }
       assert RSpec.MergeStepRelation(cmd, kind, left, nextLeft, right, nextRight, head);
       var tailKinds, tailLeftStates, tailRightStates, tailFragments, tailCuts :=
@@ -1053,7 +922,7 @@ module CommProof {
     ensures Spec.FailedReadOutputRelation(cmd, first, second,
                                           Core.FailedReadsPlan(cmd, first, second).output, Core.FailedReadsPlan(cmd, first, second).leftFault)
   {
-    var delimiter := RCore.RecordDelimiter(cmd.zeroTerminated);
+    var delimiter := RSpec.RecordDelimiter(cmd.zeroTerminated);
     var leftData := Core.ReadRecordsData(first, delimiter);
     var rightData := Core.ReadRecordsData(second, delimiter);
     var left, _, _, _ := RecordsWitness(leftData, delimiter);

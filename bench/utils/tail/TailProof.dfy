@@ -19,21 +19,6 @@ module TailProof {
   import Core = TailCore
   import Spec = TailSpec
 
-  lemma InputsFromOperandsEq(operands: seq<string>)
-    ensures Core.InputsFromOperands(operands) == Spec.InputsFromOperands(operands)
-    decreases |operands|
-  {
-    if |operands| > 0 {
-      InputsFromOperandsEq(operands[1..]);
-    }
-  }
-
-  lemma CommandEq(raw: Schema.TailCmdRaw)
-    ensures Core.Command(raw) == Spec.Command(raw)
-  {
-    InputsFromOperandsEq(raw.operands);
-  }
-
   lemma PrefixStdinCharacterization(cmd: Schema.TailCmd, preStdin: BW.Bytes,
                                     preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult)
     ensures Spec.StdinTraceRelation(cmd, preStdin,
@@ -283,8 +268,7 @@ module TailProof {
   {
     if cmd.selection.unit == Schema.CountBytes {
     } else {
-      var delimiter := RCore.RecordDelimiter(cmd.zeroTerminated);
-      assert delimiter == RSpec.RecordDelimiter(cmd.zeroTerminated);
+      var delimiter := RSpec.RecordDelimiter(cmd.zeroTerminated);
       if cmd.selection.fromStart {
         DropFirstRecordsGivesRelation(
           data,
@@ -313,7 +297,7 @@ module TailProof {
   {
     match result
     case Ok(data) =>
-      if !Core.SuppressZeroTrailingSelection(cmd) {
+      if !Spec.SuppressZeroTrailingSelection(cmd) {
         RenderDataGivesRelation(cmd, data);
       }
     case Err(error) =>
@@ -408,9 +392,9 @@ module TailProof {
             result,
             Core.PrefixHeaderCountCore(cmd, preFs, preStdin, i, preStreams)
           ),
-          Core.ErrorPiece(cmd.inputs[i], result),
-          Core.HadErrorPiece(cmd.inputs[i], result),
-          Core.ResultHasHeader(cmd, result)
+          Spec.ErrorPiece(cmd.inputs[i], result),
+          Spec.HadErrorPiece(cmd.inputs[i], result),
+          Spec.ResultHasHeader(cmd, result)
         )
       ]
   }
@@ -434,7 +418,7 @@ module TailProof {
       var prior := CoreObservations(cmd, preFs, preStdin, count - 1, preStreams);
       var observations := CoreObservations(cmd, preFs, preStdin, count, preStreams);
       var i := count - 1;
-      var failed := Core.HadErrorPiece(
+      var failed := Spec.HadErrorPiece(
         cmd.inputs[i],
         Core.ReadResultCore(cmd, preFs, preStdin, i, preStreams)
       );
@@ -527,9 +511,9 @@ module TailProof {
         result,
         Core.PrefixHeaderCountCore(cmd, preFs, preStdin, i, preStreams)
       );
-      var stderrFragment := Core.ErrorPiece(cmd.inputs[i], result);
-      var failed := Core.HadErrorPiece(cmd.inputs[i], result);
-      var hasHeader := Core.ResultHasHeader(cmd, result);
+      var stderrFragment := Spec.ErrorPiece(cmd.inputs[i], result);
+      var failed := Spec.HadErrorPiece(cmd.inputs[i], result);
+      var hasHeader := Spec.ResultHasHeader(cmd, result);
       var observation := Spec.InputObservation(
         result,
         stdoutFragment,
@@ -644,12 +628,11 @@ module TailProof {
     requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
     ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    CommandEq(raw);
-    var cmd := Core.Command(raw);
+    var cmd := Spec.Command(raw);
     if cmd.mode == Schema.ModeHelp {
     } else if cmd.mode == Schema.ModeVersion {
     } else if cmd.mode == Schema.ModeInvalidCount {
-    } else if Core.SuppressZeroTrailingSelection(cmd) {
+    } else if Spec.SuppressZeroTrailingSelection(cmd) {
     } else {
       CoreSummaryImpliesTrace(cmd, old(io.fs()), old(io.stdin()), old(io.trustedStreams()));
     }

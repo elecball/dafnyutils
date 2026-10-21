@@ -118,7 +118,7 @@ module UnlinkSpec {
     " at token '"
   }
 
-  ghost function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
+  function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
   {
     var shortOptionPrefix: string := ParseErrorTextPart4();
     var text: string := if err.kind == CliTypes.UnknownOption then
@@ -192,7 +192,7 @@ module UnlinkSpec {
     "\n"
   }
 
-  ghost function CannotUnlinkText(
+  function CannotUnlinkText(
     quotedPath: BenchWorld.Bytes,
     reason: string
   ): BenchWorld.Bytes
@@ -212,7 +212,7 @@ module UnlinkSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

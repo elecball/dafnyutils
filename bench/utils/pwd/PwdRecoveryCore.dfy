@@ -1,7 +1,8 @@
-include "PwdTextCore.dfy"
-include "PwdWorldPathCore.dfy"
-include "../../core/IO.dfy"
+include "../../core/Utf8.dfy"
+include "../../core/World.dfy"
+include "PwdEmissionSpec.dfy"
 include "PwdRecoverySpec.dfy"
+include "../../core/IO.dfy"
 include "PwdRecoveryIOProof.dfy"
 include "PwdRecoveryTraceProof.dfy"
 include "PwdRuntimeModel.dfy"
@@ -10,14 +11,12 @@ include "PwdProof.dfy"
 include "PwdEmissionCore.dfy"
 
 module PwdRecoveryCore {
-  import WorldPath = PwdWorldPathCore
   import BenchIO
   import BenchWorld
   import IOContract
   import C = IOContract
   import Errno = Errnos
-  import Utf8 = PwdUtf8Core
-  import Text = PwdTextCore
+  import Utf8 = Utf8Semantics
   import Spec = PwdRecoverySpec
   import NativeProof = PwdRecoveryIOProof
   import Trace = PwdRecoveryTraceProof
@@ -27,73 +26,6 @@ module PwdRecoveryCore {
   import PhysicalProof = PwdProof
   import Emission = PwdEmissionSpec
   import Emit = PwdEmissionCore
-
-  function ContainsUnsafeComponent(segs: seq<string>, i: nat): bool
-    requires i <= |segs|
-    decreases |segs| - i
-  {
-    if i >= |segs| then
-      false
-    else if segs[i] == "." || segs[i] == ".." then
-      true
-    else
-      ContainsUnsafeComponent(segs, i + 1)
-  } by method
-  {
-    if i >= |segs| {
-      return false;
-    } else if segs[i] == "." || segs[i] == ".." {
-      return true;
-    } else {
-      return ContainsUnsafeComponent(segs, i + 1);
-    }
-  }
-
-  function ParentArgument(height: nat): string
-    requires height >= 1
-    decreases height
-  {
-    if height == 1 then ".." else ParentArgument(height - 1) + "/.."
-  } by method
-  {
-    if height == 1 {
-      return "..";
-    }
-    var prefix := ParentArgument(height - 1);
-    return prefix + "/..";
-  }
-
-  lemma ParentArgumentMatchesText(height: nat)
-    requires height >= 1
-    ensures ParentArgument(height) == Spec.ParentArgumentText(height)
-    decreases height
-  {
-    if height == 1 {
-      assert Spec.ParentArgumentText(height) == "..";
-    } else {
-      ParentArgumentMatchesText(height - 1);
-      var prefix := Spec.ParentArgumentText(height - 1);
-      var extended := prefix + "/..";
-      assert |extended| == 3 * height - 1;
-      forall i: nat | i < |extended|
-        ensures extended[i] == Spec.ParentArgumentText(height)[i]
-      {
-        if i < |prefix| {
-          assert extended[i] == prefix[i];
-        } else {
-          assert i - |prefix| < 3;
-          if i == |prefix| {
-            assert i % 3 == 2;
-          } else if i == |prefix| + 1 {
-            assert i % 3 == 0;
-          } else {
-            assert i == |prefix| + 2 && i % 3 == 1;
-          }
-        }
-      }
-      assert extended == Spec.ParentArgumentText(height);
-    }
-  }
 
   method FormatRecoveryFailure(failure: Spec.RecoveryFailure, io: BenchIO.IO)
     returns (diagnostic: BenchWorld.Bytes)
@@ -106,8 +38,7 @@ module PwdRecoveryCore {
     } else if failure.CurrentDirectoryStatusFailed? {
       quoted := io.QuoteafPath(".");
     } else if !failure.MemoryExhausted? {
-      var argument := ParentArgument(failure.height);
-      ParentArgumentMatchesText(failure.height);
+      var argument := Spec.ParentArgumentText(failure.height);
       quoted := io.QuoteArgument(Utf8.Encode(argument));
     }
     var reason := "";
@@ -115,44 +46,17 @@ module PwdRecoveryCore {
     if err != 0 {
       reason := io.GetCLocaleErrnoText(err);
     }
-    diagnostic := Text.RecoveryFailureText(failure, quoted, reason);
-  }
-
-  function LogicalTextValid(pwd: string): bool
-  {
-    BenchWorld.IsAbsolutePath(pwd) &&
-    !ContainsUnsafeComponent(BenchWorld.SplitSegments(BenchWorld.StripLeadingSlash(pwd), 0, 0), 0)
-  } by method
-  {
-    if !BenchWorld.IsAbsolutePath(pwd) {
-      return false;
-    }
-    var components := WorldPath.SplitSegments(WorldPath.StripLeadingSlash(pwd), 0, 0);
-    var unsafe := ContainsUnsafeComponent(components, 0);
-    return !unsafe;
-  }
-
-  ghost predicate LogicalSelectionSummary(pwd: string,
-                                          observations: seq<BenchWorld.IOResult<BenchWorld.FileStatus>>, selected: bool)
-  {
-    if !LogicalTextValid(pwd) then |observations| == 0 && !selected
-    else
-      |observations| >= 1 &&
-      if observations[0].Err? then |observations| == 1 && !selected
-      else
-        |observations| == 2 &&
-        (selected <==> observations[1].Ok? &&
-                       observations[0].v.hostKey == observations[1].v.hostKey)
+    diagnostic := Spec.RecoveryFailureText(failure, quoted, reason);
   }
 
   method ChooseLogicalFromStatuses(pwd: string,
                                    observations: seq<BenchWorld.IOResult<BenchWorld.FileStatus>>) returns (selected: bool)
-    requires if !LogicalTextValid(pwd) then |observations| == 0
+    requires if !Spec.LogicalTextFields(pwd) then |observations| == 0
              else |observations| >= 1 &&
                   (if observations[0].Err? then |observations| == 1 else |observations| == 2)
-    ensures LogicalSelectionSummary(pwd, observations, selected)
+    ensures Spec.LogicalSelectionFields(pwd, observations, selected)
   {
-    var valid := LogicalTextValid(pwd);
+    var valid := Spec.LogicalTextFields(pwd);
     if !valid {
       return false;
     }
@@ -859,7 +763,7 @@ module PwdRecoveryCore {
     var diagnostics: BenchWorld.Bytes := [];
     var normalExit := 0;
     if outcome.DirectoryRecovered? {
-      output := Text.CurrentDirectoryTextSpec(outcome.directory);
+      output := Emission.CurrentDirectoryTextSpec(outcome.directory);
     } else {
       diagnostics := FormatRecoveryFailure(outcome.failure,io);
       normalExit := 1;

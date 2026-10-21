@@ -2,11 +2,6 @@
 module TailRecordCore {
   import BenchWorld
 
-  function RecordDelimiter(zeroTerminated: bool): char
-  {
-    if zeroTerminated then '\0' else '\n'
-  }
-
   function ShiftCuts(cuts: seq<nat>, delta: nat): seq<nat>
   {
     seq(

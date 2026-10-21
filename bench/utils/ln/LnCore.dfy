@@ -1,13 +1,10 @@
-include "LnPathCore.dfy"
-include "LnTextCore.dfy"
+include "LnSpec.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "LnSchema.dfy"
-include "LnSpec.dfy"
 
 module LnCore {
-  import Path = LnPathCore
-  import Text = LnTextCore
+  import Path = LnSpec
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -16,31 +13,6 @@ module LnCore {
   import IOContract
   import Schema = LnSchema
   import Spec = LnSpec
-
-  ghost function LinkNameIsDirectoryFs(
-    fs: BenchWorld.FileSystem, path: BenchWorld.Path
-  ): bool
-  {
-    match IOContract.ResolvePathForMetadataFields(fs, path, true)
-    case Ok(resolved) =>
-      BenchWorld.FsContainsPath(fs, resolved) &&
-      (match BenchWorld.FsNodeAt(fs, resolved)
-       case Directory(_, _, _) => true
-       case _ => false)
-    case Err(_) => false
-  }
-
-  ghost function CoreDestination(
-    fs: BenchWorld.FileSystem, observations: Spec.ObservationContext, operands: seq<string>
-  ): string
-    requires 1 <= |operands| <= 2
-  {
-    if |operands| == 1 then Spec.InDirectory(".", operands[0])
-    else if operands[0] == "" then operands[1]
-    else if Spec.ObservedDirectory(fs, observations, operands[1], true) then
-      Spec.InDirectory(operands[1], operands[0])
-    else operands[1]
-  }
 
   lemma DirectoryProbeMatchesCore(
     fs: BenchWorld.FileSystem, observations: Spec.ObservationContext, path: BenchWorld.Path,
@@ -193,7 +165,7 @@ module LnCore {
                exit == (if success then 0 else 1)))
      else
        var source := cmd.operands[0];
-       var destination := CoreDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
+       var destination := Spec.LinkDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
        plannedStdout == [] &&
        (exists diagnostic: BenchWorld.Bytes, success: bool
           {:trigger CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
@@ -228,7 +200,7 @@ module LnCore {
                              Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) +
                                            Spec.DestinationReadCount(Schema.Command(raw).operands)),
                              Schema.Command(raw).operands[0],
-                             CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
+                             Spec.LinkDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
                              Schema.Command(raw).symbolic, diagnostics, success)
     ensures PreparedSummary(raw, io, exit, output, diagnostics)
   {
@@ -236,7 +208,7 @@ module LnCore {
     reveal PreparedSummary();
     var cmd := Schema.Command(raw);
     var source := cmd.operands[0];
-    var destination := CoreDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
+    var destination := Spec.LinkDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
     var context := Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) +
                                  Spec.DestinationReadCount(cmd.operands));
     assert CoreStepSummary(old(io.fs()), io.fs(), old(io.now()), context,
@@ -281,28 +253,28 @@ module LnCore {
     ensures message == Spec.FailedAccessMessageSpec(source, err)
   {
     var reason := io.GetCLocaleErrnoText(err);
-    message := Text.FailedAccessMessageText(source, err, reason);
+    message := Path.FailedAccessMessageText(source, err, reason);
   }
 
   method CreateHardLinkErrorMessageCore(source: BenchWorld.Path, linkName: BenchWorld.Path, err: int, io: BenchIO.IO) returns (message: BenchWorld.Bytes)
     ensures message == Spec.CreateHardLinkErrorMessageSpec(source, linkName, err)
   {
     var reason := io.GetCLocaleErrnoText(err);
-    message := Text.CreateHardLinkErrorMessageText(source, linkName, err, reason);
+    message := Path.CreateHardLinkErrorMessageText(source, linkName, err, reason);
   }
 
   method CreateSymlinkErrorMessageCore(linkName: BenchWorld.Path, source: BenchWorld.Path, err: int, io: BenchIO.IO) returns (message: BenchWorld.Bytes)
     ensures message == Spec.CreateSymlinkErrorMessageSpec(linkName, source, err)
   {
     var reason := io.GetCLocaleErrnoText(err);
-    message := Text.CreateSymlinkErrorMessageText(linkName, source, err, reason);
+    message := Path.CreateSymlinkErrorMessageText(linkName, source, err, reason);
   }
 
   method TargetDirectoryErrorMessageCore(target: BenchWorld.Path, err: int, io: BenchIO.IO) returns (message: BenchWorld.Bytes)
     ensures message == Spec.TargetDirectoryErrorMessageSpec(target, err)
   {
     var reason := io.GetCLocaleErrnoText(err);
-    message := Text.TargetDirectoryErrorMessageText(target, err, reason);
+    message := Path.TargetDirectoryErrorMessageText(target, err, reason);
   }
 
   method {:isolate_assertions} RunBatch(
@@ -378,7 +350,7 @@ module LnCore {
         if !sourceOk {
           piece := FailedAccessMessageCore(source, sourceErr, io);
         } else if sourceIsDir {
-          piece := Text.HardDirectoryMessageSpec(source);
+          piece := Path.HardDirectoryMessageSpec(source);
         } else {
           var createHardLinkResult := io.CreateHardLink(source, destination);
           var ok := createHardLinkResult.Ok?;
@@ -553,8 +525,8 @@ module LnCore {
       destination := if dirOk && dirIsDir then
         Path.InDirectory(cmd.operands[1], source) else cmd.operands[1];
     }
-    assert destination == CoreDestination(preFs, preTrusted, cmd.operands) by {
-      reveal CoreDestination(), Path.InDirectory();
+    assert destination == Spec.LinkDestination(preFs, preTrusted, cmd.operands) by {
+      reveal Spec.LinkDestination(), Path.InDirectory();
     }
 
     ghost var stepContext := Spec.Context(io);
@@ -588,7 +560,7 @@ module LnCore {
       assert (plannedStderr) == preStderr + diagnostic;
       assert preTrusted == old(Spec.Context(io));
       assert stepContext == Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands));
-      assert destination == CoreDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
+      assert destination == Spec.LinkDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
       assert CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
                              Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),
                              source, destination, cmd.symbolic, diagnostic, ok);
@@ -599,11 +571,11 @@ module LnCore {
       assert plannedStderr == diagnostic;
       assert cmd == Schema.Command(raw);
       assert source == Schema.Command(raw).operands[0];
-      assert destination == CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands);
+      assert destination == Spec.LinkDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands);
       assert CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
                              Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(Schema.Command(raw).operands)),
                              Schema.Command(raw).operands[0],
-                             CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
+                             Spec.LinkDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
                              Schema.Command(raw).symbolic, plannedStderr, ok);
       SinglePreparedWitness@PrepareStart(raw, io, exit, plannedStdout, plannedStderr, ok);
       return;
@@ -623,7 +595,7 @@ module LnCore {
       plannedStderr := plannedStderr + (diagnostic);
       exit := 1;
     } else if sourceIsDir {
-      diagnostic := Text.HardDirectoryMessageSpec(source);
+      diagnostic := Path.HardDirectoryMessageSpec(source);
       plannedStderr := plannedStderr + (diagnostic);
       exit := 1;
     } else {
@@ -656,11 +628,11 @@ module LnCore {
     assert (plannedStderr) == preStderr + diagnostic;
     assert preTrusted == old(Spec.Context(io));
     assert stepContext == Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands));
-    assert destination == CoreDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
+    assert destination == Spec.LinkDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
     assert plannedStderr == diagnostic;
     assert cmd == Schema.Command(raw);
     assert source == Schema.Command(raw).operands[0];
-    assert destination == CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands);
+    assert destination == Spec.LinkDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands);
     assert CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
                            Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),
                            source, destination, cmd.symbolic, diagnostic, success);
@@ -671,7 +643,7 @@ module LnCore {
     assert CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
                            Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(Schema.Command(raw).operands)),
                            Schema.Command(raw).operands[0],
-                           CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
+                           Spec.LinkDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
                            Schema.Command(raw).symbolic, plannedStderr, success);
     SinglePreparedWitness@PrepareStart(raw, io, exit, plannedStdout, plannedStderr, success);
   }
@@ -693,7 +665,7 @@ module LnCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Path.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
                                               else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

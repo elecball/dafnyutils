@@ -324,7 +324,7 @@ module BenchWorld {
     (c as int) - ('0' as int)
   }
 
-  ghost function AllOctalDigits(text: string, i: nat): bool
+  function AllOctalDigits(text: string, i: nat): bool
     decreases |text| - i
   {
     if i >= |text| then
@@ -335,7 +335,7 @@ module BenchWorld {
       AllOctalDigits(text, i + 1)
   }
 
-  ghost function OctalValue(text: string, i: nat, acc: int): int
+  function OctalValue(text: string, i: nat, acc: int): int
     requires i <= |text|
     requires AllOctalDigits(text, i)
     decreases |text| - i
@@ -351,7 +351,7 @@ module BenchWorld {
     ((x % BV32_MOD + BV32_MOD) % BV32_MOD) as bv32
   }
 
-  ghost function ParsedUmaskFromProps(props: map<string, string>): bv32
+  function ParsedUmaskFromProps(props: map<string, string>): bv32
   {
     if !("umask" in props) then
       DEFAULT_UMASK
@@ -451,7 +451,9 @@ module BenchWorld {
     |path| > 0 && path[0] == '/'
   }
 
-  ghost function StripLeadingSlash(path: string): string
+  // Lexical path transformations operate only on the supplied strings. They do
+  // not observe the filesystem or implement native symlink resolution.
+  function StripLeadingSlash(path: string): string
   {
     if IsAbsolutePath(path) then
       path[1..]
@@ -459,7 +461,7 @@ module BenchWorld {
       path
   }
 
-  ghost function SplitSegments(path: string, i: int, start: int): seq<string>
+  function SplitSegments(path: string, i: int, start: int): seq<string>
     requires 0 <= start <= i <= |path|
     decreases |path| - i
   {
@@ -475,7 +477,7 @@ module BenchWorld {
       SplitSegments(path, i + 1, start)
   }
 
-  ghost function NormalizeSegments(segs: seq<string>, i: int, acc: seq<string>): seq<string>
+  function NormalizeSegments(segs: seq<string>, i: int, acc: seq<string>): seq<string>
     requires 0 <= i <= |segs|
     decreases |segs| - i
   {
@@ -492,7 +494,8 @@ module BenchWorld {
       NormalizeSegments(segs, i + 1, acc + [segs[i]])
   }
 
-  ghost function JoinSegments(segs: seq<string>): string
+  function JoinSegments(segs: seq<string>): string
+    decreases |segs|
   {
     if |segs| == 0 then
       ""
@@ -502,7 +505,7 @@ module BenchWorld {
       segs[0] + "/" + JoinSegments(segs[1..])
   }
 
-  ghost function NormalizePath(path: string): string
+  function NormalizePath(path: string): string
   {
     var abs := IsAbsolutePath(path);
     var segs := NormalizeSegments(SplitSegments(StripLeadingSlash(path), 0, 0), 0, []);
@@ -515,18 +518,18 @@ module BenchWorld {
       joined
   }
 
-  ghost function ParentSegments(path: string): seq<string>
+  function ParentSegments(path: string): seq<string>
   {
     var segs := NormalizeSegments(SplitSegments(StripLeadingSlash(path), 0, 0), 0, []);
     if |segs| == 0 then [] else segs[..|segs| - 1]
   }
 
-  ghost function PathSegments(path: string): seq<string>
+  function PathSegments(path: string): seq<string>
   {
     NormalizeSegments(SplitSegments(StripLeadingSlash(path), 0, 0), 0, [])
   }
 
-  ghost function BuildPath(abs: bool, segs: seq<string>): string
+  function BuildPath(abs: bool, segs: seq<string>): string
   {
     var joined := JoinSegments(segs);
     if abs && joined != "" then
@@ -537,18 +540,18 @@ module BenchWorld {
       joined
   }
 
-  ghost function ParentPath(path: string): string
+  function ParentPath(path: string): string
   {
     BuildPath(IsAbsolutePath(path), ParentSegments(path))
   }
 
-  ghost function LeafName(path: string): string
+  function LeafName(path: string): string
   {
     var segs := PathSegments(path);
     if |segs| == 0 then "" else segs[|segs| - 1]
   }
 
-  ghost function AppendPath(parent: string, child: string): string
+  function AppendPath(parent: string, child: string): string
   {
     if parent == "" then
       child
@@ -558,7 +561,7 @@ module BenchWorld {
       parent + "/" + child
   }
 
-  ghost function ResolveSymlinkTarget(basePath: string, target: string): string
+  function ResolveSymlinkTarget(basePath: string, target: string): string
   {
     if IsAbsolutePath(target) then
       NormalizePath(target)
@@ -612,29 +615,29 @@ module BenchWorld {
     InodeFsLookupTreeSegments(fs.inodes, fs.namespace, segs)
   }
 
-  ghost function FsLookupNode(fs: FileSystem, path: Path): IOResult<FsNode>
+  function FsLookupNode(fs: FileSystem, path: Path): IOResult<FsNode>
   {
     InodeFsLookupNode(fs, path)
   }
 
-  ghost predicate FsContainsPath(fs: FileSystem, path: Path)
+  predicate FsContainsPath(fs: FileSystem, path: Path)
   {
     InodeFsContainsPath(fs, path)
   }
 
-  ghost function FsNodeAt(fs: FileSystem, path: Path): FsNode
+  function FsNodeAt(fs: FileSystem, path: Path): FsNode
     requires FsContainsPath(fs, path)
   {
     InodeFsNodeAt(fs, path)
   }
 
-  ghost function FsIdAt(fs: FileSystem, path: Path): InodeId
+  function FsIdAt(fs: FileSystem, path: Path): InodeId
     requires FsContainsPath(fs, path)
   {
     InodeFsLookupId(fs, path).v
   }
 
-  ghost function InodeLinkCountAt(
+  function InodeLinkCountAt(
     fs: FileSystem,
     path: Path
   ): LinkCountObservation
@@ -947,7 +950,7 @@ module BenchWorld {
     |InodeNamespaceIdPaths(tree, id)|
   }
 
-  ghost function InodeNamespacePaths(tree: InodeTree): set<Path>
+  function InodeNamespacePaths(tree: InodeTree): set<Path>
     decreases tree
   {
     {""} +
@@ -1061,7 +1064,7 @@ module BenchWorld {
       case _ => Err(NotDirectory)
   }
 
-  ghost function InodeFsLookupId(
+  function InodeFsLookupId(
     fs: InodeFileSystemData,
     path: Path
   ): IOResult<InodeId>
@@ -1073,7 +1076,7 @@ module BenchWorld {
     case Err(e) => Err(e)
   }
 
-  ghost function InodeFsLookupNode(
+  function InodeFsLookupNode(
     fs: InodeFileSystemData,
     path: Path
   ): IOResult<FsNode>
@@ -1083,12 +1086,12 @@ module BenchWorld {
     case Err(e) => Err(e)
   }
 
-  ghost predicate InodeFsContainsPath(fs: InodeFileSystemData, path: Path)
+  predicate InodeFsContainsPath(fs: InodeFileSystemData, path: Path)
   {
     InodeFsLookupId(fs, path).Ok?
   }
 
-  ghost function InodeFsNodeAt(fs: InodeFileSystemData, path: Path): FsNode
+  function InodeFsNodeAt(fs: InodeFileSystemData, path: Path): FsNode
     requires InodeFsContainsPath(fs, path)
   {
     match InodeFsLookupNode(fs, path)
@@ -1342,7 +1345,7 @@ module BenchWorld {
     )
   }
 
-  ghost predicate InodeCanCreateFresh(
+  predicate InodeCanCreateFresh(
     fs: InodeFileSystem,
     path: Path,
     id: InodeId,
@@ -1441,7 +1444,7 @@ module BenchWorld {
       InodeFileSystemData(namespace, inodes)
   }
 
-  ghost predicate InodeSameObject(
+  predicate InodeSameObject(
     fs: InodeFileSystemData,
     left: Path,
     right: Path

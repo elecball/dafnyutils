@@ -47,7 +47,10 @@ module BasenameProof {
           Spec.SlashesOnly(trailing) &&
           0 < |trimmed| &&
           !Spec.IsSlash(trimmed[|trimmed| - 1]) &&
-          Spec.MaximalSlashFreeSuffix(trimmed, value);
+          Spec.MaximalSlashFreeSuffix(trimmed, value) by {
+        assert 0 < |trimmed|;
+        assert !Spec.IsSlash(trimmed[|trimmed| - 1]);
+      }
     }
   }
 
@@ -212,7 +215,7 @@ module BasenameProof {
     requires Core.RunOutputSummary(cmd, out)
     ensures Spec.CommandOutputRelation(cmd, out)
   {
-    var sep := if cmd.zeroTerminated then ['\0'] else "\n";
+    var sep := Spec.OutputSeparator(cmd);
     if |cmd.operands| == 0 {
     } else if cmd.multiple {
       match cmd.suffix

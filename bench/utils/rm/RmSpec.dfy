@@ -186,7 +186,7 @@ module RmSpec {
     "' requires an argument\n"
   }
 
-  ghost function ParseDiagnostic(err: CliTypes.ParseError, invalidShort: char): Bytes
+  function ParseDiagnostic(err: CliTypes.ParseError, invalidShort: char): Bytes
   {
     if err.kind == CliTypes.UnknownOption && !CliModel.HasPrefix(err.rawToken,ParseDiagnosticPart1()) && |err.rawToken| > 1 then
       ParseDiagnosticPart2() + [Utf8.EncodeChar(invalidShort)[0]] + ParseDiagnosticPart3()
@@ -207,7 +207,7 @@ module RmSpec {
            else ParseDiagnosticPart6() + err.rawToken + ParseDiagnosticPart14())
   }
 
-  ghost function ParseErrorText(err: CliTypes.ParseError, invalidShort: char): Bytes
+  function ParseErrorText(err: CliTypes.ParseError, invalidShort: char): Bytes
   {
     ParseDiagnostic(err,invalidShort) + UsageText()
   }
@@ -227,7 +227,7 @@ module RmSpec {
     ".\n"
   }
 
-  ghost function HyphenSuggestion(path: Path): Bytes
+  function HyphenSuggestion(path: Path): Bytes
   {
     var encoded := Utf8.Encode(path);
     var trigger := exists i: int ::
@@ -272,7 +272,7 @@ module RmSpec {
     "\n"
   }
 
-  ghost function CannotRemoveMessage(quoted: Bytes, reason: string): Bytes
+  function CannotRemoveMessage(quoted: Bytes, reason: string): Bytes
   {
     CannotRemoveMessagePart1() + quoted + CannotRemoveMessagePart2() + Utf8.Encode(reason) + CannotRemoveMessagePart3()
   }
@@ -297,7 +297,7 @@ module RmSpec {
     "\n"
   }
 
-  ghost function TraversalMessage(path: Path, reason: string): Bytes
+  function TraversalMessage(path: Path, reason: string): Bytes
   {
     TraversalMessagePart1() + Escaping.SpecQuoteFBytes(Utf8.Encode(path)) + TraversalMessagePart2() + Utf8.Encode(reason) + TraversalMessagePart3()
   }
@@ -325,7 +325,7 @@ module RmSpec {
     "\n"
   }
 
-  ghost function RootAttributesMessage(reason: string): Bytes
+  function RootAttributesMessage(reason: string): Bytes
   {
     RootAttributesMessagePart1() + Utf8.Encode(reason) + RootAttributesMessagePart2()
   }
@@ -348,7 +348,7 @@ module RmSpec {
     parent + (if |parent| > 0 && parent[|parent|-1] == '/' then "" else "/") + name
   }
 
-  ghost function DotOperand(path: Path): bool {
+  function DotOperand(path: Path): bool {
     var parts := C.RawPathSegmentsFields(path);
     |parts| > 0 && parts[|parts|-1] in {".", ".."}
   }
@@ -437,7 +437,7 @@ module RmSpec {
     ": skipping "
   }
 
-  ghost function RefusalMessage(path: Path, why: Refusal, quoted: Bytes, quotedParent: Bytes): Bytes
+  function RefusalMessage(path: Path, why: Refusal, quoted: Bytes, quotedParent: Bytes): Bytes
   {
     match why
     case DirectoryRefusal => CannotRemoveMessage(quoted, RefusalMessagePart1())
@@ -470,8 +470,8 @@ module RmSpec {
     RefusalMessage(path,why,C.QuoteafPathResult(path),C.QuoteafPathResult(ChildPath(path,RefusalTextPart1())))
   }
 
-  ghost function BasicRefusal(raw: Schema.RmCmdRaw, path: Path, top: bool,
-                              rootKey: HostInodeKey, rootDevice: int, seen: set<HostInodeKey>, status: FileTimeStatus): Refusal
+  function BasicRefusal(raw: Schema.RmCmdRaw, path: Path, top: bool,
+                        rootKey: HostInodeKey, rootDevice: int, seen: set<HostInodeKey>, status: FileTimeStatus): Refusal
   {
     if !raw.recursive && !raw.directory then DirectoryRefusal
     else if !raw.recursive then NoRefusal
@@ -511,11 +511,11 @@ module RmSpec {
     set id: InodeId | id in fs.inodes :: fs.inodes[id].hostKey
   }
 
-  ghost function EntryNames(entries: set<DirEntry>): set<string> {
+  function EntryNames(entries: set<DirEntry>): set<string> {
     set entry: DirEntry | entry in entries :: entry.name
   }
 
-  ghost function Names(names: seq<string>): set<string> {
+  function Names(names: seq<string>): set<string> {
     set i: int | 0 <= i < |names| :: names[i]
   }
 
@@ -616,7 +616,7 @@ module RmSpec {
                 children: seq<Removal>, states: seq<FileSystem>, outputs: seq<Bytes>, errors: seq<Bytes>,
                 failures: seq<bool>, ok: bool, err: int)
 
-  ghost predicate HasFailure(failures: seq<bool>) {
+  predicate HasFailure(failures: seq<bool>) {
     exists i: int :: 0 <= i < |failures| && failures[i]
   }
 
@@ -701,7 +701,7 @@ module RmSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): Bytes
+  function WriteErrorText(reason: string): Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

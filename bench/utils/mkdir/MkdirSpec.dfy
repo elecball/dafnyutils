@@ -139,7 +139,7 @@ module MkdirSpec {
     " at token '"
   }
 
-  ghost function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
+  function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
   {
     if err.kind == CliTypes.UnknownOption then
       if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
@@ -195,7 +195,7 @@ module MkdirSpec {
     "\n"
   }
 
-  ghost function DiagnosticText(quoted: BenchWorld.Bytes, reason: string): BenchWorld.Bytes
+  function DiagnosticText(quoted: BenchWorld.Bytes, reason: string): BenchWorld.Bytes
   {
     DiagnosticTextPart1() + quoted + DiagnosticTextPart2() + Utf8.Encode(reason) + DiagnosticTextPart3()
   }
@@ -266,7 +266,7 @@ module MkdirSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): BenchWorld.Bytes
+  function WriteErrorText(reason: string): BenchWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

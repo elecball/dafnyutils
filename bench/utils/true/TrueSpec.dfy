@@ -11,9 +11,6 @@ module TrueSpec {
   import BenchWorld
   import Schema = TrueSchema
 
-
-
-
   function HelpTextSpec(): BenchWorld.Bytes
   {
     "Usage: true [ignored command line arguments]\n"
@@ -74,7 +71,7 @@ module TrueSpec {
     "true: write error: " + message + "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorText(message))
   }

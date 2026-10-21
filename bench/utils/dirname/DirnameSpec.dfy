@@ -13,8 +13,6 @@ module DirnameSpec {
   import BenchWorld
   import Schema = DirnameSchema
 
-
-
   function IsSlash(ch: char): bool
   {
     ch == '/'
@@ -36,12 +34,12 @@ module DirnameSpec {
     if zeroTerminated then ['\0'] else "\n"
   }
 
-  ghost predicate SlashFree(text: string)
+  predicate SlashFree(text: string)
   {
     '/' !in text
   }
 
-  ghost predicate SlashesOnly(text: string)
+  predicate SlashesOnly(text: string)
   {
     forall i :: 0 <= i < |text| ==> IsSlash(text[i])
   }
@@ -209,7 +207,7 @@ module DirnameSpec {
     "dirname: write error: " + message + "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorText(message))
   }

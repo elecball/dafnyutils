@@ -127,7 +127,7 @@ module LinkSpec {
     " at token '"
   }
 
-  ghost function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
+  function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
   {
     if err.kind == CliTypes.UnknownOption then
       if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
@@ -214,7 +214,7 @@ module LinkSpec {
     "\n"
   }
 
-  ghost function CannotCreateLinkText(
+  function CannotCreateLinkText(
     quotedTarget: BenchWorld.Bytes,
     quotedSource: BenchWorld.Bytes,
     reason: string
@@ -235,7 +235,7 @@ module LinkSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

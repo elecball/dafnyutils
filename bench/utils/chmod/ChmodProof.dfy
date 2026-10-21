@@ -1,8 +1,9 @@
+include "../../core/StringEscaping.dfy"
+include "ChmodSpec.dfy"
 include "../../core/Errno.dfy"
 include "../../core/World.dfy"
 include "ChmodSchema.dfy"
 include "ChmodCore.dfy"
-include "ChmodSpec.dfy"
 
 module ChmodProof {
   import Errno = Errnos
@@ -13,7 +14,7 @@ module ChmodProof {
   import Core = ChmodCore
   import Spec = ChmodSpec
   import Utf8 = Utf8Semantics
-  import Quote = ChmodQuoteSpec
+  import Quote = StringEscaping
 
   lemma AsciiEncodingIdentity(text: string)
     requires forall i | 0 <= i < |text| :: text[i] as int <= 0x7f
@@ -53,159 +54,6 @@ module ChmodProof {
     NormalErrnoEncodingIdentity(err);
   }
 
-  lemma BridgeHelpText()
-    ensures Core.HelpTextCore() == Spec.HelpTextSpec()
-  {
-  }
-
-  lemma BridgeVersionText()
-    ensures Core.VersionTextCore() == Spec.VersionTextSpec()
-  {
-  }
-
-  lemma BridgeErrnoText(err: int)
-    ensures Core.ErrnoTextCore(err) == Spec.ErrnoTextSpec(err)
-  {
-  }
-
-  lemma BridgeMissingOperandMessage(cmd: Schema.ChmodCmd)
-    ensures Core.MissingOperandMessageCore(cmd) == Spec.MissingOperandMessageSpec(cmd)
-  {
-  }
-
-  lemma BridgeInvalidModeMessage(expr: string)
-    ensures Core.InvalidModeMessageCore(expr) == Spec.InvalidModeMessageSpec(expr)
-  {
-  }
-
-  lemma BridgeReferenceErrorMessage(path: string, err: int)
-    ensures Core.ReferenceErrorMessageCore(path, Core.ErrnoTextCore(err)) ==
-            Spec.ReferenceErrorMessageSpec(path, Spec.ErrnoTextSpec(err))
-  {
-    BridgeErrnoText(err);
-  }
-
-  lemma BridgeGettingNewAttributesMessage(path: string, err: int)
-    ensures Core.GettingNewAttributesMessageCore(
-              path, Core.ErrnoTextCore(err)
-            ) == Spec.GettingNewAttributesMessageSpec(
-                   path, Spec.ErrnoTextSpec(err)
-                 )
-  {
-    BridgeErrnoText(err);
-  }
-
-  lemma BridgeCombineModeReferenceMessage()
-    ensures Core.CombineModeReferenceMessageCore() == Spec.CombineModeReferenceMessageSpec()
-  {
-  }
-
-  lemma BridgeUnsupportedRecursiveMessage()
-    ensures Core.UnsupportedRecursiveMessageCore() == Spec.UnsupportedRecursiveMessageSpec()
-  {
-  }
-
-  lemma BridgeUnsupportedMultiFileMessage()
-    ensures Core.UnsupportedMultiFileMessageCore() == Spec.UnsupportedMultiFileMessageSpec()
-  {
-  }
-
-  lemma BridgeChangeErrorMessage(path: string, err: int)
-    ensures Core.ChangeErrorMessageCore(path, Core.ErrnoTextCore(err)) ==
-            Spec.ChangeErrorMessageSpec(path, Spec.ErrnoTextSpec(err))
-  {
-    BridgeErrnoText(err);
-  }
-
-  lemma BridgeAccessErrorMessage(path: string, err: int)
-    ensures Core.AccessErrorMessageCore(path, Core.ErrnoTextCore(err)) ==
-            Spec.AccessErrorMessageSpec(path, Spec.ErrnoTextSpec(err))
-  {
-    BridgeErrnoText(err);
-  }
-
-  lemma BridgeDanglingSymlinkMessage(path: string)
-    ensures Core.DanglingSymlinkMessageCore(path) ==
-            Spec.DanglingSymlinkMessageSpec(path)
-  {
-  }
-
-  lemma BridgeCannotDereferenceMessage(path: string, err: int)
-    ensures Core.CannotDereferenceMessageCore(path, err) ==
-            Spec.CannotDereferenceMessageSpec(path, err)
-  {
-    BridgeErrnoText(err);
-  }
-
-  lemma BridgeNeitherChangedMessage(path: string)
-    ensures Core.NeitherChangedMessageCore(path) ==
-            Spec.NeitherChangedMessageSpec(path)
-  {
-  }
-
-  lemma BridgeChangedMessage(path: string, before: bv32, after: bv32)
-    ensures Core.ChangedMessageCore(path, before, after) ==
-            Spec.ChangedMessageSpec(path, before, after)
-  {
-  }
-
-  lemma BridgeFailedChangeMessage(path: string, before: bv32, desired: bv32)
-    ensures Core.FailedChangeMessageCore(path, before, desired) ==
-            Spec.FailedChangeMessageSpec(path, before, desired)
-  {
-  }
-
-  lemma BridgeRetainedMessage(path: string, mode: bv32)
-    ensures Core.RetainedMessageCore(path, mode) ==
-            Spec.RetainedMessageSpec(path, mode)
-  {
-  }
-
-  lemma BridgeAccessFailureMessage(path: string)
-    ensures Core.AccessFailureMessageCore(path) == Spec.AccessFailureMessageSpec(path)
-  {
-  }
-
-  lemma BridgeSurpriseModeMessage(path: string, actual: bv32, naive: bv32)
-    ensures Core.SurpriseModeMessageCore(path, actual, naive) ==
-            Spec.SurpriseModeMessageSpec(path, actual, naive)
-  {
-  }
-
-  lemma BridgeMakeAbsolute(cwd: BW.Path, path: BW.Path)
-    ensures Core.MakeAbsoluteCore(cwd, path) == Spec.MakeAbsolute(cwd, path)
-  {
-  }
-
-  lemma BridgeShouldDereference(cmd: Schema.ChmodCmd)
-    ensures Core.ShouldDereferenceCore(cmd) == Spec.ShouldDereference(cmd)
-  {
-  }
-
-  lemma BridgeUsesPhysicalTopLevelMetadata(cmd: Schema.ChmodCmd)
-    ensures Core.CoreUsesPhysicalTopLevelMetadata(cmd) ==
-            Spec.SpecUsesPhysicalTopLevelMetadata(cmd)
-  {
-  }
-
-  lemma BridgeUsesExplicitPhysicalDereference(cmd: Schema.ChmodCmd)
-    ensures Core.CoreUsesExplicitPhysicalDereference(cmd) ==
-            Spec.SpecUsesExplicitPhysicalDereference(cmd)
-  {
-  }
-
-  lemma BridgeUsesFollowedTopLevelNoDereference(cmd: Schema.ChmodCmd)
-    ensures Core.CoreUsesFollowedTopLevelNoDereference(cmd) ==
-            Spec.SpecUsesFollowedTopLevelNoDereference(cmd)
-  {
-  }
-
-  lemma BridgeIsDanglingSymlinkFailure(isSymlink: bool, err: int)
-    ensures Core.CoreIsDanglingSymlinkFailure(isSymlink, err) ==
-            Spec.SpecIsDanglingSymlinkFailure(isSymlink, err)
-  {
-  }
-
   lemma BridgePathIsDanglingSymlinkFailure(
     fs: BW.FileSystem,
     actual: BW.Path,
@@ -221,120 +69,9 @@ module ChmodProof {
       case Ok(resolved) =>
         if BW.FsContainsPath(fs, resolved) {
           match BW.FsNodeAt(fs, resolved)
-          case Symlink(_, _, _, _) => BridgeIsDanglingSymlinkFailure(true, err);
-          case _ => BridgeIsDanglingSymlinkFailure(false, err);
+          case Symlink(_, _, _, _) =>
+          case _ =>
         }
-    }
-  }
-
-  lemma BridgeSupportedOctalMode(expr: string)
-    ensures Core.SupportedOctalModeCore(expr) == Spec.SupportedOctalMode(expr)
-  {
-  }
-
-  lemma BridgeOctalMode(expr: string)
-    requires Core.SupportedOctalModeCore(expr)
-    ensures Core.OctalModeCore(expr) == Spec.OctalMode(expr)
-  {
-    BridgeSupportedOctalMode(expr);
-  }
-
-  lemma BridgeCopyExistingValue(value: bv32, current: bv32)
-    ensures Core.CoreCopyExistingValue(value, current) ==
-            Spec.SpecCopyExistingValue(value, current)
-  {
-  }
-
-  lemma BridgeInvertModeBits(value: bv32)
-    ensures Core.CoreInvertModeBits(value) == Spec.SpecInvertModeBits(value)
-  {
-  }
-
-  lemma BridgeOmittedChangeBits(isDir: bool, mentioned: bv32)
-    ensures Core.CoreOmittedChangeBits(isDir, mentioned) ==
-            Spec.SpecOmittedChangeBits(isDir, mentioned)
-  {
-    BridgeInvertModeBits(mentioned);
-  }
-
-  lemma BridgeChangeAffectedMask(affected: bv32, umask: bv32)
-    ensures Core.CoreChangeAffectedMask(affected, umask) ==
-            Spec.SpecChangeAffectedMask(affected, umask)
-  {
-    BridgeInvertModeBits(umask);
-  }
-
-  lemma BridgeChangeValue(current: bv32, isDir: bool, change: Schema.ModeChange)
-    ensures Core.CoreChangeValue(current, isDir, change) ==
-            Spec.SpecChangeValue(current, isDir, change)
-  {
-    BridgeCopyExistingValue(change.value, current);
-  }
-
-  lemma BridgeMaskedChangeValue(
-    current: bv32,
-    isDir: bool,
-    umask: bv32,
-    change: Schema.ModeChange
-  )
-    ensures Core.CoreMaskedChangeValue(current, isDir, umask, change) ==
-            Spec.SpecMaskedChangeValue(current, isDir, umask, change)
-  {
-    BridgeChangeValue(current, isDir, change);
-    BridgeChangeAffectedMask(change.affected, umask);
-    BridgeOmittedChangeBits(isDir, change.mentioned);
-    BridgeInvertModeBits(Core.CoreOmittedChangeBits(isDir, change.mentioned));
-  }
-
-  lemma BridgePreservedAffectedBits(affected: bv32)
-    ensures Core.CorePreservedAffectedBits(affected) ==
-            Spec.SpecPreservedAffectedBits(affected)
-  {
-    BridgeInvertModeBits(affected);
-  }
-
-  lemma BridgePreservedChangeBits(isDir: bool, change: Schema.ModeChange)
-    ensures Core.CorePreservedChangeBits(isDir, change) ==
-            Spec.SpecPreservedChangeBits(isDir, change)
-  {
-    BridgePreservedAffectedBits(change.affected);
-    BridgeOmittedChangeBits(isDir, change.mentioned);
-  }
-
-  lemma {:isolate_assertions} {:vcs_split_on_every_assert} BridgeApplyChange(
-    current: bv32,
-    isDir: bool,
-    umask: bv32,
-    change: Schema.ModeChange
-  )
-    ensures Core.CoreApplyChange(current, isDir, umask, change) ==
-            Spec.SpecApplyChange(current, isDir, umask, change)
-  {
-    BridgeMaskedChangeValue(current, isDir, umask, change);
-    var coreMasked := Core.CoreMaskedChangeValue(current, isDir, umask, change);
-    var specMasked := Spec.SpecMaskedChangeValue(current, isDir, umask, change);
-    assert coreMasked == specMasked;
-    if change.op == '=' {
-      BridgePreservedChangeBits(isDir, change);
-      var corePreserved := Core.CorePreservedChangeBits(isDir, change);
-      var specPreserved := Spec.SpecPreservedChangeBits(isDir, change);
-      assert corePreserved == specPreserved;
-      assert Core.CoreApplyChange(current, isDir, umask, change) ==
-             BW.NormalizeMode((current & corePreserved) | coreMasked);
-      assert Spec.SpecApplyChange(current, isDir, umask, change) ==
-             BW.NormalizeMode((current & specPreserved) | specMasked);
-    } else if change.op == '+' {
-      assert Core.CoreApplyChange(current, isDir, umask, change) ==
-             BW.NormalizeMode(current | coreMasked);
-      assert Spec.SpecApplyChange(current, isDir, umask, change) ==
-             BW.NormalizeMode(current | specMasked);
-    } else {
-      BridgeInvertModeBits(coreMasked);
-      assert Core.CoreInvertModeBits(coreMasked) == Spec.SpecInvertModeBits(specMasked);
-      assert Core.CoreApplyChange(current, isDir, umask, change) ==
-             BW.NormalizeMode(current & Core.CoreInvertModeBits(coreMasked));
-      assert Spec.SpecApplyChange(current, isDir, umask, change) ==
-             BW.NormalizeMode(current & Spec.SpecInvertModeBits(specMasked));
     }
   }
 
@@ -357,11 +94,11 @@ module ChmodProof {
   {
     reveal Spec.SpecModeChangesRelation();
     if i < |changes| {
-      BridgeApplyChange(current, isDir, umask, changes[i]);
+
       BridgeModeChangesFrom(
         changes,
         i + 1,
-        Core.CoreApplyChange(current, isDir, umask, changes[i]),
+        Spec.SpecApplyChange(current, isDir, umask, changes[i]),
         isDir,
         umask
       );
@@ -729,19 +466,11 @@ module ChmodProof {
                    cmd, fs, path, actual, follow, err
                  )
   {
-    BridgeUsesExplicitPhysicalDereference(cmd);
-    BridgeNoDereferenceSymlink(fs, actual, false);
-    BridgeCannotDereferenceMessage(path, err);
-    BridgePathIsDanglingSymlinkFailure(fs, actual, follow, err);
-    BridgeDanglingSymlinkMessage(path);
-    BridgeErrnoText(err);
-    BridgeAccessErrorMessage(path, err);
-    BridgeAccessFailureMessage(path);
-  }
 
-  lemma BridgeNodeIsDirectory(node: BW.FsNode)
-    ensures Core.CoreNodeIsDirectory(node) == Spec.SpecNodeIsDirectory(node)
-  {
+    BridgeNoDereferenceSymlink(fs, actual, false);
+
+    BridgePathIsDanglingSymlinkFailure(fs, actual, follow, err);
+
   }
 
   lemma BridgePlannedMode(plan: Core.CoreModePlan, before: bv32, isDir: bool)
@@ -787,44 +516,13 @@ module ChmodProof {
             )
   {
     var coreNaive := Core.CoreNaiveMode(plan, before, isDir);
-    BridgeInvertModeBits(coreNaive);
-    assert Core.CoreInvertModeBits(coreNaive) ==
-           Spec.SpecInvertModeBits(coreNaive);
+
     assert Core.CoreDiagnoseSurprise(cmd, plan, before, after, isDir) ==
            (cmd.diagnoseSurprises &&
-            (after & Core.CoreInvertModeBits(coreNaive)) != 0 as bv32);
+            (after & Spec.SpecInvertModeBits(coreNaive)) != 0 as bv32);
     assert Spec.SpecDiagnoseSurpriseForNaive(cmd, after, coreNaive) ==
            (cmd.diagnoseSurprises &&
             (after & Spec.SpecInvertModeBits(coreNaive)) != 0 as bv32);
-  }
-
-  lemma BridgeSuccessStdout(
-    cmd: Schema.ChmodCmd,
-    path: string,
-    before: bv32,
-    after: bv32
-  )
-    ensures Core.CoreSuccessStdout(cmd, path, before, after) ==
-            Spec.SpecSuccessStdout(cmd, path, before, after)
-  {
-    if cmd.verbose {
-      if before == after {
-        BridgeRetainedMessage(path, after);
-      } else {
-        BridgeChangedMessage(path, before, after);
-      }
-    } else if cmd.changes && before != after {
-      BridgeChangedMessage(path, before, after);
-    }
-  }
-
-  lemma BridgePostChangeLookupNeeded(
-    cmd: Schema.ChmodCmd,
-    after: bv32
-  )
-    ensures Core.CorePostChangeLookupNeeded(cmd, after) ==
-            Spec.SpecPostChangeLookupNeeded(cmd, after)
-  {
   }
 
   lemma {:isolate_assertions} {:vcs_split_on_every_assert} BridgeSuccessfulChangeResult(
@@ -867,17 +565,15 @@ module ChmodProof {
       naive,
       fs
     );
-    BridgePostChangeLookupNeeded(cmd, after);
+
     BridgeNaiveMode(plan, before, isDir);
     BridgeDiagnoseSurprise(cmd, plan, before, after, isDir);
-    BridgeSuccessStdout(cmd, path, before, after);
-    BridgeRetainedMessage(path, after);
-    BridgeSurpriseModeMessage(path, after, naive);
-    if Core.CorePostChangeLookupNeeded(cmd, after) {
+
+    if Spec.SpecPostChangeLookupNeeded(cmd, after) {
       match IOC.ResolvePathForMetadataFields(fs, actual, follow)
       case Err(_) =>
         var err := IOC.MetadataFailureErrFields(fs, actual, follow);
-        BridgeGettingNewAttributesMessage(path, err);
+
         assert SpecPathResultOfCore(coreResult) == specResult by {
           reveal SpecPathResultOfCore;
           reveal SpecPathStatusOfCore;
@@ -887,7 +583,7 @@ module ChmodProof {
       case Ok(target) =>
         if !BW.FsContainsPath(fs, target) {
           var err := IOC.MetadataFailureErrFields(fs, actual, follow);
-          BridgeGettingNewAttributesMessage(path, err);
+
           assert SpecPathResultOfCore(coreResult) == specResult by {
             reveal SpecPathResultOfCore;
             reveal SpecPathStatusOfCore;
@@ -897,9 +593,9 @@ module ChmodProof {
         } else {
           var observed := BW.NodeMode(BW.FsNodeAt(fs, target));
           BridgeDiagnoseSurprise(cmd, plan, before, observed, isDir);
-          BridgeSuccessStdout(cmd, path, before, observed);
+
           var observedNaive := Core.CoreNaiveMode(plan, before, isDir);
-          BridgeSurpriseModeMessage(path, observed, observedNaive);
+
           assert SpecPathResultOfCore(coreResult) == specResult by {
             reveal SpecPathResultOfCore;
             reveal SpecPathStatusOfCore;
@@ -973,7 +669,7 @@ module ChmodProof {
     path: string,
     now: int
   )
-    requires Core.CoreUsesPhysicalTopLevelMetadata(cmd)
+    requires Spec.SpecUsesPhysicalTopLevelMetadata(cmd)
     ensures Spec.SpecPathStepRelation(
               cmd,
               SpecModePlanOfCore(plan),
@@ -986,10 +682,8 @@ module ChmodProof {
               now
             )
   {
-    BridgeMakeAbsolute(cwd, path);
-    BridgeShouldDereference(cmd);
-    BridgeUsesPhysicalTopLevelMetadata(cmd);
-    var actual := Core.MakeAbsoluteCore(cwd, path);
+
+    var actual := Spec.MakeAbsolute(cwd, path);
     assert Spec.SpecUsesPhysicalTopLevelMetadata(cmd);
     match IOC.ResolvePathForMetadataFields(fs, actual, false)
     case Err(_) =>
@@ -1014,20 +708,18 @@ module ChmodProof {
       } else {
         var node := BW.FsNodeAt(fs, metadataTarget);
         var before := BW.NodeMode(node);
-        BridgeNodeIsDirectory(node);
-        var isDir := Core.CoreNodeIsDirectory(node);
+
+        var isDir := Spec.SpecNodeIsDirectory(node);
         BridgePlannedMode(plan, before, isDir);
         var desired := Core.CorePlannedMode(plan, before, isDir);
         match IOC.ResolvePathForMetadataFields(fs, actual, true)
         case Err(_) =>
           var err := IOC.MetadataFailureErrFields(fs, actual, true);
-          BridgeFailedChangeMessage(path, before, desired);
-          BridgeChangeErrorMessage(path, err);
+
         case Ok(changeTarget) =>
           if !BW.FsContainsPath(fs, changeTarget) {
             var err := IOC.MetadataFailureErrFields(fs, actual, true);
-            BridgeFailedChangeMessage(path, before, desired);
-            BridgeChangeErrorMessage(path, err);
+
           } else {
             BridgeModeSetFs(fs, true, changeTarget, desired, now);
             var after := BW.NormalizeMode(desired);
@@ -1038,8 +730,7 @@ module ChmodProof {
             BridgeNaiveMode(plan, before, isDir);
             BridgeDiagnoseSurprise(cmd, plan, before, after, isDir);
             var naive := Core.CoreNaiveMode(plan, before, isDir);
-            BridgeSurpriseModeMessage(path, after, naive);
-            BridgeSuccessStdout(cmd, path, before, after);
+
           }
       }
   }
@@ -1052,7 +743,7 @@ module ChmodProof {
     path: string,
     now: int
   )
-    requires !Core.CoreUsesPhysicalTopLevelMetadata(cmd)
+    requires !Spec.SpecUsesPhysicalTopLevelMetadata(cmd)
     ensures Spec.SpecPathStepRelation(
               cmd,
               SpecModePlanOfCore(plan),
@@ -1065,11 +756,9 @@ module ChmodProof {
               now
             )
   {
-    BridgeMakeAbsolute(cwd, path);
-    BridgeShouldDereference(cmd);
-    BridgeUsesPhysicalTopLevelMetadata(cmd);
-    var actual := Core.MakeAbsoluteCore(cwd, path);
-    var follow := Core.ShouldDereferenceCore(cmd);
+
+    var actual := Spec.MakeAbsolute(cwd, path);
+    var follow := Spec.ShouldDereference(cmd);
     assert !Spec.SpecUsesPhysicalTopLevelMetadata(cmd);
     match IOC.ResolvePathForMetadataFields(fs, actual, follow)
     case Err(_) =>
@@ -1084,8 +773,8 @@ module ChmodProof {
         var before := BW.NodeMode(node);
         BridgeNoDereferenceSymlink(fs, actual, follow);
         if Core.CoreNoDereferenceSymlink(fs, actual, follow) {
-          BridgeUsesFollowedTopLevelNoDereference(cmd);
-          if Core.CoreUsesFollowedTopLevelNoDereference(cmd) {
+
+          if Spec.SpecUsesFollowedTopLevelNoDereference(cmd) {
             var followed := IOC.ResolvePathForMetadataFields(fs, actual, true);
             var followedOk :=
               match followed
@@ -1095,14 +784,14 @@ module ChmodProof {
             if !followedOk && err != Errno.ENOENT {
               BridgePathAccessFailureResult(cmd, fs, path, actual, true, err);
             } else {
-              BridgeNeitherChangedMessage(path);
+
             }
           } else {
-            BridgeNeitherChangedMessage(path);
+
           }
         } else {
-          BridgeNodeIsDirectory(node);
-          var isDir := Core.CoreNodeIsDirectory(node);
+
+          var isDir := Spec.SpecNodeIsDirectory(node);
           BridgePlannedMode(plan, before, isDir);
           var desired := Core.CorePlannedMode(plan, before, isDir);
           BridgeModeSetSuppressed(fs, target, follow);
@@ -1117,8 +806,7 @@ module ChmodProof {
           BridgeNaiveMode(plan, before, isDir);
           BridgeDiagnoseSurprise(cmd, plan, before, after, isDir);
           var naive := Core.CoreNaiveMode(plan, before, isDir);
-          BridgeSurpriseModeMessage(path, after, naive);
-          BridgeSuccessStdout(cmd, path, before, after);
+
         }
       }
   }
@@ -1143,7 +831,7 @@ module ChmodProof {
               now
             )
   {
-    if Core.CoreUsesPhysicalTopLevelMetadata(cmd) {
+    if Spec.SpecUsesPhysicalTopLevelMetadata(cmd) {
       BridgePhysicalPathStep(cmd, plan, cwd, fs, path, now);
     } else {
       BridgeOrdinaryPathStep(cmd, plan, cwd, fs, path, now);
@@ -1438,7 +1126,7 @@ module ChmodProof {
     requires Core.CoreReferenceFailure(cmd, fs, cwd)
     ensures Spec.SpecReferenceFailure(cmd, fs, cwd)
   {
-    BridgeMakeAbsolute(cwd, cmd.referenceFile);
+
   }
 
   lemma BridgeReferenceFailureEquivalent(
@@ -1449,7 +1137,7 @@ module ChmodProof {
     ensures Core.CoreReferenceFailure(cmd, fs, cwd) <==>
             Spec.SpecReferenceFailure(cmd, fs, cwd)
   {
-    BridgeMakeAbsolute(cwd, cmd.referenceFile);
+
   }
 
   lemma BridgeReferenceFailureOutcome(
@@ -1473,19 +1161,18 @@ module ChmodProof {
     var mode: bv32, err: int :|
       IOC.GetFileModeContractFields(
         fs0,
-        Core.MakeAbsoluteCore(cwd0, cmd.referenceFile),
+        Spec.MakeAbsolute(cwd0, cmd.referenceFile),
         true,
         false,
         mode,
         err
       ) &&
       fs2 == fs0 && stdout2 == stdout0 &&
-      stderr2 == stderr0 + Core.ReferenceErrorMessageCore(
+      stderr2 == stderr0 + Spec.ReferenceErrorMessageSpec(
         cmd.referenceFile,
-        Core.ErrnoTextCore(err)
+        Spec.ErrnoTextSpec(err)
       ) && exit == 1;
-    BridgeMakeAbsolute(cwd0, cmd.referenceFile);
-    BridgeReferenceErrorMessage(cmd.referenceFile, err);
+
     assert exists specMode: bv32, specErr: int ::
         IOC.GetFileModeContractFields(
           fs0,
@@ -1526,7 +1213,7 @@ module ChmodProof {
     var refMode: bv32 :|
       IOC.GetFileModeContractFields(
         fs0,
-        Core.MakeAbsoluteCore(cwd0, cmd.referenceFile),
+        Spec.MakeAbsolute(cwd0, cmd.referenceFile),
         true,
         true,
         refMode,
@@ -1545,7 +1232,7 @@ module ChmodProof {
         exit,
         now
       );
-    BridgeMakeAbsolute(cwd0, cmd.referenceFile);
+
     BridgeBatchOutcome(
       cmd,
       Core.CoreReferenceModePlan(refMode),
@@ -1601,13 +1288,13 @@ module ChmodProof {
       BridgeReferenceFailureEquivalent(cmd, old(io.fs()), old(io.cwd()));
     }
     if cmd.mode == Schema.ModeHelp {
-      BridgeHelpText();
+
     } else if cmd.mode == Schema.ModeVersion {
-      BridgeVersionText();
+
     } else if cmd.seenReference && cmd.diagnoseSurprises {
-      BridgeCombineModeReferenceMessage();
+
     } else if |cmd.files| == 0 {
-      BridgeMissingOperandMessage(cmd);
+
     } else if cmd.seenReference &&
               Core.CoreReferenceFailure(cmd, old(io.fs()), old(io.cwd())) {
       BridgeReferenceFailure(cmd, old(io.fs()), old(io.cwd()));
@@ -1623,9 +1310,9 @@ module ChmodProof {
         exit
       );
     } else if !cmd.seenReference && !Schema.IsValidModeExpr(cmd.modeExpr) {
-      BridgeInvalidModeMessage(cmd.modeExpr);
+
     } else if cmd.recursive {
-      BridgeUnsupportedRecursiveMessage();
+
     } else if cmd.seenReference {
       BridgeReferenceBatchOutcome(
         cmd,

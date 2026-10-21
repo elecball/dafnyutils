@@ -1,12 +1,11 @@
-include "ExpandTextCore.dfy"
+include "ExpandSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "ExpandSchema.dfy"
-include "ExpandSpec.dfy"
 
 module ExpandCore {
-  import Text = ExpandTextCore
+  import Text = ExpandSpec
   import StreamContract = IOContract
 
   import Result = Results
@@ -16,34 +15,18 @@ module ExpandCore {
   import Schema = ExpandSchema
   import Spec = ExpandSpec
 
-  function IsDigit(ch: char): bool
-  {
-    '0' <= ch <= '9'
-  }
-
-  function MaxColumn(): nat
-  {
-    9223372036854775807
-  }
-
-  function DigitValue(ch: char): nat
-    requires IsDigit(ch)
-  {
-    ((ch as int) - ('0' as int)) as nat
-  }
-
   function ParseNatFrom(text: string, i: nat, acc: nat): Schema.NatParse
     requires i <= |text|
     decreases |text| - i
   {
     if i == |text| then
       Schema.NatOk(acc)
-    else if !IsDigit(text[i]) then
+    else if !Spec.IsDigit(text[i]) then
       Schema.NatErr
-    else if acc > (MaxColumn() - DigitValue(text[i])) / 10 then
+    else if acc > (Spec.MaxColumn() - Spec.DigitValue(text[i])) / 10 then
       Schema.NatErr
     else
-      ParseNatFrom(text, i + 1, acc * 10 + DigitValue(text[i]))
+      ParseNatFrom(text, i + 1, acc * 10 + Spec.DigitValue(text[i]))
   }
 
   function ParsePositiveNat(text: string): Schema.NatParse
@@ -51,101 +34,15 @@ module ExpandCore {
     if |text| == 0 then Schema.NatErr else ParseNatFrom(text, 0, 0)
   }
 
-  function IsSeparator(ch: char): bool
-  {
-    ch == ',' || ch == ' ' || ch == '\t'
-  }
-
-  function IsMarker(ch: char): bool
-  {
-    ch == '+' || ch == '/'
-  }
-
-  function MarkerOf(ch: char): Schema.MarkerKind
-    requires IsMarker(ch)
-  {
-    if ch == '+' then Schema.MarkerPlus else Schema.MarkerSlash
-  }
-
   function FindTokenEnd(text: string, start: nat): nat
     requires start <= |text|
     ensures start <= FindTokenEnd(text, start) <= |text|
     decreases |text| - start
   {
-    if start == |text| || IsSeparator(text[start]) then
+    if start == |text| || Spec.IsSeparator(text[start]) then
       start
     else
       FindTokenEnd(text, start + 1)
-  }
-
-  function FindDigitsEnd(text: string, start: nat): nat
-    requires start <= |text|
-    ensures start <= FindDigitsEnd(text, start) <= |text|
-    decreases |text| - start
-  {
-    if start == |text| || !IsDigit(text[start]) then
-      start
-    else
-      FindDigitsEnd(text, start + 1)
-  }
-
-  function CombineDiagnostics(first: BenchWorld.Bytes, rest: BenchWorld.Bytes): BenchWorld.Bytes
-  {
-    if rest == "" then first else first + "\nexpand: " + rest
-  }
-
-  function SyntaxDiagnosticsFrom(
-    text: string,
-    i: nat,
-    haveValue: bool,
-    numberStart: nat,
-    value: nat
-  ): BenchWorld.Bytes
-    requires i <= |text|
-    requires !haveValue || numberStart <= i
-    decreases |text| - i
-  {
-    if i == |text| then
-      ""
-    else if IsSeparator(text[i]) then
-      SyntaxDiagnosticsFrom(text, i + 1, false, 0, 0)
-    else if IsMarker(text[i]) then
-      var rest := SyntaxDiagnosticsFrom(
-                    text, i + 1, haveValue, numberStart, value
-                  );
-      if haveValue then
-        CombineDiagnostics(
-          Text.MarkerNotAtStartMessage(
-            MarkerOf(text[i]), text[i..]
-          ),
-          rest
-        )
-      else
-        rest
-    else if IsDigit(text[i]) then
-      var start := if haveValue then numberStart else i;
-      var accumulated := if haveValue then value else 0;
-      var digit := DigitValue(text[i]);
-      if accumulated > (MaxColumn() - digit) / 10 then
-        var end := FindDigitsEnd(text, i);
-        CombineDiagnostics(
-          Text.TooLargeMessage(text[start..end]),
-          SyntaxDiagnosticsFrom(
-            text, end, true, start, accumulated
-          )
-        )
-      else
-        SyntaxDiagnosticsFrom(
-          text, i + 1, true, start,
-          accumulated * 10 + digit
-        )
-    else
-      Text.InvalidCharacterMessage(text[i..])
-  }
-
-  function SyntaxDiagnostics(text: string): BenchWorld.Bytes
-  {
-    SyntaxDiagnosticsFrom(text, 0, false, 0, 0)
   }
 
   function ScanMarkers(part: string, i: nat, marker: Schema.MarkerKind, hasMarker: bool): Schema.MarkerScan
@@ -153,16 +50,10 @@ module ExpandCore {
     ensures i <= ScanMarkers(part, i, marker, hasMarker).index <= |part|
     decreases |part| - i
   {
-    if i == |part| || !IsMarker(part[i]) then
+    if i == |part| || !Spec.IsMarker(part[i]) then
       Schema.MarkerScan(i, marker, hasMarker)
     else
-      ScanMarkers(part, i + 1, MarkerOf(part[i]), true)
-  }
-
-  function LastStop(stops: seq<nat>): nat
-    requires |stops| > 0
-  {
-    stops[|stops| - 1]
+      ScanMarkers(part, i + 1, Spec.MarkerOf(part[i]), true)
   }
 
   function CommitTabValue(
@@ -208,11 +99,11 @@ module ExpandCore {
                             acc.stops, acc.extendSize, acc.incrementSize, marker
                           ))
       else
-        var end := FindDigitsEnd(part, scan.index);
+        var end := Spec.FindDigitsEnd(part, scan.index);
         if end < |part| then
-          if IsMarker(part[end]) then
+          if Spec.IsMarker(part[end]) then
             Schema.TabAccumErr(Text.MarkerNotAtStartMessage(
-                                 MarkerOf(part[end]), part[end..]
+                                 Spec.MarkerOf(part[end]), part[end..]
                                ))
           else
             Schema.TabAccumErr(
@@ -233,7 +124,7 @@ module ExpandCore {
   {
     if start == |text| then
       Schema.TabAccumOk(acc)
-    else if IsSeparator(text[start]) then
+    else if Spec.IsSeparator(text[start]) then
       ParseTabTextFrom(text, start + 1, acc)
     else
       var end := FindTokenEnd(text, start);
@@ -260,7 +151,7 @@ module ExpandCore {
                       acc.incrementSize,
                       Schema.MarkerNone
                     );
-      var diagnostics := SyntaxDiagnostics(arg.text);
+      var diagnostics := Spec.SyntaxDiagnostics(arg.text);
       if diagnostics != "" then
         Schema.TabAccumErr(diagnostics)
       else
@@ -270,21 +161,9 @@ module ExpandCore {
           ParseTabArgsFrom(args, i + 1, limit, next)
   }
 
-  function StopsValidationError(
-    stops: seq<nat>, i: nat, previous: nat
-  ): BenchWorld.Bytes
-    requires i <= |stops|
-    decreases |stops| - i
-  {
-    if i == |stops| then ""
-    else if stops[i] == 0 then Spec.ZeroTabMessage()
-    else if stops[i] <= previous then Spec.AscendingTabsMessage()
-    else StopsValidationError(stops, i + 1, stops[i])
-  }
-
   function FinalizeTabAccum(acc: Schema.TabAccum): Schema.TabParse
   {
-    var validationError := StopsValidationError(acc.stops, 0, 0);
+    var validationError := Spec.StopsValidationError(acc.stops, 0, 0);
     if validationError != "" then
       Schema.TabErr(validationError)
     else if acc.incrementSize != 0 && acc.extendSize != 0 then
@@ -326,37 +205,18 @@ module ExpandCore {
       InputsFromOperands(operands[1..])
   }
 
-  function HelpBeforeOther(raw: Schema.ExpandCmdRaw): bool
-  {
-    raw.seenHelp &&
-    (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex)
-  }
-
-  function VersionBeforeInvalid(raw: Schema.ExpandCmdRaw): bool
-  {
-    raw.seenVersion &&
-    (!raw.seenHelp || raw.versionTokenIndex < raw.helpTokenIndex)
-  }
-
-  function RequestTokenIndex(raw: Schema.ExpandCmdRaw): int
-  {
-    if HelpBeforeOther(raw) then raw.helpTokenIndex
-    else if VersionBeforeInvalid(raw) then raw.versionTokenIndex
-    else -1
-  }
-
   function ScanCommandOptions(
     raw: Schema.ExpandCmdRaw
   ): Schema.OptionScan
   {
     match ParseTabArgsFrom(
-        raw.tabArgs, 0, RequestTokenIndex(raw),
+        raw.tabArgs, 0, Spec.RequestTokenIndex(raw),
         Schema.TabAccum([], 0, 0, Schema.MarkerNone)
       )
     case TabAccumErr(value) => Schema.ScanInvalidTabs(value)
     case TabAccumOk(acc) =>
-      if HelpBeforeOther(raw) then Schema.ScanHelp
-      else if VersionBeforeInvalid(raw) then Schema.ScanVersion
+      if Spec.HelpBeforeOther(raw) then Schema.ScanHelp
+      else if Spec.VersionBeforeInvalid(raw) then Schema.ScanVersion
       else Schema.ScanContinue(acc)
   }
 
@@ -396,7 +256,6 @@ module ExpandCore {
           if |inputs| == 0 then [Schema.Stdin] else inputs
         )
   }
-
 
   function Spaces(count: nat): BenchWorld.Bytes
     decreases count
@@ -449,7 +308,7 @@ module ExpandCore {
           if |stops| == 0 then
             NextFixedSpaces(width, column)
           else
-            NextIncrementalSpaces(LastStop(stops), width, column)
+            NextIncrementalSpaces(Spec.LastStop(stops), width, column)
   }
 
   function BackspaceColumn(column: nat): nat
@@ -460,12 +319,6 @@ module ExpandCore {
   function LeadingAfterByte(b: BenchWorld.RawByte, leading: bool): bool
   {
     if b == '\n' then true else leading && (b == ' ' || b == '\t')
-  }
-
-  function JoinPieces(pieces: seq<BenchWorld.Bytes>): BenchWorld.Bytes
-    decreases |pieces|
-  {
-    if |pieces| == 0 then [] else pieces[0] + JoinPieces(pieces[1..])
   }
 
   ghost predicate ByteExpansionSummary(
@@ -530,7 +383,7 @@ module ExpandCore {
                           tabs, initialOnly, data[i], columns[i], leadings[i],
                           pieces[i], columns[i + 1], leadings[i + 1]
                         )) &&
-    output == JoinPieces(pieces)
+    output == Spec.JoinPieces(pieces)
   }
 
   ghost predicate ReadStepSummary(
@@ -641,8 +494,8 @@ module ExpandCore {
                         ErrorPieceSummary(
                           cmd.inputs[i], results[i], errorPieces[i], errorFlags[i]
                         )) &&
-    output == JoinPieces(outputPieces) &&
-    errorOutput == JoinPieces(errorPieces) &&
+    output == Spec.JoinPieces(outputPieces) &&
+    errorOutput == Spec.JoinPieces(errorPieces) &&
     hadError == (exists i: nat :: i < |errorFlags| && errorFlags[i])
   }
 
@@ -677,8 +530,8 @@ module ExpandCore {
     pieces: seq<BenchWorld.Bytes>,
     piece: BenchWorld.Bytes
   )
-    ensures JoinPieces(pieces + [piece]) ==
-            JoinPieces(pieces) + piece
+    ensures Spec.JoinPieces(pieces + [piece]) ==
+            Spec.JoinPieces(pieces) + piece
     decreases |pieces|
   {
     if |pieces| > 0 {
@@ -856,7 +709,7 @@ module ExpandCore {
                                      tabs, initialOnly, data[j], columns[j], leadings[j],
                                      pieces[j], columns[j + 1], leadings[j + 1]
                                    )
-      invariant out == JoinPieces(pieces)
+      invariant out == Spec.JoinPieces(pieces)
       decreases |data| - i
     {
       var byte := data[i];
@@ -931,7 +784,7 @@ module ExpandCore {
           }
         }
       }
-      assert out == JoinPieces(pieces);
+      assert out == Spec.JoinPieces(pieces);
       i := i + 1;
     }
     reveal DataExpansionWitnessSummary();

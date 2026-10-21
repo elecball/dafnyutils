@@ -2,21 +2,21 @@ module LsTime {
   datatype CivilDate = CivilDate(year: int, month: nat, day: nat)
   datatype UtcParts = UtcParts(date: CivilDate, hour: nat, minute: nat, second: nat)
 
-  ghost function FloorDiv(value: int, divisor: nat): int
+  function FloorDiv(value: int, divisor: nat): int
     requires divisor > 0
   {
     if value >= 0 then value / divisor
     else -((-value + divisor - 1) / divisor)
   }
 
-  ghost function FloorMod(value: int, divisor: nat): nat
+  function FloorMod(value: int, divisor: nat): nat
     requires divisor > 0
   {
     (value - FloorDiv(value, divisor) * divisor) as nat
   }
 
   // Howard Hinnant's civil-from-days transformation, with day zero at 1970-01-01.
-  ghost function CivilFromDays(daysSinceEpoch: int): CivilDate
+  function CivilFromDays(daysSinceEpoch: int): CivilDate
   {
     var z := daysSinceEpoch + 719468;
     var era := FloorDiv(z, 146097);
@@ -31,7 +31,7 @@ module LsTime {
     CivilDate(year + (if month <= 2 then 1 else 0), month as nat, day as nat)
   }
 
-  ghost function Digit(d: nat): char
+  function Digit(d: nat): char
     requires d < 10
   {
     if d == 0 then '0' else if d == 1 then '1' else if d == 2 then '2'
@@ -39,7 +39,7 @@ module LsTime {
     else if d == 6 then '6' else if d == 7 then '7' else if d == 8 then '8' else '9'
   }
 
-  ghost function NatText(value: nat): string
+  function NatText(value: nat): string
     decreases value
   {
     if value < 10 then [Digit(value)]
@@ -51,13 +51,13 @@ module LsTime {
     "0"
   }
 
-  ghost function Zeroes(count: nat): string
+  function Zeroes(count: nat): string
     decreases count
   {
     if count == 0 then [] else ZeroesPart1() + Zeroes(count - 1)
   }
 
-  ghost function PaddedNat(value: nat, width: nat): string
+  function PaddedNat(value: nat, width: nat): string
   {
     var text := NatText(value);
     if |text| < width then Zeroes(width - |text|) + text else text
@@ -68,7 +68,7 @@ module LsTime {
     "-"
   }
 
-  ghost function YearText(year: int): string
+  function YearText(year: int): string
   {
     if 0 <= year < 10000 then PaddedNat(year as nat, 4)
     else if year < 0 then YearTextPart1() + NatText((-year) as nat)
@@ -135,7 +135,7 @@ module LsTime {
     "Dec"
   }
 
-  ghost function MonthName(month: nat): string
+  function MonthName(month: nat): string
   {
     if month == 1 then MonthNamePart1() else if month == 2 then MonthNamePart2()
     else if month == 3 then MonthNamePart3() else if month == 4 then MonthNamePart4()
@@ -145,7 +145,7 @@ module LsTime {
     else if month == 11 then MonthNamePart11() else MonthNamePart12()
   }
 
-  ghost function TimeParts(seconds: int): UtcParts
+  function TimeParts(seconds: int): UtcParts
   {
     var dayNumber := FloorDiv(seconds, 86400);
     var secondOfDay := FloorMod(seconds, 86400);
@@ -153,7 +153,7 @@ module LsTime {
              (secondOfDay % 3600) / 60, secondOfDay % 60)
   }
 
-  ghost function IsRecent(seconds: int, nanoseconds: int, now: int): bool
+  function IsRecent(seconds: int, nanoseconds: int, now: int): bool
   {
     var normalized := NormalizeNsec(nanoseconds) as int;
     // Now() observes whole seconds, so every timestamp in the observed second is non-future.
@@ -187,7 +187,7 @@ module LsTime {
     " +0000"
   }
 
-  ghost function FullIso(seconds: int, nanoseconds: int): string
+  function FullIso(seconds: int, nanoseconds: int): string
   {
     var parts := TimeParts(seconds);
     var date := parts.date;
@@ -197,7 +197,7 @@ module LsTime {
     PaddedNat(NormalizeNsec(nanoseconds), 9) + FullIsoPart5()
   }
 
-  ghost function NormalizeNsec(nanoseconds: int): nat
+  function NormalizeNsec(nanoseconds: int): nat
   {
     if 0 <= nanoseconds < 1000000000 then nanoseconds as nat else 0
   }
@@ -217,7 +217,7 @@ module LsTime {
     ":"
   }
 
-  ghost function LongIso(seconds: int): string
+  function LongIso(seconds: int): string
   {
     var parts := TimeParts(seconds);
     var date := parts.date;
@@ -240,7 +240,7 @@ module LsTime {
     ":"
   }
 
-  ghost function Iso(seconds: int, nanoseconds: int, now: int): string
+  function Iso(seconds: int, nanoseconds: int, now: int): string
   {
     var parts := TimeParts(seconds);
     var date := parts.date;
@@ -266,7 +266,7 @@ module LsTime {
     "  "
   }
 
-  ghost function DefaultC(seconds: int, nanoseconds: int, now: int): string
+  function DefaultC(seconds: int, nanoseconds: int, now: int): string
   {
     var parts := TimeParts(seconds);
     var date := parts.date;

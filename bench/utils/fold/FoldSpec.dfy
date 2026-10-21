@@ -74,7 +74,7 @@ module FoldSpec {
     + "Written by David MacKenzie.\n"
   }
 
-  ghost function InvalidWidthMessage(value: string): BenchWorld.Bytes
+  function InvalidWidthMessage(value: string): BenchWorld.Bytes
   {
     InvalidWidthMessageText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
     (if AllDigits(value) then InvalidWidthMessageText1 else InvalidWidthMessageText2)
@@ -96,7 +96,7 @@ module FoldSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     ErrorMessageText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
     ErrorMessageText1 + Utf8.Encode(ErrnoText(err)) + ErrorMessageText2
@@ -121,15 +121,14 @@ module FoldSpec {
     ((ch as int) - ('0' as int)) as nat
   }
 
-  // Ghost counterpart of `AllDigits` above. `AllDigits` stays compilable and
-  // non-empty because `InvalidWidthMessage` executes it; this one is the form a
-  // recursion over prefixes can carry.
-  ghost predicate EveryDigit(text: string)
+  // Unlike `AllDigits` above, this predicate permits an empty string, which
+  // supports proofs that recurse over prefixes.
+  predicate EveryDigit(text: string)
   {
     forall k :: 0 <= k < |text| ==> IsDigit(text[k])
   }
 
-  ghost function DecimalValue(digits: string): nat
+  function DecimalValue(digits: string): nat
     requires EveryDigit(digits)
     decreases |digits|
   {
@@ -434,7 +433,7 @@ module FoldSpec {
       output == RenderRecords(lineOutputs, terminated)
   }
 
-  ghost predicate HasEarlierStdin(cmd: Schema.FoldCmd, i: nat)
+  predicate HasEarlierStdin(cmd: Schema.FoldCmd, i: nat)
     requires i <= |cmd.inputs|
   {
     Schema.Stdin in cmd.inputs[..i]
@@ -582,7 +581,7 @@ module FoldSpec {
     true
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }

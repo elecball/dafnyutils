@@ -1,10 +1,8 @@
-include "RmdirTextCore.dfy"
 include "RmdirSpec.dfy"
 include "RmdirProof.dfy"
 include "RmdirPathCore.dfy"
 
 module RmdirCore {
-  import Text = RmdirTextCore
   import BenchIO
   import opened BenchWorld
   import C = IOContract
@@ -44,6 +42,7 @@ module RmdirCore {
       Proof.NonemptyWitness(context, io.fs(), path,
                             true, true, 0, map[], map[], 0, false, 0,
                             false, "", UnknownDirentKind, 0, false, 0, nonempty);
+      hide Spec.NonemptyObservation();
       return;
     }
     var openResult := io.OpenDir(path, false);
@@ -69,6 +68,7 @@ module RmdirCore {
                             openHandles, openHandles, 0, false, C.ResultErrno(openResult),
                             false, "", UnknownDirentKind, 0, false, 0, nonempty);
     }
+    hide Spec.NonemptyObservation();
   }
 
   method IgnoreFailure(raw: S.RmdirCmdRaw, io: BenchIO.IO,
@@ -160,7 +160,7 @@ module RmdirCore {
         display, custom := DiagnosticPath(io, path, parent, err);
         var quoted := io.QuoteafPath(display);
         var reason := io.GetCLocaleErrnoText(err);
-        diagnostic := Text.FailureText(parent, err, custom, quoted, reason);
+        diagnostic := Spec.FailureText(parent, err, custom, quoted, reason);
       }
     }
     accepted := removed || ignored;
@@ -271,7 +271,7 @@ module RmdirCore {
         finalDiagnostic := diagnostics + Spec.PriorWriteErrorText();
       } else {
         var reason := io.GetCLocaleErrnoText(outErr);
-        finalDiagnostic := diagnostics + Text.WriteErrorText(reason);
+        finalDiagnostic := diagnostics + Spec.WriteErrorText(reason);
       }
     }
     assert finalDiagnostic == diagnostics + (if outObservation.err == 0 then []

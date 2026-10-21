@@ -13,7 +13,7 @@ module ChmodDescriptorPrincipalSpec {
   datatype PreparedWitness = PreparedWitness(plan: Base.SpecModePlan,
                                              result: Descriptor.State, files: Descriptor.Files)
 
-  ghost predicate EarlyCase(cmd: Schema.ChmodCmd)
+  predicate EarlyCase(cmd: Schema.ChmodCmd)
   {
     cmd.mode == Schema.ModeHelp || cmd.mode == Schema.ModeVersion ||
     (cmd.recursive && cmd.dereferenceMode == 1 && cmd.traversalMode == 0) ||

@@ -10,38 +10,6 @@ module FoldProof {
   import Spec = FoldSpec
   import Schema = FoldSchema
 
-  lemma IsDigitEq(ch: char)
-    ensures Core.IsDigit(ch) == Spec.IsDigit(ch)
-  {
-  }
-
-  lemma DigitValueEq(ch: char)
-    requires Core.IsDigit(ch)
-    ensures Core.DigitValue(ch) == Spec.DigitValue(ch)
-  {
-  }
-
-  lemma StepColumnEq(
-    byteMode: bool,
-    ch: char,
-    column: nat
-  )
-    ensures Core.StepColumn(byteMode, ch, column) ==
-            Spec.StepColumn(byteMode, ch, column)
-  {
-    if byteMode {
-    } else if ch == '\U{0}' {
-    } else if ch == '\U{8}' {
-    } else if ch == '\r' {
-    } else if ch == '\t' {
-    }
-  }
-
-  lemma IsBlankEq(ch: char)
-    ensures Core.IsBlank(ch) == Spec.IsBlank(ch)
-  {
-  }
-
   // Core folds left with an accumulator while `Spec.DecimalValue` peels the
   // last digit, so the bridge needs positional weights. They belong here.
   ghost function Pow10(power: nat): nat
@@ -88,9 +56,7 @@ module FoldProof {
       assert suf[1..] == text[i + 1..];
       assert |suf| == |text| - i;
       assert Spec.IsDigit(text[i]);
-      IsDigitEq(text[i]);
-      DigitValueEq(text[i]);
-      NatParseAccumulator(text, i + 1, acc * 10 + Core.DigitValue(text[i]));
+      NatParseAccumulator(text, i + 1, acc * 10 + Spec.DigitValue(text[i]));
       DecimalFrontPeel(suf);
       assert (acc * 10 + Spec.DigitValue(text[i])) * Pow10(|text| - i - 1) +
         Spec.DecimalValue(text[i + 1..]) ==
@@ -109,14 +75,13 @@ module FoldProof {
     if i < |text| {
       assert suf[0] == text[i];
       assert suf[1..] == text[i + 1..];
-      IsDigitEq(text[i]);
-      if Core.IsDigit(text[i]) {
+      if Spec.IsDigit(text[i]) {
         assert !Spec.EveryDigit(text[i + 1..]) by {
           var k :| 0 <= k < |suf| && !Spec.IsDigit(suf[k]);
           assert k != 0;
           assert suf[1..][k - 1] == suf[k];
         }
-        NatParseErrOnNonDigit(text, i + 1, acc * 10 + Core.DigitValue(text[i]));
+        NatParseErrOnNonDigit(text, i + 1, acc * 10 + Spec.DigitValue(text[i]));
       }
     }
   }

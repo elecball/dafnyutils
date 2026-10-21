@@ -15,14 +15,6 @@ module LnProof {
   import Core = LnCore
   import Spec = LnSpec
 
-  lemma DestinationEq(
-    fs: BenchWorld.FileSystem, observations: Spec.ObservationContext, operands: seq<string>
-  )
-    requires 1 <= |operands| <= 2
-    ensures Core.CoreDestination(fs, observations, operands) == Spec.LinkDestination(fs, observations, operands)
-  {
-  }
-
   lemma StepSummaryImpliesSpec(
     beforeFs: BenchWorld.FileSystem,
     afterFs: BenchWorld.FileSystem,
@@ -153,7 +145,7 @@ module LnProof {
               beforeFs, afterFs, now, trustedFilesystem, sources,
               directory, symbolic, diagnostic, success)
   {
-    hide Core.CoreStepSummary;
+    hide *;
     reveal Core.CoreBatchSummary();
     var states: seq<BenchWorld.FileSystem>,
         diagnostics: seq<BenchWorld.Bytes>,
@@ -200,8 +192,7 @@ module LnProof {
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeRun && 1 <= |cmd.operands| <= 2 {
       var source := cmd.operands[0];
-      DestinationEq(old(io.fs()), old(Spec.Context(io)), cmd.operands);
-      var destination := Core.CoreDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
+      var destination := Spec.LinkDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
       var diagnostic: BenchWorld.Bytes, success: bool :|
         Core.CoreStepSummary(
           old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),

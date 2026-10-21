@@ -18,8 +18,6 @@ module TailSpec {
   import TailRecordSpec
   import SE = StringEscaping
 
-
-
   datatype InputObservation = InputObservation(
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
     stdoutFragment: BenchWorld.Bytes,
@@ -79,14 +77,14 @@ module TailSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  opaque ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  opaque function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     ErrorPrefix(err) + SE.SpecQuoteAfBytes(Utf8.Encode(path)) + ErrorInfix(err) +
     Utf8.Encode(ErrnoText(err)) + DiagnosticSuffix()
   }
 
 
-  ghost function InvalidCountMessage(unit: TailSchema.CountUnit, value: string): BenchWorld.Bytes
+  function InvalidCountMessage(unit: TailSchema.CountUnit, value: string): BenchWorld.Bytes
   {
     var displayValue := if |value| > 0 && value[0] == '-' then value[1..] else value;
     Utf8.Encode(InvalidCountPrefix(unit)) + SE.SpecLocaleQuoteBytes(Utf8.Encode(displayValue)) + DiagnosticSuffix()
@@ -98,13 +96,13 @@ module TailSpec {
     "standard input"
   }
 
-  ghost function HeaderText(name: string): BenchWorld.Bytes
+  function HeaderText(name: string): BenchWorld.Bytes
   {
     HeaderPrefix() + Utf8.Encode(name) + HeaderSuffix()
   }
 
 
-  ghost function InputsFromOperands(operands: seq<string>): seq<TailSchema.Input>
+  function InputsFromOperands(operands: seq<string>): seq<TailSchema.Input>
     decreases |operands|
   {
     if |operands| == 0 then
@@ -127,7 +125,7 @@ module TailSpec {
     (raw.invalidCountTokenIndex == -1 || raw.versionTokenIndex <= raw.invalidCountTokenIndex)
   }
 
-  ghost function Command(raw: TailSchema.TailCmdRaw): TailSchema.TailCmd
+  function Command(raw: TailSchema.TailCmdRaw): TailSchema.TailCmd
   {
     var mode :=
       if HelpBeforeOther(raw) then
@@ -251,7 +249,7 @@ module TailSpec {
     !cmd.selection.fromStart && cmd.selection.amount == 0
   }
 
-  ghost function HeaderForInput(cmd: TailSchema.TailCmd, input: TailSchema.Input, printedHeaders: int): BenchWorld.Bytes
+  function HeaderForInput(cmd: TailSchema.TailCmd, input: TailSchema.Input, printedHeaders: int): BenchWorld.Bytes
   {
     if ShouldPrintHeaders(cmd) then
       (if printedHeaders == 0 then [] else ['\n']) +
@@ -294,7 +292,7 @@ module TailSpec {
                      else [])
   }
 
-  ghost function ErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
+  function ErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match input
     case Stdin(_) => if result.Err? then StdinReadErrorMessage(result.e) else []
@@ -314,7 +312,7 @@ module TailSpec {
       case Err(_) => true
   }
 
-  ghost function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
   {
     StdinReadErrorPrefix() + Utf8.Encode(ErrnoText(error)) + DiagnosticSuffix()
   }
@@ -515,7 +513,7 @@ module TailSpec {
     true
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorText(message))
   }

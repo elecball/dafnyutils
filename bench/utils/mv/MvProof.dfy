@@ -1,9 +1,10 @@
+include "MvPathSpec.dfy"
+include "MvSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IOContract.dfy"
 include "MvPathProof.dfy"
 include "MvSchema.dfy"
 include "MvCore.dfy"
-include "MvSpec.dfy"
 
 module MvProof {
   import Result = Results
@@ -35,28 +36,6 @@ module MvProof {
     );
   }
 
-  lemma SourceRenameDiagnosticErrCoreEqualsSpec(
-    target: string,
-    sourceIsDir: bool,
-    renameErr: int
-  )
-    ensures Core.SourceRenameDiagnosticErr(
-              target, sourceIsDir, renameErr
-            ) == Spec.SourceRenameDiagnosticErrSpec(
-                   target, sourceIsDir, renameErr
-                 )
-  {
-  }
-
-  lemma DigitCharSpecEqualsCore(d: nat)
-    requires d < 10
-    ensures Spec.DigitCharSpec(d) == Core.DigitChar(d)
-  { PathProof.DigitCharSpecEqualsCore(d); }
-
-  lemma DecimalNatSpecEqualsCore(n: nat)
-    ensures Spec.DecimalNatSpec(n) == Core.DecimalNat(n)
-  { PathProof.DecimalNatSpecEqualsCore(n); }
-
   lemma BackupStatusSuffixCoreImpliesSpec(
     backupMode: Schema.BackupMode,
     fs: BW.FileSystem,
@@ -66,84 +45,6 @@ module MvProof {
     requires Core.BackupStatusSuffixFor(backupMode, fs, target, calls)
     ensures Spec.BackupStatusSuffix(backupMode, fs, target, calls)
   {
-    if backupMode == Schema.BackupExisting && |calls| > 0 {
-      DecimalNatSpecEqualsCore(1);
-      if calls[0].ok {
-        forall i: nat | 1 <= i < |calls|
-          ensures Spec.StatusRequest(
-                    calls[i], fs, Spec.NumberedBackupPathSpec(target, i), false
-                  )
-        {
-          DecimalNatSpecEqualsCore(i);
-        }
-      }
-    } else if backupMode == Schema.BackupNumbered {
-      forall i: nat | i < |calls|
-        ensures Spec.StatusRequest(
-                  calls[i], fs, Spec.NumberedBackupPathSpec(target, i + 1), false
-                )
-      {
-        DecimalNatSpecEqualsCore(i + 1);
-      }
-    }
-  }
-
-  // Core keeps its index recursion, so each bridge carries the suffix or prefix
-  // generalisation the structural specification needs.
-  lemma AllSlashesSpecEqualsCore(text: string, i: nat)
-    requires i <= |text|
-    ensures Spec.AllSlashesSpec(text[i..]) == Core.AllSlashes(text, i)
-    decreases |text| - i
-  {
-    if i < |text| {
-      assert text[i..][0] == text[i];
-      assert text[i..][1..] == text[i + 1..];
-      if text[i] == '/' {
-        AllSlashesSpecEqualsCore(text, i + 1);
-      }
-    }
-  }
-
-  lemma TrimTrailingSlashesSpecEqualsCore(text: string, end: nat)
-    requires end <= |text|
-    ensures Spec.TrimTrailingSlashesSpec(text[..end]) == Core.TrimTrailingSlashes(text, end)
-    decreases end
-  {
-    if end > 0 {
-      var prefix := text[..end];
-      assert |prefix| == end;
-      assert prefix[|prefix| - 1] == text[end - 1];
-      assert prefix[..|prefix| - 1] == text[..end - 1];
-      if text[end - 1] == '/' {
-        TrimTrailingSlashesSpecEqualsCore(text, end - 1);
-      }
-    }
-  }
-
-  lemma NormalizeSourceSpecEqualsCore(source: string, stripTrailingSlashes: bool)
-    ensures Spec.NormalizeSourceSpec(source, stripTrailingSlashes) == Core.NormalizeSource(source, stripTrailingSlashes)
-  {
-    if stripTrailingSlashes && source != "" {
-      assert source[0..] == source;
-      assert source[..|source|] == source;
-      if Core.AllSlashes(source, 0) {
-        AllSlashesSpecEqualsCore(source, 0);
-      } else {
-        AllSlashesSpecEqualsCore(source, 0);
-        TrimTrailingSlashesSpecEqualsCore(source, |source|);
-      }
-    }
-  }
-
-  lemma TargetInDirectorySpecEqualsCore(
-    directory: string,
-    source: string
-  )
-    ensures Spec.TargetInDirectorySpec(directory, source) ==
-            Core.TargetInDirectory(directory, source)
-  {
-    assert Spec.SourceLeafNameSpec(source) ==
-           Core.SourceLeafName(source);
   }
 
   lemma NonSlashPrefixSlashSuffixFunctional(
@@ -815,7 +716,7 @@ module MvProof {
              )
     requires collision.CheckedBackupCollision? ==>
                collision.simpleCandidateFollowed.ok ||
-               !Spec.StatusExistsOutcomeFields(fs, Core.SimpleBackupPath(target, cmd.backupSuffix), true, true, 0)
+               !Spec.StatusExistsOutcomeFields(fs, BasenameSpec.SimpleBackupPathSpec(target, cmd.backupSuffix), true, true, 0)
     ensures Core.BackupCollisionDetected(collision) ==
             Spec.BackupWouldDestroySource(cmd, fs, source, target)
   {
@@ -842,9 +743,9 @@ module MvProof {
         }
       case CheckedBackupCollision(sourceNoFollow, candidateFollowed) =>
         var candidate :=
-          Core.SimpleBackupPath(target, cmd.backupSuffix);
+          BasenameSpec.SimpleBackupPathSpec(target, cmd.backupSuffix);
         assert sourceNoFollow == sourceMetadata;
-        assert Spec.SimpleBackupPathSpec(target, cmd.backupSuffix) ==
+        assert BasenameSpec.SimpleBackupPathSpec(target, cmd.backupSuffix) ==
                candidate;
         if Core.BackupCollisionDetected(collision) {
           MetadataEvidenceKeysImplySameResolvedObject(
@@ -886,16 +787,14 @@ module MvProof {
             )
   {
     var index: nat := start + |checks| - 1;
-    DecimalNatSpecEqualsCore(index);
-    assert path == Core.NumberedBackupPath(target, index);
-    assert path == Spec.NumberedBackupPathSpec(target, index);
+    assert path == BasenameSpec.NumberedBackupPathSpec(target, index);
     assert Spec.StatusExistsOutcomeFields(
         fs, path, false, false, checks[|checks| - 1].err
       );
     assert forall j: nat | start <= j < index ::
         Spec.StatusExistsOutcomeFields(
           fs,
-          Spec.NumberedBackupPathSpec(target, j),
+          BasenameSpec.NumberedBackupPathSpec(target, j),
           false,
           true,
           0
@@ -903,7 +802,7 @@ module MvProof {
       forall j: nat | start <= j < index
         ensures Spec.StatusExistsOutcomeFields(
                   fs,
-                  Spec.NumberedBackupPathSpec(target, j),
+                  BasenameSpec.NumberedBackupPathSpec(target, j),
                   false,
                   true,
                   0
@@ -912,11 +811,8 @@ module MvProof {
         var i: nat := j - start;
         assert i + 1 < |checks|;
         assert checks[i].found;
-        DecimalNatSpecEqualsCore(j);
         assert checks[i].candidate ==
-               Core.NumberedBackupPath(target, j);
-        assert Spec.NumberedBackupPathSpec(target, j) ==
-               Core.NumberedBackupPath(target, j);
+               BasenameSpec.NumberedBackupPathSpec(target, j);
         assert Spec.StatusExistsOutcomeFields(
             fs, checks[i].candidate, false, true, checks[i].err
           );
@@ -951,26 +847,7 @@ module MvProof {
         existingFirstFound,
         existingFirstErr
         ) =>
-        if mode == Schema.BackupSimple {
-          assert Spec.SimpleBackupPathSpec(target, suffix) ==
-                 Core.SimpleBackupPath(target, suffix);
-        } else if mode == Schema.BackupExisting {
-          DecimalNatSpecEqualsCore(1);
-          assert Spec.NumberedBackupPathSpec(target, 1) ==
-                 Core.NumberedBackupPath(target, 1);
-          if existingFirstFound {
-            BackupChecksImplyNumberedTarget(
-              target, 1, fs, checks, path
-            );
-            assert Spec.NumberedBackupTargetSpecFields(
-                fs, target, path
-              );
-          } else {
-            assert Spec.SimpleBackupPathSpec(target, suffix) ==
-                   Core.SimpleBackupPath(target, suffix);
-          }
-        } else {
-          assert mode == Schema.BackupNumbered;
+        if mode == Schema.BackupNumbered || (mode == Schema.BackupExisting && existingFirstFound) {
           BackupChecksImplyNumberedTarget(
             target, 1, fs, checks, path
           );
@@ -1008,23 +885,6 @@ module MvProof {
               beforeFs, preCwd, afterFs, outcome
             )
   {
-    assert Spec.ShowActionMessageSpec(verbose, debug) ==
-           Core.ShowActionMessage(verbose, debug);
-    assert Spec.StepSuccessStdoutSpec(
-        source, target, backupPath, verbose, debug
-      ) == Core.StepSuccessStdout(
-                  source, target, backupPath, verbose, debug
-                );
-    if |calls| > 0 {
-      SourceRenameDiagnosticErrCoreEqualsSpec(
-        target, sourceIsDir, calls[0].err
-      );
-    }
-    if |calls| > 1 {
-      SourceRenameDiagnosticErrCoreEqualsSpec(
-        target, sourceIsDir, calls[1].err
-      );
-    }
   }
 
   lemma RenameNativeEvidenceImpliesObservedRelation(
@@ -1040,15 +900,6 @@ module MvProof {
     ensures Spec.ObservedRenameEffectRelation(source, target, backupPath, cmd,
                                               step.sourceIsDir, step.targetFound, step.inputs, step.beforeFs, step.afterFs, step.outcome)
   {
-    assert Spec.ShowActionMessageSpec(cmd.verbose, cmd.debug) == Core.ShowActionMessage(cmd.verbose, cmd.debug);
-    assert Spec.StepSuccessStdoutSpec(source, target, backupPath, cmd.verbose, cmd.debug) ==
-           Core.StepSuccessStdout(source, target, backupPath, cmd.verbose, cmd.debug);
-    if |step.renames| > 0 {
-      SourceRenameDiagnosticErrCoreEqualsSpec(target, step.sourceIsDir, step.renames[0].err);
-    }
-    if |step.renames| > 1 {
-      SourceRenameDiagnosticErrCoreEqualsSpec(target, step.sourceIsDir, step.renames[1].err);
-    }
     reveal Core.RenameEvidenceFor(), Core.RenameNativeObservationsFor();
     if backupPath == "" {
       assert |step.renames| == 1;
@@ -1073,13 +924,6 @@ module MvProof {
                                             if evidence.SelectedBackup? then evidence.backupPath else "")
   {
     BackupStatusSuffixCoreImpliesSpec(cmd.backupMode, fs, target, calls);
-    assert Spec.SimpleBackupPathSpec(target, cmd.backupSuffix) ==
-           Core.SimpleBackupPath(target, cmd.backupSuffix);
-    if cmd.backupMode == Schema.BackupExisting && calls[0].ok {
-      DecimalNatSpecEqualsCore(|calls| - 1);
-    } else if cmd.backupMode == Schema.BackupNumbered {
-      DecimalNatSpecEqualsCore(|calls|);
-    }
   }
 
   lemma ExistingTargetRenameEvidenceImpliesRelation(
@@ -1097,7 +941,7 @@ module MvProof {
     requires evidence.sameFile.CheckedSameFile?
     requires evidence.sameFile.backupCollision.CheckedBackupCollision? ==>
                evidence.sameFile.backupCollision.simpleCandidateFollowed.ok ||
-               !Spec.StatusExistsOutcomeFields(evidence.beforeFs, Core.SimpleBackupPath(target, cmd.backupSuffix), true, true, 0)
+               !Spec.StatusExistsOutcomeFields(evidence.beforeFs, BasenameSpec.SimpleBackupPathSpec(target, cmd.backupSuffix), true, true, 0)
     ensures Spec.ExistingTargetRenameEffectRelation(
               source,
               target,
@@ -1383,7 +1227,6 @@ module MvProof {
                                                                                           evidence.statusCalls[i].followSymlink, true, 0));
     assert IOContract.IsDirectoryStrictContractFields(evidence.beforeFs, source, false,
                                                       evidence.sourceOk, evidence.sourceIsDir, evidence.sourceErr);
-    assert Core.SkipStdout(target, cmd.debug) == Spec.SkipStdoutSpec(target, cmd.debug);
     if !evidence.sourceOk {
       assert evidence.afterFs == evidence.beforeFs && evidence.outcome == Spec.MoveOutcome([],
                                                                                            Spec.SourceStatFailureMessageSpec(source, evidence.sourceErr), true);
@@ -1412,7 +1255,7 @@ module MvProof {
         if same.decision == Spec.RejectSameFile {
           assert evidence.afterFs == evidence.beforeFs && evidence.outcome ==
                                                           Spec.MoveOutcome([], Spec.SameFileMessageSpec(source, target), true);
-        } else if cmd.updateMode == Schema.UpdateOlder && !Core.SourceNewer(
+        } else if cmd.updateMode == Schema.UpdateOlder && !Spec.SourceNewerSpec(
                     same.source.times.mtimeSec, same.source.times.mtimeNsec,
                     same.target.times.mtimeSec, same.target.times.mtimeNsec) {
           assert evidence.afterFs == evidence.beforeFs && evidence.outcome ==
@@ -1573,7 +1416,7 @@ module MvProof {
     requires cmd.overwriteMode != Schema.OverwriteSkip && cmd.updateMode != Schema.UpdateNone &&
              cmd.updateMode != Schema.UpdateNoneFail
     requires step.sameFile.CheckedSameFile? && step.sameFile.decision == Spec.ContinueMove
-    requires cmd.updateMode != Schema.UpdateOlder || Core.SourceNewer(
+    requires cmd.updateMode != Schema.UpdateOlder || Spec.SourceNewerSpec(
                step.sameFile.source.times.mtimeSec, step.sameFile.source.times.mtimeNsec,
                step.sameFile.target.times.mtimeSec, step.sameFile.target.times.mtimeNsec)
     ensures
@@ -1588,7 +1431,7 @@ module MvProof {
       (collisionNeeded ==>
          same.backupCollision.CheckedBackupCollision? &&
          step.statusCalls[afterEntries] == Core.MetadataStatusCall(step.beforeFs,
-                                                                   Core.SimpleBackupPath(target, cmd.backupSuffix), true,
+                                                                   BasenameSpec.SimpleBackupPathSpec(target, cmd.backupSuffix), true,
                                                                    same.backupCollision.simpleCandidateFollowed)) &&
       (!Core.BackupCollisionDetected(same.backupCollision) ==>
          Core.BackupSelectionFromStatusCallsFor(cmd.backupMode, cmd.backupSuffix,
@@ -1745,7 +1588,7 @@ module MvProof {
           assert sourceMetadata.isSymlink == (step.statusCalls[0].status.kind == BW.SymlinkKind);
           assert Spec.SourceNewerSpec(step.statusCalls[0].status.times.mtimeSec,
                                       step.statusCalls[0].status.times.mtimeNsec, step.statusCalls[1].status.times.mtimeSec,
-                                      step.statusCalls[1].status.times.mtimeNsec) == Core.SourceNewer(
+                                      step.statusCalls[1].status.times.mtimeNsec) == Spec.SourceNewerSpec(
                                                                   sourceMetadata.times.mtimeSec, sourceMetadata.times.mtimeNsec,
                                                                   targetMetadata.times.mtimeSec, targetMetadata.times.mtimeNsec);
           var afterEntries: nat :=
@@ -1755,14 +1598,14 @@ module MvProof {
           assert sourceEntry.leaf != targetEntry.leaf ||
                  (step.statusCalls[2].ok && step.statusCalls[3].ok);
           if decision.FailedParentStat? || decision == Spec.RejectSameFile ||
-             (cmd.updateMode == Schema.UpdateOlder && !Core.SourceNewer(
+             (cmd.updateMode == Schema.UpdateOlder && !Spec.SourceNewerSpec(
                 sourceMetadata.times.mtimeSec, sourceMetadata.times.mtimeNsec,
                 targetMetadata.times.mtimeSec, targetMetadata.times.mtimeNsec)) {
             assert |step.statusCalls| == afterEntries;
           }
           if decision == Spec.ContinueMove &&
              (cmd.updateMode != Schema.UpdateOlder ||
-              Core.SourceNewer(
+              Spec.SourceNewerSpec(
                 sourceMetadata.times.mtimeSec,
                 sourceMetadata.times.mtimeNsec,
                 targetMetadata.times.mtimeSec,
@@ -1777,15 +1620,12 @@ module MvProof {
               sourceEntry.leaf == targetEntry.leaf + cmd.backupSuffix;
             var afterCollision := afterEntries +
             (if collisionNeeded then 1 else 0);
-            assert Spec.SimpleBackupPathSpec(
-                target, cmd.backupSuffix
-              ) == Core.SimpleBackupPath(target, cmd.backupSuffix);
             if !collisionNeeded {
               assert !Core.BackupCollisionDetected(collision);
             }
             if collisionNeeded {
               assert Spec.StatusRequest(step.statusCalls[afterEntries], step.beforeFs,
-                                        Spec.SimpleBackupPathSpec(target, cmd.backupSuffix), true);
+                                        BasenameSpec.SimpleBackupPathSpec(target, cmd.backupSuffix), true);
               assert Core.BackupCollisionDetected(collision) ==
                      (step.statusCalls[afterEntries].ok &&
                       step.statusCalls[afterEntries].status.hostKey ==
@@ -1881,10 +1721,11 @@ module MvProof {
         EntryNameEvidenceImpliesPathRelations(step.beforeFs, referent.resolvedPath, referent.value);
       }
     } else if same.decision == Spec.ContinueMove &&
-              (cmd.updateMode != Schema.UpdateOlder || Core.SourceNewer(
+              (cmd.updateMode != Schema.UpdateOlder || Spec.SourceNewerSpec(
                  same.source.times.mtimeSec, same.source.times.mtimeNsec,
                  same.target.times.mtimeSec, same.target.times.mtimeNsec)) {
       reveal Core.ExistingTargetRenameEvidenceFor();
+      ContinuingStepStatusTail(source, target, cmd, step);
       if !Core.BackupCollisionDetected(same.backupCollision) {
         var collisionNeeded :=
           (cmd.backupMode == Schema.BackupSimple || cmd.backupMode == Schema.BackupExisting) &&
@@ -1985,14 +1826,10 @@ module MvProof {
   {
     reveal Core.BatchStepEvidenceFor();
     var normalizedCore :=
-      Core.NormalizeSource(source, cmd.stripTrailingSlashes);
-    NormalizeSourceSpecEqualsCore(
-      source, cmd.stripTrailingSlashes
-    );
-    TargetInDirectorySpecEqualsCore(directory, normalizedCore);
+      Spec.NormalizeSourceSpec(source, cmd.stripTrailingSlashes);
     StepEvidenceImpliesMoveEffect(
       normalizedCore,
-      Core.TargetInDirectory(directory, normalizedCore),
+      Spec.TargetInDirectorySpec(directory, normalizedCore),
       cmd,
       preCwd,
       step
@@ -2274,9 +2111,9 @@ module MvProof {
                batch.fsBounds[i + 1], batch.outcomes[i],
                batch.stdoutFragments[i], batch.stderrFragments[i], batch.steps[i])
     requires Core.StepStatusEvidenceFor(
-               Core.NormalizeSource(source, cmd.stripTrailingSlashes),
-               Core.TargetInDirectory(
-                 directory, Core.NormalizeSource(source, cmd.stripTrailingSlashes)),
+               Spec.NormalizeSourceSpec(source, cmd.stripTrailingSlashes),
+               Spec.TargetInDirectorySpec(
+                 directory, Spec.NormalizeSourceSpec(source, cmd.stripTrailingSlashes)),
                cmd, batch.steps[i])
     requires Core.BatchStatusEvidenceFor(observations, batch)
     ensures Spec.ObservedStepRelation(
@@ -2294,20 +2131,18 @@ module MvProof {
     hide Spec.ObservedStepRelation();
     hide Core.BatchStatusEvidenceFor();
     BatchStatusStepInterval(observations, batch, i);
-    NormalizeSourceSpecEqualsCore(source, cmd.stripTrailingSlashes);
-    var normalizedSource := Core.NormalizeSource(
+    var normalizedSource := Spec.NormalizeSourceSpec(
       source, cmd.stripTrailingSlashes);
-    TargetInDirectorySpecEqualsCore(directory, normalizedSource);
     reveal Core.BatchStepEvidenceFor();
     assert Core.StepEvidenceFor(
-        normalizedSource, Core.TargetInDirectory(directory, normalizedSource),
+        normalizedSource, Spec.TargetInDirectorySpec(directory, normalizedSource),
         cmd, preCwd, batch.steps[i]);
     assert batch.steps[i].beforeFs == batch.fsBounds[i];
     assert batch.steps[i].afterFs == batch.fsBounds[i + 1];
     assert batch.steps[i].outcome == batch.outcomes[i];
     assert Spec.NormalizeSourceSpec(source, cmd.stripTrailingSlashes) == normalizedSource;
     assert Spec.TargetInDirectorySpec(directory, normalizedSource) ==
-           Core.TargetInDirectory(directory, normalizedSource);
+           Spec.TargetInDirectorySpec(directory, normalizedSource);
     var lo := batch.statusBounds[i] - batch.firstStatus;
     var hi := batch.statusBounds[i + 1] - batch.firstStatus;
     assert batch.statusCalls[lo..hi] == batch.steps[i].statusCalls;
@@ -2321,10 +2156,10 @@ module MvProof {
       reveal Core.StepEvidenceFor();
     }
     StepStatusEvidenceImpliesObservedStep(
-      normalizedSource, Core.TargetInDirectory(directory, normalizedSource),
+      normalizedSource, Spec.TargetInDirectorySpec(directory, normalizedSource),
       cmd, preCwd, batch.steps[i], observations);
     assert Spec.ObservedStepRelation(
-        normalizedSource, Core.TargetInDirectory(directory, normalizedSource),
+        normalizedSource, Spec.TargetInDirectorySpec(directory, normalizedSource),
         cmd, batch.steps[i].beforeFs, preCwd, batch.steps[i].afterFs,
         batch.steps[i].outcome, observations, batch.steps[i].firstStatus,
         batch.steps[i].firstStatus + |batch.steps[i].statusCalls|,
@@ -2541,13 +2376,9 @@ module MvProof {
             )
   {
     var sourceCore :=
-      Core.NormalizeSource(
+      Spec.NormalizeSourceSpec(
         cmd.operands[0], cmd.stripTrailingSlashes
       );
-    NormalizeSourceSpecEqualsCore(
-      cmd.operands[0], cmd.stripTrailingSlashes
-    );
-    TargetInDirectorySpecEqualsCore(cmd.operands[1], sourceCore);
     forall step: Core.StepEvidence
       ensures Core.StepEvidenceFor(
                 sourceCore, cmd.operands[1], cmd, preCwd, step
@@ -2631,8 +2462,6 @@ module MvProof {
     requires Core.TargetDirectoryCheckSummaryFields(directory, preFs, ok, err)
     ensures Spec.TargetDirectoryCheckSpecFields(directory, preFs, ok, err)
   {
-    assert forall statOk: bool, isDir: bool, statErr: int ::
-        Spec.TargetDirectoryErrSpec(statOk, isDir, statErr) == Core.TargetDirectoryErr(statOk, isDir, statErr);
   }
 
   lemma PreparedSummaryIOImpliesCandidateSpecFields(
@@ -2871,10 +2700,7 @@ module MvProof {
         case _ =>
       }
     } else if |cmd.operands| == 2 {
-      var source := Core.NormalizeSource(
-        cmd.operands[0], cmd.stripTrailingSlashes
-      );
-      NormalizeSourceSpecEqualsCore(
+      var source := Spec.NormalizeSourceSpec(
         cmd.operands[0], cmd.stripTrailingSlashes
       );
       match evidence {
@@ -2885,10 +2711,9 @@ module MvProof {
         case ProbedMoveStatus(call, step) =>
           var target :=
             if call.ok && call.status.kind == BW.DirectoryKind then
-              Core.TargetInDirectory(cmd.operands[1], source)
+              Spec.TargetInDirectorySpec(cmd.operands[1], source)
             else cmd.operands[1];
           if call.ok && call.status.kind == BW.DirectoryKind {
-            TargetInDirectorySpecEqualsCore(cmd.operands[1], source);
           }
           assert !cmd.noTargetDirectory;
           assert step.firstStatus == firstStatus + 1;

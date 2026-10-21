@@ -31,7 +31,7 @@ Current maintenance validation and source-snapshot evidence are recorded in the
 | [IOContract.dfy](../bench/core/IOContract.dfy) | Specification of IO APIs |
 | [IO.dfy](../bench/core/IO.dfy) | IO APIs for making effect (e.g., read, write on files ) on the system |
 | [CliTypes.dfy](../bench/core/CliTypes.dfy) | CLI protocol data types; no parsing algorithms or derived proofs |
-| [Utf8.dfy](../bench/core/Utf8.dfy), [StringEscaping.dfy](../bench/core/StringEscaping.dfy) | Ghost mathematical encoding and byte-quoting models |
+| [Utf8.dfy](../bench/core/Utf8.dfy), [StringEscaping.dfy](../bench/core/StringEscaping.dfy) | Executable pure encoding and byte-quoting definitions, also usable in specifications |
 
 ## Copy stdin with explicit error results
 
@@ -98,11 +98,11 @@ for `CliEarlyExit`. Early-exit writes are checked explicitly; stdout failure
 appends the named GNU write-error diagnostic after the planned diagnostics, and
 either write failure returns exit status 1.
 
-The parser, runner and CLI-only encoding are task-local fixed protocol
-scaffolding. They preserve the command-line-to-raw-input mapping and are not
-trusted core API helpers. The runner's encoding functions are private to its
-module. Runtime algorithms and their derived proofs belong in the utility's
-editable Core and Proof sources, outside the fixed CLI dependency closure.
+The parser and runner are task-local fixed protocol scaffolding. They preserve
+the command-line-to-raw-input mapping and call the shared pure UTF-8 definition
+for diagnostic encoding. Runtime algorithms and their derived proofs belong in
+the utility's editable Core and Proof sources, outside the fixed CLI dependency
+closure.
 
 - `RunCore` must ensure `Spec(raw, io, exit)` directly; a proof about a helper
   is not enough.
@@ -226,7 +226,7 @@ later metadata lookup.
 - `QuoteArgument(value: Bytes)`: the C-locale argument-quoting contract compatible
   with gnulib `quote_mem` (C escapes and single quotes). The current
   `IOExtern.cs` implementation is a managed compatibility adapter, not a direct
-  gnulib call. Encode text with the utility's own UTF-8 implementation; raw
+  gnulib call. Encode text with `Utf8Semantics.Encode`; raw
   input bytes need no encoding. An embedded NUL is
   escaped, so to match a C-string `quote` call, pass only the bytes before it.
 - `ParseTimestamp`, `ParseDate`: `IOResult<ParsedInstant>` under
@@ -509,16 +509,17 @@ these primitives implements robust_getcwd for the utility.
 | Task-local `CliModel` | `ParseValue(argv, schema, cfg)` | Fixed CLI parser; config sets order, bundling and abbreviations |
 | Task-local `CliExtern` | `Cli.Parse`, `Cli.ParsePortable` | Fixed executable parser wrappers with the `ParseValue` result contract |
 | Task-local `BenchItem` | `BenchmarkItemTwostate<CmdRaw>`, `RunMain` | Fixed plan/decode/run protocol; hooks in [Entry and CLI contract](#entry-and-cli-contract) |
-| `Utf8Semantics` | `Encode`, `EncodeChar`, `ValidExternalText`, `UnicodeScalar` | Ghost mathematical encoding and input relations; executable encoding and its derived proofs belong to each utility |
-| `StringEscaping` | C, shell and locale quoting relations | Ghost byte models; executable renderers and their connecting proofs belong to each utility |
+| `Utf8Semantics` | `Encode`, `EncodeChar`, `ValidExternalText`, `UnicodeScalar` | Executable UTF-8 encoding and input validation |
+| `StringEscaping` | C, shell and locale quoting | Executable pure byte-quoting definitions |
 
 Map, filter, scan and fold implementations and their derived proofs are not
 supplied as shared verified support. Implement any needed sequence algorithms
 and prove their properties in the utility's editable Core and Proof sources.
-Path algorithms and their connecting proofs are task-local in `cp`, `mv`, `rm`
-and `rmdir`. Their mathematical relations remain fixed specifications; runtime
-helpers are candidate proof targets. Cp's decoder has a separate fixed CLI trim
-routine so it does not make the runtime PathCore file immutable.
+Utility-specific path algorithms and their connecting proofs are task-local
+in `cp`, `mv`, `rm` and `rmdir`. Their mathematical relations remain fixed
+specifications; runtime helpers are candidate proof targets. Cp's decoder has
+a separate fixed CLI trim routine so it does not make the runtime PathCore
+file immutable.
 
 ## Trust limits and API changes
 

@@ -75,20 +75,13 @@ module TrProof {
   {
     reveal Spec.SetAtomRelation();
     if text[lo] == '\\' && lo + 1 < |text| {
-      if Core.IsOctal(text[lo + 1]) {
-        if lo + 2 < |text| && Core.IsOctal(text[lo + 2]) {
-          if lo + 3 < |text| && Core.IsOctal(text[lo + 3]) {
+      if Spec.IsOctal(text[lo + 1]) {
+        if lo + 2 < |text| && Spec.IsOctal(text[lo + 2]) {
+          if lo + 3 < |text| && Spec.IsOctal(text[lo + 3]) {
           }
         }
       }
     }
-  }
-
-  lemma AtomNextEq(text: string, lo: nat)
-    requires lo < |text|
-    ensures Core.AtomAt(text, lo).next == Spec.AtomNext(text, lo)
-  {
-    CoreAtomSatisfiesRelation(text, lo);
   }
 
   lemma WarningPartitionFromElement(
@@ -184,7 +177,6 @@ module TrProof {
           text, start, [], [start], [0]);
     } else {
       var next := Core.AtomAt(text, start).next;
-      AtomNextEq(text, start);
       CoreWarningSatisfiesRelation(text, next);
       var tailInputCuts: seq<nat>, tailOutputCuts: seq<nat> :|
         Spec.WarningPartitionFrom(
@@ -212,78 +204,6 @@ module TrProof {
   {
     CoreAtomSatisfiesRelation(text, lo);
     reveal Spec.SetAtomRelation();
-  }
-
-  // Core keeps its index recursion, so each bridge carries the suffix
-  // generalisation the declarative specification needs.
-  lemma {:induction false} ContainsPairFromEq(
-    text: string, i: nat, first: char, second: char)
-    requires i <= |text|
-    ensures Core.ContainsPairFrom(text, i, first, second) ==
-            Spec.ContainsPair(text[i..], first, second)
-    decreases |text| - i
-  {
-    if i < |text| {
-      var suf := text[i..];
-      assert suf[1..] == text[i + 1..];
-      ContainsPairFromEq(text, i + 1, first, second);
-      if Core.ContainsPairFrom(text, i, first, second) {
-        if i + 1 < |text| && text[i] == first && text[i + 1] == second {
-          assert suf[0] == first && suf[1] == second;
-        } else {
-          var k :| 0 <= k < |suf[1..]| - 1 &&
-                   suf[1..][k] == first && suf[1..][k + 1] == second;
-          assert suf[k + 1] == first && suf[k + 2] == second;
-        }
-      }
-      if Spec.ContainsPair(suf, first, second) {
-        var k :| 0 <= k < |suf| - 1 && suf[k] == first && suf[k + 1] == second;
-        if k != 0 {
-          assert suf[1..][k - 1] == suf[k];
-          assert suf[1..][k] == suf[k + 1];
-        }
-      }
-    }
-  }
-
-  lemma {:induction false} ContainsCharFromEq(text: string, i: nat, target: char)
-    requires i <= |text|
-    ensures Core.ContainsCharFrom(text, i, target) == (target in text[i..])
-    decreases |text| - i
-  {
-    if i < |text| {
-      var suf := text[i..];
-      assert suf[0] == text[i];
-      assert suf[1..] == text[i + 1..];
-      ContainsCharFromEq(text, i + 1, target);
-      if target in suf && suf[0] != target {
-        var k :| 0 <= k < |suf| && suf[k] == target;
-        assert k != 0;
-        assert suf[1..][k - 1] == suf[k];
-      }
-    }
-  }
-
-  lemma {:induction false} StartsUnsupportedConstructEq(text: string, i: nat)
-    requires i <= |text|
-    ensures Core.StartsUnsupportedConstruct(text, i) ==
-            Spec.StartsUnsupportedConstruct(text[i..])
-  {
-    var suf := text[i..];
-    if i < |text| {
-      assert suf[0] == text[i];
-      if i + 1 < |text| {
-        assert suf[1] == text[i + 1];
-        assert suf[2..] == text[i + 2..];
-        ContainsPairFromEq(text, i + 2, ':', ']');
-        ContainsPairFromEq(text, i + 2, '=', ']');
-      }
-      if i + 2 < |text| {
-        assert suf[2] == text[i + 2];
-        assert suf[3..] == text[i + 3..];
-        ContainsCharFromEq(text, i + 3, ']');
-      }
-    }
   }
 
   lemma RangeExpansionFunctional(
@@ -442,36 +362,6 @@ module TrProof {
       tailOutputCuts, |piece|, |tailOutputCuts| - 1
     );
     assert outputCuts[|outputCuts| - 1] == |piece + rest|;
-    forall i
-      {:trigger inputCuts[i], inputCuts[i + 1]}
-      {:trigger (piece + rest)[outputCuts[i]..outputCuts[i + 1]]} |
-      0 <= i && i + 1 < |inputCuts|
-      ensures inputCuts[i] < inputCuts[i + 1] <= |text| &&
-              outputCuts[i] <= outputCuts[i + 1] <= |piece + rest| &&
-              Spec.SetUnitRelation(
-                text,
-                inputCuts[i],
-                inputCuts[i + 1],
-                (piece + rest)[outputCuts[i]..outputCuts[i + 1]]
-              )
-    {
-      if i == 0 {
-        ShiftIndicesIndex(tailOutputCuts, |piece|, 0);
-        assert outputCuts[1] == |piece|;
-        assert (piece + rest)[0..|piece|] == piece;
-      } else {
-        var j := i - 1;
-        ShiftIndicesIndex(tailOutputCuts, |piece|, j);
-        ShiftIndicesIndex(tailOutputCuts, |piece|, j + 1);
-        SetPartitionFromElement(
-          text, next, rest, tailInputCuts, tailOutputCuts, j
-        );
-        AppendShiftedSlice(
-          piece, rest, tailOutputCuts[j], tailOutputCuts[j + 1]
-        );
-      }
-    }
-    assert Spec.SetPartitionFrom(text, start, piece + rest, inputCuts, outputCuts);
     assert forall i
         {:trigger inputCuts[i], inputCuts[i + 1]}
         {:trigger (piece + rest)[outputCuts[i]..outputCuts[i + 1]]} ::
@@ -483,7 +373,38 @@ module TrProof {
             inputCuts[i],
             inputCuts[i + 1],
             (piece + rest)[outputCuts[i]..outputCuts[i + 1]]
+          ) by {
+      forall i
+        {:trigger inputCuts[i], inputCuts[i + 1]}
+    {:trigger (piece + rest)[outputCuts[i]..outputCuts[i + 1]]} |
+    0 <= i && i + 1 < |inputCuts|
+        ensures inputCuts[i] < inputCuts[i + 1] <= |text| &&
+                outputCuts[i] <= outputCuts[i + 1] <= |piece + rest| &&
+                Spec.SetUnitRelation(
+                  text,
+                  inputCuts[i],
+                  inputCuts[i + 1],
+                  (piece + rest)[outputCuts[i]..outputCuts[i + 1]]
+                )
+      {
+        if i == 0 {
+          ShiftIndicesIndex(tailOutputCuts, |piece|, 0);
+          assert outputCuts[1] == |piece|;
+          assert (piece + rest)[0..|piece|] == piece;
+        } else {
+          var j := i - 1;
+          ShiftIndicesIndex(tailOutputCuts, |piece|, j);
+          ShiftIndicesIndex(tailOutputCuts, |piece|, j + 1);
+          SetPartitionFromElement(
+            text, next, rest, tailInputCuts, tailOutputCuts, j
           );
+          AppendShiftedSlice(
+            piece, rest, tailOutputCuts[j], tailOutputCuts[j + 1]
+          );
+        }
+      }
+    }
+    assert Spec.SetPartitionFrom(text, start, piece + rest, inputCuts, outputCuts);
   }
 
   lemma SetPartitionFromMatchesCore(
@@ -520,7 +441,6 @@ module TrProof {
       var hi := inputCuts[i + 1];
       var piece := bytes[outputCuts[i]..outputCuts[i + 1]];
       SetUnitMatchesCore(text, lo, hi, piece);
-      StartsUnsupportedConstructEq(text, lo);
       SetPartitionFromMatchesCore(
         text, start, bytes, inputCuts, outputCuts, i + 1
       );
@@ -560,8 +480,7 @@ module TrProof {
           text, start, [], inputCuts, outputCuts
         );
     } else {
-      StartsUnsupportedConstructEq(text, start);
-      if Core.StartsUnsupportedConstruct(text, start) {
+      if Spec.StartsUnsupportedConstruct(text[start..]) {
       } else {
         var atom := Core.AtomAt(text, start);
         CoreAtomSatisfiesRelation(text, start);

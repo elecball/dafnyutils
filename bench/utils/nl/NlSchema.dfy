@@ -4,14 +4,11 @@ include "../../core/CliTypes.dfy"
 include "../../core/StringEscaping.dfy"
 
 module NlSchema {
-  // CLI codecs are fixed protocol details, outside the candidate API.
   export
     provides Utf8, BenchWorld, CliTypes, SE, Schema, ParserConfig, Decode, PriorOptionState, FormatParseError, PlanParseFailure
     reveals NlMode, NlOptionError, BodyStyle, NumberFormat, Input, NlCmdRaw, NlCmd, InputsFromOperands, BodyStyleMode, BodyStyleValue, NumberFormatMode, NumberFormatValue, SeparatorValue, Command, ParseErrorText, TryHelp, InvalidBodyStyleLine, InvalidNumberFormatLine, OptionErrorLine, OptionErrorsText
     reveals InvalidBodyStylePrefix, InvalidNumberFormatPrefix, DiagnosticTerminator
 
-  import ProtocolUtf8Model = Utf8Semantics
-  import ProtocolEscapingModel = StringEscaping
 
   import Utf8 = Utf8Semantics
   import BenchWorld
@@ -275,13 +272,13 @@ module NlSchema {
     "Try 'nl --help' for more information.\n"
   }
 
-  ghost function InvalidBodyStyleLine(value: string): BenchWorld.Bytes
+  function InvalidBodyStyleLine(value: string): BenchWorld.Bytes
   {
     InvalidBodyStylePrefix() +
     SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) + DiagnosticTerminator()
   }
 
-  ghost function InvalidNumberFormatLine(value: string): BenchWorld.Bytes
+  function InvalidNumberFormatLine(value: string): BenchWorld.Bytes
   {
     InvalidNumberFormatPrefix() +
     SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) + DiagnosticTerminator()
@@ -291,14 +288,14 @@ module NlSchema {
   function InvalidNumberFormatPrefix(): BenchWorld.Bytes { "nl: invalid line numbering format: " }
   function DiagnosticTerminator(): BenchWorld.Bytes { "\n" }
 
-  ghost function OptionErrorLine(error: NlOptionError): BenchWorld.Bytes
+  function OptionErrorLine(error: NlOptionError): BenchWorld.Bytes
   {
     match error
     case InvalidBodyStyle(value) => InvalidBodyStyleLine(value)
     case InvalidNumberFormat(value) => InvalidNumberFormatLine(value)
   }
 
-  ghost function OptionErrorsText(errors: seq<NlOptionError>): BenchWorld.Bytes
+  function OptionErrorsText(errors: seq<NlOptionError>): BenchWorld.Bytes
     decreases |errors|
   {
     if |errors| == 0 then
@@ -383,40 +380,7 @@ module NlSchema {
 
   method FormatParseError(e: CliTypes.ParseError) returns (b: BenchWorld.Bytes)
   {
-    var text := ParseErrorText(e);
-    b := [];
-    var i := |text|;
-    while 0 < i
-      invariant 0 <= i <= |text|
-      invariant b == ProtocolEncode(text[i..])
-      decreases i
-    {
-      i := i - 1;
-      var code := text[i] as int;
-      var piece: BenchWorld.Bytes :=
-        if code <= 0x7f then
-          [code as char]
-        else if code <= 0x7ff then
-          [
-            (0xc0 + code / 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ]
-        else if code <= 0xffff then
-          [
-            (0xe0 + code / 0x1000) as char,
-            (0x80 + (code / 0x40) % 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ]
-        else
-          [
-            (0xf0 + code / 0x40000) as char,
-            (0x80 + (code / 0x1000) % 0x40) as char,
-            (0x80 + (code / 0x40) % 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ];
-      b := piece + b;
-    }
-    assert b == ProtocolEncode(ParseErrorText(e));
+    b := Utf8.Encode(ParseErrorText(e));
   }
 
   method PlanParseFailure(
@@ -441,140 +405,7 @@ module NlSchema {
       return;
     }
     var msg := FormatParseError(e);
-    plan := CliTypes.CliEarlyExit(1, [], ProtocolOptionErrorsText(errors) + msg);
-  }
-  function ProtocolEncodeChar(ch: char): BenchWorld.Bytes
-    ensures ProtocolEncodeChar(ch) == ProtocolUtf8Model.EncodeChar(ch)
-    ensures |ProtocolEncodeChar(ch)| == BenchWorld.Utf8ByteWidth(ch)
-    ensures 1 <= |ProtocolEncodeChar(ch)| <= 4
-  {
-    var code := ch as int;
-    if code <= 0x7f then
-      [code as char]
-    else if code <= 0x7ff then
-      [
-        (0xc0 + code / 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else if code <= 0xffff then
-      [
-        (0xe0 + code / 0x1000) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else
-      [
-        (0xf0 + code / 0x40000) as char,
-        (0x80 + (code / 0x1000) % 0x40) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-  }
-
-  function ProtocolEncode(text: string): BenchWorld.Bytes
-    ensures ProtocolEncode(text) == ProtocolUtf8Model.Encode(text)
-    ensures |ProtocolEncode(text)| >= |text|
-    decreases |text|
-  {
-    if text == [] then [] else ProtocolEncodeChar(text[0]) + ProtocolEncode(text[1..])
-  }
-
-  function ProtocolSpecCPrintableByte(byte: char): bool
-    ensures ProtocolSpecCPrintableByte(byte) == ProtocolEscapingModel.SpecCPrintableByte(byte)
-  {
-    0x20 <= byte as int <= 0x7e
-  }
-
-  function ProtocolSpecOctDigit(value: int): char
-    ensures ProtocolSpecOctDigit(value) == ProtocolEscapingModel.SpecOctDigit(value)
-  {
-    if value == 0 then '0'
-    else if value == 1 then '1'
-    else if value == 2 then '2'
-    else if value == 3 then '3'
-    else if value == 4 then '4'
-    else if value == 5 then '5'
-    else if value == 6 then '6'
-    else '7'
-  }
-
-  function ProtocolSpecOctalEscape(byte: char): BenchWorld.Bytes
-    ensures ProtocolSpecOctalEscape(byte) == ProtocolEscapingModel.SpecOctalEscape(byte)
-  {
-    var value := byte as int;
-    ['\\', ProtocolSpecOctDigit((value / 64) % 8), ProtocolSpecOctDigit((value / 8) % 8), ProtocolSpecOctDigit(value % 8)]
-  }
-
-  function ProtocolSpecNamedEscape(byte: char): BenchWorld.Bytes
-    ensures ProtocolSpecNamedEscape(byte) == ProtocolEscapingModel.SpecNamedEscape(byte)
-  {
-    if byte == 7 as char then "\\a"
-    else if byte == 8 as char then "\\b"
-    else if byte == 12 as char then "\\f"
-    else if byte == '\n' then "\\n"
-    else if byte == '\r' then "\\r"
-    else if byte == '\t' then "\\t"
-    else if byte == 11 as char then "\\v"
-    else []
-  }
-
-  function ProtocolSpecLocaleQuoteByte(byte: char): BenchWorld.Bytes
-    ensures ProtocolSpecLocaleQuoteByte(byte) == ProtocolEscapingModel.SpecLocaleQuoteByte(byte)
-  {
-    var named := ProtocolSpecNamedEscape(byte);
-    if named != [] then named
-    else if byte == '\'' then "\\'"
-    else if byte == '\\' then "\\\\"
-    else if ProtocolSpecCPrintableByte(byte) then [byte]
-    else ProtocolSpecOctalEscape(byte)
-  }
-
-  function ProtocolSpecLocaleQuoteBody(bytes: BenchWorld.Bytes): BenchWorld.Bytes
-    ensures ProtocolSpecLocaleQuoteBody(bytes) == ProtocolEscapingModel.SpecLocaleQuoteBody(bytes)
-    decreases |bytes|
-  {
-    if |bytes| == 0 then
-      []
-    else
-      ProtocolSpecLocaleQuoteByte(bytes[0]) + ProtocolSpecLocaleQuoteBody(bytes[1..])
-  }
-
-  function ProtocolSpecLocaleQuoteBytes(bytes: BenchWorld.Bytes): BenchWorld.Bytes
-    ensures ProtocolSpecLocaleQuoteBytes(bytes) == ProtocolEscapingModel.SpecLocaleQuoteBytes(bytes)
-  {
-    "'" + ProtocolSpecLocaleQuoteBody(bytes) + "'"
-  }
-
-  function ProtocolInvalidBodyStyleLine(value: string): BenchWorld.Bytes
-    ensures ProtocolInvalidBodyStyleLine(value) == InvalidBodyStyleLine(value)
-  {
-    InvalidBodyStylePrefix() +
-    ProtocolSpecLocaleQuoteBytes(ProtocolEncode(value)) + DiagnosticTerminator()
-  }
-
-  function ProtocolInvalidNumberFormatLine(value: string): BenchWorld.Bytes
-    ensures ProtocolInvalidNumberFormatLine(value) == InvalidNumberFormatLine(value)
-  {
-    InvalidNumberFormatPrefix() +
-    ProtocolSpecLocaleQuoteBytes(ProtocolEncode(value)) + DiagnosticTerminator()
-  }
-
-  function ProtocolOptionErrorLine(error: NlOptionError): BenchWorld.Bytes
-    ensures ProtocolOptionErrorLine(error) == OptionErrorLine(error)
-  {
-    match error
-    case InvalidBodyStyle(value) => ProtocolInvalidBodyStyleLine(value)
-    case InvalidNumberFormat(value) => ProtocolInvalidNumberFormatLine(value)
-  }
-
-  function ProtocolOptionErrorsText(errors: seq<NlOptionError>): BenchWorld.Bytes
-    ensures ProtocolOptionErrorsText(errors) == OptionErrorsText(errors)
-    decreases |errors|
-  {
-    if |errors| == 0 then
-      []
-    else
-      ProtocolOptionErrorLine(errors[0]) + ProtocolOptionErrorsText(errors[1..])
+    plan := CliTypes.CliEarlyExit(1, [], OptionErrorsText(errors) + msg);
   }
 
 }

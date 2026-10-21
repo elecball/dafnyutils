@@ -1,17 +1,14 @@
-include "SeqTextCore.dfy"
+include "SeqSpec.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "SeqSchema.dfy"
-include "SeqSpec.dfy"
 
 module SeqCore {
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = SeqUtf8Core
-  import Text = SeqTextCore
   import BenchWorld
   import SeqSchema
   import Spec = SeqSpec
@@ -26,52 +23,6 @@ module SeqCore {
     | NumbersErr(stderr: BenchWorld.Bytes)
   datatype RunResult = RunResult(stdout: BenchWorld.Bytes, stderr: BenchWorld.Bytes, exit: int)
 
-  function HelpSelected(raw: SeqSchema.SeqCmdRaw): bool
-  {
-    raw.seenHelp &&
-    (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex)
-  } by method
-  {
-    return raw.seenHelp &&
-           (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex);
-  }
-
-  function VersionSelected(raw: SeqSchema.SeqCmdRaw): bool
-  {
-    raw.seenVersion &&
-    (!raw.seenHelp || raw.versionTokenIndex < raw.helpTokenIndex)
-  } by method
-  {
-    return raw.seenVersion &&
-           (!raw.seenHelp || raw.versionTokenIndex < raw.helpTokenIndex);
-  }
-
-  function Separator(raw: SeqSchema.SeqCmdRaw): BenchWorld.Bytes
-  {
-    match raw.separator
-    case Some(value) => Utf8.Encode(value)
-    case None => ['\n']
-  } by method
-  {
-    match raw.separator
-    case Some(value) =>
-      return Utf8.Encode(value);
-    case None =>
-      return ['\n'];
-  }
-
-  function IsDigit(ch: char): bool
-  {
-    '0' <= ch && ch <= '9'
-  }
-
-  function DigitValue(ch: char): int
-    requires IsDigit(ch)
-    ensures 0 <= DigitValue(ch) < 10
-  {
-    (ch as int) - ('0' as int)
-  }
-
   function ScanDecimal(text: string, i: nat, sawDot: bool, sawDigit: bool, mantissa: int, scale: nat): Scan
     requires i <= |text|
     requires 0 <= mantissa
@@ -79,13 +30,13 @@ module SeqCore {
   {
     if i >= |text| then
       Scan(true, sawDigit, sawDot, mantissa, scale)
-    else if IsDigit(text[i]) then
+    else if Spec.IsDigit(text[i]) then
       ScanDecimal(
         text,
         i + 1,
         sawDot,
         true,
-        mantissa * 10 + DigitValue(text[i]),
+        mantissa * 10 + Spec.DigitAt(text[i]),
         if sawDot then scale + 1 else scale
       )
     else if text[i] == '.' && !sawDot then
@@ -141,8 +92,8 @@ module SeqCore {
   {
     if i >= |text| then
       NatScan(true, sawDigit, value)
-    else if IsDigit(text[i]) then
-      ScanNat(text, i + 1, true, (value * 10 + DigitValue(text[i])) as nat)
+    else if Spec.IsDigit(text[i]) then
+      ScanNat(text, i + 1, true, (value * 10 + Spec.DigitAt(text[i])) as nat)
     else
       NatScan(false, sawDigit, value)
   } by method
@@ -196,7 +147,7 @@ module SeqCore {
       if positiveExponent <= scale then
         Decimal(token, value, scale - positiveExponent, negativeZero)
       else
-        Decimal(token, value * Pow10(positiveExponent - scale), 0, negativeZero)
+        Decimal(token, value * Spec.Pow10(positiveExponent - scale), 0, negativeZero)
     else
       Decimal(token, value, scale + ((-exponent) as nat), negativeZero)
   } by method
@@ -206,7 +157,7 @@ module SeqCore {
       if positiveExponent <= scale {
         return Decimal(token, value, scale - positiveExponent, negativeZero);
       }
-      var factor := Pow10(positiveExponent - scale);
+      var factor := Spec.Pow10(positiveExponent - scale);
       return Decimal(token, value * factor, 0, negativeZero);
     }
     return Decimal(token, value, scale + ((-exponent) as nat), negativeZero);
@@ -274,7 +225,7 @@ module SeqCore {
     if |args| == 0 then
       NumbersErr(Spec.MissingOperandMessage())
     else if |args| > 3 then
-      NumbersErr(Text.ExtraOperandMessage(args[3]))
+      NumbersErr(Spec.ExtraOperandMessage(args[3]))
     else
       var firstText := if |args| == 1 then "1" else args[0];
       var stepText := if |args| == 3 then args[1] else "1";
@@ -282,20 +233,20 @@ module SeqCore {
       var firstParse := ParseDecimal(firstText);
       match firstParse
       case Err(token) =>
-        NumbersErr(Text.InvalidNumberMessage(token))
+        NumbersErr(Spec.InvalidNumberMessage(token))
       case Ok(first) =>
         var stepParse := ParseDecimal(stepText);
         match stepParse
         case Err(token) =>
-          NumbersErr(Text.InvalidNumberMessage(token))
+          NumbersErr(Spec.InvalidNumberMessage(token))
         case Ok(step) =>
           if step.value == 0 then
-            NumbersErr(Text.ZeroIncrementMessage(step.raw))
+            NumbersErr(Spec.ZeroIncrementMessage(step.raw))
           else
             var lastParse := ParseDecimal(lastText);
             match lastParse
             case Err(token) =>
-              NumbersErr(Text.InvalidNumberMessage(token))
+              NumbersErr(Spec.InvalidNumberMessage(token))
             case Ok(last) =>
               NumbersOk(first, step, last)
   } by method
@@ -333,73 +284,22 @@ module SeqCore {
           return NumbersOk(first, step, last);
   }
 
-  function MaxNat(a: nat, b: nat): nat
-  {
-    if a < b then b else a
-  } by method
-  {
-    return if a < b then b else a;
-  }
-
   function MaxScale(first: Decimal, step: Decimal, last: Decimal): nat
   {
-    MaxNat(first.scale, MaxNat(step.scale, last.scale))
+    Spec.MaxNat(first.scale, Spec.MaxNat(step.scale, last.scale))
   } by method
   {
-    var stepLast := MaxNat(step.scale, last.scale);
-    return MaxNat(first.scale, stepLast);
-  }
-
-  function Pow10(n: nat): int
-    ensures 1 <= Pow10(n)
-    decreases n
-  {
-    if n == 0 then
-      1
-    else
-      10 * Pow10(n - 1)
-  } by method
-  {
-    if n == 0 {
-      return 1;
-    }
-    return 10 * Pow10(n - 1);
+    var stepLast := Spec.MaxNat(step.scale, last.scale);
+    return Spec.MaxNat(first.scale, stepLast);
   }
 
   function Rescale(d: Decimal, scale: nat): int
     requires d.scale <= scale
   {
-    d.value * Pow10(scale - d.scale)
+    d.value * Spec.Pow10(scale - d.scale)
   } by method
   {
-    return d.value * Pow10(scale - d.scale);
-  }
-
-  function TermCount(first: int, step: int, last: int): nat
-    requires step != 0
-  {
-    if step > 0 then
-      if first > last then
-        0
-      else
-        ((last - first) / step) as nat + 1
-    else
-    if first < last then
-      0
-    else
-      ((first - last) / (-step)) as nat + 1
-  } by method
-  {
-    if step > 0 {
-      if first > last {
-        return 0;
-      }
-      return ((last - first) / step) as nat + 1;
-    }
-    if first < last {
-      return 0;
-    }
-    return ((first - last) / (-step)) as nat + 1;
+    return d.value * Spec.Pow10(scale - d.scale);
   }
 
   function GenerateValues(current: int, step: int, count: nat): seq<int>
@@ -424,109 +324,13 @@ module SeqCore {
     return values;
   }
 
-  function DigitChar(d: int): char
-  {
-    if 0 <= d && d < 10 then
-      (d + ('0' as int)) as char
-    else
-      '0'
-  } by method
-  {
-    return if 0 <= d && d < 10 then (d + ('0' as int)) as char else '0';
-  }
-
-  function DigitsUnsigned(n: int): BenchWorld.Bytes
-    requires 0 <= n
-    decreases n
-  {
-    if n < 10 then
-      [DigitChar(n)]
-    else
-      DigitsUnsigned(n / 10) + [DigitChar(n % 10)]
-  } by method
-  {
-    if n < 10 {
-      return [DigitChar(n)];
-    }
-    return DigitsUnsigned(n / 10) + [DigitChar(n % 10)];
-  }
-
-  function Zeros(n: nat): BenchWorld.Bytes
-    decreases n
-  {
-    if n == 0 then [] else ['0'] + Zeros(n - 1)
-  } by method
-  {
-    if n == 0 {
-      return [];
-    }
-    return ['0'] + Zeros(n - 1);
-  }
-
-  function LeftPadZeros(text: BenchWorld.Bytes, width: nat): BenchWorld.Bytes
-  {
-    if width <= |text| then
-      text
-    else
-      Zeros(width - |text|) + text
-  } by method
-  {
-    if width <= |text| {
-      return text;
-    }
-    return Zeros(width - |text|) + text;
-  }
-
-  function RenderMagnitude(magnitude: int, scale: nat): BenchWorld.Bytes
-    requires 0 <= magnitude
-  {
-    if scale == 0 then
-      DigitsUnsigned(magnitude)
-    else
-      var divisor := Pow10(scale);
-      Spec.DivNonnegative(magnitude, divisor);
-      var integerPart := magnitude / divisor;
-      var fractionalPart := magnitude % divisor;
-      DigitsUnsigned(integerPart) + ['.'] + LeftPadZeros(DigitsUnsigned(fractionalPart), scale)
-  } by method
-  {
-    if scale == 0 {
-      return DigitsUnsigned(magnitude);
-    }
-    var divisor := Pow10(scale);
-    var integerPart := magnitude / divisor;
-    var fractionalPart := magnitude % divisor;
-    Spec.DivNonnegative(magnitude, divisor);
-    var integerText := DigitsUnsigned(integerPart);
-    var fractionalText := DigitsUnsigned(fractionalPart);
-    return integerText + ['.'] + LeftPadZeros(fractionalText, scale);
-  }
-
-  function RenderFixed(value: int, scale: nat, negativeZero: bool): BenchWorld.Bytes
-  {
-    if value < 0 then
-      ['-'] + RenderMagnitude(-value, scale)
-    else if value == 0 && negativeZero then
-      ['-'] + RenderMagnitude(value, scale)
-    else
-      RenderMagnitude(value, scale)
-  } by method
-  {
-    if value < 0 {
-      return ['-'] + RenderMagnitude(-value, scale);
-    } else if value == 0 && negativeZero {
-      return ['-'] + RenderMagnitude(value, scale);
-    }
-    return RenderMagnitude(value, scale);
-  }
-
   function RenderValues(values: seq<int>, scale: nat, firstNegativeZero: bool): seq<BenchWorld.Bytes>
     decreases |values|
   {
     if |values| == 0 then
       []
     else
-      [RenderFixed(values[0], scale, firstNegativeZero)] + RenderValues(values[1..], scale, false)
+      [Spec.RenderFixed(values[0], scale, firstNegativeZero)] + RenderValues(values[1..], scale, false)
   } by method
   {
     var i := |values|;
@@ -537,7 +341,7 @@ module SeqCore {
       decreases i
     {
       i := i - 1;
-      rendered := [RenderFixed(values[i], scale, if i == 0 then firstNegativeZero else false)] + rendered;
+      rendered := [Spec.RenderFixed(values[i], scale, if i == 0 then firstNegativeZero else false)] + rendered;
     }
     return rendered;
   }
@@ -548,7 +352,7 @@ module SeqCore {
     if |items| == 0 then
       0
     else
-      MaxNat(|items[0]|, MaxWidth(items[1..]))
+      Spec.MaxNat(|items[0]|, MaxWidth(items[1..]))
   } by method
   {
     var i := |items|;
@@ -559,27 +363,9 @@ module SeqCore {
       decreases i
     {
       i := i - 1;
-      width := MaxNat(|items[i]|, width);
+      width := Spec.MaxNat(|items[i]|, width);
     }
     return width;
-  }
-
-  function PadNumber(text: BenchWorld.Bytes, width: nat): BenchWorld.Bytes
-  {
-    if width <= |text| then
-      text
-    else if |text| > 0 && text[0] == '-' then
-      ['-'] + Zeros(width - |text|) + text[1..]
-    else
-      Zeros(width - |text|) + text
-  } by method
-  {
-    if width <= |text| {
-      return text;
-    } else if |text| > 0 && text[0] == '-' {
-      return ['-'] + Zeros(width - |text|) + text[1..];
-    }
-    return Zeros(width - |text|) + text;
   }
 
   function PadValues(items: seq<BenchWorld.Bytes>, width: nat): seq<BenchWorld.Bytes>
@@ -588,7 +374,7 @@ module SeqCore {
     if |items| == 0 then
       []
     else
-      [PadNumber(items[0], width)] + PadValues(items[1..], width)
+      [Spec.PadNumber(items[0], width)] + PadValues(items[1..], width)
   } by method
   {
     var i := |items|;
@@ -599,7 +385,7 @@ module SeqCore {
       decreases i
     {
       i := i - 1;
-      padded := [PadNumber(items[i], width)] + padded;
+      padded := [Spec.PadNumber(items[i], width)] + padded;
     }
     return padded;
   }
@@ -639,7 +425,7 @@ module SeqCore {
     var firstValue := Rescale(first, scale);
     var stepValue := Rescale(step, scale);
     var lastValue := Rescale(last, scale);
-    var values := GenerateValues(firstValue, stepValue, TermCount(firstValue, stepValue, lastValue));
+    var values := GenerateValues(firstValue, stepValue, Spec.TermCount(firstValue, stepValue, lastValue));
     var rendered := RenderValues(values, scale, first.negativeZero && first.value == 0);
     var padded := if equalWidth then PadValues(rendered, MaxWidth(rendered)) else rendered;
     JoinItems(padded, separator)
@@ -649,7 +435,7 @@ module SeqCore {
     var firstValue := Rescale(first, scale);
     var stepValue := Rescale(step, scale);
     var lastValue := Rescale(last, scale);
-    var count := TermCount(firstValue, stepValue, lastValue);
+    var count := Spec.TermCount(firstValue, stepValue, lastValue);
     var values := GenerateValues(firstValue, stepValue, count);
     var rendered := RenderValues(values, scale, first.negativeZero && first.value == 0);
     var padded := if equalWidth then PadValues(rendered, MaxWidth(rendered)) else rendered;
@@ -658,9 +444,9 @@ module SeqCore {
 
   function Evaluate(raw: SeqSchema.SeqCmdRaw): RunResult
   {
-    if HelpSelected(raw) then
+    if Spec.HelpSelected(raw) then
       RunResult(Spec.HelpText(), [], 0)
-    else if VersionSelected(raw) then
+    else if Spec.VersionSelected(raw) then
       RunResult(Spec.VersionText(), [], 0)
     else
       var plan := ParseNumbers(raw.operands);
@@ -668,14 +454,14 @@ module SeqCore {
       case NumbersErr(stderr) =>
         RunResult([], stderr, 1)
       case NumbersOk(first, step, last) =>
-        RunResult(RenderSequence(first, step, last, raw.equalWidth, Separator(raw)), [], 0)
+        RunResult(RenderSequence(first, step, last, raw.equalWidth, Spec.Separator(raw)), [], 0)
   } by method
   {
-    if HelpSelected(raw) {
+    if Spec.HelpSelected(raw) {
       var out := GetHelpText();
       return RunResult(out, [], 0);
     }
-    if VersionSelected(raw) {
+    if Spec.VersionSelected(raw) {
       var out := GetVersionText();
       return RunResult(out, [], 0);
     }
@@ -683,7 +469,7 @@ module SeqCore {
     case NumbersErr(stderr) =>
       return RunResult([], stderr, 1);
     case NumbersOk(first, step, last) =>
-      var separator := Separator(raw);
+      var separator := Spec.Separator(raw);
       return RunResult(
           RenderSequence(first, step, last, raw.equalWidth, separator),
           [],
@@ -721,19 +507,19 @@ module SeqCore {
   method ExtraOperandMessageRuntime(token: string) returns (message: BenchWorld.Bytes)
     ensures message == Spec.ExtraOperandMessage(token)
   {
-    message := Text.ExtraOperandMessage(token);
+    message := Spec.ExtraOperandMessage(token);
   }
 
   method InvalidNumberMessageRuntime(token: string) returns (message: BenchWorld.Bytes)
     ensures message == Spec.InvalidNumberMessage(token)
   {
-    message := Text.InvalidNumberMessage(token);
+    message := Spec.InvalidNumberMessage(token);
   }
 
   method ZeroIncrementMessageRuntime(token: string) returns (message: BenchWorld.Bytes)
     ensures message == Spec.ZeroIncrementMessage(token)
   {
-    message := Text.ZeroIncrementMessage(token);
+    message := Spec.ZeroIncrementMessage(token);
   }
 
   method Prepare(raw: SeqSchema.SeqCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
@@ -776,7 +562,7 @@ module SeqCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

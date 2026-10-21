@@ -1,13 +1,12 @@
-include "ChmodTextCore.dfy"
-include "ChmodRecursiveTextCore.dfy"
+include "ChmodRecursiveSpec.dfy"
+include "ChmodSpec.dfy"
 include "ChmodDescriptorSpec.dfy"
 include "ChmodOperandCore.dfy"
 include "ChmodCore.dfy"
 include "ChmodEntryProof.dfy"
 
 module ChmodEntryRuntime {
-  import Text = ChmodTextCore
-  import RecursiveText = ChmodRecursiveTextCore
+  import RecursiveText = ChmodRecursiveSpec
   import W = BenchWorld
   import Errno = Errnos
   import BenchIO

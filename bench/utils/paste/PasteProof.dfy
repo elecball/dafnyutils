@@ -15,21 +15,6 @@ module PasteProof {
   import Spec = PasteSpec
   import C = IOContract
 
-  function ToSpecEntry(entry: Core.Entry): Spec.Entry
-  {
-    Spec.Entry(entry.lines, entry.readOk)
-  }
-
-  function ToSpecEntries(entries: seq<Core.Entry>): seq<Spec.Entry>
-    ensures |ToSpecEntries(entries)| == |entries|
-    decreases |entries|
-  {
-    if |entries| == 0 then
-      []
-    else
-      [ToSpecEntry(entries[0])] + ToSpecEntries(entries[1..])
-  }
-
   ghost function ShiftCuts(cuts: seq<nat>, offset: nat): seq<nat>
   {
     seq(|cuts|, i requires 0 <= i < |cuts| => cuts[i] + offset)
@@ -63,8 +48,8 @@ module PasteProof {
     var result := Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i);
     Spec.InputObservation(
       result,
-      ToSpecEntry(Core.EntryForRead(
-                    result, Core.RecordDelimiter(cmd.zeroTerminated))),
+      Core.EntryForRead(
+        result, Spec.RecordDelimiter(cmd.zeroTerminated)),
       Core.ErrorPiece(cmd.inputs[i], result),
       Core.HadErrorPiece(cmd.inputs[i], result),
       Core.HadBlockingErrorPiece(cmd.inputs[i], result))
@@ -80,41 +65,6 @@ module PasteProof {
     |cmd.inputs|,
     i requires 0 <= i < |cmd.inputs| =>
       ObservationAt(cmd, preFs, preStreams, preStdin, i))
-  }
-
-  lemma ToSpecEntriesConcat(left: seq<Core.Entry>, right: seq<Core.Entry>)
-    ensures ToSpecEntries(left + right) ==
-            ToSpecEntries(left) + ToSpecEntries(right)
-    decreases |left|
-  {
-    if |left| == 0 {
-      assert left + right == right;
-    } else {
-      assert (left + right)[0] == left[0];
-      assert (left + right)[1..] == left[1..] + right;
-      ToSpecEntriesConcat(left[1..], right);
-      assert ToSpecEntries(left + right) ==
-             [ToSpecEntry(left[0])] +
-             ToSpecEntries(left[1..] + right);
-      assert ToSpecEntries(left) ==
-             [ToSpecEntry(left[0])] + ToSpecEntries(left[1..]);
-    }
-  }
-
-  lemma ToSpecEntriesIndex(entries: seq<Core.Entry>, i: nat)
-    requires i < |entries|
-    ensures ToSpecEntries(entries)[i] == ToSpecEntry(entries[i])
-    decreases i
-  {
-    if i > 0 {
-      ToSpecEntriesIndex(entries[1..], i - 1);
-    }
-  }
-
-  lemma RecordDelimiterEq(zeroTerminated: bool)
-    ensures Core.RecordDelimiter(zeroTerminated) ==
-            Spec.RecordDelimiter(zeroTerminated)
-  {
   }
 
   lemma SliceAfterPrefix<T>(
@@ -267,7 +217,7 @@ module PasteProof {
     ensures Spec.EntryRelation(
               result,
               recordDelimiter,
-              ToSpecEntry(Core.EntryForRead(result, recordDelimiter)))
+              Core.EntryForRead(result, recordDelimiter))
   {
     var terminated, fragments, cuts :=
       BuildLinePartition(C.ReadResultData(result), recordDelimiter);
@@ -320,8 +270,8 @@ module PasteProof {
   {
     var result := Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i);
     ReadResultRefines(cmd, preFs, preStreams, preStdin, i);
-    RecordDelimiterEq(cmd.zeroTerminated);
-    EntryRefines(result, Core.RecordDelimiter(cmd.zeroTerminated));
+
+    EntryRefines(result, Spec.RecordDelimiter(cmd.zeroTerminated));
     reveal Spec.InputObservationRelation();
     match cmd.inputs[i]
     case Stdin =>
@@ -342,7 +292,7 @@ module PasteProof {
     ensures Core.PrefixEntriesCore(cmd, preFs, preStreams, preStdin, i)[j] ==
             Core.EntryForRead(
               Core.ReadResultCore(cmd, preFs, preStreams, preStdin, j),
-              Core.RecordDelimiter(cmd.zeroTerminated))
+              Spec.RecordDelimiter(cmd.zeroTerminated))
     decreases i
   {
     if j + 1 < i {
@@ -357,21 +307,21 @@ module PasteProof {
   )
     ensures Spec.ObservationEntries(
               Observations(cmd, preFs, preStreams, preStdin)) ==
-            ToSpecEntries(Core.EntriesCore(cmd, preFs, preStreams, preStdin))
+            Core.EntriesCore(cmd, preFs, preStreams, preStdin)
   {
     var observations := Observations(cmd, preFs, preStreams, preStdin);
     var entries := Core.EntriesCore(cmd, preFs, preStreams, preStdin);
     assert |observations| == |entries| == |cmd.inputs|;
     assert forall i: nat :: i < |observations| ==>
                               Spec.ObservationEntries(observations)[i] ==
-                              ToSpecEntries(entries)[i] by {
+                              entries[i] by {
       forall i: nat | i < |observations|
         ensures Spec.ObservationEntries(observations)[i] ==
-                ToSpecEntries(entries)[i]
+                entries[i]
       {
         PrefixEntriesIndex(
           cmd, preFs, preStreams, preStdin, |cmd.inputs|, i);
-        ToSpecEntriesIndex(entries, i);
+
       }
     }
   }
@@ -546,7 +496,7 @@ module PasteProof {
 
   lemma ParallelEntryAt(
     inputs: seq<Schema.Input>,
-    entries: seq<Core.Entry>,
+    entries: seq<Spec.Entry>,
     stdinLines: seq<BW.Bytes>,
     stdinCount: nat,
     start: nat,
@@ -558,7 +508,7 @@ module PasteProof {
               inputs, entries, stdinLines, stdinCount, start)[j - start] ==
             match inputs[j]
             case Stdin =>
-              Core.Entry(
+              Spec.Entry(
                 Core.SelectStdinLines(
                   stdinLines,
                   Core.CountStdinPrefix(inputs, j),
@@ -579,28 +529,28 @@ module PasteProof {
   lemma {:isolate_assertions} EntriesForOutputRefines(
     cmd: Schema.PasteCmd,
     preStdin: BW.Bytes,
-    rawEntries: seq<Core.Entry>
+    rawEntries: seq<Spec.Entry>
   )
     requires |rawEntries| == |cmd.inputs|
     ensures Spec.EntriesForOutputRelation(
               cmd,
               preStdin,
-              ToSpecEntries(rawEntries),
-              ToSpecEntries(Core.EntriesForOutputFromEntries(
-                              cmd,
-                              rawEntries,
-                              if Spec.HasStdinInput(cmd.inputs) then preStdin else [])))
+              rawEntries,
+              Core.EntriesForOutputFromEntries(
+                cmd,
+                rawEntries,
+                if Spec.HasStdinInput(cmd.inputs) then preStdin else []))
   {
     if cmd.serial {
       reveal Spec.EntriesForOutputRelation();
       assert Spec.EntriesForOutputRelation(
           cmd,
           preStdin,
-          ToSpecEntries(rawEntries),
-          ToSpecEntries(Core.EntriesForOutputFromEntries(
-                          cmd,
-                          rawEntries,
-                          if Spec.HasStdinInput(cmd.inputs) then preStdin else [])));
+          rawEntries,
+          Core.EntriesForOutputFromEntries(
+            cmd,
+            rawEntries,
+            if Spec.HasStdinInput(cmd.inputs) then preStdin else []));
     } else {
       var positions :=
         PrefixStdinPositions(cmd.inputs, |cmd.inputs|);
@@ -609,43 +559,43 @@ module PasteProof {
       CountStdinInputsEqPositions(cmd.inputs);
       var stdinData :=
         if Spec.HasStdinInput(cmd.inputs) then preStdin else [];
-      var recordDelimiter := Core.RecordDelimiter(cmd.zeroTerminated);
-      RecordDelimiterEq(cmd.zeroTerminated);
+      var recordDelimiter := Spec.RecordDelimiter(cmd.zeroTerminated);
+
       var terminated, fragments, cuts :=
         BuildLinePartition(stdinData, recordDelimiter);
       var stdinLines := Core.Lines(stdinData, recordDelimiter);
       var outputEntries := Core.EntriesForOutputFromEntries(
         cmd, rawEntries, stdinData);
       assert |outputEntries| == |cmd.inputs|;
-      assert |ToSpecEntries(outputEntries)| == |cmd.inputs|;
-      assert |ToSpecEntries(rawEntries)| == |cmd.inputs|;
+      assert |outputEntries| == |cmd.inputs|;
+      assert |rawEntries| == |cmd.inputs|;
       reveal Spec.EntriesForOutputRelation();
       assert forall i: nat :: i < |cmd.inputs| ==>
                                 match cmd.inputs[i]
                                 case File(_) =>
-                                  ToSpecEntries(outputEntries)[i] ==
-                                  ToSpecEntries(rawEntries)[i]
+                                  outputEntries[i] ==
+                                  rawEntries[i]
                                 case Stdin =>
                                   exists rank: nat, selected: seq<BW.Bytes> ::
                                     rank < |positions| &&
                                     positions[rank] == i &&
                                     Spec.SelectedLinesRelation(
                                       stdinLines, rank, |positions|, selected) &&
-                                    ToSpecEntries(outputEntries)[i] ==
+                                    outputEntries[i] ==
                                     Spec.Entry(selected, true) by {
         forall i: nat | i < |cmd.inputs|
           ensures
             match cmd.inputs[i]
             case File(_) =>
-              ToSpecEntries(outputEntries)[i] ==
-              ToSpecEntries(rawEntries)[i]
+              outputEntries[i] ==
+              rawEntries[i]
             case Stdin =>
               exists rank: nat, selected: seq<BW.Bytes> ::
                 rank < |positions| &&
                 positions[rank] == i &&
                 Spec.SelectedLinesRelation(
                   stdinLines, rank, |positions|, selected) &&
-                ToSpecEntries(outputEntries)[i] ==
+                outputEntries[i] ==
                 Spec.Entry(selected, true)
         {
           ParallelEntryAt(
@@ -655,10 +605,10 @@ module PasteProof {
             Core.CountStdinInputs(cmd.inputs),
             0,
             i);
-          ToSpecEntriesIndex(outputEntries, i);
+
           match cmd.inputs[i]
           case File(_) =>
-            ToSpecEntriesIndex(rawEntries, i);
+
           case Stdin =>
             var rank := Core.CountStdinPrefix(cmd.inputs, i);
             PrefixPositionsLength(cmd.inputs, i);
@@ -675,23 +625,23 @@ module PasteProof {
       assert Spec.ParallelEntriesForOutputRelation(
           cmd,
           preStdin,
-          ToSpecEntries(rawEntries),
-          ToSpecEntries(outputEntries),
+          rawEntries,
+          outputEntries,
           trace) by {
         reveal Spec.ParallelEntriesForOutputRelation();
       }
       assert Spec.EntriesForOutputRelation(
           cmd,
           preStdin,
-          ToSpecEntries(rawEntries),
-          ToSpecEntries(outputEntries)) by {
+          rawEntries,
+          outputEntries) by {
         reveal Spec.EntriesForOutputRelation();
         assert exists witnessValue: Spec.EntriesForOutputWitness ::
             Spec.ParallelEntriesForOutputRelation(
               cmd,
               preStdin,
-              ToSpecEntries(rawEntries),
-              ToSpecEntries(outputEntries),
+              rawEntries,
+              outputEntries,
               witnessValue) by {
           ghost var witnessValue := trace;
         }
@@ -898,8 +848,8 @@ module PasteProof {
               preFs, preStreams,
               preStdin,
               Core.PrefixStdinCore(cmd, preStreams, preStdin, |cmd.inputs|),
-              ToSpecEntries(Core.EntriesForOutputCore(
-                              cmd, preFs, preStreams, preStdin)),
+              Core.EntriesForOutputCore(
+                cmd, preFs, preStreams, preStdin),
               Core.PrefixVisibleErrorOutputCore(
                 cmd, preFs, preStreams, preStdin, |cmd.inputs|),
               Core.PrefixHadErrorCore(
@@ -948,7 +898,7 @@ module PasteProof {
     }
     InputTraceWitness(cmd, preFs, preStreams, preStdin,
                       Core.PrefixStdinCore(cmd, preStreams, preStdin, |cmd.inputs|),
-                      ToSpecEntries(Core.EntriesForOutputCore(cmd, preFs, preStreams, preStdin)),
+                      Core.EntriesForOutputCore(cmd, preFs, preStreams, preStdin),
                       Core.PrefixVisibleErrorOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
                       Core.PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
                       Core.PrefixHadBlockingErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
@@ -1046,32 +996,8 @@ module PasteProof {
     }
   }
 
-  lemma MaxEq(a: nat, b: nat)
-    ensures Core.Max(a, b) == Spec.Max(a, b)
-  {
-  }
-
-  lemma MaxLineCountEq(entries: seq<Core.Entry>)
-    ensures Core.MaxLineCount(entries) ==
-            Spec.MaxLineCount(ToSpecEntries(entries))
-    decreases |entries|
-  {
-    if |entries| > 0 {
-      MaxLineCountEq(entries[1..]);
-      MaxEq(
-        |entries[0].lines|,
-        Core.MaxLineCount(entries[1..]));
-    }
-  }
-
-  lemma DelimAtEq(delims: seq<BW.Bytes>, i: nat)
-    requires |delims| > 0
-    ensures Core.DelimAt(delims, i) == Spec.DelimAt(delims, i)
-  {
-  }
-
   lemma BuildParallelColumns(
-    entries: seq<Core.Entry>,
+    entries: seq<Spec.Entry>,
     delims: seq<BW.Bytes>,
     row: nat,
     i: nat,
@@ -1081,7 +1007,7 @@ module PasteProof {
     requires |entries| > 0
     requires i <= |entries|
     ensures Spec.ParallelColumnsRelation(
-              ToSpecEntries(entries), delims, row, i, before,
+              entries, delims, row, i, before,
               before + Core.RenderParallelRow(
                 entries, delims, row, i, |entries| - 1), assembly)
     decreases |entries| - i
@@ -1089,11 +1015,11 @@ module PasteProof {
     if i == |entries| {
       assembly := Spec.ColumnsDone;
     } else {
-      ToSpecEntriesIndex(entries, i);
-      DelimAtEq(delims, i);
+
+
       var fragment :=
         (if row < |entries[i].lines| then entries[i].lines[row] else []) +
-        (if i + 1 < |entries| then Core.DelimAt(delims, i) else []);
+        (if i + 1 < |entries| then Spec.DelimAt(delims, i) else []);
       var after := before + fragment;
       var rest := BuildParallelColumns(
         entries, delims, row, i + 1, after);
@@ -1107,7 +1033,7 @@ module PasteProof {
   }
 
   lemma BuildParallelRecords(
-    entries: seq<Core.Entry>,
+    entries: seq<Spec.Entry>,
     delims: seq<BW.Bytes>,
     recordDelimiter: BW.RawByte,
     row: nat,
@@ -1116,9 +1042,9 @@ module PasteProof {
   ) returns (assembly: Spec.RecordAssembly)
     requires |delims| > 0
     requires row <= limit
-    requires limit == Core.MaxLineCount(entries)
+    requires limit == Spec.MaxLineCount(entries)
     ensures Spec.ParallelRecordsRelation(
-              ToSpecEntries(entries), delims, recordDelimiter, row, limit, before,
+              entries, delims, recordDelimiter, row, limit, before,
               before + Core.RenderParallelRows(
                 entries, delims, recordDelimiter, row, limit), assembly)
     decreases limit - row
@@ -1161,9 +1087,9 @@ module PasteProof {
     if i == |lines| {
       assembly := Spec.ColumnsDone;
     } else {
-      DelimAtEq(delims, i);
+
       var fragment := lines[i] +
-      (if i + 1 < |lines| then Core.DelimAt(delims, i) else []);
+      (if i + 1 < |lines| then Spec.DelimAt(delims, i) else []);
       var after := before + fragment;
       var rest := BuildSerialColumns(
         lines, delims, i + 1, after);
@@ -1175,7 +1101,7 @@ module PasteProof {
   }
 
   lemma BuildSerialRecords(
-    entries: seq<Core.Entry>,
+    entries: seq<Spec.Entry>,
     delims: seq<BW.Bytes>,
     recordDelimiter: BW.RawByte,
     i: nat,
@@ -1184,7 +1110,7 @@ module PasteProof {
     requires |delims| > 0
     requires i <= |entries|
     ensures Spec.SerialRecordsRelation(
-              ToSpecEntries(entries), delims, recordDelimiter, i, before,
+              entries, delims, recordDelimiter, i, before,
               before + Core.RenderSerial(
                 entries[i..], delims, recordDelimiter), assembly)
     decreases |entries| - i
@@ -1192,7 +1118,7 @@ module PasteProof {
     if i == |entries| {
       assembly := Spec.RecordsDone;
     } else {
-      ToSpecEntriesIndex(entries, i);
+
       if entries[i].readOk {
         var columns := BuildSerialColumns(
           entries[i].lines, delims, 0, []);
@@ -1227,14 +1153,14 @@ module PasteProof {
     serial: bool,
     delims: seq<BW.Bytes>,
     recordDelimiter: BW.RawByte,
-    entries: seq<Core.Entry>
+    entries: seq<Spec.Entry>
   )
     requires |delims| > 0
     ensures Spec.OutputRelation(
               serial,
               delims,
               recordDelimiter,
-              ToSpecEntries(entries),
+              entries,
               Core.RenderOutput(
                 serial, delims, recordDelimiter, entries))
   {
@@ -1247,7 +1173,7 @@ module PasteProof {
              Core.RenderSerial(entries, delims, recordDelimiter);
       assert exists r: Spec.RecordAssembly ::
           Spec.SerialRecordsRelation(
-            ToSpecEntries(entries),
+            entries,
             delims,
             recordDelimiter,
             0,
@@ -1257,30 +1183,28 @@ module PasteProof {
         ghost var r := records;
       }
     } else {
-      MaxLineCountEq(entries);
+
       var records := BuildParallelRecords(
         entries,
         delims,
         recordDelimiter,
         0,
-        Core.MaxLineCount(entries),
+        Spec.MaxLineCount(entries),
         []);
-      assert Core.MaxLineCount(entries) ==
-             Spec.MaxLineCount(ToSpecEntries(entries));
       assert [] + Core.RenderParallelRows(
           entries,
           delims,
           recordDelimiter,
           0,
-          Core.MaxLineCount(entries)) ==
+          Spec.MaxLineCount(entries)) ==
              Core.RenderParallel(entries, delims, recordDelimiter);
       assert exists r: Spec.RecordAssembly ::
           Spec.ParallelRecordsRelation(
-            ToSpecEntries(entries),
+            entries,
             delims,
             recordDelimiter,
             0,
-            Spec.MaxLineCount(ToSpecEntries(entries)),
+            Spec.MaxLineCount(entries),
             [],
             Core.RenderParallel(entries, delims, recordDelimiter),
             r) by {
@@ -1297,7 +1221,7 @@ module PasteProof {
     requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
     ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    var cmd := Core.Command(raw);
+    var cmd := Schema.Command(raw);
     assert cmd == Schema.Command(raw);
     if cmd.mode == Schema.ModeHelp {
     } else if cmd.mode == Schema.ModeVersion {
@@ -1313,11 +1237,11 @@ module PasteProof {
         assert |delims| > 0;
         InputTraceRefines(
           cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
-        RecordDelimiterEq(cmd.zeroTerminated);
+
         OutputRefines(
           cmd.serial,
           delims,
-          Core.RecordDelimiter(cmd.zeroTerminated),
+          Spec.RecordDelimiter(cmd.zeroTerminated),
           Core.EntriesForOutputCore(
             cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin())));
     }

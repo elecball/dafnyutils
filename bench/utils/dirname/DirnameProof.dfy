@@ -232,7 +232,7 @@ module DirnameProof {
             )
   {
     RenderSummaryGivesRelation(
-      cmd.operands, if cmd.zeroTerminated then ['\0'] else "\n", out
+      cmd.operands, Spec.OutputSeparator(cmd.zeroTerminated), out
     );
   }
 

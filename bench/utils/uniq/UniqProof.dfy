@@ -15,34 +15,6 @@ module UniqProof {
   import Core = UniqCore
   import Spec = UniqSpec
 
-  lemma InputFromOperandsEq(operands: seq<string>)
-    ensures Core.InputFromOperands(operands) ==
-            Spec.InputFromOperands(operands)
-  {
-  }
-
-  lemma CommandEq(raw: Schema.UniqCmdRaw)
-    ensures Core.Command(raw) == Spec.Command(raw)
-  {
-    InputFromOperandsEq(raw.operands);
-  }
-
-  lemma LowerAsciiEq(ch: BW.RawByte)
-    ensures Core.LowerAscii(ch) == Spec.LowerAscii(ch)
-  {
-  }
-
-  lemma EqualFoldAsciiEq(a: BW.Bytes, b: BW.Bytes)
-    ensures Core.EqualFoldAscii(a, b) == Spec.EqualFoldAscii(a, b)
-    decreases |a|
-  {
-    if |a| == |b| && |a| > 0 {
-      LowerAsciiEq(a[0]);
-      LowerAsciiEq(b[0]);
-      EqualFoldAsciiEq(a[1..], b[1..]);
-    }
-  }
-
   lemma CoreFieldStep(line: BW.Bytes, start: nat)
     requires start < |line|
     ensures Spec.FieldStep(
@@ -51,8 +23,7 @@ module UniqProof {
   {
     var middle := Core.SkipBlanks(line, start);
     var end := Core.SkipNonBlanks(line, middle);
-    assert Core.IsFieldBlank(line[start]) == Spec.IsFieldBlank(line[start]);
-    if Core.IsFieldBlank(line[start]) {
+    if Spec.IsFieldBlank(line[start]) {
       assert start < middle;
     } else {
       assert middle == start;
@@ -230,7 +201,7 @@ module UniqProof {
     SkipFieldsWitness(b, 0, cmd.skipFields);
     assert Spec.FieldSkipRelation(a, cmd.skipFields, a[leftCut..]);
     assert Spec.FieldSkipRelation(b, cmd.skipFields, b[rightCut..]);
-    EqualFoldAsciiEq(a[leftCut..], b[rightCut..]);
+
     reveal Spec.LinesEqual();
     if Spec.LinesEqual(cmd, a, b) {
       var left: BW.Bytes, right: BW.Bytes :|
@@ -599,48 +570,6 @@ module UniqProof {
     }
   }
 
-  lemma DigitCharEq(d: int)
-    ensures Core.DigitChar(d) == Spec.DigitChar(d)
-  {
-  }
-
-  lemma DigitsEq(n: nat)
-    ensures Core.Digits(n) == Spec.Digits(n)
-    decreases n
-  {
-    if n < 10 {
-      DigitCharEq(n as int);
-    } else {
-      DigitsEq(n / 10);
-      DigitCharEq((n % 10) as int);
-    }
-  }
-
-  lemma PadLeftEq(text: BW.Bytes, width: int)
-    ensures Core.PadLeft(text, width) == Spec.PadLeft(text, width)
-    decreases width - |text|
-  {
-    if |text| < width {
-      PadLeftEq([' '] + text, width);
-    }
-  }
-
-  lemma CountPrefixEq(count: nat)
-    ensures Core.CountPrefix(count) == Spec.CountPrefix(count)
-  {
-    DigitsEq(count);
-    PadLeftEq(Core.Digits(count), 7);
-  }
-
-  lemma ShouldOutputGroupEq(
-    cmd: Schema.UniqCmd,
-    group: Spec.Group
-  )
-    ensures Core.ShouldOutputGroup(cmd, group) ==
-            Spec.ShouldOutputGroup(cmd, group)
-  {
-  }
-
   lemma RenderGroupRelation(
     cmd: Schema.UniqCmd,
     group: Spec.Group
@@ -649,11 +578,6 @@ module UniqProof {
               cmd, group, Core.RenderGroup(cmd, group)
             )
   {
-    ShouldOutputGroupEq(cmd, group);
-    if Core.ShouldOutputGroup(cmd, group) &&
-       cmd.countOccurrences {
-      CountPrefixEq(group.count);
-    }
     reveal Spec.GroupRenderRelation();
   }
 
@@ -805,8 +729,8 @@ module UniqProof {
   {
     reveal Core.PreparedSummary();
     reveal Spec.PreparedSpec();
-    CommandEq(raw);
-    var cmd := Core.Command(raw);
+
+    var cmd := Spec.Command(raw);
     if cmd.mode == Schema.ModeRun {
       InputTraceRefines(
         cmd,

@@ -2,11 +2,6 @@
 module HeadRecordCore {
   import BenchWorld
 
-  function RecordDelimiter(zeroTerminated: bool): char
-  {
-    if zeroTerminated then '\0' else '\n'
-  }
-
   function RecordCount(data: BenchWorld.Bytes, delimiter: char): nat
     decreases |data|
   {

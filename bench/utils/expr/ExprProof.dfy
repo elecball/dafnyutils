@@ -39,35 +39,6 @@ module ExprProof {
     }
   }
 
-  lemma AllDigitsForward(text: string, i: nat)
-    requires i <= |text|
-    requires Core.AllDigitsFrom(text, i)
-    ensures Spec.AllDigits(text[i..])
-    decreases |text| - i
-  {
-    if i < |text| {
-      AllDigitsForward(text, i + 1);
-      forall j | 0 <= j < |text[i..]|
-        ensures Spec.IsDigit(text[i..][j])
-      {
-        assert text[i..][j] == text[i + j];
-      }
-    }
-  }
-
-  lemma AllDigitsBackward(text: string, i: nat)
-    requires i <= |text|
-    requires Spec.AllDigits(text[i..])
-    ensures Core.AllDigitsFrom(text, i)
-    decreases |text| - i
-  {
-    if i < |text| {
-      assert text[i..][0] == text[i];
-      assert text[i..][1..] == text[i + 1..];
-      AllDigitsBackward(text, i + 1);
-    }
-  }
-
   // Relates the two recursion directions of `Spec.DecimalValue`.
   lemma {:induction false} DecimalFrontPeel(digits: string)
     requires Spec.AllDigits(digits)
@@ -96,19 +67,17 @@ module ExprProof {
 
   lemma {:induction false} ParseUnsignedPositional(text: string, i: nat, acc: int)
     requires i <= |text|
-    requires Core.AllDigitsFrom(text, i)
     requires Spec.AllDigits(text[i..])
     ensures Core.ParseUnsigned(text, i, acc) ==
             acc * Pow10(|text| - i) + Spec.DecimalValue(text[i..])
     decreases |text| - i
   {
     if i < |text| {
-      var digit := Core.DigitValue(text[i]);
+      var digit := Spec.DigitValue(text[i]);
       var suf := text[i..];
       assert suf[0] == text[i];
       assert suf[1..] == text[i + 1..];
       assert |suf| == |text| - i;
-      AllDigitsForward(text, i + 1);
       ParseUnsignedPositional(text, i + 1, acc * 10 + digit);
       DecimalFrontPeel(suf);
       calc {
@@ -129,10 +98,8 @@ module ExprProof {
     ensures Spec.IntegerValue(text, Core.ParseInteger(text))
   {
     if text[0] == '-' {
-      AllDigitsForward(text, 1);
       ParseUnsignedPositional(text, 1, 0);
     } else {
-      AllDigitsForward(text, 0);
       ParseUnsignedPositional(text, 0, 0);
       assert text[0..] == text;
     }
@@ -144,11 +111,9 @@ module ExprProof {
     ensures Core.ParseInteger(text) == value
   {
     if text[0] == '-' {
-      AllDigitsBackward(text, 1);
       ParseUnsignedPositional(text, 1, 0);
     } else {
       assert text[0..] == text;
-      AllDigitsBackward(text, 0);
       ParseUnsignedPositional(text, 0, 0);
     }
   }
@@ -245,35 +210,6 @@ module ExprProof {
     }
   }
 
-  ghost predicate LexLessFrom(a: string, b: string, i: nat)
-    requires i <= |a|
-    requires i <= |b|
-  {
-    (exists first: nat ::
-       i <= first < |a| &&
-       first < |b| &&
-       a[i..first] == b[i..first] &&
-       a[first] < b[first]) ||
-    (|a| < |b| && a[i..] == b[i..|a|])
-  }
-
-  lemma StringLessFromRefinement(a: string, b: string, i: nat)
-    requires i <= |a|
-    requires i <= |b|
-    ensures Core.StringLessFrom(a, b, i) <==> LexLessFrom(a, b, i)
-    decreases |a| - i, |b| - i
-  {
-    if i < |a| && i < |b| && a[i] == b[i] {
-      StringLessFromRefinement(a, b, i + 1);
-    }
-  }
-
-  lemma StringLessRefinement(a: string, b: string)
-    ensures Core.StringLess(a, b) <==> Spec.StringLess(a, b)
-  {
-    StringLessFromRefinement(a, b, 0);
-  }
-
   lemma ComparisonRefinement(left: string, op: string, right: string)
     ensures Spec.ComparisonRelation(left, op, right, Core.CompareValues(left, op, right))
   {
@@ -289,8 +225,6 @@ module ExprProof {
         IsIntegerBackward(right, r);
         assert false;
       }
-      StringLessRefinement(left, right);
-      StringLessRefinement(right, left);
     }
   }
 
@@ -493,7 +427,7 @@ module ExprProof {
             )
     decreases |tokens| - i, 4
   {
-    if i < |tokens| && Core.IsCompareOp(tokens[i]) {
+    if i < |tokens| && Spec.IsCompareOp(tokens[i]) {
       AddRefinement(tokens, i + 1);
       var right := Core.ParseAdd(tokens, i + 1);
       if right.0 {

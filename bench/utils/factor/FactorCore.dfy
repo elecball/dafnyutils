@@ -1,12 +1,10 @@
-include "FactorTextCore.dfy"
+include "FactorSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "FactorSchema.dfy"
-include "FactorSpec.dfy"
 
 module FactorCore {
-  import Text = FactorTextCore
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
@@ -19,40 +17,18 @@ module FactorCore {
   datatype TokenResult = TokenOk(out: BenchWorld.Bytes) | TokenErr(err: BenchWorld.Bytes)
   datatype RunResult = RunResult(stdout: BenchWorld.Bytes, stderr: BenchWorld.Bytes, hadError: bool)
 
-  function HelpSelected(raw: Schema.FactorCmdRaw): bool
-  {
-    raw.seenHelp &&
-    (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex)
-  }
-
-  function VersionSelected(raw: Schema.FactorCmdRaw): bool
-  {
-    raw.seenVersion &&
-    (!raw.seenHelp || raw.versionTokenIndex < raw.helpTokenIndex)
-  }
-
-  function IsWhitespace(ch: char): bool
-  {
-    ch == ' ' || ch == '\t' || ch == '\n'
-  }
-
-  function IsDigit(ch: char): bool
-  {
-    '0' <= ch && ch <= '9'
-  }
-
   function TrimLeftWhitespace(text: string): string
     decreases |text|
   {
     if |text| == 0 then
       text
-    else if IsWhitespace(text[0]) then
+    else if Spec.IsWhitespace(text[0]) then
       TrimLeftWhitespace(text[1..])
     else
       text
   } by method {
     var cursor := 0;
-    while cursor < |text| && IsWhitespace(text[cursor])
+    while cursor < |text| && Spec.IsWhitespace(text[cursor])
       invariant 0 <= cursor <= |text|
       invariant TrimLeftWhitespace(text) == TrimLeftWhitespace(text[cursor..])
       decreases |text| - cursor
@@ -67,14 +43,14 @@ module FactorCore {
   {
     if |text| == 0 then
       text
-    else if IsWhitespace(text[|text| - 1]) then
+    else if Spec.IsWhitespace(text[|text| - 1]) then
       TrimRightWhitespace(text[..|text| - 1])
     else
       text
   } by method {
     var end := |text|;
     assert text[..end] == text;
-    while 0 < end && IsWhitespace(text[end - 1])
+    while 0 < end && Spec.IsWhitespace(text[end - 1])
       invariant 0 <= end <= |text|
       invariant TrimRightWhitespace(text) == TrimRightWhitespace(text[..end])
       decreases end
@@ -98,7 +74,7 @@ module FactorCore {
   {
     if i >= |text| then
       true
-    else if !IsDigit(text[i]) then
+    else if !Spec.IsDigit(text[i]) then
       false
     else
       AllDigits(text, i + 1)
@@ -109,7 +85,7 @@ module FactorCore {
       invariant AllDigits(text, i) == AllDigits(text, cursor)
       decreases |text| - cursor
     {
-      if !IsDigit(text[cursor]) {
+      if !Spec.IsDigit(text[cursor]) {
         return false;
       }
       cursor := cursor + 1;
@@ -335,8 +311,8 @@ module FactorCore {
     requires fromArgv || token is BenchWorld.Bytes
   {
     var trimmed := TrimWhitespace(token);
-    var invalid := if fromArgv then Text.InvalidArgvTokenMessage(token)
-                   else Text.InvalidTokenMessage(token);
+    var invalid := if fromArgv then Spec.InvalidArgvTokenMessage(token)
+                   else Spec.InvalidTokenMessage(token);
     if |trimmed| == 0 then
       TokenErr(invalid)
     else if trimmed[0] == '-' then
@@ -358,7 +334,7 @@ module FactorCore {
   {
     if i >= |text| then
       []
-    else if IsWhitespace(text[i]) then
+    else if Spec.IsWhitespace(text[i]) then
       SplitWordsFrom(text, i + 1)
     else if text[i] == '\0' then
       [""] + SplitWordsFrom(text, SkipAfterNul(text, i))
@@ -377,7 +353,7 @@ module FactorCore {
                 tokens + SplitWordsFrom(text, cursor)
       decreases |text| - cursor
     {
-      if IsWhitespace(text[cursor]) {
+      if Spec.IsWhitespace(text[cursor]) {
         cursor := cursor + 1;
       } else if text[cursor] == '\0' {
         tokens := tokens + [""];
@@ -403,13 +379,13 @@ module FactorCore {
   {
     if i >= |text| then
       i
-    else if IsWhitespace(text[i]) then
+    else if Spec.IsWhitespace(text[i]) then
       i + 1
     else
       SkipAfterNul(text, i + 1)
   } by method {
     var cursor := i;
-    while cursor < |text| && !IsWhitespace(text[cursor])
+    while cursor < |text| && !Spec.IsWhitespace(text[cursor])
       invariant i <= cursor <= |text|
       invariant SkipAfterNul(text, i) == SkipAfterNul(text, cursor)
       decreases |text| - cursor
@@ -422,19 +398,19 @@ module FactorCore {
   function WordEnd(text: BenchWorld.Bytes, i: nat): nat
     requires i <= |text|
     ensures i <= WordEnd(text, i) <= |text|
-    ensures i < |text| && !IsWhitespace(text[i]) && text[i] != '\0' ==> i < WordEnd(text, i)
+    ensures i < |text| && !Spec.IsWhitespace(text[i]) && text[i] != '\0' ==> i < WordEnd(text, i)
     decreases |text| - i
   {
     if i >= |text| then
       i
-    else if IsWhitespace(text[i]) || text[i] == '\0' then
+    else if Spec.IsWhitespace(text[i]) || text[i] == '\0' then
       i
     else
       WordEnd(text, i + 1)
   } by method {
     var cursor := i;
     while cursor < |text| &&
-      !IsWhitespace(text[cursor]) &&
+      !Spec.IsWhitespace(text[cursor]) &&
       text[cursor] != '\0'
       invariant i <= cursor <= |text|
       invariant WordEnd(text, i) == WordEnd(text, cursor)
@@ -494,12 +470,12 @@ module FactorCore {
   twostate predicate PreparedSummary(raw: Schema.FactorCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     reads io.Footprint()
   {
-    if HelpSelected(raw) then
+    if Spec.HelpSelected(raw) then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) + Spec.HelpTextSpec() &&
       plannedStderr == old(io.stderr()) &&
       exit == 0
-    else if VersionSelected(raw) then
+    else if Spec.VersionSelected(raw) then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) + Spec.VersionTextSpec() &&
       plannedStderr == old(io.stderr()) &&
@@ -536,7 +512,7 @@ module FactorCore {
     plannedStdout := [];
     plannedStderr := [];
     ghost var preStdin := io.stdin();
-    var help := HelpSelected(raw);
+    var help := Spec.HelpSelected(raw);
     if help {
       var out := Spec.HelpTextSpec();
       plannedStdout := plannedStdout + (out);
@@ -544,7 +520,7 @@ module FactorCore {
       return;
     }
 
-    var version := VersionSelected(raw);
+    var version := Spec.VersionSelected(raw);
     if version {
       var out := Spec.VersionTextSpec();
       plannedStdout := plannedStdout + (out);
@@ -568,7 +544,7 @@ module FactorCore {
     var diagnostics := run.stderr;
     if readErr != 0 {
       var reason := io.GetCLocaleErrnoText(readErr);
-      diagnostics := diagnostics + Text.ReadErrorText(reason);
+      diagnostics := diagnostics + Spec.ReadErrorText(reason);
     }
     plannedStdout := plannedStdout + (run.stdout);
     plannedStderr := plannedStderr + (diagnostics);
@@ -595,7 +571,7 @@ module FactorCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
                                               else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));

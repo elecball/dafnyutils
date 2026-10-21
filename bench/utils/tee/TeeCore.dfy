@@ -1,12 +1,10 @@
-include "TeeTextCore.dfy"
+include "TeeSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "TeeSchema.dfy"
-include "TeeSpec.dfy"
 
 module TeeCore {
-  import Text = TeeTextCore
 
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
@@ -80,31 +78,10 @@ module TeeCore {
         exit == (if prefixExit == 0 && stepExit == 0 then 0 else 1)
   }
 
-  function Command(raw: Schema.TeeCmdRaw): Schema.TeeCmd
-  {
-    var mode :=
-      if raw.seenHelp && (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) then
-        Schema.ModeHelp
-      else if raw.seenVersion then
-        Schema.ModeVersion
-      else
-        Schema.ModeRun;
-    Schema.TeeCmd(mode, raw.seenAppend, raw.seenIgnoreInterrupts, raw.operands)
-  } by method {
-    var mode :=
-      if raw.seenHelp && (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) then
-        Schema.ModeHelp
-      else if raw.seenVersion then
-        Schema.ModeVersion
-      else
-        Schema.ModeRun;
-    return Schema.TeeCmd(mode, raw.seenAppend, raw.seenIgnoreInterrupts, raw.operands);
-  }
-
   opaque twostate predicate PreparedSummary(raw: Schema.TeeCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
     reads io.fsRegion, io.stdinRegion
   {
-    var cmd := Command(raw);
+    var cmd := Spec.CommandSpec(raw);
     if cmd.mode == Schema.ModeHelp then
       io.fs() == old(io.fs()) &&
       io.stdin() == old(io.stdin()) &&
@@ -165,16 +142,16 @@ module TeeCore {
   }
 
   method GetReadErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError) returns (msg: BenchWorld.Bytes)
-    ensures msg == Text.ReadErrorMessageSpec(path, err)
+    ensures msg == Spec.ReadErrorMessageSpec(path, err)
   {
-    msg := Text.ReadErrorMessageSpec(path, err);
+    msg := Spec.ReadErrorMessageSpec(path, err);
   }
 
   method GetWriteErrorMessage(path: BenchWorld.Path, err: int, io: BenchIO.IO) returns (msg: BenchWorld.Bytes)
     ensures msg == Spec.WriteErrorMessageSpec(path, err)
   {
     var reason := GetWriteErrnoText(err, io);
-    msg := Text.WriteErrorMessageText(path, reason);
+    msg := Spec.WriteErrorMessageText(path, reason);
   }
 
   method WriteOne(
@@ -250,7 +227,7 @@ module TeeCore {
     ghost var preProps := io.props();
     ghost var preCredentials := io.credentials();
     ghost var preTrustedFilesystem := io.trustedFilesystem();
-    var cmd := Command(raw);
+    var cmd := Spec.CommandSpec(raw);
     match cmd.mode
     case ModeHelp =>
       var out := GetHelpText();
@@ -277,7 +254,7 @@ module TeeCore {
       var diagnostics := errOut;
       if read.Err? {
         var reason := io.GetCLocaleErrnoText(IOContract.ResultErrno(read));
-        diagnostics := diagnostics + Text.StdinReadErrorText(reason);
+        diagnostics := diagnostics + Spec.StdinReadErrorText(reason);
       }
       plannedStdout := plannedStdout + (input);
       plannedStderr := plannedStderr + (diagnostics);
@@ -319,10 +296,10 @@ module TeeCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Text.WriteErrorText(raw, reason);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(raw, reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-                                              else Text.WriteErrorText(raw, StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(raw, StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {

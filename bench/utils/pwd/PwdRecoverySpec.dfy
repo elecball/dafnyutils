@@ -28,14 +28,14 @@ module PwdRecoverySpec {
     case _ => failure.err
   }
 
-  ghost predicate ValidRecoveryFailure(failure: RecoveryFailure)
+  predicate ValidRecoveryFailure(failure: RecoveryFailure)
   {
     (failure.MemoryExhausted? || failure.ParentEntryMissing? || failure.err > 0) &&
     (failure.MemoryExhausted? || failure.RootAttributesFailed? ||
      failure.CurrentDirectoryStatusFailed? || failure.height >= 1)
   }
 
-  ghost function ParentArgumentText(height: nat): string
+  function ParentArgumentText(height: nat): string
     requires height >= 1
   {
     seq(3 * height - 1, i => if i % 3 == 2 then '/' else '.')
@@ -91,8 +91,8 @@ module PwdRecoverySpec {
     " with matching i-node\n"
   }
 
-  ghost function RecoveryFailureText(failure: RecoveryFailure,
-                                     quotedArgument: BenchWorld.Bytes, reason: string): BenchWorld.Bytes
+  function RecoveryFailureText(failure: RecoveryFailure,
+                               quotedArgument: BenchWorld.Bytes, reason: string): BenchWorld.Bytes
   {
     var suffix := RecoveryFailureTextPart1() + Utf8.Encode(reason) + RecoveryFailureTextPart2();
     match failure
@@ -126,7 +126,7 @@ module PwdRecoverySpec {
     RecoveryFailureText(failure, quoted, reason)
   }
 
-  ghost predicate LogicalTextFields(pwd: string)
+  predicate LogicalTextFields(pwd: string)
   {
     BenchWorld.IsAbsolutePath(pwd) &&
     var components := BenchWorld.SplitSegments(BenchWorld.StripLeadingSlash(pwd), 0, 0);
@@ -150,13 +150,13 @@ module PwdRecoverySpec {
     read: BenchWorld.IOResult<BenchWorld.DirectoryRead>,
     entryStatus: seq<BenchWorld.IOResult<BenchWorld.FileStatus>>)
 
-  ghost predicate EntryNameFields(name: string)
+  predicate EntryNameFields(name: string)
   {
     BenchWorld.InodeChildNameValid(name)
   }
 
-  ghost predicate EntryNeedsStatusFields(child: BenchWorld.FileStatus,
-                                         parent: BenchWorld.FileStatus, entry: BenchWorld.DirectoryRead)
+  predicate EntryNeedsStatusFields(child: BenchWorld.FileStatus,
+                                   parent: BenchWorld.FileStatus, entry: BenchWorld.DirectoryRead)
   {
     entry.DirectoryItem? &&
     (entry.inode == 0 || parent.hostKey.device != child.hostKey.device)
@@ -290,7 +290,7 @@ module PwdRecoverySpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): BenchWorld.Bytes
+  function WriteErrorText(reason: string): BenchWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

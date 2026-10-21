@@ -1,18 +1,14 @@
-include "UniqTextCore.dfy"
+include "UniqSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "UniqSchema.dfy"
-include "UniqSpec.dfy"
 
 module UniqCore {
-  import Text = UniqTextCore
-
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = UniqUtf8Core
   import BenchWorld
   import IOContract
   import Spec = UniqSpec
@@ -20,145 +16,26 @@ module UniqCore {
 
   // Deferred GNU behavior: non-"-" OUTPUT operands require file-content
   // write/truncate effects that are not currently exposed by BenchIO.IO.
-  function InputFromOperands(
-    operands: seq<string>
-  ): UniqSchema.Input
-  {
-    if |operands| > 0 && operands[0] != "-" then
-      UniqSchema.File(operands[0])
-    else
-      UniqSchema.Stdin
-  } by method {
-    return if |operands| > 0 && operands[0] != "-" then
-        UniqSchema.File(operands[0])
-      else
-        UniqSchema.Stdin;
-  }
-
-  function Command(
-    raw: UniqSchema.UniqCmdRaw
-  ): UniqSchema.UniqCmd
-  {
-    var mode :=
-      if raw.seenHelp &&
-         (!raw.seenVersion ||
-          raw.helpTokenIndex <= raw.versionTokenIndex) then
-        UniqSchema.ModeHelp
-      else if raw.seenVersion then
-        UniqSchema.ModeVersion
-      else if UniqSchema.UnsupportedSkipOperand(raw.operands) != "" then
-        UniqSchema.ModeUnsupportedSkipChars(
-          UniqSchema.UnsupportedSkipOperand(raw.operands)
-        )
-      else if |raw.operands| > 2 then
-        UniqSchema.ModeExtraOperand(raw.operands[2])
-      else if |raw.operands| == 2 && raw.operands[1] != "-" then
-        UniqSchema.ModeUnsupportedOutput(raw.operands[1])
-      else
-        UniqSchema.ModeRun;
-    UniqSchema.UniqCmd(
-      mode,
-      raw.seenCount,
-      !raw.seenRepeated,
-      !raw.seenUnique,
-      raw.seenIgnoreCase,
-      raw.skipFields,
-      InputFromOperands(raw.operands)
-    )
-  } by method {
-    var mode :=
-      if raw.seenHelp &&
-         (!raw.seenVersion ||
-          raw.helpTokenIndex <= raw.versionTokenIndex) then
-        UniqSchema.ModeHelp
-      else if raw.seenVersion then
-        UniqSchema.ModeVersion
-      else if UniqSchema.UnsupportedSkipOperand(raw.operands) != "" then
-        UniqSchema.ModeUnsupportedSkipChars(
-          UniqSchema.UnsupportedSkipOperand(raw.operands)
-        )
-      else if |raw.operands| > 2 then
-        UniqSchema.ModeExtraOperand(raw.operands[2])
-      else if |raw.operands| == 2 && raw.operands[1] != "-" then
-        UniqSchema.ModeUnsupportedOutput(raw.operands[1])
-      else
-        UniqSchema.ModeRun;
-    return UniqSchema.UniqCmd(
-        mode,
-        raw.seenCount,
-        !raw.seenRepeated,
-        !raw.seenUnique,
-        raw.seenIgnoreCase,
-        raw.skipFields,
-        InputFromOperands(raw.operands)
-      );
-  }
-
-  function LowerAscii(ch: BenchWorld.RawByte): BenchWorld.RawByte
-  {
-    var code := ch as int;
-    if ('A' as int) <= code <= ('Z' as int) then
-      (code + (('a' as int) - ('A' as int))) as char
-    else
-      ch
-  } by method {
-    var code := ch as int;
-    if ('A' as int) <= code <= ('Z' as int) {
-      return (code + (('a' as int) - ('A' as int))) as char;
-    } else {
-      return ch;
-    }
-  }
-
-  function EqualFoldAscii(
-    a: BenchWorld.Bytes,
-    b: BenchWorld.Bytes
-  ): bool
-    decreases |a|
-  {
-    if |a| != |b| then
-      false
-    else if |a| == 0 then
-      true
-    else
-      LowerAscii(a[0]) == LowerAscii(b[0]) &&
-      EqualFoldAscii(a[1..], b[1..])
-  } by method {
-    if |a| != |b| {
-      return false;
-    } else if |a| == 0 {
-      return true;
-    } else {
-      return LowerAscii(a[0]) == LowerAscii(b[0]) &&
-             EqualFoldAscii(a[1..], b[1..]);
-    }
-  }
-
-  function IsFieldBlank(ch: BenchWorld.RawByte): bool
-  {
-    ch == ' ' || ch == '\t'
-  }
-
   function SkipBlanks(line: BenchWorld.Bytes, i: nat): nat
     requires i <= |line|
     ensures i <= SkipBlanks(line, i) <= |line|
-    ensures i < |line| && IsFieldBlank(line[i]) ==> i < SkipBlanks(line, i)
-    ensures forall j: nat :: i <= j < SkipBlanks(line, i) ==> IsFieldBlank(line[j])
-    ensures SkipBlanks(line, i) < |line| ==> !IsFieldBlank(line[SkipBlanks(line, i)])
+    ensures i < |line| && Spec.IsFieldBlank(line[i]) ==> i < SkipBlanks(line, i)
+    ensures forall j: nat :: i <= j < SkipBlanks(line, i) ==> Spec.IsFieldBlank(line[j])
+    ensures SkipBlanks(line, i) < |line| ==> !Spec.IsFieldBlank(line[SkipBlanks(line, i)])
     decreases |line| - i
   {
-    if i < |line| && IsFieldBlank(line[i]) then SkipBlanks(line, i + 1) else i
+    if i < |line| && Spec.IsFieldBlank(line[i]) then SkipBlanks(line, i + 1) else i
   }
 
   function SkipNonBlanks(line: BenchWorld.Bytes, i: nat): nat
     requires i <= |line|
     ensures i <= SkipNonBlanks(line, i) <= |line|
-    ensures i < |line| && !IsFieldBlank(line[i]) ==> i < SkipNonBlanks(line, i)
-    ensures forall j: nat :: i <= j < SkipNonBlanks(line, i) ==> !IsFieldBlank(line[j])
-    ensures SkipNonBlanks(line, i) < |line| ==> IsFieldBlank(line[SkipNonBlanks(line, i)])
+    ensures i < |line| && !Spec.IsFieldBlank(line[i]) ==> i < SkipNonBlanks(line, i)
+    ensures forall j: nat :: i <= j < SkipNonBlanks(line, i) ==> !Spec.IsFieldBlank(line[j])
+    ensures SkipNonBlanks(line, i) < |line| ==> Spec.IsFieldBlank(line[SkipNonBlanks(line, i)])
     decreases |line| - i
   {
-    if i < |line| && !IsFieldBlank(line[i]) then SkipNonBlanks(line, i + 1) else i
+    if i < |line| && !Spec.IsFieldBlank(line[i]) then SkipNonBlanks(line, i + 1) else i
   }
 
   function SkipFieldsIndex(line: BenchWorld.Bytes, start: nat, count: nat): nat
@@ -181,12 +58,12 @@ module UniqCore {
   {
     var left := a[SkipFieldsIndex(a, 0, cmd.skipFields)..];
     var right := b[SkipFieldsIndex(b, 0, cmd.skipFields)..];
-    if cmd.ignoreCase then EqualFoldAscii(left, right) else left == right
+    if cmd.ignoreCase then Spec.EqualFoldAscii(left, right) else left == right
   } by method {
     var left := a[SkipFieldsIndex(a, 0, cmd.skipFields)..];
     var right := b[SkipFieldsIndex(b, 0, cmd.skipFields)..];
     if cmd.ignoreCase {
-      return EqualFoldAscii(left, right);
+      return Spec.EqualFoldAscii(left, right);
     } else {
       return left == right;
     }
@@ -265,86 +142,20 @@ module UniqCore {
     }
   }
 
-  function DigitChar(d: int): BenchWorld.RawByte
-  {
-    if 0 <= d < 10 then
-      (d + ('0' as int)) as char
-    else
-      '0'
-  } by method {
-    if 0 <= d < 10 {
-      return (d + ('0' as int)) as char;
-    } else {
-      return '0';
-    }
-  }
-
-  function Digits(n: nat): BenchWorld.Bytes
-    decreases n
-  {
-    if n < 10 then
-      [DigitChar(n as int)]
-    else
-      Digits(n / 10) + [DigitChar((n % 10) as int)]
-  } by method {
-    if n < 10 {
-      return [DigitChar(n as int)];
-    } else {
-      return Digits(n / 10) + [DigitChar((n % 10) as int)];
-    }
-  }
-
-  function PadLeft(
-    text: BenchWorld.Bytes,
-    width: int
-  ): BenchWorld.Bytes
-    decreases width - |text|
-  {
-    if |text| >= width then
-      text
-    else
-      PadLeft([' '] + text, width)
-  } by method {
-    if |text| >= width {
-      return text;
-    } else {
-      return PadLeft([' '] + text, width);
-    }
-  }
-
-  function CountPrefix(count: nat): BenchWorld.Bytes
-  {
-    PadLeft(Digits(count), 7) + [' ']
-  } by method {
-    return PadLeft(Digits(count), 7) + [' '];
-  }
-
-  function ShouldOutputGroup(
-    cmd: UniqSchema.UniqCmd,
-    group: Spec.Group
-  ): bool
-  {
-    (group.count == 1 && cmd.outputUnique) ||
-    (group.count > 1 && cmd.outputRepeated)
-  } by method {
-    return (group.count == 1 && cmd.outputUnique) ||
-           (group.count > 1 && cmd.outputRepeated);
-  }
-
   function RenderGroup(
     cmd: UniqSchema.UniqCmd,
     group: Spec.Group
   ): BenchWorld.Bytes
   {
-    if ShouldOutputGroup(cmd, group) then
-      (if cmd.countOccurrences then CountPrefix(group.count) else []) +
+    if Spec.ShouldOutputGroup(cmd, group) then
+      (if cmd.countOccurrences then Spec.CountPrefix(group.count) else []) +
       group.line + ['\n']
     else
       []
   } by method {
-    if ShouldOutputGroup(cmd, group) {
+    if Spec.ShouldOutputGroup(cmd, group) {
       var prefix :=
-        if cmd.countOccurrences then CountPrefix(group.count) else [];
+        if cmd.countOccurrences then Spec.CountPrefix(group.count) else [];
       return prefix + group.line + ['\n'];
     } else {
       return [];
@@ -401,18 +212,18 @@ module UniqCore {
   ): BenchWorld.Bytes
   {
     match input
-    case Stdin => if result.Err? then Text.StdinReadErrorMessage(result.e) else []
+    case Stdin => if result.Err? then Spec.StdinReadErrorMessage(result.e) else []
     case File(path) =>
       match result
       case Ok(_) => []
-      case Err(err) => Text.ReadErrorMessageSpec(path, err)
+      case Err(err) => Spec.ReadErrorMessageSpec(path, err)
   } by method {
     match input
-    case Stdin => return if result.Err? then Text.StdinReadErrorMessage(result.e) else [];
+    case Stdin => return if result.Err? then Spec.StdinReadErrorMessage(result.e) else [];
     case File(path) =>
       match result
       case Ok(_) => return [];
-      case Err(err) => return Text.ReadErrorMessageSpec(path, err);
+      case Err(err) => return Spec.ReadErrorMessageSpec(path, err);
   }
 
   function HadInputError(
@@ -454,7 +265,7 @@ module UniqCore {
     case Stdin =>
       readResults[0] == IOContract.ObservedReadStdinResultFields(preStdin, preStreams) &&
       OutputRelation(cmd, IOContract.ReadResultData(readResults[0]), stdoutPart) &&
-      stderrPart == (if readResults[0].Err? then Text.StdinReadErrorMessage(readResults[0].e) else []) &&
+      stderrPart == (if readResults[0].Err? then Spec.StdinReadErrorMessage(readResults[0].e) else []) &&
       hadError == readResults[0].Err?
     case File(path) =>
       readResults[0] == IOContract.ObservedReadFileResultFields(
@@ -467,7 +278,7 @@ module UniqCore {
         !hadError
       case Err(err) =>
         stdoutPart == [] &&
-        stderrPart == Text.ReadErrorMessageSpec(path, err) &&
+        stderrPart == Spec.ReadErrorMessageSpec(path, err) &&
         hadError
   }
 
@@ -482,7 +293,7 @@ module UniqCore {
   , plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
     reads io.stdinRegion
   {
-    var cmd := Command(raw);
+    var cmd := Spec.Command(raw);
     match cmd.mode
     case ModeHelp =>
       io.stdin() == old(io.stdin()) &&
@@ -498,19 +309,19 @@ module UniqCore {
       io.stdin() == old(io.stdin()) &&
       plannedStdout == [] &&
       plannedStderr ==
-      Text.UnsupportedOutputMessageSpec(path) &&
+      Spec.UnsupportedOutputMessageSpec(path) &&
       exit == 1
     case ModeUnsupportedSkipChars(operand) =>
       io.stdin() == old(io.stdin()) &&
       plannedStdout == [] &&
       plannedStderr ==
-      Text.UnsupportedSkipCharsMessageSpec(operand) &&
+      Spec.UnsupportedSkipCharsMessageSpec(operand) &&
       exit == 1
     case ModeExtraOperand(operand) =>
       io.stdin() == old(io.stdin()) &&
       plannedStdout == [] &&
       plannedStderr ==
-      Text.ExtraOperandMessageSpec(operand) &&
+      Spec.ExtraOperandMessageSpec(operand) &&
       exit == 1
     case ModeRun =>
       InputTraceRelation(
@@ -547,25 +358,25 @@ module UniqCore {
   method UnsupportedOutputMessage(
     path: BenchWorld.Path
   ) returns (msg: BenchWorld.Bytes)
-    ensures msg == Text.UnsupportedOutputMessageSpec(path)
+    ensures msg == Spec.UnsupportedOutputMessageSpec(path)
   {
-    msg := Text.UnsupportedOutputMessageSpec(path);
+    msg := Spec.UnsupportedOutputMessageSpec(path);
   }
 
   method UnsupportedSkipCharsMessage(
     operand: string
   ) returns (msg: BenchWorld.Bytes)
-    ensures msg == Text.UnsupportedSkipCharsMessageSpec(operand)
+    ensures msg == Spec.UnsupportedSkipCharsMessageSpec(operand)
   {
-    msg := Text.UnsupportedSkipCharsMessageSpec(operand);
+    msg := Spec.UnsupportedSkipCharsMessageSpec(operand);
   }
 
   method ExtraOperandMessage(
     operand: string
   ) returns (msg: BenchWorld.Bytes)
-    ensures msg == Text.ExtraOperandMessageSpec(operand)
+    ensures msg == Spec.ExtraOperandMessageSpec(operand)
   {
-    msg := Text.ExtraOperandMessageSpec(operand);
+    msg := Spec.ExtraOperandMessageSpec(operand);
   }
 
   method {:isolate_assertions} Prepare(
@@ -592,7 +403,7 @@ module UniqCore {
     stdoutPart := [];
     stderrPart := [];
     hadError := false;
-    var cmd := Command(raw);
+    var cmd := Spec.Command(raw);
 
     match cmd.mode {
       case ModeHelp =>
@@ -620,7 +431,7 @@ module UniqCore {
         assert io.stdin() == preStdin;
         assert plannedOut == [];
         assert plannedErr ==
-               Text.UnsupportedOutputMessageSpec(path);
+               Spec.UnsupportedOutputMessageSpec(path);
         return;
 
       case ModeUnsupportedSkipChars(operand) =>
@@ -630,7 +441,7 @@ module UniqCore {
         assert io.stdin() == preStdin;
         assert plannedOut == [];
         assert plannedErr ==
-               Text.UnsupportedSkipCharsMessageSpec(operand);
+               Spec.UnsupportedSkipCharsMessageSpec(operand);
         return;
 
       case ModeExtraOperand(operand) =>
@@ -640,7 +451,7 @@ module UniqCore {
         assert io.stdin() == preStdin;
         assert plannedOut == [];
         assert plannedErr ==
-               Text.ExtraOperandMessageSpec(operand);
+               Spec.ExtraOperandMessageSpec(operand);
         return;
 
       case ModeRun =>
@@ -699,10 +510,10 @@ module UniqCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);

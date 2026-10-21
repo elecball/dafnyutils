@@ -1,12 +1,12 @@
-include "ChmodTextCore.dfy"
-include "ChmodRecursiveTextCore.dfy"
+include "ChmodRecursiveSpec.dfy"
+include "ChmodSpec.dfy"
 include "ChmodEntryRuntime.dfy"
 include "ChmodProof.dfy"
 include "ChmodTraversalProof.dfy"
 
 module ChmodChangeRuntime {
-  import Text = ChmodTextCore
-  import RecursiveText = ChmodRecursiveTextCore
+  import Text = ChmodSpec
+  import RecursiveText = ChmodRecursiveSpec
   import W = BenchWorld
   import BenchIO
   import C = IOContract
@@ -30,18 +30,13 @@ module ChmodChangeRuntime {
                                                                                                                                      before,requested,isDir,fs,postOk,postMode,postErr)))
   {
     BaseProof.BridgeNaiveMode(plan,before,isDir);
-    BaseProof.BridgePostChangeLookupNeeded(cmd,requested);
+
     BaseProof.BridgeDiagnoseSurprise(cmd,plan,before,requested,isDir);
-    BaseProof.BridgeSuccessStdout(cmd,path,before,requested);
-    BaseProof.BridgeRetainedMessage(path,requested);
-    BaseProof.BridgeSurpriseModeMessage(path,requested,Base.CoreNaiveMode(plan,before,isDir));
-    if Base.CorePostChangeLookupNeeded(cmd,requested) && postOk {
+
+    if BaseSpec.SpecPostChangeLookupNeeded(cmd,requested) && postOk {
       BaseProof.BridgeDiagnoseSurprise(cmd,plan,before,postMode,isDir);
-      BaseProof.BridgeSuccessStdout(cmd,path,before,postMode);
-      BaseProof.BridgeSurpriseModeMessage(path,postMode,Base.CoreNaiveMode(plan,before,isDir));
+
     }
-    assert Base.GettingNewAttributesMessageCore(path,C.CLocaleErrnoTextResult(postErr))==
-           BaseSpec.GettingNewAttributesMessageSpec(path,C.CLocaleErrnoTextResult(postErr));
     assert BaseSpec.SuccessOutputRelation(cmd,BaseProof.SpecModePlanOfCore(plan),path,before,requested,isDir,fs,
                                           postOk,postMode,postErr,BaseProof.SpecPathResultOfCore(Base.SuccessfulChangeResultForPost(cmd,plan,path,
                                                                                                                                     before,requested,isDir,fs,postOk,postMode,postErr))) by {
@@ -68,8 +63,8 @@ module ChmodChangeRuntime {
                                io.statusCursor(), io.cwdContext(), BaseProof.SpecPathResultOfCore(result))
     ensures result.fs == io.fs() && result.ok == ok
     ensures output.stdout == old(output.stdout)+result.stdoutChunk && output.stderr == old(output.stderr)+result.stderrChunk
-    ensures io.statusCursor() == old(io.statusCursor())+(if Base.CorePostChangeLookupNeeded(cmd, requested) then 1 else 0)
-    ensures io.cwdContext() == Operand.AtOffset(old(io.cwdContext()), if Base.CorePostChangeLookupNeeded(cmd, requested) then 1 else 0)
+    ensures io.statusCursor() == old(io.statusCursor())+(if BaseSpec.SpecPostChangeLookupNeeded(cmd, requested) then 1 else 0)
+    ensures io.cwdContext() == Operand.AtOffset(old(io.cwdContext()), if BaseSpec.SpecPostChangeLookupNeeded(cmd, requested) then 1 else 0)
     ensures Operand.AnchorFields(io, native.operand)
   {
     hide *;
@@ -83,7 +78,7 @@ module ChmodChangeRuntime {
     var postOk := true;
     var postMode := requested;
     var postErr := 0;
-    if Base.CorePostChangeLookupNeeded(cmd, requested) {
+    if BaseSpec.SpecPostChangeLookupNeeded(cmd, requested) {
       var post := Dispatch.ReadStatus(native.operand, true, io);
       postOk := post.Ok?;
       postMode := C.ResultValue(post, W.DEFAULT_FILE_STATUS).mode;
@@ -92,7 +87,7 @@ module ChmodChangeRuntime {
     } else {
       assert io.cwdContext() == Operand.AtOffset(native0, 0) by { reveal Operand.AtOffset(); }
     }
-    Frame.Offset(native0, if Base.CorePostChangeLookupNeeded(cmd, requested) then 1 else 0);
+    Frame.Offset(native0, if BaseSpec.SpecPostChangeLookupNeeded(cmd, requested) then 1 else 0);
     ok := Base.AppendSuccessfulChangeOutputCore(cmd, plan, native.displayPath, before, requested, native.isDirectory,
                                                 postOk, postMode, postErr, io, output);
     ghost var post := Operand.StatusAt(context, fs0, native0, native.operand, 0, true);
@@ -103,7 +98,7 @@ module ChmodChangeRuntime {
     assert result == actualResult by { reveal Base.SuccessfulChangeResultForPost(); }
     BridgeSuccessOutput(cmd, plan, native.displayPath, before, requested, native.isDirectory, fs0,
                         post.Ok?, C.ResultValue(post, W.DEFAULT_FILE_STATUS).mode, C.ResultErrno(post));
-    BaseProof.BridgePostChangeLookupNeeded(cmd, requested);
+
     assert Spec.SuccessFields(cmd, BaseProof.SpecModePlanOfCore(plan), scope, entry, fs0, native0, cursor0,
                               before, requested, io.statusCursor(), io.cwdContext(), BaseProof.SpecPathResultOfCore(result)) by {
       reveal Spec.SuccessFields();

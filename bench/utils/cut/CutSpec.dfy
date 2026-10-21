@@ -57,12 +57,6 @@ module CutSpec {
     + "Written by David M. Ihnat, David MacKenzie, and Jim Meyering.\n"
   }
 
-
-
-
-
-
-
   function ErrnoText(err: BenchWorld.IOError): string
   {
     match err
@@ -79,7 +73,7 @@ module CutSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     ErrorMessageText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ErrorMessageText1 + Utf8.Encode(ErrnoText(err)) + ErrorMessageText2
   }
@@ -97,7 +91,7 @@ module CutSpec {
     if zeroTerminated then '\0' else '\n'
   }
 
-  ghost function OutputDelimiterBytes(delimiter: CutSchema.OutputDelimiter): BenchWorld.Bytes
+  function OutputDelimiterBytes(delimiter: CutSchema.OutputDelimiter): BenchWorld.Bytes
   {
     match delimiter
     case OutputDefault => []
@@ -109,7 +103,7 @@ module CutSpec {
     forall i, j :: 0 <= i < j < |indices| ==> indices[i] < indices[j]
   }
 
-  ghost predicate PositionSelected(selection: CutSchema.Selection, position: int)
+  predicate PositionSelected(selection: CutSchema.Selection, position: int)
   {
     1 <= position &&
     selection.complement !=
@@ -117,7 +111,7 @@ module CutSpec {
                  RangeContains(selection.ranges[i], position))
   }
 
-  ghost predicate DelimiterBeforeSelected(
+  predicate DelimiterBeforeSelected(
     command: CutSchema.CutCmdRaw,
     position: int
   )
@@ -393,7 +387,7 @@ module CutSpec {
     true
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }

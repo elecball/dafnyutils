@@ -18,9 +18,6 @@ module ReadlinkSpec {
   import Schema = ReadlinkSchema
   import SE = StringEscaping
 
-
-
-
   function ErrnoTextSpec(err: BenchWorld.IOError): string
   {
     match err
@@ -36,8 +33,6 @@ module ReadlinkSpec {
     case StreamFailure(_, message, _, _) => message
     case TimeParseFailure(message, _, _) => message
   }
-
-
 
   function HelpTextSpec(): BenchWorld.Bytes
   {
@@ -113,7 +108,7 @@ module ReadlinkSpec {
     "\n"
   }
 
-  ghost function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     ErrorMessageSpecPart1() + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ErrorMessageSpecPart2() + ErrnoTextSpec(err) + ErrorMessageSpecPart3()
   }
@@ -151,7 +146,7 @@ module ReadlinkSpec {
     if cmd.noNewline && |cmd.operands| > 1 then NoNewlineWarningSpec() else ""
   }
 
-  ghost function MakeAbsoluteSpec(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
+  function MakeAbsoluteSpec(cwd: BenchWorld.Path, path: BenchWorld.Path): BenchWorld.Path
   {
     if BenchWorld.IsAbsolutePath(path) then
       path
@@ -297,7 +292,7 @@ module ReadlinkSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

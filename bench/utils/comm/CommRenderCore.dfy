@@ -1,58 +1,14 @@
-include "CommTextCore.dfy"
+include "CommRenderSpec.dfy"
 include "../../core/World.dfy"
 include "CommSchema.dfy"
 
 module CommRenderCore {
-  import Text = CommTextCore
+  import Spec = CommRenderSpec
 
   import BenchWorld
-  import Utf8 = CommUtf8Core
   import Schema = CommSchema
 
   datatype LineOrder = LineLess | LineEqual | LineGreater
-  datatype ColumnCounts = ColumnCounts(first: nat, second: nat, both: nat)
-
-  function AddFirst(counts: ColumnCounts): ColumnCounts
-  {
-    ColumnCounts(counts.first + 1, counts.second, counts.both)
-  }
-
-  function AddSecond(counts: ColumnCounts): ColumnCounts
-  {
-    ColumnCounts(counts.first, counts.second + 1, counts.both)
-  }
-
-  function AddBoth(counts: ColumnCounts): ColumnCounts
-  {
-    ColumnCounts(counts.first, counts.second, counts.both + 1)
-  }
-
-  function RecordDelimiter(zeroTerminated: bool): BenchWorld.RawByte
-  {
-    if zeroTerminated then '\0' else '\n'
-  }
-
-  function RecordTerminator(cmd: Schema.CommCmd): BenchWorld.Bytes
-  {
-    [RecordDelimiter(cmd.zeroTerminated)]
-  }
-
-  function DelimiterValuesMatch(first: string, rest: seq<string>): bool
-    decreases |rest|
-  {
-    if |rest| == 0 then true else rest[0] == first && DelimiterValuesMatch(first, rest[1..])
-  }
-
-  function HasConflictingOutputDelimiters(values: seq<string>): bool
-  {
-    |values| > 0 && !DelimiterValuesMatch(values[0], values[1..])
-  }
-
-  function OutputDelimiterFromValues(values: seq<string>): BenchWorld.Bytes
-  {
-    if |values| == 0 then ['\t'] else if values[0] == "" then ['\0'] else Utf8.Encode(values[0])
-  }
-
   function RecordsFrom(data: BenchWorld.Bytes, current: BenchWorld.Bytes, delimiter: char): seq<BenchWorld.Bytes>
     decreases |data|
   {
@@ -86,32 +42,6 @@ module CommRenderCore {
       CompareRecords(left[1..], right[1..])
   }
 
-  function Column2Prefix(cmd: Schema.CommCmd): BenchWorld.Bytes
-  {
-    if cmd.suppress1 then [] else cmd.outputDelimiter
-  }
-
-  function Column3Prefix(cmd: Schema.CommCmd): BenchWorld.Bytes
-  {
-    (if cmd.suppress1 then [] else cmd.outputDelimiter) +
-    (if cmd.suppress2 then [] else cmd.outputDelimiter)
-  }
-
-  function RenderOnlyFirst(cmd: Schema.CommCmd, record: BenchWorld.Bytes): BenchWorld.Bytes
-  {
-    if cmd.suppress1 then [] else record + RecordTerminator(cmd)
-  }
-
-  function RenderOnlySecond(cmd: Schema.CommCmd, record: BenchWorld.Bytes): BenchWorld.Bytes
-  {
-    if cmd.suppress2 then [] else Column2Prefix(cmd) + record + RecordTerminator(cmd)
-  }
-
-  function RenderBoth(cmd: Schema.CommCmd, record: BenchWorld.Bytes): BenchWorld.Bytes
-  {
-    if cmd.suppress3 then [] else Column3Prefix(cmd) + record + RecordTerminator(cmd)
-  }
-
   function RenderRecords(
     cmd: Schema.CommCmd,
     left: seq<BenchWorld.Bytes>,
@@ -123,37 +53,37 @@ module CommRenderCore {
       if |right| == 0 then
         []
       else
-        RenderOnlySecond(cmd, right[0]) + RenderRecords(cmd, left, right[1..])
+        Spec.RenderFragment(cmd, Spec.OnlySecond, right[0]) + RenderRecords(cmd, left, right[1..])
     else if |right| == 0 then
-      RenderOnlyFirst(cmd, left[0]) + RenderRecords(cmd, left[1..], right)
+      Spec.RenderFragment(cmd, Spec.OnlyFirst, left[0]) + RenderRecords(cmd, left[1..], right)
     else
       match CompareRecords(left[0], right[0])
       case LineLess =>
-        RenderOnlyFirst(cmd, left[0]) + RenderRecords(cmd, left[1..], right)
+        Spec.RenderFragment(cmd, Spec.OnlyFirst, left[0]) + RenderRecords(cmd, left[1..], right)
       case LineGreater =>
-        RenderOnlySecond(cmd, right[0]) + RenderRecords(cmd, left, right[1..])
+        Spec.RenderFragment(cmd, Spec.OnlySecond, right[0]) + RenderRecords(cmd, left, right[1..])
       case LineEqual =>
-        RenderBoth(cmd, left[0]) + RenderRecords(cmd, left[1..], right[1..])
+        Spec.RenderFragment(cmd, Spec.Both, left[0]) + RenderRecords(cmd, left[1..], right[1..])
   }
 
-  function CountRecords(left: seq<BenchWorld.Bytes>, right: seq<BenchWorld.Bytes>): ColumnCounts
+  function CountRecords(left: seq<BenchWorld.Bytes>, right: seq<BenchWorld.Bytes>): Spec.ColumnCounts
     decreases |left| + |right|
   {
     if |left| == 0 then
       if |right| == 0 then
-        ColumnCounts(0, 0, 0)
+        Spec.ColumnCounts(0, 0, 0)
       else
-        AddSecond(CountRecords(left, right[1..]))
+        Spec.AddKind(Spec.OnlySecond, CountRecords(left, right[1..]))
     else if |right| == 0 then
-      AddFirst(CountRecords(left[1..], right))
+      Spec.AddKind(Spec.OnlyFirst, CountRecords(left[1..], right))
     else
       match CompareRecords(left[0], right[0])
       case LineLess =>
-        AddFirst(CountRecords(left[1..], right))
+        Spec.AddKind(Spec.OnlyFirst, CountRecords(left[1..], right))
       case LineGreater =>
-        AddSecond(CountRecords(left, right[1..]))
+        Spec.AddKind(Spec.OnlySecond, CountRecords(left, right[1..]))
       case LineEqual =>
-        AddBoth(CountRecords(left[1..], right[1..]))
+        Spec.AddKind(Spec.Both, CountRecords(left[1..], right[1..]))
   }
 
   function DigitChar(n: nat): char
@@ -177,7 +107,7 @@ module CommRenderCore {
       NatText(counts.first) + cmd.outputDelimiter +
       NatText(counts.second) + cmd.outputDelimiter +
       NatText(counts.both) + cmd.outputDelimiter +
-      "total" + RecordTerminator(cmd)
+      "total" + [Spec.RecordDelimiter(cmd.zeroTerminated)]
   }
 
   function RenderData(
@@ -186,7 +116,7 @@ module CommRenderCore {
     rightData: BenchWorld.Bytes
   ): BenchWorld.Bytes
   {
-    var delimiter := RecordDelimiter(cmd.zeroTerminated);
+    var delimiter := Spec.RecordDelimiter(cmd.zeroTerminated);
     var left := Records(leftData, delimiter);
     var right := Records(rightData, delimiter);
     RenderRecords(cmd, left, right) + TotalRow(cmd, left, right)
@@ -203,7 +133,7 @@ module CommRenderCore {
 
   function DataSorted(data: BenchWorld.Bytes, zeroTerminated: bool): bool
   {
-    RecordsSorted(Records(data, RecordDelimiter(zeroTerminated)))
+    RecordsSorted(Records(data, Spec.RecordDelimiter(zeroTerminated)))
   }
 
 }

@@ -18,10 +18,6 @@ module HeadSpec {
   import HeadRecordSpec
   import SE = StringEscaping
 
-
-
-
-
   function HelpText(): BenchWorld.Bytes
   {
     "Usage: head [OPTION]... [FILE]...\n"
@@ -73,20 +69,20 @@ module HeadSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     Utf8.Encode(ErrorMessageText(SE.SpecQuoteAfBytes(Utf8.Encode(path)), err))
   }
 
 
-  ghost function InvalidCountMessage(unit: HeadSchema.CountUnit, value: string): BenchWorld.Bytes
+  function InvalidCountMessage(unit: HeadSchema.CountUnit, value: string): BenchWorld.Bytes
   {
     var displayValue := if |value| > 0 && value[0] == '-' then value[1..] else value;
     Utf8.Encode(InvalidCountText(unit, SE.SpecLocaleQuoteBytes(Utf8.Encode(displayValue))))
   }
 
 
-  ghost function InputsFromOperands(operands: seq<string>): seq<HeadSchema.Input>
+  function InputsFromOperands(operands: seq<string>): seq<HeadSchema.Input>
     decreases |operands|
   {
     if |operands| == 0 then
@@ -109,7 +105,7 @@ module HeadSpec {
     (raw.invalidCountTokenIndex == -1 || raw.versionTokenIndex <= raw.invalidCountTokenIndex)
   }
 
-  ghost function Command(raw: HeadSchema.HeadCmdRaw): HeadSchema.HeadCmd
+  function Command(raw: HeadSchema.HeadCmdRaw): HeadSchema.HeadCmd
   {
     var mode :=
       if HelpBeforeOther(raw) then
@@ -205,7 +201,7 @@ module HeadSpec {
     (cmd.headerMode == HeadSchema.HeadersMultiple && |cmd.inputs| > 1)
   }
 
-  ghost function HeaderForInput(cmd: HeadSchema.HeadCmd, input: HeadSchema.Input, printedHeaders: int): BenchWorld.Bytes
+  function HeaderForInput(cmd: HeadSchema.HeadCmd, input: HeadSchema.Input, printedHeaders: int): BenchWorld.Bytes
   {
     if ShouldPrintHeaders(cmd) then
       (if printedHeaders == 0 then [] else ['\n']) +
@@ -214,7 +210,7 @@ module HeadSpec {
       []
   }
 
-  ghost function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
   {
     StdinReadErrorPrefix() + Utf8.Encode(ErrnoText(error)) + DiagnosticSuffix()
   }
@@ -398,7 +394,7 @@ module HeadSpec {
     true
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorText(message))
   }
@@ -464,7 +460,7 @@ module HeadSpec {
     (if unit == HeadSchema.CountLines then "lines" else "bytes") + ": " + quoted + "\n"
   }
 
-  ghost function HeaderText(name: string): BenchWorld.Bytes
+  function HeaderText(name: string): BenchWorld.Bytes
   {
     HeaderPrefix() + Utf8.Encode(name) + HeaderSuffix()
   }

@@ -1,131 +1,21 @@
-include "TailTextCore.dfy"
+include "TailSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "TailSchema.dfy"
 include "TailRecordCore.dfy"
-include "TailSpec.dfy"
 
 module TailCore {
-  import Text = TailTextCore
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = Utf8Semantics
   import BenchWorld
   import IOContract
   import TailSchema
   import TailRecordCore
+  import TailRecordSpec
   import Spec = TailSpec
-
-  function InputsFromOperands(operands: seq<string>): seq<TailSchema.Input>
-    decreases |operands|
-  {
-    if |operands| == 0 then
-      []
-    else
-      [(if operands[0] == "-" then TailSchema.Stdin(Spec.StandardInputName()) else TailSchema.File(operands[0]))] +
-      InputsFromOperands(operands[1..])
-  } by method {
-    if |operands| == 0 {
-      return [];
-    } else {
-      var first :=
-        if operands[0] == "-"
-        then TailSchema.Stdin(Spec.StandardInputName())
-        else TailSchema.File(operands[0]);
-      return [first] + InputsFromOperands(operands[1..]);
-    }
-  }
-
-  ghost function HelpBeforeOther(raw: TailSchema.TailCmdRaw): bool
-  {
-    raw.seenHelp &&
-    (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) &&
-    (raw.invalidCountTokenIndex == -1 || raw.helpTokenIndex <= raw.invalidCountTokenIndex)
-  }
-
-  ghost function VersionBeforeInvalid(raw: TailSchema.TailCmdRaw): bool
-  {
-    raw.seenVersion &&
-    (raw.invalidCountTokenIndex == -1 || raw.versionTokenIndex <= raw.invalidCountTokenIndex)
-  }
-
-  function Command(raw: TailSchema.TailCmdRaw): TailSchema.TailCmd
-  {
-    var mode :=
-      if HelpBeforeOther(raw) then
-        TailSchema.ModeHelp
-      else if VersionBeforeInvalid(raw) then
-        TailSchema.ModeVersion
-      else if raw.invalidCountTokenIndex != -1 then
-        TailSchema.ModeInvalidCount
-      else
-        TailSchema.ModeRun;
-    var inputs := InputsFromOperands(raw.operands);
-    var runInputs :=
-      if mode == TailSchema.ModeRun && |inputs| == 0
-      then [TailSchema.Stdin(Spec.StandardInputName())]
-      else inputs;
-    TailSchema.TailCmd(
-      mode,
-      raw.selection,
-      raw.headerMode,
-      raw.zeroTerminated,
-      raw.invalidCountUnit,
-      raw.invalidCountValue,
-      runInputs
-    )
-  } by method {
-    var mode :=
-      if raw.seenHelp &&
-         (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) &&
-         (raw.invalidCountTokenIndex == -1 ||
-          raw.helpTokenIndex <= raw.invalidCountTokenIndex) then
-        TailSchema.ModeHelp
-      else if raw.seenVersion &&
-              (raw.invalidCountTokenIndex == -1 ||
-               raw.versionTokenIndex <= raw.invalidCountTokenIndex) then
-        TailSchema.ModeVersion
-      else if raw.invalidCountTokenIndex != -1 then
-        TailSchema.ModeInvalidCount
-      else
-        TailSchema.ModeRun;
-    var inputs := InputsFromOperands(raw.operands);
-    var runInputs :=
-      if mode == TailSchema.ModeRun && |inputs| == 0
-      then [TailSchema.Stdin(Spec.StandardInputName())]
-      else inputs;
-    return TailSchema.TailCmd(
-        mode,
-        raw.selection,
-        raw.headerMode,
-        raw.zeroTerminated,
-        raw.invalidCountUnit,
-        raw.invalidCountValue,
-        runInputs
-      );
-  }
-
-  ghost function IsStdinInput(input: TailSchema.Input): bool
-  {
-    match input
-    case Stdin(_) => true
-    case File(_) => false
-  }
-
-  function InputName(input: TailSchema.Input): string
-  {
-    match input
-    case Stdin(displayName) => displayName
-    case File(path) => path
-  } by method {
-    return
-      match input
-      case Stdin(displayName) => displayName
-      case File(path) => path;
-  }
 
   ghost function PrefixStdinCore(cmd: TailSchema.TailCmd, preStdin: BenchWorld.Bytes, i: nat, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
     requires i <= |cmd.inputs|
@@ -185,7 +75,7 @@ module TailCore {
       else
         TakeLastBytes(data, cmd.selection.amount)
     else
-      var delimiter := TailRecordCore.RecordDelimiter(cmd.zeroTerminated);
+      var delimiter := TailRecordSpec.RecordDelimiter(cmd.zeroTerminated);
       if cmd.selection.fromStart then
         TailRecordCore.DropFirstRecords(data, if cmd.selection.amount == 0 then 0 else cmd.selection.amount - 1, delimiter)
       else
@@ -201,7 +91,7 @@ module TailCore {
         return TakeLastBytes(data, cmd.selection.amount);
       }
     } else {
-      var delimiter := TailRecordCore.RecordDelimiter(cmd.zeroTerminated);
+      var delimiter := TailRecordSpec.RecordDelimiter(cmd.zeroTerminated);
       if cmd.selection.fromStart {
         return TailRecordCore.DropFirstRecords(
             data,
@@ -214,50 +104,6 @@ module TailCore {
     }
   }
 
-  function ShouldPrintHeaders(cmd: TailSchema.TailCmd): bool
-  {
-    cmd.headerMode == TailSchema.HeadersAlways ||
-    (cmd.headerMode == TailSchema.HeadersMultiple && |cmd.inputs| > 1)
-  } by method {
-    return cmd.headerMode == TailSchema.HeadersAlways ||
-           (cmd.headerMode == TailSchema.HeadersMultiple && |cmd.inputs| > 1);
-  }
-
-  function SuppressZeroTrailingSelection(cmd: TailSchema.TailCmd): bool
-  {
-    !cmd.selection.fromStart && cmd.selection.amount == 0
-  } by method {
-    return !cmd.selection.fromStart && cmd.selection.amount == 0;
-  }
-
-  function HeaderForInput(cmd: TailSchema.TailCmd, input: TailSchema.Input, printedHeaders: int): BenchWorld.Bytes
-  {
-    if ShouldPrintHeaders(cmd) then
-      (if printedHeaders == 0 then [] else ['\n']) +
-      Spec.HeaderText(InputName(input))
-    else
-      []
-  } by method {
-    if ShouldPrintHeaders(cmd) {
-      return (if printedHeaders == 0 then [] else ['\n']) +
-        Text.HeaderText(InputName(input));
-    } else {
-      return [];
-    }
-  }
-
-  function ResultHasHeader(cmd: TailSchema.TailCmd, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
-  {
-    match result
-    case Ok(_) => !SuppressZeroTrailingSelection(cmd)
-    case Err(err) => IOContract.IOErrorIsDirectory(err) || ((err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !SuppressZeroTrailingSelection(cmd))
-  } by method {
-    return
-      match result
-      case Ok(_) => !SuppressZeroTrailingSelection(cmd)
-      case Err(err) => IOContract.IOErrorIsDirectory(err) || ((err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !SuppressZeroTrailingSelection(cmd));
-  }
-
   function OutputPiece(
     cmd: TailSchema.TailCmd,
     input: TailSchema.Input,
@@ -267,68 +113,30 @@ module TailCore {
   {
     match result
     case Ok(data) =>
-      if SuppressZeroTrailingSelection(cmd) then
+      if Spec.SuppressZeroTrailingSelection(cmd) then
         []
       else
-        HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, data)
+        Spec.HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, data)
     case Err(err) =>
-      if (err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !SuppressZeroTrailingSelection(cmd) then
-        HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, err.partial)
-      else if IOContract.IOErrorIsDirectory(err) then HeaderForInput(cmd, input, printedHeaders) else []
+      if (err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !Spec.SuppressZeroTrailingSelection(cmd) then
+        Spec.HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, err.partial)
+      else if IOContract.IOErrorIsDirectory(err) then Spec.HeaderForInput(cmd, input, printedHeaders) else []
   } by method {
     match result
     case Ok(data) =>
-      if SuppressZeroTrailingSelection(cmd) {
+      if Spec.SuppressZeroTrailingSelection(cmd) {
         return [];
       } else {
-        return HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, data);
+        return Spec.HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, data);
       }
     case Err(err) =>
-      if (err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !SuppressZeroTrailingSelection(cmd) {
-        return HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, err.partial);
+      if (err.StreamFailure? || (err.ReadFailure? && err.readStage == BenchWorld.CloseFailed)) && !Spec.SuppressZeroTrailingSelection(cmd) {
+        return Spec.HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, err.partial);
       } else if IOContract.IOErrorIsDirectory(err) {
-        return HeaderForInput(cmd, input, printedHeaders);
+        return Spec.HeaderForInput(cmd, input, printedHeaders);
       } else {
         return [];
       }
-  }
-
-  function ErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
-  {
-    match input
-    case Stdin(_) => if result.Err? then Spec.StdinReadErrorMessage(result.e) else []
-    case File(path) =>
-      match result
-      case Ok(_) => []
-      case Err(err) => Spec.ErrorMessage(path, err)
-  } by method {
-    match input
-    case Stdin(_) =>
-      return if result.Err? then Text.StdinReadErrorMessage(result.e) else [];
-    case File(path) =>
-      match result
-      case Ok(_) =>
-        return [];
-      case Err(err) =>
-        return Text.ErrorMessage(path, err);
-  }
-
-  function HadErrorPiece(input: TailSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
-  {
-    match input
-    case Stdin(_) => result.Err?
-    case File(_) =>
-      match result
-      case Ok(_) => false
-      case Err(_) => true
-  } by method {
-    return
-      match input
-      case Stdin(_) => result.Err?
-      case File(_) =>
-        match result
-        case Ok(_) => false
-        case Err(_) => true;
   }
 
   ghost function PrefixHeaderCountCore(
@@ -345,7 +153,7 @@ module TailCore {
       0
     else
       PrefixHeaderCountCore(cmd, preFs, preStdin, i - 1, preStreams) +
-      (if ResultHasHeader(cmd, ReadResultCore(cmd, preFs, preStdin, i - 1, preStreams)) then 1 else 0)
+      (if Spec.ResultHasHeader(cmd, ReadResultCore(cmd, preFs, preStdin, i - 1, preStreams)) then 1 else 0)
   }
 
   ghost function PrefixOutputCore(
@@ -384,7 +192,7 @@ module TailCore {
       []
     else
       PrefixErrorOutputCore(cmd, preFs, preStdin, i - 1, preStreams) +
-      ErrorPiece(cmd.inputs[i - 1], ReadResultCore(cmd, preFs, preStdin, i - 1, preStreams))
+      Spec.ErrorPiece(cmd.inputs[i - 1], ReadResultCore(cmd, preFs, preStdin, i - 1, preStreams))
   }
 
   ghost function PrefixHadErrorCore(
@@ -401,7 +209,7 @@ module TailCore {
       false
     else
       PrefixHadErrorCore(cmd, preFs, preStdin, i - 1, preStreams) ||
-      HadErrorPiece(cmd.inputs[i - 1], ReadResultCore(cmd, preFs, preStdin, i - 1, preStreams))
+      Spec.HadErrorPiece(cmd.inputs[i - 1], ReadResultCore(cmd, preFs, preStdin, i - 1, preStreams))
   }
 
   ghost function RunOutputCore(
@@ -417,7 +225,7 @@ module TailCore {
   twostate predicate PreparedSummary(raw: TailSchema.TailCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
     reads io.stdinRegion
   {
-    var cmd := Command(raw);
+    var cmd := Spec.Command(raw);
     if cmd.mode == TailSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) + Spec.HelpText() &&
@@ -433,7 +241,7 @@ module TailCore {
       plannedStdout == old(io.stdout()) &&
       plannedStderr == old(io.stderr()) + Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue) &&
       exit == 1
-    else if SuppressZeroTrailingSelection(cmd) then
+    else if Spec.SuppressZeroTrailingSelection(cmd) then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) &&
       plannedStderr == old(io.stderr()) &&
@@ -464,7 +272,7 @@ module TailCore {
     requires i < |cmd.inputs|
     ensures PrefixHeaderCountCore(cmd, preFs, preStdin, i + 1, preStreams) ==
             PrefixHeaderCountCore(cmd, preFs, preStdin, i, preStreams) +
-            (if ResultHasHeader(cmd, ReadResultCore(cmd, preFs, preStdin, i, preStreams)) then 1 else 0)
+            (if Spec.ResultHasHeader(cmd, ReadResultCore(cmd, preFs, preStdin, i, preStreams)) then 1 else 0)
   {
   }
 
@@ -497,7 +305,7 @@ module TailCore {
     requires i < |cmd.inputs|
     ensures PrefixErrorOutputCore(cmd, preFs, preStdin, i + 1, preStreams) ==
             PrefixErrorOutputCore(cmd, preFs, preStdin, i, preStreams) +
-            ErrorPiece(cmd.inputs[i], ReadResultCore(cmd, preFs, preStdin, i, preStreams))
+            Spec.ErrorPiece(cmd.inputs[i], ReadResultCore(cmd, preFs, preStdin, i, preStreams))
   {
   }
 
@@ -511,7 +319,7 @@ module TailCore {
     requires i < |cmd.inputs|
     ensures PrefixHadErrorCore(cmd, preFs, preStdin, i + 1, preStreams) ==
             (PrefixHadErrorCore(cmd, preFs, preStdin, i, preStreams) ||
-             HadErrorPiece(cmd.inputs[i], ReadResultCore(cmd, preFs, preStdin, i, preStreams)))
+             Spec.HadErrorPiece(cmd.inputs[i], ReadResultCore(cmd, preFs, preStdin, i, preStreams)))
   {
   }
 
@@ -535,7 +343,7 @@ module TailCore {
     hide *;
     reveal PreparedSummary(), PrefixStdinCore(), PrefixOutputCore(), PrefixErrorOutputCore();
     reveal PrefixHadErrorCore(), PrefixHeaderCountCore(), RunOutputCore(), ReadResultCore();
-    reveal SuppressZeroTrailingSelection();
+    reveal Spec.SuppressZeroTrailingSelection();
     plannedOut := [];
     plannedErr := [];
     ghost var initialStdout := io.stdout();
@@ -546,7 +354,7 @@ module TailCore {
     ghost var preStdin := io.stdin();
     ghost var preStdout := (initialStdout + plannedOut);
     ghost var preStderr := (initialStderr + plannedErr);
-    var cmd := Command(raw);
+    var cmd := Spec.Command(raw);
 
     if cmd.mode == TailSchema.ModeHelp {
       var help := GetHelpText();
@@ -569,7 +377,7 @@ module TailCore {
     }
 
     if cmd.mode == TailSchema.ModeInvalidCount {
-      var invalid := Text.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
+      var invalid := Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
       plannedErr := plannedErr + invalid;
       exit := 1;
       assert io.stdin() == preStdin;
@@ -578,7 +386,7 @@ module TailCore {
       return;
     }
 
-    var suppressZero := SuppressZeroTrailingSelection(cmd);
+    var suppressZero := Spec.SuppressZeroTrailingSelection(cmd);
     if suppressZero {
       exit := 0;
       assert io.stdin() == preStdin;
@@ -630,9 +438,9 @@ module TailCore {
       assert readResult == ReadResultCore(cmd, preFs, preStdin, i, old(io.trustedStreams()));
 
       var piece := OutputPiece(cmd, input, readResult, headers);
-      var errorPiece := ErrorPiece(input, readResult);
-      var inputHadError := HadErrorPiece(input, readResult);
-      var inputHadHeader := ResultHasHeader(cmd, readResult);
+      var errorPiece := Spec.ErrorPiece(input, readResult);
+      var inputHadError := Spec.HadErrorPiece(input, readResult);
+      var inputHadHeader := Spec.ResultHasHeader(cmd, readResult);
 
       out := out + piece;
       err := err + errorPiece;
@@ -686,7 +494,7 @@ module TailCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

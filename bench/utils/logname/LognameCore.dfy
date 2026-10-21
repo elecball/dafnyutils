@@ -1,21 +1,17 @@
-include "LognameUtf8Core.dfy"
-include "LognameTextCore.dfy"
+include "LognameSpec.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "LognameSchema.dfy"
-include "LognameSpec.dfy"
 
 module LognameCore {
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = LognameUtf8Core
   import IOContract
   import Schema = LognameSchema
   import BenchWorld
   import Spec = LognameSpec
-  import Text = LognameTextCore
 
   method GetHelpText() returns (out: BenchWorld.Bytes)
     ensures out == Spec.HelpTextSpec()
@@ -32,7 +28,7 @@ module LognameCore {
   method GetExtraOperandMessage(op: string) returns (out: BenchWorld.Bytes)
     ensures out == Spec.ExtraOperandMessageSpec(op)
   {
-    out := Text.ExtraOperandMessage(op);
+    out := Spec.ExtraOperandMessageSpec(op);
   }
 
   method GetNoLoginNameMessage() returns (out: BenchWorld.Bytes)
@@ -135,7 +131,7 @@ module LognameCore {
     assert IOContract.GetLoginNameContractFields(preProps, login);
     match login
     case Ok(name) =>
-      plannedOut := plannedOut + Text.LoginNameOutput(name);
+      plannedOut := plannedOut + Spec.LoginNameOutput(name);
       exit := 0;
       assert LoginNameResultFields(
           preProps,
@@ -196,7 +192,7 @@ module LognameCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

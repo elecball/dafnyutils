@@ -23,9 +23,10 @@ A moved file is a candidate obligation only when all of these hold:
 
 The evaluator fixes whole specification/support source files. A filename ending
 in `Core` or a directory-wide editable mount cannot override that classification.
-Keep mathematical relations in Spec files and implementations/proofs in separate
-files. Never let a fixed decoder import an implementation-owned helper: that
-would make the helper's entire file immutable.
+Keep behavioral relations in Spec files and implementation algorithms/proofs in
+separate files; implementations may reuse pure Spec values. Never let a fixed
+decoder import an implementation-owned helper: that would make the helper's
+entire file immutable.
 
 Path trimming demonstrates this distinction. `cp`, `mv`, `rm` and `rmdir` own
 their runtime path algorithms and connecting proofs. Cp's fixed decoder keeps
@@ -43,11 +44,10 @@ CLI parsing remains outside the principal `RunCore ==> Spec` proof boundary.
 Task-local protocol code is explicitly fixed support, not a candidate-owned
 utility implementation or a native API.
 
-The runner's codec is private to its module and has no public export. It cannot
-be called as an encoding API from Core. Unused parser proof lemmas are removed,
-and the old module-wide verification skips are removed from the local protocol
-and shared data types. Contributor scaffolds use the same files as existing
-items.
+The runner uses shared `Utf8Semantics.Encode` for encoding. Unused parser proof
+lemmas are removed, and the old module-wide verification skips are removed from
+the local protocol and shared data types. Contributor scaffolds use the same
+files as existing items.
 
 ## Shared algorithm supply
 
@@ -56,19 +56,12 @@ automatically supplied by profiles or recommended as a solved support resource.
 The unused shared Functional module is removed. Tasks implement any such
 algorithms themselves.
 
-Runtime path/backup helpers, UTF-8 encoding, byte quoting, dynamic diagnostics,
-numeric formatting, mode parsing and time formatting are task-owned wherever
-they implement utility behavior. Core imports the item's implementations; the
-fixed specification imports only mathematical relations and protocol data.
-Each owned encoder proves its agreement with the ghost encoding model and any
-width or length facts it needs. Those properties are not supplied as completed
-shared encoder proofs.
-
-The mathematical `Utf8Semantics` and `StringEscaping` definitions are ghost.
-World path transformations and contract-side filesystem transformations are
-also mathematical definitions. They cannot be executed by a candidate as a
-ready-made implementation. The remaining shared proof surface establishes
-representation validity required by primitive contracts. Kernel lookup,
+Utility-specific path/backup algorithms and mode parsing remain task-owned.
+Existing pure UTF-8, byte-quoting, diagnostic, numeric/time and lexical-path
+value definitions can be reused directly from core or Spec. Native observations,
+filesystem state transformations and proof witnesses remain ghost.
+The shared proof surface establishes representation validity required by
+primitive contracts. Kernel lookup,
 removal and rename proof internals are private to `IOContract`; they do not
 export utility correctness lemmas. Task-specific lookup, mutation and metadata
 proofs are in the corresponding editable task closure.

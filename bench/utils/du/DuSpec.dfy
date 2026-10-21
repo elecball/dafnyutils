@@ -55,8 +55,6 @@ module DuSpec {
     "du: this benchmark supports apparent byte counts only; use -b or --bytes\n"
   }
 
-
-
   function ErrnoText(err: BenchWorld.IOError): string
   {
     match err
@@ -88,7 +86,7 @@ module DuSpec {
     "\n"
   }
 
-  ghost function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     ErrorMessageSpecPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
     ErrorMessageSpecPart2() + Utf8.Encode(ErrnoText(err)) + ErrorMessageSpecPart3()
@@ -109,7 +107,8 @@ module DuSpec {
     else '9'
   }
 
-  ghost function NatText(n: nat): string
+  function NatText(n: nat): string
+    ensures forall i: nat | i < |NatText(n)| :: '0' <= NatText(n)[i] <= '9'
     decreases n
   {
     if n < 10 then
@@ -128,7 +127,7 @@ module DuSpec {
     "\n"
   }
 
-  ghost function CountLineSpec(size: nat, path: BenchWorld.Path): BenchWorld.Bytes
+  function CountLineSpec(size: nat, path: BenchWorld.Path): BenchWorld.Bytes
   {
     NatText(size) + CountLineSpecPart1() + Utf8.Encode(path) + CountLineSpecPart2()
   }
@@ -144,14 +143,14 @@ module DuSpec {
       observations[i] == IOContract.ObservedReadFileResultFields(preFs, preStreams, cmd.operands[i])
   }
 
-  ghost function OutputPieceSpec(path: BenchWorld.Path, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
+  function OutputPieceSpec(path: BenchWorld.Path, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match result
     case Ok(data) => CountLineSpec(|data|, path)
     case Err(_) => []
   }
 
-  ghost function ErrorPieceSpec(path: BenchWorld.Path, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
+  function ErrorPieceSpec(path: BenchWorld.Path, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     match result
     case Ok(_) => []
@@ -224,7 +223,7 @@ module DuSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

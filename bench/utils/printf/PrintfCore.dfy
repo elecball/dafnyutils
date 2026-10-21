@@ -1,16 +1,15 @@
-include "PrintfTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "PrintfSpec.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "PrintfSchema.dfy"
-include "PrintfSpec.dfy"
 
 module PrintfCore {
   import StreamContract = IOContract
 
   import BenchIO
-  import Utf8 = PrintfUtf8Core
-  import Text = PrintfTextCore
+  import Utf8 = Utf8Semantics
   import BenchWorld
   import Schema = PrintfSchema
   import Spec = PrintfSpec
@@ -139,7 +138,7 @@ module PrintfCore {
       if startArg == |args| then
         (0, pass.1, [])
       else
-        (0, pass.1, Text.ExcessArgumentsWarning(args[startArg]))
+        (0, pass.1, Spec.ExcessArgumentsWarning(args[startArg]))
     else if pass.2 >= |args| then
       (0, pass.1, [])
     else
@@ -153,7 +152,7 @@ module PrintfCore {
       if startArg == |args| {
         return (0, pass.1, []);
       } else {
-        return (0, pass.1, Text.ExcessArgumentsWarning(args[startArg]));
+        return (0, pass.1, Spec.ExcessArgumentsWarning(args[startArg]));
       }
     } else if pass.2 >= |args| {
       return (0, pass.1, []);
@@ -175,9 +174,9 @@ module PrintfCore {
   function Evaluate(raw: Schema.PrintfCmdRaw): (BenchWorld.Bytes, BenchWorld.Bytes, int)
   {
     if Schema.HelpSelected(raw) then
-      (Spec.HelpText(), Text.RequestExcessWarning(raw), 0)
+      (Spec.HelpText(), Spec.RequestExcessWarning(raw), 0)
     else if Schema.VersionSelected(raw) then
-      (Spec.VersionText(), Text.RequestExcessWarning(raw), 0)
+      (Spec.VersionText(), Spec.RequestExcessWarning(raw), 0)
     else if |raw.operands| == 0 then
       ([], Spec.MissingOperandMessage(), 1)
     else
@@ -185,9 +184,9 @@ module PrintfCore {
       (rendered.1, rendered.2, if rendered.0 == 2 then 1 else 0)
   } by method {
     if Schema.HelpSelected(raw) {
-      return (Spec.HelpText(), Text.RequestExcessWarning(raw), 0);
+      return (Spec.HelpText(), Spec.RequestExcessWarning(raw), 0);
     } else if Schema.VersionSelected(raw) {
-      return (Spec.VersionText(), Text.RequestExcessWarning(raw), 0);
+      return (Spec.VersionText(), Spec.RequestExcessWarning(raw), 0);
     } else if |raw.operands| == 0 {
       return ([], Spec.MissingOperandMessage(), 1);
     } else {
@@ -249,7 +248,7 @@ module PrintfCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

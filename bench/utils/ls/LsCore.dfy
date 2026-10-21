@@ -1,11 +1,10 @@
-include "LsTextCore.dfy"
-include "LsWorldPathCore.dfy"
+include "../../core/Utf8.dfy"
 include "../../core/World.dfy"
+include "LsSpec.dfy"
+include "LsTextCore.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "LsSchema.dfy"
-include "LsSpec.dfy"
-include "LsTimeCore.dfy"
 include "LsNativeObservationCore.dfy"
 include "LsNativeObservationProof.dfy"
 include "LsNativeResourceProof.dfy"
@@ -16,18 +15,17 @@ include "LsRunNativeProof.dfy"
 
 module LsCore {
   import Text = LsTextCore
-  import WorldPath = LsWorldPathCore
+  import WorldPath = BenchWorld
   import StreamWorld = BenchWorld
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = LsUtf8Core
+  import Utf8 = Utf8Semantics
   import BenchWorld
   import IOContract
   import Schema = LsSchema
   import Spec = LsSpec
-  import Time = LsTimeCore
   import Native = LsNativeSpec
   import NativeIO = LsNativeCore
   import NativeObservation = LsNativeObservationSpec
@@ -41,194 +39,6 @@ module LsCore {
   import DirectoryPieceProof = LsDirectoryPieceProof
   import RunNativeProof = LsRunNativeProof
 
-  function DigitCharCore(d: nat): char
-    requires d < 10
-  {
-    if d == 0 then '0'
-    else if d == 1 then '1'
-    else if d == 2 then '2'
-    else if d == 3 then '3'
-    else if d == 4 then '4'
-    else if d == 5 then '5'
-    else if d == 6 then '6'
-    else if d == 7 then '7'
-    else if d == 8 then '8'
-    else '9'
-  }
-
-  function NatTextCore(n: nat): string
-    decreases n
-  {
-    Text.NatTextSpec(n)
-  }
-
-  function IntTextCore(n: int): string
-  {
-    if n < 0 then Spec.IntTextSpecPart1() + NatTextCore((-n) as nat) else NatTextCore(n as nat)
-  }
-
-  function PermissionCharCore(mode: bv32, bit: bv32, present: char): char
-  {
-    if (mode & bit) != 0 as bv32 then present else '-'
-  }
-
-  function ExecuteCharCore(
-    mode: bv32,
-    executeBit: bv32,
-    specialBit: bv32,
-    specialExecute: char,
-    specialNoExecute: char
-  ): char
-  {
-    if (mode & specialBit) != 0 as bv32 then
-      if (mode & executeBit) != 0 as bv32 then specialExecute else specialNoExecute
-    else
-      PermissionCharCore(mode, executeBit, 'x')
-  }
-
-  function KindCharCore(kind: BenchWorld.FileKind): char
-  {
-    match kind
-    case RegularKind => '-'
-    case DirectoryKind => 'd'
-    case SymlinkKind => 'l'
-    case BlockDeviceKind => 'b'
-    case CharacterDeviceKind => 'c'
-    case FifoKind => 'p'
-    case SocketKind => 's'
-  }
-
-  function ModeTextCore(status: BenchWorld.FileStatus): string
-  {
-    [KindCharCore(status.kind),
-     PermissionCharCore(status.mode, 256 as bv32, 'r'),
-     PermissionCharCore(status.mode, 128 as bv32, 'w'),
-     ExecuteCharCore(status.mode, 64 as bv32, 2048 as bv32, 's', 'S'),
-     PermissionCharCore(status.mode, 32 as bv32, 'r'),
-     PermissionCharCore(status.mode, 16 as bv32, 'w'),
-     ExecuteCharCore(status.mode, 8 as bv32, 1024 as bv32, 's', 'S'),
-     PermissionCharCore(status.mode, 4 as bv32, 'r'),
-     PermissionCharCore(status.mode, 2 as bv32, 'w'),
-     ExecuteCharCore(status.mode, 1 as bv32, 512 as bv32, 't', 'T')]
-  }
-
-  function RenderEntryCore(cmd: Schema.LsCmd, displayName: string, status: BenchWorld.FileStatus): BenchWorld.Bytes
-  {
-    RenderAlignedEntryCore(cmd, displayName, status, Spec.ColumnWidths(0, 0, 0, 0, 0))
-  }
-
-  function RenderAlignedEntryCore(
-    cmd: Schema.LsCmd,
-    displayName: string,
-    status: BenchWorld.FileStatus,
-    widths: Spec.ColumnWidths
-  ): BenchWorld.Bytes
-  {
-    var blockPrefix := if cmd.showBlocks then
-                         Text.PadColumn(NatTextCore(Spec.DisplayedBlocksSpec(status.storage.allocatedBlocks, cmd.cliBlockSize)), widths.blocks, true) + Spec.RenderAlignedEntrySpecPart1()
-                       else Spec.RenderAlignedEntrySpecPart2();
-    Utf8.Encode(blockPrefix + if !cmd.numericLong then
-                  displayName + Spec.RenderAlignedEntrySpecPart3()
-                else
-                  ModeTextCore(status) + Spec.RenderAlignedEntrySpecPart1() +
-                  Text.PadColumn(NatTextCore(status.linkCount), widths.links, true) + Spec.RenderAlignedEntrySpecPart1() +
-                  Text.PadColumn(NatTextCore(status.ownership.uid), widths.owner, true) + Spec.RenderAlignedEntrySpecPart1() +
-                  Text.PadColumn(NatTextCore(status.ownership.gid), widths.group, true) + Spec.RenderAlignedEntrySpecPart1() +
-                  Text.PadColumn(NatTextCore(Spec.DisplayedFileSizeSpec(
-                                               status.storage.size, cmd.fileSizeBlockSize)), widths.size, true) + Spec.RenderAlignedEntrySpecPart1() +
-                  TimeTextCore(cmd, SelectedSecondsCore(cmd, status),
-                               SelectedNanosecondsCore(cmd, status)) + Spec.RenderAlignedEntrySpecPart1() +
-                  displayName + Spec.RenderAlignedEntrySpecPart3())
-  }
-
-  function TimeTextCore(cmd: Schema.LsCmd, seconds: int, nanoseconds: int): string
-  {
-    match cmd.timeStyle
-    case EpochSeconds => IntTextCore(seconds)
-    case FullIso => Time.FullIso(seconds, nanoseconds)
-    case LongIso => Time.LongIso(seconds)
-    case Iso => Time.Iso(seconds, nanoseconds, cmd.referenceNow)
-    case DefaultC => Time.DefaultC(seconds, nanoseconds, cmd.referenceNow)
-  }
-
-  function AllocatedBlocksSumCore(observations: seq<Spec.EntryObservation>): nat
-    decreases |observations|
-  {
-    if |observations| == 0 then 0
-    else
-      (if observations[0].ok then observations[0].status.storage.allocatedBlocks else 0) +
-      AllocatedBlocksSumCore(observations[1..])
-  }
-
-  function TotalLineCore(cmd: Schema.LsCmd, observations: seq<Spec.EntryObservation>): BenchWorld.Bytes
-  {
-    if cmd.numericLong || cmd.showBlocks then
-      Utf8.Encode(Spec.TotalLineSpecPart1() + NatTextCore(
-                    Spec.DisplayedBlocksSpec(AllocatedBlocksSumCore(observations), cmd.cliBlockSize)) + Spec.TotalLineSpecPart2())
-    else
-      []
-  }
-
-  opaque function StringLessFromCore(left: string, right: string, i: nat): bool
-    requires i <= |left| && i <= |right|
-    decreases |left| + |right| - 2 * i
-  {
-    if i == |left| then i < |right|
-    else if i == |right| then false
-    else if left[i] == right[i] then StringLessFromCore(left, right, i + 1)
-    else left[i] < right[i]
-  }
-
-  opaque function StringLessCore(left: string, right: string): bool
-  {
-    StringLessFromCore(left, right, 0)
-  }
-
-  function SelectedSecondsCore(cmd: Schema.LsCmd, status: BenchWorld.FileStatus): int
-  {
-    match cmd.timeField
-    case ModificationTime => status.times.mtimeSec
-    case AccessTime => status.times.atimeSec
-    case ChangeTime => status.times.ctimeSec
-  }
-
-  function SelectedNanosecondsCore(cmd: Schema.LsCmd, status: BenchWorld.FileStatus): int
-  {
-    match cmd.timeField
-    case ModificationTime => status.times.mtimeNsec
-    case AccessTime => status.times.atimeNsec
-    case ChangeTime => status.times.ctimeNsec
-  }
-
-  opaque function BaseEntryBeforeCore(
-    cmd: Schema.LsCmd,
-    left: Spec.EntryObservation,
-    right: Spec.EntryObservation
-  ): bool
-  {
-    if cmd.sortMode == Schema.SortSize &&
-       (if left.ok then left.status.storage.size else 0) != (if right.ok then right.status.storage.size else 0) then
-      (if left.ok then left.status.storage.size else 0) > (if right.ok then right.status.storage.size else 0)
-    else if cmd.sortMode == Schema.SortTime &&
-            (if left.ok then SelectedSecondsCore(cmd, left.status) else 0) != (if right.ok then SelectedSecondsCore(cmd, right.status) else 0) then
-      (if left.ok then SelectedSecondsCore(cmd, left.status) else 0) > (if right.ok then SelectedSecondsCore(cmd, right.status) else 0)
-    else if cmd.sortMode == Schema.SortTime &&
-            (if left.ok then SelectedNanosecondsCore(cmd, left.status) else 0) != (if right.ok then SelectedNanosecondsCore(cmd, right.status) else 0) then
-      (if left.ok then SelectedNanosecondsCore(cmd, left.status) else 0) > (if right.ok then SelectedNanosecondsCore(cmd, right.status) else 0)
-    else
-      StringLessCore(left.displayName, right.displayName)
-  }
-
-  opaque function EntryBeforeCore(
-    cmd: Schema.LsCmd,
-    left: Spec.EntryObservation,
-    right: Spec.EntryObservation
-  ): bool
-  {
-    if cmd.reverse then BaseEntryBeforeCore(cmd, right, left)
-    else BaseEntryBeforeCore(cmd, left, right)
-  }
-
   opaque function InsertSortedCore(
     cmd: Schema.LsCmd,
     entry: Spec.EntryObservation,
@@ -237,7 +47,7 @@ module LsCore {
     decreases |sorted|
   {
     if |sorted| == 0 then [entry]
-    else if EntryBeforeCore(cmd, entry, sorted[0]) then [entry] + sorted
+    else if Spec.EntryBeforeSpec(cmd, entry, sorted[0]) then [entry] + sorted
     else [sorted[0]] + InsertSortedCore(cmd, entry, sorted[1..])
   }
 
@@ -251,19 +61,6 @@ module LsCore {
     else InsertSortedCore(cmd, entries[0], SortEntriesCore(cmd, entries[1..]))
   }
 
-  opaque function OperandBeforeCore(
-    cmd: Schema.LsCmd,
-    left: Spec.OperandObservation,
-    right: Spec.OperandObservation
-  ): bool
-  {
-    if left.operandClass != right.operandClass then
-      Spec.OperandClassRank(left.operandClass) <
-      Spec.OperandClassRank(right.operandClass)
-    else
-      EntryBeforeCore(cmd, Spec.OperandAsEntry(left), Spec.OperandAsEntry(right))
-  }
-
   opaque function InsertOperandSortedCore(
     cmd: Schema.LsCmd,
     observation: Spec.OperandObservation,
@@ -272,7 +69,7 @@ module LsCore {
     decreases |sorted|
   {
     if |sorted| == 0 then [observation]
-    else if OperandBeforeCore(cmd, observation, sorted[0]) then
+    else if Spec.OperandBeforeSpec(cmd, observation, sorted[0]) then
       [observation] + sorted
     else
       [sorted[0]] + InsertOperandSortedCore(cmd, observation, sorted[1..])
@@ -320,8 +117,8 @@ module LsCore {
   function RenderOperandCore(cmd: Schema.LsCmd, observations: seq<Spec.OperandObservation>, index: nat): BenchWorld.Bytes
     requires index < |observations|
   {
-    RenderAlignedEntryCore(cmd, observations[index].renderName, observations[index].status,
-                           Text.OperandWidthsSpec(cmd, observations))
+    Spec.RenderAlignedEntrySpec(cmd, observations[index].renderName, observations[index].status,
+                                Text.OperandWidthsSpec(cmd, observations))
   }
 
   function BodiesAtPositionsCore(
@@ -527,7 +324,7 @@ module LsCore {
     forall i: nat | i < |observations| ::
       outputFragments[i] ==
       (if observations[i].ok
-       then RenderEntryCore(cmd, observations[i].renderName, observations[i].status)
+       then Spec.RenderEntrySpec(cmd, observations[i].renderName, observations[i].status)
        else []) &&
       errorFragments[i] ==
       Spec.EntryErrorTextSpec(observations[i].displayName, observations[i])
@@ -543,7 +340,7 @@ module LsCore {
     forall i: nat | i < |observations| ::
       outputFragments[i] ==
       (if observations[i].ok
-       then RenderAlignedEntryCore(cmd, observations[i].renderName, observations[i].status, Spec.ObservationWidthsSpec(cmd, observations))
+       then Spec.RenderAlignedEntrySpec(cmd, observations[i].renderName, observations[i].status, Spec.ObservationWidthsSpec(cmd, observations))
        else Spec.RenderFailedEntrySpec(cmd, observations[i], Spec.ObservationWidthsSpec(cmd, observations)))
   }
 
@@ -575,7 +372,7 @@ module LsCore {
       ObservationPiecesSummary(cmd, observations, outputFragments) &&
       Spec.ObservationErrorsRelation(displayPath, rawObservations, errorFragments) &&
       Spec.FragmentsConcatenate(outputFragments, entryOutput, outputCuts) &&
-      output == TotalLineCore(cmd, rawObservations) + entryOutput &&
+      output == Spec.TotalLineSpec(cmd, rawObservations) + entryOutput &&
       Spec.FragmentsConcatenate(errorFragments, entryErrors, errorCuts) &&
       errors == entryErrors +
       (if readErr == 0 then [] else Spec.ReadDirectoryErrorMessageSpec(displayPath, readErr)) +
@@ -795,7 +592,7 @@ module LsCore {
         Spec.ObservedOperandStatusCallCount(cmd,fs,observation) &&
         !observation.sectionAvailable &&
         Spec.DirectOperandRenderFields(cmd,fs,observation,status) &&
-        observation.body == RenderEntryCore(cmd,observation.renderName,status) &&
+        observation.body == Spec.RenderEntrySpec(cmd,observation.renderName,status) &&
         observation.sectionErrors == [] && !observation.hasCycle && !observation.directoryFailed
   }
 
@@ -1161,7 +958,7 @@ module LsCore {
     ensures io.statusCursor() == old(io.statusCursor())+1
     ensures Native.TraceFields(cmd.nativeInputs[0],old(NativeIO.State(io)),NativeIO.State(io),
                                observation.nativeCalls)
-    ensures output == (if observation.ok then RenderEntryCore(cmd,observation.renderName,observation.status) else [])
+    ensures output == (if observation.ok then Spec.RenderEntrySpec(cmd,observation.renderName,observation.status) else [])
     ensures errors == Spec.EntryErrorTextSpec(displayName,observation)
     ensures hadError == Spec.ObservationFailedSpec(observation)
     ensures observation.entryKind == entryKind && observation.displayName == displayName
@@ -1175,12 +972,12 @@ module LsCore {
     observation := Spec.EntryObservation(displayName,renderName,path,followSymlink,ok,status,
                                          err,linkErr,entryKind,before.status,Spec.StatusEntryEvidence(before.status),calls);
     if ok {
-      output := RenderEntryCore(cmd,renderName,status);
-      errors := Text.ReadLinkErrorMessageSpec(displayName,linkErr);
+      output := Spec.RenderEntrySpec(cmd,renderName,status);
+      errors := Spec.ReadLinkErrorMessageSpec(displayName,linkErr);
       hadError := linkErr != 0;
     } else {
       output := [];
-      errors := Text.AccessErrorMessageSpec(displayName,err);
+      errors := Spec.AccessErrorMessageSpec(displayName,err);
       hadError := true;
     }
     assert Spec.MetadataObservationRelation(cmd,io.fs(),observation) by {
@@ -1226,7 +1023,7 @@ module LsCore {
               Spec.DirentKindMatchesEntrySpec(Spec.ClassifiedDirentKindSpec(kind), entry) &&
               Spec.CanonicalDirentFields(observation)
     ensures !Spec.EntryStatusRequiredSpec(cmd,Spec.ClassifiedDirentKindSpec(kind),name) ==> observation.nativeCalls == []
-    ensures output == (if observation.ok then RenderEntryCore(cmd, observation.renderName, observation.status) else [])
+    ensures output == (if observation.ok then Spec.RenderEntrySpec(cmd, observation.renderName, observation.status) else [])
     ensures errors == Spec.EntryErrorTextSpec(name, observation)
     ensures hadError == Spec.ObservationFailedSpec(observation)
   {
@@ -1238,7 +1035,7 @@ module LsCore {
       observation := Spec.EntryObservation(
         name, name, path, false, true, BenchWorld.DEFAULT_FILE_STATUS, 0, 0, kind,
         io.statusCursor(), Spec.DirentEntryEvidence(entry, Spec.ClassifiedDirentKindSpec(kind)));
-      output := RenderEntryCore(cmd, name, BenchWorld.DEFAULT_FILE_STATUS);
+      output := Spec.RenderEntrySpec(cmd, name, BenchWorld.DEFAULT_FILE_STATUS);
       errors := [];
       hadError := false;
     }
@@ -1273,7 +1070,7 @@ module LsCore {
               (cmd.followMode == Schema.FollowAlways && Spec.EntryMetadataRequiredSpec(cmd))
             else observation.source == Spec.ImpliedDotEntryEvidence && Spec.CanonicalDirentFields(observation)
     ensures !Spec.EntryRenderSortMetadataRequiredSpec(cmd) ==> observation.nativeCalls == []
-    ensures output == (if observation.ok then RenderEntryCore(cmd, observation.renderName, observation.status) else [])
+    ensures output == (if observation.ok then Spec.RenderEntrySpec(cmd, observation.renderName, observation.status) else [])
     ensures errors == Spec.EntryErrorTextSpec(name, observation)
     ensures hadError == Spec.ObservationFailedSpec(observation)
   {
@@ -1285,7 +1082,7 @@ module LsCore {
       observation := Spec.EntryObservation(
         name, name, path, false, true, BenchWorld.DEFAULT_FILE_STATUS, 0, 0,
         BenchWorld.DirectoryDirentKind, io.statusCursor(), Spec.ImpliedDotEntryEvidence);
-      output := RenderEntryCore(cmd, name, BenchWorld.DEFAULT_FILE_STATUS);
+      output := Spec.RenderEntrySpec(cmd, name, BenchWorld.DEFAULT_FILE_STATUS);
       errors := [];
       hadError := false;
     }
@@ -1316,7 +1113,7 @@ module LsCore {
     requires Spec.FragmentsConcatenate(outputFragments, output, outputCuts)
     requires Spec.FragmentsConcatenate(errorFragments, errors, errorCuts)
     requires piece ==
-             (if observation.ok then RenderEntryCore(cmd, observation.renderName, observation.status) else [])
+             (if observation.ok then Spec.RenderEntrySpec(cmd, observation.renderName, observation.status) else [])
     requires errorPiece ==
              Spec.EntryErrorTextSpec(observation.displayName, observation)
     ensures observations2 == observations + [observation]
@@ -1560,8 +1357,8 @@ module LsCore {
       invariant |errorFragments| == i
       invariant forall j: nat | j < i ::
                   outputFragments[j] == (if observations[j].ok then
-                                           RenderAlignedEntryCore(cmd, observations[j].renderName, observations[j].status,
-                                                                  Spec.ObservationWidthsSpec(cmd, observations)) else Spec.RenderFailedEntrySpec(cmd, observations[j], Spec.ObservationWidthsSpec(cmd, observations))) &&
+                                           Spec.RenderAlignedEntrySpec(cmd, observations[j].renderName, observations[j].status,
+                                                                       Spec.ObservationWidthsSpec(cmd, observations)) else Spec.RenderFailedEntrySpec(cmd, observations[j], Spec.ObservationWidthsSpec(cmd, observations))) &&
                   errorFragments[j] == Spec.EntryErrorTextSpec(Spec.EntryDiagnosticPathSpec(displayPath, observations[j].displayName), observations[j])
       invariant Spec.FragmentsConcatenate(outputFragments, output, outputCuts)
       invariant Spec.FragmentsConcatenate(errorFragments, errors, errorCuts)
@@ -1586,17 +1383,17 @@ module LsCore {
         }
       }
       var piece := if observation.ok
-      then RenderAlignedEntryCore(cmd, observation.renderName, observation.status, Text.ObservationWidthsSpec(cmd, observations))
-      else Text.RenderFailedEntrySpec(cmd, observation, Text.ObservationWidthsSpec(cmd, observations));
-      var errorPiece := Text.EntryErrorTextSpec(
-        EntryDiagnosticPathCore(displayPath, observation.displayName), observation);
+      then Spec.RenderAlignedEntrySpec(cmd, observation.renderName, observation.status, Text.ObservationWidthsSpec(cmd, observations))
+      else Spec.RenderFailedEntrySpec(cmd, observation, Text.ObservationWidthsSpec(cmd, observations));
+      var errorPiece := Spec.EntryErrorTextSpec(
+        Spec.EntryDiagnosticPathSpec(displayPath, observation.displayName), observation);
       assert piece == (if observation.ok then
-                         RenderAlignedEntryCore(cmd, observation.renderName, observation.status,
-                                                Spec.ObservationWidthsSpec(cmd, observations))
+                         Spec.RenderAlignedEntrySpec(cmd, observation.renderName, observation.status,
+                                                     Spec.ObservationWidthsSpec(cmd, observations))
                        else Spec.RenderFailedEntrySpec(cmd, observation, Spec.ObservationWidthsSpec(cmd, observations)));
       assert errorPiece == Spec.EntryErrorTextSpec(
                              Spec.EntryDiagnosticPathSpec(displayPath, observation.displayName), observation) by {
-        reveal EntryDiagnosticPathCore();
+        reveal Spec.EntryDiagnosticPathSpec();
       }
       AppendFragment(outputFragments, output, outputCuts, piece);
       AppendFragment(errorFragments, errors, errorCuts, errorPiece);
@@ -2013,9 +1810,9 @@ module LsCore {
     ghost var ignoredCuts: seq<nat>;
     ignoredOutput, entryErrors, ignoredFailure, ignoredFragments, ignoredCuts,
     renderedErrors, renderedErrorCuts := RenderObservationSequence(cmd, displayPath, rawObservations);
-    output := TotalLineCore(cmd, rawObservations) + entryOutput;
-    errors := entryErrors + (if readErr == 0 then [] else Text.ReadDirectoryErrorMessageSpec(displayPath, readErr)) +
-    Text.CloseDirectoryErrorMessageSpec(displayPath, closeErr);
+    output := Spec.TotalLineSpec(cmd, rawObservations) + entryOutput;
+    errors := entryErrors + (if readErr == 0 then [] else Spec.ReadDirectoryErrorMessageSpec(displayPath, readErr)) +
+    Spec.CloseDirectoryErrorMessageSpec(displayPath, closeErr);
     directoryFailed := readErr != 0 || closeErr != 0;
     hadError := hadError || directoryFailed;
     assert directoryFailed == Spec.DirectoryOperationFailed(nativeTrace,readErr) by {
@@ -2185,7 +1982,7 @@ module LsCore {
       observations := [];
       readErr := openErr;
       output := [];
-      errors := Text.OpenDirectoryErrorMessageSpec(displayPath, openErr);
+      errors := Spec.OpenDirectoryErrorMessageSpec(displayPath, openErr);
       hadError := true;
       directoryFailed := true;
       assert directoryFailed == Spec.DirectoryOperationFailed(nativeTrace,readErr) by {
@@ -2432,7 +2229,7 @@ module LsCore {
     requires piece ==
              (if i in afterChildren && Spec.RecursiveNodeListed(afterChildren[i])
               then "\n" + afterChildren[i].output else [])
-    ensures beforeOutput + piece == Text.DirectoryHeaderSpec(displayPath) + listing +
+    ensures beforeOutput + piece == Spec.DirectoryHeaderSpec(displayPath) + listing +
                                     RecursiveChildOutputPrefixCore(observations, afterChildren, i + 1)
   {
     assert forall k: nat :: k < i ==>
@@ -2464,14 +2261,14 @@ module LsCore {
     requires afterCycles == beforeCycles || afterCycles == beforeCycles + {i}
     requires piece ==
              (if i in afterCycles then
-                Text.RecursiveCycleMessageSpec(
+                Spec.RecursiveCycleMessageSpec(
                   Spec.ChildDisplayPath(displayPath, observations[i].displayName))
               else if i in afterChildren then afterChildren[i].errors else [])
     ensures beforeErrors + piece == listingErrors + RecursiveChildErrorPrefixCore(
                                       displayPath, observations, afterChildren, afterCycles, i + 1)
   {
     hide *;
-    assert Text.RecursiveCycleMessageSpec(
+    assert Spec.RecursiveCycleMessageSpec(
         Spec.ChildDisplayPath(displayPath, observations[i].displayName)) ==
            Spec.RecursiveCycleMessageSpec(
              Spec.ChildDisplayPath(displayPath, observations[i].displayName));
@@ -2830,7 +2627,7 @@ module LsCore {
     if !openOk {
       wasListed := false;
       output := [];
-      errors := Text.OpenDirectoryErrorMessageSpec(displayPath, openErr);
+      errors := Spec.OpenDirectoryErrorMessageSpec(displayPath, openErr);
       hadError := true;
       hasCycle := false;
       directoryFailed := true;
@@ -2877,7 +2674,7 @@ module LsCore {
       closeErr := IOContract.ResultErrno(closeResult),closeCalls := [closed],
       nativeCalls := nativeTrace.nativeCalls+[closed]);
       output := [];
-      errors := Text.DirectoryIdentityErrorMessageSpec(displayPath, statusErr);
+      errors := Spec.DirectoryIdentityErrorMessageSpec(displayPath, statusErr);
       hadError := !statusOk || closeFailed;
       hasCycle := false;
       directoryFailed := true;
@@ -2907,7 +2704,7 @@ module LsCore {
       closeErr := IOContract.ResultErrno(closeResult),closeCalls := [closed],
       nativeCalls := nativeTrace.nativeCalls+[closed]);
       output := [];
-      errors := Text.RecursiveCycleMessageSpec(displayPath);
+      errors := Spec.RecursiveCycleMessageSpec(displayPath);
       hadError := openedStatus.hostKey in ancestors || closeFailed;
       hasCycle := true;
       directoryFailed := closeFailed;
@@ -2951,7 +2748,7 @@ module LsCore {
     errors := listingErrors;
     hadError := listingHadError;
     hasCycle := false;
-    output := Text.DirectoryHeaderSpec(displayPath) + listing;
+    output := Spec.DirectoryHeaderSpec(displayPath) + listing;
     ghost var children: map<nat, Spec.RecursiveWitness> := map[];
     ghost var cycles: set<nat> := {};
     var childAncestors := ancestors + {openedStatus.hostKey};
@@ -3029,10 +2826,7 @@ module LsCore {
       ghost var addedCycle := false;
       if Spec.RecursiveEntryEligible(observation)
       {
-        var childDisplay := ChildDisplayPathCore(displayPath, observation.displayName);
-        assert childDisplay == Spec.ChildDisplayPath(displayPath, observation.displayName) by {
-          reveal ChildDisplayPathCore();
-        }
+        var childDisplay := Spec.ChildDisplayPath(displayPath, observation.displayName);
         var descendantOutput: BenchWorld.Bytes;
         var descendantErrors: BenchWorld.Bytes;
         var childFailed: bool;
@@ -3153,7 +2947,7 @@ module LsCore {
     assert path == Spec.OperandPathSpec(cmd,cwd,operand);
     if !ok {
       observation := Spec.OperandObservation(index,operand,operand,path,false,status,err,Spec.AccessFailure,
-                                             false,[],Text.AccessErrorMessageSpec(operand,err),[],true,false,false,
+                                             false,[],Spec.AccessErrorMessageSpec(operand,err),[],true,false,false,
                                              before.status,io.statusCursor(),Spec.NoDirectoryTrace,statusCalls,[],statusCalls,0);
       assert Spec.OperandNativeFields(cmd,preFs,observation) by {
         reveal Spec.OperandNativeFields(), Spec.NativeCallsFields(), Spec.NativeCommandFields(), Native.TraceFields();
@@ -3199,7 +2993,7 @@ module LsCore {
           ReadDirectoryCore(cmd,operand,path,io);
         assert nativeTrace.DirectoryTrace? by { reveal Spec.BoundOpenDirectoryTrace(); }
         body := listingOutput;
-        if |cmd.operands| > 1 { body := Text.DirectoryHeaderSpec(operand)+body; }
+        if |cmd.operands| > 1 { body := Spec.DirectoryHeaderSpec(operand)+body; }
         NativeTrace.Concat(cmd.nativeInputs[0],before,afterStatus,NativeIO.State(io),statusCalls,nativeTrace.nativeCalls);
         observation := Spec.OperandObservation(index,operand,operand,path,true,status,0,Spec.ExpandedDirectory,
                                                wasOpened,if wasOpened then body else [],[],sectionErrors,failed,false,directoryFailed,
@@ -3219,7 +3013,7 @@ module LsCore {
                                Spec.ExplicitCommandLineFollowSpec(cmd),cmd.numericLong,status,renderName,linkErr,renderCalls);
       NativeTrace.Concat(cmd.nativeInputs[0],before,afterStatus,NativeIO.State(io),statusCalls,renderCalls);
       observation := Spec.OperandObservation(index,operand,renderName,path,true,status,0,Spec.DirectOperand,
-                                             false,RenderEntryCore(cmd,renderName,status),Text.ReadLinkErrorMessageSpec(operand,linkErr),[],
+                                             false,Spec.RenderEntrySpec(cmd,renderName,status),Spec.ReadLinkErrorMessageSpec(operand,linkErr),[],
                                              linkErr != 0,false,false,before.status,io.statusCursor(),Spec.NoDirectoryTrace,
                                              statusCalls,renderCalls,statusCalls+renderCalls,linkErr);
       assert Spec.OperandNativeFields(cmd,preFs,observation) by {
@@ -3309,7 +3103,7 @@ module LsCore {
       return;
     }
     if parsedCmd.mode != Schema.ModeRun {
-      plannedStderr := plannedStderr + (Text.InvalidModeMessageSpec(parsedCmd.mode));
+      plannedStderr := plannedStderr + (Spec.InvalidModeMessageSpec(parsedCmd.mode));
       exit := if parsedCmd.mode.ModeInvalidTime? then 1 else 2;
       assert PreparedSummary(raw, io, exit, plannedStdout, plannedStderr) by {
         reveal PreparedSummary();
@@ -3427,7 +3221,7 @@ module LsCore {
     var finalDiagnostics := diagnostics;
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
-      finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
+      finalDiagnostics := diagnostics + Spec.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
                                               else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
@@ -3461,49 +3255,4 @@ module LsCore {
         Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
                             io.trustedStreams(), emitted, reported, preparedExit, exit);
   }
-  function EntryDiagnosticPathCore(displayPath: BenchWorld.Path, name: string): BenchWorld.Path
-  {
-    Spec.EntryDiagnosticPathSpec(displayPath, name)
-  } by method {
-    if displayPath == "." {
-      return name;
-    }
-    if |displayPath| > 0 && displayPath[|displayPath| - 1] == '/' {
-      return displayPath + name;
-    }
-    return WorldPath.AppendPath(displayPath, name);
-  }
-
-  lemma TrailingSlashCutUnique(path: string, left: nat, right: nat)
-    requires Spec.TrailingSlashCut(path, left) && Spec.TrailingSlashCut(path, right)
-    ensures left == right
-  {
-    if left < right {
-      assert path[right - 1] == '/';
-    } else if right < left {
-      assert path[left - 1] == '/';
-    }
-  }
-
-  function ChildDisplayPathCore(displayPath: BenchWorld.Path, name: string): BenchWorld.Path
-  {
-    Spec.ChildDisplayPath(displayPath, name)
-  } by method {
-    var cut := |displayPath|;
-    while 0 < cut && displayPath[cut - 1] == '/'
-      invariant 0 <= cut <= |displayPath|
-      invariant forall j: nat :: cut <= j < |displayPath| ==> displayPath[j] == '/'
-      decreases cut
-    {
-      cut := cut - 1;
-    }
-    assert Spec.TrailingSlashCut(displayPath, cut);
-    forall other: nat | Spec.TrailingSlashCut(displayPath, other)
-      ensures other == cut
-    {
-      TrailingSlashCutUnique(displayPath, cut, other);
-    }
-    return displayPath[..cut] + "/" + name;
-  }
-
 }

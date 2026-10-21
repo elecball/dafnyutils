@@ -15,9 +15,6 @@ module BasenameSpec {
   import Schema = BasenameSchema
   import SE = StringEscaping
 
-
-
-
   function IsSlash(ch: char): bool
   {
     ch == '/'
@@ -28,12 +25,12 @@ module BasenameSpec {
     if cmd.zeroTerminated then ['\0'] else "\n"
   }
 
-  ghost predicate SlashFree(text: string)
+  predicate SlashFree(text: string)
   {
     '/' !in text
   }
 
-  ghost predicate SlashesOnly(text: string)
+  predicate SlashesOnly(text: string)
   {
     forall i :: 0 <= i < |text| ==> IsSlash(text[i])
   }
@@ -199,7 +196,7 @@ module BasenameSpec {
     "\nTry 'basename --help' for more information.\n"
   }
 
-  ghost function ExtraOperandMessageSpec(op: string): BenchWorld.Bytes
+  function ExtraOperandMessageSpec(op: string): BenchWorld.Bytes
   {
     ExtraOperandPrefix() + SE.SpecLocaleQuoteBytes(Utf8.Encode(op)) + ExtraOperandSuffix()
   }
@@ -242,7 +239,7 @@ module BasenameSpec {
     "basename: write error: " + message + "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorText(message))
   }

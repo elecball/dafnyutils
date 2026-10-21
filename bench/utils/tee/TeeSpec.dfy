@@ -40,9 +40,6 @@ module TeeSpec {
   import Utf8 = Utf8Semantics
   import SE = StringEscaping
 
-
-
-
   function HelpTextSpec(): BenchWorld.Bytes
   {
     "Usage: tee [OPTION]... [FILE]...\n"
@@ -112,13 +109,13 @@ module TeeSpec {
     IOContract.CLocaleErrnoTextResult(err)
   }
 
-  ghost function ReadErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ReadErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     ReadErrorMessageSpecText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
     ReadErrorMessageSpecText1 + Utf8.Encode(ReadErrnoTextSpec(err)) + ReadErrorMessageSpecText2
   }
 
-  ghost function WriteErrorMessageText(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
+  function WriteErrorMessageText(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
   {
     WriteErrorMessageTextText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
     WriteErrorMessageTextText1 + Utf8.Encode(reason) + WriteErrorMessageTextText2
@@ -219,7 +216,7 @@ module TeeSpec {
                             preTrustedFilesystem, states[i], states[i + 1])
   }
 
-  ghost function StdinReadErrorText(reason: string): BenchWorld.Bytes
+  function StdinReadErrorText(reason: string): BenchWorld.Bytes
   {
     StdinReadErrorTextText0 + Utf8.Encode(reason) + StdinReadErrorTextText1
   }
@@ -230,7 +227,7 @@ module TeeSpec {
   }
 
 
-  ghost function WriteErrorText(raw: Schema.TeeCmdRaw, reason: string): StreamWorld.Bytes
+  function WriteErrorText(raw: Schema.TeeCmdRaw, reason: string): StreamWorld.Bytes
   {
     (if CommandSpec(raw).mode == Schema.ModeRun then WriteErrorTextText0
      else WriteErrorTextText1) + Utf8.Encode(reason) + WriteErrorTextText2

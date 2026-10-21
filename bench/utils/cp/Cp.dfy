@@ -1,7 +1,7 @@
+include "CpSpec.dfy"
 include "../../core/StringEscaping.dfy"
 include "../../core/Utf8.dfy"
 include "CliSupport.dfy"
-include "CpSpec.dfy"
 include "CpCore.dfy"
 include "CpProof.dfy"
 
@@ -11,8 +11,6 @@ module Cp {
     provides BenchIO, BenchWorld, BenchItem, CliTypes, S, Core, Spec, Proof, CliExtern, CpBenchmarkItem._ctor, CpBenchmarkItem.Name, CpBenchmarkItem.Schema, CpBenchmarkItem.ParseConfig, CpBenchmarkItem.Decode, CpBenchmarkItem.FormatParseError, CpBenchmarkItem.PlanArgv, CpBenchmarkItem.PlanParseFailure, CpBenchmarkItem.RunCore
     reveals CpBenchmarkItem
 
-  import ProtocolUtf8Model = Utf8Semantics
-  import ProtocolEscapingModel = StringEscaping
   import opened ProtocolModel = CpSpec
 
   import BenchIO
@@ -45,7 +43,7 @@ module Cp {
     }
 
     method FormatParseError(err: CliTypes.ParseError) returns (msg: BenchWorld.Bytes) {
-      msg := ProtocolParseErrorText(err);
+      msg := ProtocolModel.ParseErrorText(err);
     }
 
     method PlanArgv(argv: seq<string>) returns (plan: CliTypes.CliPlan<S.CpCmdRaw>) {
@@ -73,7 +71,7 @@ module Cp {
           case ParseFailure(_) =>
         }
       }
-      return CliTypes.CliEarlyExit(1,[],ProtocolParseErrorText(e));
+      return CliTypes.CliEarlyExit(1,[],ProtocolModel.ParseErrorText(e));
     }
 
     method RunCore(raw: S.CpCmdRaw, io: BenchIO.IO) returns (exit: int)
@@ -83,61 +81,6 @@ module Cp {
       exit := Core.RunCore(raw, io);
       Proof.CoreSummaryImpliesSpec(raw, io, exit);
     }
-  }
-  function ProtocolEncodeChar(ch: char): BenchWorld.Bytes
-    ensures ProtocolEncodeChar(ch) == ProtocolUtf8Model.EncodeChar(ch)
-    ensures |ProtocolEncodeChar(ch)| == BenchWorld.Utf8ByteWidth(ch)
-    ensures 1 <= |ProtocolEncodeChar(ch)| <= 4
-  {
-    var code := ch as int;
-    if code <= 0x7f then
-      [code as char]
-    else if code <= 0x7ff then
-      [
-        (0xc0 + code / 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else if code <= 0xffff then
-      [
-        (0xe0 + code / 0x1000) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else
-      [
-        (0xf0 + code / 0x40000) as char,
-        (0x80 + (code / 0x1000) % 0x40) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-  }
-
-  function ProtocolEncode(text: string): BenchWorld.Bytes
-    ensures ProtocolEncode(text) == ProtocolUtf8Model.Encode(text)
-    ensures |ProtocolEncode(text)| >= |text|
-    decreases |text|
-  {
-    if text == [] then [] else ProtocolEncodeChar(text[0]) + ProtocolEncode(text[1..])
-  }
-
-  function ProtocolParseErrorText(error: CliTypes.ParseError): BW.Bytes
-    ensures ProtocolParseErrorText(error) == ProtocolModel.ParseErrorText(error)
-  {
-    if error.kind == CliTypes.UnknownOption then
-      if |error.rawToken| > 2 && error.rawToken[..2] == ParseErrorTextPart1() then
-        ParseErrorTextPart2() + ProtocolEncode(error.rawToken) + ParseErrorTextPart3() + Hint()
-      else if |error.rawToken| > 1 then
-        ParseErrorTextPart4() + [ProtocolEncodeChar(error.rawToken[1])[0]] + ParseErrorTextPart3() + Hint()
-      else ParseErrorTextPart5() + Hint()
-    else if error.kind == CliTypes.MissingValue then
-      if |error.rawToken| > 2 && error.rawToken[..2] == ParseErrorTextPart1() then
-        ParseErrorTextPart6() + ProtocolEncode(error.rawToken) + ParseErrorTextPart7() + Hint()
-      else if |error.rawToken| > 1 then
-        ParseErrorTextPart8() + [ProtocolEncodeChar(error.rawToken[|error.rawToken|-1])[0]] + ParseErrorTextPart3() + Hint()
-      else ParseErrorTextPart9() + Hint()
-    else if error.kind == CliTypes.UnexpectedValue then
-      ParseErrorTextPart6() + ProtocolEncode(LongOption(error.rawToken)) + ParseErrorTextPart10() + Hint()
-    else ParseErrorTextPart6() + ProtocolEncode(error.rawToken) + ParseErrorTextPart11() + Hint()
   }
 
 }

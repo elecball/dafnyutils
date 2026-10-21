@@ -3,20 +3,23 @@ include "World.dfy"
 module Utf8Semantics {
   import BW = BenchWorld
 
-  ghost predicate UnicodeScalar(ch: char)
+  predicate UnicodeScalar(ch: char)
   {
     var code := ch as int;
     0 <= code <= 0x10ffff && !(0xd800 <= code <= 0xdfff)
   }
 
   // External argv/path values are scalar strings without NUL; invalid raw POSIX byte strings are unrepresentable.
-  ghost predicate ValidExternalText(text: string)
+  predicate ValidExternalText(text: string)
   {
     forall i | 0 <= i < |text| ::
       text[i] != '\0' && UnicodeScalar(text[i])
   }
 
-  ghost function EncodeChar(ch: char): BW.Bytes
+  // Pure encoding definitions are shared by specifications and executable code.
+  function EncodeChar(ch: char): BW.Bytes
+    ensures |EncodeChar(ch)| == BW.Utf8ByteWidth(ch)
+    ensures 1 <= |EncodeChar(ch)| <= 4
   {
     var code := ch as int;
     if code <= 0x7f then
@@ -41,7 +44,8 @@ module Utf8Semantics {
       ]
   }
 
-  ghost function Encode(text: string): BW.Bytes
+  function Encode(text: string): BW.Bytes
+    ensures |Encode(text)| >= |text|
     decreases |text|
   {
     if text == [] then [] else EncodeChar(text[0]) + Encode(text[1..])

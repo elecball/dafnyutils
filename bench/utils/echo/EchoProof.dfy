@@ -202,19 +202,7 @@ module EchoProof {
         assert Core.RenderEscaped(text, lo).out ==
                piece + Core.RenderEscaped(text, lo + 2).out;
       } else if e == 'x' {
-        if lo + 2 < |text| {
-          IsHexDigitEq(text[lo + 2]);
-        }
-        if lo + 2 < |text| && Core.IsHexDigit(text[lo + 2]) {
-          assert Spec.IsHexDigit(text[lo + 2]);
-          HexValueEq(text[lo + 2]);
-          if lo + 3 < |text| {
-            IsHexDigitEq(text[lo + 3]);
-            if Core.IsHexDigit(text[lo + 3]) {
-              assert Spec.IsHexDigit(text[lo + 3]);
-              HexValueEq(text[lo + 3]);
-            }
-          }
+        if lo + 2 < |text| && Spec.IsHexDigit(text[lo + 2]) {
           var parsed := Core.ParseHex(text, lo + 2);
           var count :=
             if lo + 3 < |text| && Spec.IsHexDigit(text[lo + 3]) then 2 else 1;
@@ -792,8 +780,7 @@ module EchoProof {
   {
     if i == |args| {
     } else {
-      OptionTokenEq(args[i]);
-      if !Core.IsEchoOptionToken(args[i]) {
+      if !Spec.OptionToken(args[i]) {
       } else {
         assert Spec.OptionToken(args[i]);
         assert 1 < |args[i]|;
@@ -809,41 +796,6 @@ module EchoProof {
         assert forall j :: 0 <= j < i + 1 ==> Spec.OptionToken(args[j]);
         ScanOptionsSatisfiesRelations(args, i + 1, next.0, next.1);
       }
-    }
-  }
-
-  lemma AllValidEchoOptionCharsQuantified(token: string, i: nat)
-    requires i <= |token|
-    ensures Core.AllValidEchoOptionChars(token, i) ==
-            (forall j :: i <= j < |token| ==> Spec.ValidEchoOptionChar(token[j]))
-    decreases |token| - i
-  {
-    if i < |token| {
-      AllValidEchoOptionCharsQuantified(token, i + 1);
-      if Core.ValidEchoOptionChar(token[i]) &&
-         Core.AllValidEchoOptionChars(token, i + 1) {
-        assert forall j :: i <= j < |token| ==>
-                             Spec.ValidEchoOptionChar(token[j]) by {
-          forall j | i <= j < |token|
-            ensures Spec.ValidEchoOptionChar(token[j])
-          {
-            if j == i {
-              assert Core.ValidEchoOptionChar(token[i]);
-            } else {
-              assert i + 1 <= j < |token|;
-              assert Spec.ValidEchoOptionChar(token[j]);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  lemma OptionTokenEq(token: string)
-    ensures Core.IsEchoOptionToken(token) == Spec.OptionToken(token)
-  {
-    if |token| > 1 && token[0] == '-' {
-      AllValidEchoOptionCharsQuantified(token, 1);
     }
   }
 
@@ -922,19 +874,6 @@ module EchoProof {
       raw, Spec.PosixlyCorrect(old(io.env()))
     );
   }
-
-  lemma IsHexDigitEq(c: char)
-    ensures Core.IsHexDigit(c) == Spec.IsHexDigit(c)
-  {
-  }
-
-  lemma HexValueEq(c: char)
-    requires Core.IsHexDigit(c)
-    requires Spec.IsHexDigit(c)
-    ensures Core.HexValue(c) == Spec.HexValue(c)
-  {
-  }
-
 
   twostate lemma CoreSummaryImpliesSpec(raw: Schema.EchoCmdRaw, io: BenchIO.IO, exit: int)
     requires Core.CoreSummary(raw, io, exit)

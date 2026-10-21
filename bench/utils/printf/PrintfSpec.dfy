@@ -14,9 +14,6 @@ module PrintfSpec {
   import Schema = PrintfSchema
   import SE = StringEscaping
 
-
-
-
   function HelpText(): BenchWorld.Bytes
   {
     "Usage: printf FORMAT [ARGUMENT]...\n"
@@ -97,13 +94,13 @@ module PrintfSpec {
     "\n"
   }
 
-  ghost function ExcessArgumentsWarning(arg: string): BenchWorld.Bytes
+  function ExcessArgumentsWarning(arg: string): BenchWorld.Bytes
   {
     ExcessArgumentsWarningPart1() +
     SE.SpecLocaleQuoteBytes(Utf8.Encode(arg)) + ExcessArgumentsWarningPart2()
   }
 
-  ghost function RequestExcessWarning(raw: Schema.PrintfCmdRaw): BenchWorld.Bytes
+  function RequestExcessWarning(raw: Schema.PrintfCmdRaw): BenchWorld.Bytes
   {
     match raw.excessAfterRequest
     case Some(arg) => ExcessArgumentsWarning(arg)
@@ -430,7 +427,7 @@ module PrintfSpec {
     "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorMessagePart1() + message + StreamWriteErrorMessagePart2())
   }

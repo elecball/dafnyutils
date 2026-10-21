@@ -14,71 +14,6 @@ module NlProof {
   import Core = NlCore
   import Spec = NlSpec
 
-  lemma RepeatCharRefines(ch: BW.RawByte, count: int)
-    ensures Core.RepeatChar(ch, count) == Spec.RepeatChar(ch, count)
-    decreases count
-  {
-    if count > 0 {
-      RepeatCharRefines(ch, count - 1);
-    }
-  }
-
-  lemma DigitCharRefines(d: int)
-    ensures Core.DigitChar(d) == Spec.DigitChar(d)
-  {
-  }
-
-  lemma DigitsRefines(n: int)
-    requires 0 <= n
-    ensures Core.Digits(n) == Spec.Digits(n)
-    decreases n
-  {
-    DigitCharRefines(n % 10);
-    if n >= 10 {
-      DigitsRefines(n / 10);
-    }
-  }
-
-  lemma RenderNumberRefines(
-    format: Schema.NumberFormat,
-    n: int,
-    width: int
-  )
-    requires 0 <= n
-    ensures Core.RenderNumber(format, n, width) ==
-            Spec.RenderNumber(format, n, width)
-  {
-    DigitsRefines(n);
-    RepeatCharRefines(' ', width - |Core.Digits(n)|);
-    RepeatCharRefines('0', width - |Core.Digits(n)|);
-  }
-
-  lemma ShouldNumberRefines(
-    style: Schema.BodyStyle,
-    nonempty: bool
-  )
-    ensures Core.ShouldNumber(style, nonempty) ==
-            Spec.ShouldNumber(style, nonempty)
-  {
-  }
-
-  lemma LinePrefixRefines(
-    cmd: Schema.NlCmd,
-    nonempty: bool,
-    n: int
-  )
-    requires 0 <= n
-    ensures Core.LinePrefix(cmd, nonempty, n) ==
-            Spec.LinePrefix(cmd, nonempty, n)
-  {
-    ShouldNumberRefines(cmd.bodyStyle, nonempty);
-    if Core.ShouldNumber(cmd.bodyStyle, nonempty) {
-      RenderNumberRefines(cmd.numberFormat, n, 6);
-    } else {
-      RepeatCharRefines(' ', 6 + |cmd.separator|);
-    }
-  }
-
   lemma LineNumberFromRefines(
     cmd: Schema.NlCmd,
     lines: seq<BW.Bytes>,
@@ -90,14 +25,7 @@ module NlProof {
   {
     reveal Core.LineNumberFromSummary();
     reveal Spec.LineNumberFromRelation();
-    forall i: nat | i < |lines|
-      ensures numbers[i + 1] == numbers[i] +
-                                (if Spec.ShouldNumber(
-                                      cmd.bodyStyle, |lines[i]| > 0
-                                    ) then 1 else 0)
-    {
-      ShouldNumberRefines(cmd.bodyStyle, |lines[i]| > 0);
-    }
+
   }
 
   lemma LineRenderRefines(
@@ -114,7 +42,7 @@ module NlProof {
   {
     reveal Core.LineRenderSummary();
     reveal Spec.LineRenderRelation();
-    LinePrefixRefines(cmd, |line| > 0, number as int);
+
   }
 
   lemma OutputWitnessRefines(
@@ -187,36 +115,6 @@ module NlProof {
     reveal Spec.NormalizedInputRelation();
   }
 
-  lemma LogicalPageDelimiterRefines(line: BW.Bytes)
-    ensures Core.IsLogicalPageDelimiterLine(line) ==
-            Spec.IsLogicalPageDelimiterLine(line)
-  {
-    reveal Core.IsLogicalPageDelimiterLine();
-  }
-
-  lemma HasLogicalPageDelimiterRefines(lines: seq<BW.Bytes>)
-    ensures
-      (exists i ::
-         0 <= i < |lines| &&
-         Core.IsLogicalPageDelimiterLine(lines[i])) <==>
-      (exists i ::
-         0 <= i < |lines| &&
-         Spec.IsLogicalPageDelimiterLine(lines[i]))
-  {
-    if exists i :: 0 <= i < |lines| &&
-                   Core.IsLogicalPageDelimiterLine(lines[i]) {
-      var i: nat :| i < |lines| &&
-                    Core.IsLogicalPageDelimiterLine(lines[i]);
-      LogicalPageDelimiterRefines(lines[i]);
-    }
-    if exists i :: 0 <= i < |lines| &&
-                   Spec.IsLogicalPageDelimiterLine(lines[i]) {
-      var i: nat :| i < |lines| &&
-                    Spec.IsLogicalPageDelimiterLine(lines[i]);
-      LogicalPageDelimiterRefines(lines[i]);
-    }
-  }
-
   lemma InputTraceRefines(
     cmd: Schema.NlCmd,
     preFs: BW.FileSystem,
@@ -284,8 +182,8 @@ module NlProof {
         combined, lines, terminated, fragments, cuts) &&
       hasDelimiter ==
       (exists i :: 0 <= i < |lines| &&
-                   Core.IsLogicalPageDelimiterLine(lines[i]));
-    HasLogicalPageDelimiterRefines(lines);
+                   Spec.IsLogicalPageDelimiterLine(lines[i]));
+
     assert exists ls: seq<BW.Bytes>,
         ts: seq<bool>,
         fs: seq<BW.Bytes>,

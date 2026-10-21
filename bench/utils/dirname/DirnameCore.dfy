@@ -1,21 +1,18 @@
-include "DirnameUtf8Core.dfy"
-include "DirnameTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "DirnameSpec.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
-include "../../core/Utf8.dfy"
 include "DirnameSchema.dfy"
-include "DirnameSpec.dfy"
 
 module DirnameCore {
   import StreamContract = IOContract
 
-  import Utf8 = DirnameUtf8Core
+  import Utf8 = Utf8Semantics
   import BenchIO
   import BenchWorld
   import Schema = DirnameSchema
   import Spec = DirnameSpec
-  import Text = DirnameTextCore
 
   datatype DirnameMode = ModeRun | ModeHelp | ModeVersion
 
@@ -94,7 +91,7 @@ module DirnameCore {
 
   ghost predicate RunOutputSummary(cmd: DirnameCmd, out: string)
   {
-    RenderSummary(cmd.operands, if cmd.zeroTerminated then ['\0'] else "\n", out)
+    RenderSummary(cmd.operands, Spec.OutputSeparator(cmd.zeroTerminated), out)
   }
 
   twostate predicate PreparedSummary(raw: Schema.DirnameCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
@@ -163,7 +160,7 @@ module DirnameCore {
     ensures RunOutputSummary(cmd, out)
     decreases *
   {
-    var sep := if cmd.zeroTerminated then ['\0'] else "\n";
+    var sep := Spec.OutputSeparator(cmd.zeroTerminated);
     out := "";
     var i := 0;
     while i < |cmd.operands|
@@ -311,7 +308,7 @@ module DirnameCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

@@ -175,11 +175,6 @@ module PrintenvProof {
     }
   }
 
-  lemma TerminatorEq(nullTerminated: bool)
-    ensures Core.Terminator(nullTerminated) == Spec.Terminator(nullTerminated)
-  {
-  }
-
   lemma RenderEnvEntriesRefines(entries: seq<string>, terminator: BW.Bytes)
     ensures Spec.EnvironmentOutputRelation(
               entries, terminator, Core.RenderEnvEntries(entries, terminator))
@@ -214,9 +209,8 @@ module PrintenvProof {
         plannedStderr == old(io.stderr()) &&
         exit == Core.ExitStatus(cc, entries);
       if |cc.operands| == 0 {
-        TerminatorEq(cc.nullTerminated);
         RenderEnvEntriesRefines(
-          entries, Core.Terminator(cc.nullTerminated)
+          entries, Spec.Terminator(cc.nullTerminated)
         );
       } else {
         reveal IOC.GetEnvironmentContractFields();
@@ -224,16 +218,15 @@ module PrintenvProof {
           old(io.env()),
           cc.operands,
           entries,
-          Core.Terminator(cc.nullTerminated)
+          Spec.Terminator(cc.nullTerminated)
         );
         assert Spec.OperandResultRelation(
             old(io.env()),
             cc.operands,
-            Core.Terminator(cc.nullTerminated),
+            Spec.Terminator(cc.nullTerminated),
             Core.Output(cc, entries),
             Core.ExitStatus(cc, entries)
           );
-        TerminatorEq(cc.nullTerminated);
       }
     }
   }

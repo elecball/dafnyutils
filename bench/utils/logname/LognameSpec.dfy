@@ -13,9 +13,6 @@ module LognameSpec {
   import Schema = LognameSchema
   import SE = StringEscaping
 
-
-
-
   function HelpTextSpec(): BenchWorld.Bytes
   {
     "Usage: logname [OPTION]\n"
@@ -56,7 +53,7 @@ module LognameSpec {
     + "Try 'logname --help' for more information.\n"
   }
 
-  ghost function ExtraOperandMessageSpec(op: string): BenchWorld.Bytes
+  function ExtraOperandMessageSpec(op: string): BenchWorld.Bytes
   {
     ExtraOperandPrefix() + SE.SpecLocaleQuoteBytes(Utf8.Encode(op)) + ExtraOperandSuffix()
   }
@@ -76,7 +73,7 @@ module LognameSpec {
     "\n"
   }
 
-  ghost function LoginNameOutput(name: string): BenchWorld.Bytes
+  function LoginNameOutput(name: string): BenchWorld.Bytes
   {
     Utf8.Encode(name) + LoginNameTerminator()
   }
@@ -117,7 +114,7 @@ module LognameSpec {
     "logname: write error: " + message + "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorText(message))
   }

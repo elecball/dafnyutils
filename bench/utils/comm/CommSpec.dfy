@@ -45,9 +45,6 @@ module CommSpec {
   import Render = CommRenderSpec
   import SE = StringEscaping
 
-
-
-
   function HelpTextSpec(): BenchWorld.Bytes
   {
     "Usage: comm [OPTION]... FILE1 FILE2\n"
@@ -102,12 +99,12 @@ module CommSpec {
       path[0] == ' ' || path[0] == '\t' || ContainsDiagnosticBlank(path[1..])
   }
 
-  ghost function FileErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function FileErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     FileErrorMessageSpecText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) + FileErrorMessageSpecText1 + Utf8.Encode(ErrnoText(err)) + FileErrorMessageSpecText2
   }
 
-  ghost function InputErrorMessageSpec(input: Schema.CommInput, err: BenchWorld.IOError): BenchWorld.Bytes
+  function InputErrorMessageSpec(input: Schema.CommInput, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     match input
     case Stdin => InputErrorMessageSpecText0 + Utf8.Encode(ErrnoText(err)) + InputErrorMessageSpecText1
@@ -119,13 +116,13 @@ module CommSpec {
     "comm: missing operand\nTry 'comm --help' for more information.\n"
   }
 
-  ghost function MissingOperandAfterMessageSpec(operand: string): BenchWorld.Bytes
+  function MissingOperandAfterMessageSpec(operand: string): BenchWorld.Bytes
   {
     MissingOperandAfterMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) + MissingOperandAfterMessageSpecText1 +
     MissingOperandAfterMessageSpecText2
   }
 
-  ghost function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
+  function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
   {
     ExtraOperandMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) + ExtraOperandMessageSpecText1 +
     ExtraOperandMessageSpecText2
@@ -162,7 +159,7 @@ module CommSpec {
     if operand == "-" then Schema.Stdin else Schema.File(operand)
   }
 
-  ghost function CommandRelation(raw: Schema.CommCmdRaw): Schema.CommCmd
+  function CommandRelation(raw: Schema.CommCmdRaw): Schema.CommCmd
   {
     var first := FirstOperand(raw.operands);
     var second := SecondOperand(raw.operands);
@@ -333,7 +330,7 @@ module CommSpec {
     true
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }
@@ -389,14 +386,14 @@ module CommSpec {
     forall i: nat | |complete| <= i < |data| :: data[i] != delimiter
   }
 
-  ghost predicate FirstReadAborts(cmd: Schema.CommCmd, first: BenchWorld.IOResult<BenchWorld.Bytes>)
+  predicate FirstReadAborts(cmd: Schema.CommCmd, first: BenchWorld.IOResult<BenchWorld.Bytes>)
     ensures FirstReadAborts(cmd, first) ==> first.Err?
   {
     first.Err? && Render.RecordDelimiter(cmd.zeroTerminated) !in IOContract.ReadResultData(first)
   }
 
-  ghost function FailedReadMessage(cmd: Schema.CommCmd, first: BenchWorld.IOResult<BenchWorld.Bytes>,
-                                                                                   second: BenchWorld.IOResult<BenchWorld.Bytes>, leftFault: bool): BenchWorld.Bytes
+  function FailedReadMessage(cmd: Schema.CommCmd, first: BenchWorld.IOResult<BenchWorld.Bytes>,
+                                                                             second: BenchWorld.IOResult<BenchWorld.Bytes>, leftFault: bool): BenchWorld.Bytes
   {
     var result := if leftFault then first else second;
     match result

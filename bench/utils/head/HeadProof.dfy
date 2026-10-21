@@ -1,10 +1,10 @@
+include "HeadSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "HeadSchema.dfy"
 include "HeadRecordCore.dfy"
 include "HeadRecordSpec.dfy"
 include "HeadCore.dfy"
-include "HeadSpec.dfy"
 
 module HeadProof {
   import IOContract
@@ -18,31 +18,6 @@ module HeadProof {
   import RSpec = HeadRecordSpec
   import Core = HeadCore
   import Spec = HeadSpec
-
-  lemma InputsFromOperandsEq(operands: seq<string>)
-    ensures Core.InputsFromOperands(operands) == Spec.InputsFromOperands(operands)
-    decreases |operands|
-  {
-    if |operands| > 0 {
-      InputsFromOperandsEq(operands[1..]);
-    }
-  }
-
-  lemma CommandEq(raw: Schema.HeadCmdRaw)
-    ensures Core.Command(raw) == Spec.Command(raw)
-  {
-    InputsFromOperandsEq(raw.operands);
-  }
-
-  lemma IsStdinInputEq(input: Schema.Input)
-    ensures Core.IsStdinInput(input) == Spec.IsStdinInput(input)
-  {
-  }
-
-  lemma InputNameEq(input: Schema.Input)
-    ensures Core.InputName(input) == Spec.InputName(input)
-  {
-  }
 
   lemma PrefixStdinRelation(cmd: Schema.HeadCmd, preStdin: BW.Bytes,
                             preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult)
@@ -221,22 +196,11 @@ module HeadProof {
       RecordSelectionRelation(
         data,
         cmd.selection.amount,
-        RCore.RecordDelimiter(cmd.zeroTerminated),
+        RSpec.RecordDelimiter(cmd.zeroTerminated),
         cmd.selection.fromEnd
       );
       reveal Spec.DataSelectionRelation();
     }
-  }
-
-  lemma HeaderForInputEq(
-    cmd: Schema.HeadCmd,
-    input: Schema.Input,
-    printedHeaders: int
-  )
-    ensures Core.HeaderForInput(cmd, input, printedHeaders) ==
-            Spec.HeaderForInput(cmd, input, printedHeaders)
-  {
-    InputNameEq(input);
   }
 
   ghost function SuccessfulIndicesCore(
@@ -320,11 +284,6 @@ module HeadProof {
             )
   {
     ReadResultRelation(cmd, preFs, preStreams, preStdin, i);
-    HeaderForInputEq(
-      cmd,
-      cmd.inputs[i],
-      Core.PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i)
-    );
     match Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
     case Ok(data) =>
       DataSelectionRelation(cmd, data);
@@ -674,6 +633,7 @@ module HeadProof {
             )
     decreases count
   {
+    hide Core.OutputPiece();
     if i + 1 < count {
       CoreOutputFragmentsIndex(
         cmd, preFs, preStreams, preStdin, count - 1, i
@@ -936,8 +896,7 @@ module HeadProof {
     requires Core.PreparedSummary(raw, io, exit, plannedStdout, plannedStderr)
     ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
-    CommandEq(raw);
-    var cmd := Core.Command(raw);
+    var cmd := Spec.Command(raw);
     if cmd.mode == Schema.ModeRun {
       InputTraceRelation(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()));
     }

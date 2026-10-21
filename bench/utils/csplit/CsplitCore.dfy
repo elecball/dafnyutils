@@ -1,46 +1,21 @@
-include "CsplitTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "CsplitSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "CsplitSchema.dfy"
-include "CsplitSpec.dfy"
 
 module CsplitCore {
-  import Text = CsplitTextCore
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = CsplitUtf8Core
+  import Utf8 = Utf8Semantics
   import BenchWorld
   import IOContract
   import Schema = CsplitSchema
   import Spec = CsplitSpec
 
-  function ZeroLineMessage(line: nat): BenchWorld.Bytes
-    ensures ZeroLineMessage(line) == Spec.ZeroLineMessage(line)
-  {
-    Spec.ZeroLineMessagePart1() + DigitsNat(line) + Spec.ZeroLineMessagePart2()
-  }
-
-  function BackwardLineMessage(current: nat, previous: nat): BenchWorld.Bytes
-    ensures BackwardLineMessage(current, previous) == Spec.BackwardLineMessage(current, previous)
-  {
-    Spec.BackwardLineMessagePart1() + DigitsNat(current) + Spec.BackwardLineMessagePart2() +
-    DigitsNat(previous) + Spec.BackwardLineMessagePart3()
-  }
-
-  function OutOfRangeMessage(line: nat): BenchWorld.Bytes
-    ensures OutOfRangeMessage(line) == Spec.OutOfRangeMessage(line)
-  {
-    Spec.OutOfRangeMessagePart1() + DigitsNat(line) + Spec.OutOfRangeMessagePart2()
-  }
-
-  function DuplicateWarning(line: nat): BenchWorld.Bytes
-    ensures DuplicateWarning(line) == Spec.DuplicateWarning(line)
-  {
-    Spec.DuplicateWarningPart1() + DigitsNat(line) + Spec.DuplicateWarningPart2()
-  }
   datatype NumberStatus = NumbersOk | NumberZero | NumberBackwards(current: nat, previous: nat)
   datatype NumberValidation = NumberValidation(status: NumberStatus, processed: nat)
   datatype NumberAnalysis = NumberAnalysis(
@@ -137,7 +112,7 @@ module CsplitCore {
       []
     else
       (if hasPrevious && lines[0] == previous
-       then DuplicateWarning(lines[0])
+       then Spec.DuplicateWarning(lines[0])
        else []) +
       DuplicateWarningsFrom(lines[1..], lines[0], true)
   }
@@ -181,7 +156,7 @@ module CsplitCore {
     else
       exists afterWriteFs: BenchWorld.FileSystem, ok: bool, err: int ::
         Spec.WriteObservation(observations,
-                              preFs, preNow, OutputName(index), pieces[0], ok, err, afterWriteFs
+                              preFs, preNow, Spec.OutputName(index), pieces[0], ok, err, afterWriteFs
         ) &&
         if ok then
           exists tailFs: BenchWorld.FileSystem, tailOut: BenchWorld.Bytes,
@@ -213,17 +188,17 @@ module CsplitCore {
             (if hasTerminalError || tailExit != 0 then
                exists deleteOk: bool, deleteErr: int ::
                  Spec.DeleteObservation(observations,
-                                        tailFs, OutputName(index), deleteOk, deleteErr, fs2
+                                        tailFs, Spec.OutputName(index), deleteOk, deleteErr, fs2
                  )
              else
                fs2 == tailFs) &&
-            stdout == CountLine(|pieces[0]|) + tailOut &&
+            stdout == Spec.CountLine(|pieces[0]|) + tailOut &&
             stderr == tailErr &&
             exit == tailExit
         else
-          Spec.FailedWriteCleanupRelation(observations, preFs, preNow, OutputName(index), pieces[0], err, afterWriteFs, fs2) &&
+          Spec.FailedWriteCleanupRelation(observations, preFs, preNow, Spec.OutputName(index), pieces[0], err, afterWriteFs, fs2) &&
           stdout == [] &&
-          stderr == Spec.WriteErrorMessage(OutputName(index), err) &&
+          stderr == Spec.WriteErrorMessage(Spec.OutputName(index), err) &&
           exit == 1
   }
 
@@ -356,75 +331,6 @@ module CsplitCore {
               analysis.warnings + writeErr
   }
 
-  function DigitChar(d: nat): char
-    requires d < 10
-  {
-    if d == 0 then '0'
-    else if d == 1 then '1'
-    else if d == 2 then '2'
-    else if d == 3 then '3'
-    else if d == 4 then '4'
-    else if d == 5 then '5'
-    else if d == 6 then '6'
-    else if d == 7 then '7'
-    else if d == 8 then '8'
-    else '9'
-  } by method {
-    var ch: char;
-    if d == 0 { ch := '0'; }
-    else if d == 1 { ch := '1'; }
-    else if d == 2 { ch := '2'; }
-    else if d == 3 { ch := '3'; }
-    else if d == 4 { ch := '4'; }
-    else if d == 5 { ch := '5'; }
-    else if d == 6 { ch := '6'; }
-    else if d == 7 { ch := '7'; }
-    else if d == 8 { ch := '8'; }
-    else { ch := '9'; }
-    return ch;
-  }
-
-  function DigitsNat(n: nat): BenchWorld.Bytes
-    decreases n
-  {
-    if n < 10 then [DigitChar(n)]
-    else DigitsNat(n / 10) + [DigitChar(n % 10)]
-  } by method {
-    var digits: BenchWorld.Bytes;
-    if n < 10 {
-      var ch := DigitChar(n);
-      digits := [ch];
-    } else {
-      var prefix := DigitsNat(n / 10);
-      var ch := DigitChar(n % 10);
-      digits := prefix + [ch];
-    }
-    return digits;
-  }
-
-  function CountLine(n: nat): BenchWorld.Bytes
-  {
-    DigitsNat(n) + "\n"
-  } by method {
-    var digits := DigitsNat(n);
-    return digits + "\n";
-  }
-
-  function OutputName(index: nat): BenchWorld.Path
-  {
-    if index < 10 then
-      "xx0" + DigitsNat(index)
-    else
-      "xx" + DigitsNat(index)
-  } by method {
-    var digits := DigitsNat(index);
-    if index < 10 {
-      return "xx0" + digits;
-    } else {
-      return "xx" + digits;
-    }
-  }
-
   ghost predicate NoFreshObjectAfterLastRemoval(events: seq<LifetimeMutation>)
   {
     forall i: int, j: int ::
@@ -501,7 +407,7 @@ module CsplitCore {
         Spec.WriteObservation(observations,
                               preFs,
                               preNow,
-                              OutputName(index),
+                              Spec.OutputName(index),
                               pieces[0],
                               ok,
                               err,
@@ -526,20 +432,20 @@ module CsplitCore {
             FreshWriteEvents(
               preFs,
               afterWriteFs,
-              OutputName(index),
+              Spec.OutputName(index),
               writeEvents
             ),
             LastRemovalEvents(
               tailFs,
               fs2,
-              OutputName(index),
+              Spec.OutputName(index),
               cleanupEvents
             )}
             ::
               FreshWriteEvents(
                 preFs,
                 afterWriteFs,
-                OutputName(index),
+                Spec.OutputName(index),
                 writeEvents
               ) &&
               LifetimeEvidence(observations,
@@ -556,7 +462,7 @@ module CsplitCore {
                  exists deleteOk: bool, deleteErr: int ::
                    Spec.DeleteObservation(observations,
                                           tailFs,
-                                          OutputName(index),
+                                          Spec.OutputName(index),
                                           deleteOk,
                                           deleteErr,
                                           fs2
@@ -564,7 +470,7 @@ module CsplitCore {
                    LastRemovalEvents(
                      tailFs,
                      fs2,
-                     OutputName(index),
+                     Spec.OutputName(index),
                      cleanupEvents
                    )
                else
@@ -572,10 +478,10 @@ module CsplitCore {
               exit == tailExit &&
               lifetimeEvents == writeEvents + tailEvents + cleanupEvents
         else
-          Spec.FailedWriteCleanupRelation(observations, preFs, preNow, OutputName(index), pieces[0], err, afterWriteFs, fs2) &&
+          Spec.FailedWriteCleanupRelation(observations, preFs, preNow, Spec.OutputName(index), pieces[0], err, afterWriteFs, fs2) &&
           exit == 1 &&
-          lifetimeEvents == FreshWriteEventList(preFs, afterWriteFs, OutputName(index)) +
-          LastRemovalEventList(afterWriteFs, fs2, OutputName(index))
+          lifetimeEvents == FreshWriteEventList(preFs, afterWriteFs, Spec.OutputName(index)) +
+          LastRemovalEventList(afterWriteFs, fs2, Spec.OutputName(index))
   }
 
   ghost predicate WritePiecesLifetimeEvidence(observations: Spec.ObservationContext,
@@ -678,13 +584,13 @@ module CsplitCore {
 
     ghost var beforeWriteFs := io.fs();
     ghost var beforeWriteNow := io.now();
-    var path := OutputName(index);
+    var path := Spec.OutputName(index);
     var writeFileResult := io.WriteFile(path, pieces[0]);
     var ok := writeFileResult.Ok?;
     var err := IOContract.ResultErrno(writeFileResult);
     ghost var afterWriteFs := io.fs();
-    assert path == OutputName(index);
-    assert Spec.WriteObservation(observations, beforeWriteFs, beforeWriteNow, OutputName(index), pieces[0], ok, err, afterWriteFs);
+    assert path == Spec.OutputName(index);
+    assert Spec.WriteObservation(observations, beforeWriteFs, beforeWriteNow, Spec.OutputName(index), pieces[0], ok, err, afterWriteFs);
 
     if ok {
       ghost var writeEvents :=
@@ -710,13 +616,13 @@ module CsplitCore {
                               tailEvents,
                               false
         );
-      var count := CountLine(|pieces[0]|);
+      var count := Spec.CountLine(|pieces[0]|);
       ghost var cleanupEvents: seq<LifetimeMutation> := [];
       if tailExit != 0 {
         var deletePathResult := io.DeletePath(path);
         var deleteOk := deletePathResult.Ok?;
         var deleteErr := IOContract.ResultErrno(deletePathResult);
-        assert Spec.DeleteObservation(observations, tailFs, OutputName(index), deleteOk, deleteErr, io.fs());
+        assert Spec.DeleteObservation(observations, tailFs, Spec.OutputName(index), deleteOk, deleteErr, io.fs());
         cleanupEvents := LastRemovalEventList(tailFs, io.fs(), path);
         assert LastRemovalEvents(
             tailFs,
@@ -725,7 +631,7 @@ module CsplitCore {
             cleanupEvents
           );
         assert exists cleanupOk: bool, cleanupErr: int ::
-            Spec.DeleteObservation(observations, tailFs, OutputName(index), cleanupOk, cleanupErr, io.fs());
+            Spec.DeleteObservation(observations, tailFs, Spec.OutputName(index), cleanupOk, cleanupErr, io.fs());
       } else {
         assert LastRemovalEvents(
             tailFs,
@@ -789,11 +695,11 @@ module CsplitCore {
                                            deleteOk, deleteErr, io.fs()));
       }
       stdout := [];
-      stderr := Text.WriteErrorMessage(path, err);
+      stderr := Spec.WriteErrorMessage(path, err);
       exit := 1;
       lifetimeEvents := FreshWriteEventList(beforeWriteFs, afterWriteFs, path) +
       LastRemovalEventList(afterWriteFs, io.fs(), path);
-      assert stderr == Spec.WriteErrorMessage(OutputName(index), err);
+      assert stderr == Spec.WriteErrorMessage(Spec.OutputName(index), err);
       assert WritePiecesSummaryFields(observations, pieces, index, beforeWriteFs, beforeWriteNow, io.fs(), stdout, stderr, exit);
     }
   }
@@ -830,13 +736,13 @@ module CsplitCore {
 
     ghost var beforeWriteFs := io.fs();
     ghost var beforeWriteNow := io.now();
-    var path := OutputName(index);
+    var path := Spec.OutputName(index);
     var writeFileResult2 := io.WriteFile(path, pieces[0]);
     var ok := writeFileResult2.Ok?;
     var err := IOContract.ResultErrno(writeFileResult2);
     ghost var afterWriteFs := io.fs();
-    assert path == OutputName(index);
-    assert Spec.WriteObservation(observations, beforeWriteFs, beforeWriteNow, OutputName(index), pieces[0], ok, err, afterWriteFs);
+    assert path == Spec.OutputName(index);
+    assert Spec.WriteObservation(observations, beforeWriteFs, beforeWriteNow, Spec.OutputName(index), pieces[0], ok, err, afterWriteFs);
 
     if ok {
       ghost var writeEvents :=
@@ -865,7 +771,7 @@ module CsplitCore {
       var deletePathResult2 := io.DeletePath(path);
       var deleteOk := deletePathResult2.Ok?;
       var deleteErr := IOContract.ResultErrno(deletePathResult2);
-      assert Spec.DeleteObservation(observations, tailFs, OutputName(index), deleteOk, deleteErr, io.fs());
+      assert Spec.DeleteObservation(observations, tailFs, Spec.OutputName(index), deleteOk, deleteErr, io.fs());
       ghost var cleanupEvents :=
         LastRemovalEventList(tailFs, io.fs(), path);
       assert LastRemovalEvents(
@@ -874,7 +780,7 @@ module CsplitCore {
           path,
           cleanupEvents
         );
-      var count := CountLine(|pieces[0]|);
+      var count := Spec.CountLine(|pieces[0]|);
       stdout := count + tailOut;
       stderr := tailErr;
       exit := tailExit;
@@ -887,7 +793,7 @@ module CsplitCore {
       ComposeLifetimeEvents(writeEvents, tailEvents, cleanupEvents);
       assert WriteTraceSummaryFields(observations, pieces[1..], index + 1, terminalError, true, afterWriteFs, beforeWriteNow, tailFs, tailOut, tailErr, tailExit);
       assert exists cleanupOk: bool, cleanupErr: int ::
-          Spec.DeleteObservation(observations, tailFs, OutputName(index), cleanupOk, cleanupErr, io.fs());
+          Spec.DeleteObservation(observations, tailFs, Spec.OutputName(index), cleanupOk, cleanupErr, io.fs());
       assert WriteTraceSummaryFields(observations, pieces, index, terminalError, true, beforeWriteFs, beforeWriteNow, io.fs(), stdout, stderr, exit);
       assert LifetimeEvidence(observations,
                               pieces,
@@ -932,11 +838,11 @@ module CsplitCore {
                                            deleteOk, deleteErr, io.fs()));
       }
       stdout := [];
-      stderr := Text.WriteErrorMessage(path, err);
+      stderr := Spec.WriteErrorMessage(path, err);
       exit := 1;
       lifetimeEvents := FreshWriteEventList(beforeWriteFs, afterWriteFs, path) +
       LastRemovalEventList(afterWriteFs, io.fs(), path);
-      assert stderr == Spec.WriteErrorMessage(OutputName(index), err);
+      assert stderr == Spec.WriteErrorMessage(Spec.OutputName(index), err);
       assert WriteTraceSummaryFields(observations, pieces, index, terminalError, true, beforeWriteFs, beforeWriteNow, io.fs(), stdout, stderr, exit);
     }
   }
@@ -969,7 +875,7 @@ module CsplitCore {
   {
     ghost var observations := Spec.Context(io);
     stdout, stderr, exit, lifetimeEvents :=
-      WritePiecesThenDiagnostic(pieces, index, OutOfRangeMessage(line), io);
+      WritePiecesThenDiagnostic(pieces, index, Spec.OutOfRangeMessage(line), io);
   }
 
   method {:isolate_assertions} Prepare(raw: Schema.CsplitCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
@@ -1019,7 +925,7 @@ module CsplitCore {
         assert readResult == DeferredReadResultFields(raw, preFs, preStreams, preStdin);
         match readResult
         case Err(err) =>
-          var msg := Text.ReadErrorMessage(raw.input, err);
+          var msg := Spec.ReadErrorMessage(raw.input, err);
           plannedErr := msg;
           exit := 1;
           assert DeferredReadResultFields(raw, old(io.fs()), old(io.trustedStreams()), old(io.stdin())) == Result.Err(err);
@@ -1045,7 +951,7 @@ module CsplitCore {
     match numberAnalysis.status
     case NumberZero =>
       assert AnalyzeNumbers(raw.lineNumbers).status == NumberZero;
-      var msg := ZeroLineMessage(0);
+      var msg := Spec.ZeroLineMessage(0);
       plannedErr := plannedErr + warnings + msg;
       exit := 1;
       assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by {
@@ -1058,7 +964,7 @@ module CsplitCore {
     case NumberBackwards(current, previous) =>
       assert AnalyzeNumbers(raw.lineNumbers).status ==
              NumberBackwards(current, previous);
-      var msg := BackwardLineMessage(current, previous);
+      var msg := Spec.BackwardLineMessage(current, previous);
       plannedErr := plannedErr + warnings + msg;
       exit := 1;
       assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by {
@@ -1078,7 +984,7 @@ module CsplitCore {
             var faultOut, faultErr, faultExit;
             ghost var lifetimeEvents;
             faultOut, faultErr, faultExit, lifetimeEvents :=
-              WritePiecesThenDiagnostic(pieces, 0, Text.ReadErrorMessage(raw.input, read.e), io);
+              WritePiecesThenDiagnostic(pieces, 0, Spec.ReadErrorMessage(raw.input, read.e), io);
             plannedOut := faultOut;
             plannedErr := warnings + faultErr;
             exit := faultExit;
@@ -1122,6 +1028,8 @@ module CsplitCore {
         assert WritePiecesThenErrorSummaryFields(observations, pieces, 0, line, preFs, preNow, io.fs(), out, errOut, writeExit);
         assert io.stdin() == Spec.ReadStdinAfterFields(raw.input, preStdin, old(io.trustedStreams()));
         assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by {
+          hide *;
+          reveal PreparedSummary();
           assert AnalyzeNumbers(raw.lineNumbers).status == NumbersOk;
           assert DeferredReadResultFields(raw, preFs, preStreams, preStdin) ==
                  Result.Ok(data);
@@ -1250,7 +1158,7 @@ module CsplitCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

@@ -1,128 +1,21 @@
-include "HeadTextCore.dfy"
+include "HeadSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "HeadSchema.dfy"
 include "HeadRecordCore.dfy"
-include "HeadSpec.dfy"
 
 module HeadCore {
-  import Text = HeadTextCore
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = Utf8Semantics
   import BenchWorld
   import IOContract
   import HeadSchema
   import HeadRecordCore
+  import HeadRecordSpec
   import Spec = HeadSpec
-
-  function InputsFromOperands(operands: seq<string>): seq<HeadSchema.Input>
-    decreases |operands|
-  {
-    if |operands| == 0 then
-      []
-    else
-      [(if operands[0] == "-" then HeadSchema.Stdin("standard input") else HeadSchema.File(operands[0]))] +
-      InputsFromOperands(operands[1..])
-  } by method {
-    if |operands| == 0 {
-      return [];
-    } else {
-      var input :=
-        if operands[0] == "-"
-        then HeadSchema.Stdin("standard input")
-        else HeadSchema.File(operands[0]);
-      return [input] + InputsFromOperands(operands[1..]);
-    }
-  }
-
-  ghost function HelpBeforeOther(raw: HeadSchema.HeadCmdRaw): bool
-  {
-    raw.seenHelp &&
-    (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) &&
-    (raw.invalidCountTokenIndex == -1 || raw.helpTokenIndex <= raw.invalidCountTokenIndex)
-  }
-
-  ghost function VersionBeforeInvalid(raw: HeadSchema.HeadCmdRaw): bool
-  {
-    raw.seenVersion &&
-    (raw.invalidCountTokenIndex == -1 || raw.versionTokenIndex <= raw.invalidCountTokenIndex)
-  }
-
-  function Command(raw: HeadSchema.HeadCmdRaw): HeadSchema.HeadCmd
-  {
-    var mode :=
-      if HelpBeforeOther(raw) then
-        HeadSchema.ModeHelp
-      else if VersionBeforeInvalid(raw) then
-        HeadSchema.ModeVersion
-      else if raw.invalidCountTokenIndex != -1 then
-        HeadSchema.ModeInvalidCount
-      else
-        HeadSchema.ModeRun;
-    var inputs := InputsFromOperands(raw.operands);
-    var runInputs := if mode == HeadSchema.ModeRun && |inputs| == 0 then [HeadSchema.Stdin("standard input")] else inputs;
-    HeadSchema.HeadCmd(
-      mode,
-      raw.selection,
-      raw.headerMode,
-      raw.zeroTerminated,
-      raw.invalidCountUnit,
-      raw.invalidCountValue,
-      runInputs
-    )
-  } by method {
-    var mode :=
-      if raw.seenHelp &&
-         (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) &&
-         (raw.invalidCountTokenIndex == -1 ||
-          raw.helpTokenIndex <= raw.invalidCountTokenIndex) then
-        HeadSchema.ModeHelp
-      else if raw.seenVersion &&
-              (raw.invalidCountTokenIndex == -1 ||
-               raw.versionTokenIndex <= raw.invalidCountTokenIndex) then
-        HeadSchema.ModeVersion
-      else if raw.invalidCountTokenIndex != -1 then
-        HeadSchema.ModeInvalidCount
-      else
-        HeadSchema.ModeRun;
-    var inputs := InputsFromOperands(raw.operands);
-    var runInputs :=
-      if mode == HeadSchema.ModeRun && |inputs| == 0
-      then [HeadSchema.Stdin("standard input")]
-      else inputs;
-    return HeadSchema.HeadCmd(
-        mode,
-        raw.selection,
-        raw.headerMode,
-        raw.zeroTerminated,
-        raw.invalidCountUnit,
-        raw.invalidCountValue,
-        runInputs
-      );
-  }
-
-  ghost function IsStdinInput(input: HeadSchema.Input): bool
-  {
-    match input
-    case Stdin(_) => true
-    case File(_) => false
-  }
-
-  function InputName(input: HeadSchema.Input): string
-  {
-    match input
-    case Stdin(displayName) => displayName
-    case File(path) => path
-  } by method {
-    return
-      match input
-      case Stdin(displayName) => displayName
-      case File(path) => path;
-  }
 
   ghost function PrefixStdinCore(cmd: HeadSchema.HeadCmd, preStdin: BenchWorld.Bytes, i: nat, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
     requires i <= |cmd.inputs|
@@ -168,7 +61,7 @@ module HeadCore {
     if cmd.selection.unit == HeadSchema.CountBytes then
       if cmd.selection.fromEnd then TakeAllButLastBytes(data, cmd.selection.amount) else TakeFirstBytes(data, cmd.selection.amount)
     else
-      var delimiter := HeadRecordCore.RecordDelimiter(cmd.zeroTerminated);
+      var delimiter := HeadRecordSpec.RecordDelimiter(cmd.zeroTerminated);
       if cmd.selection.fromEnd then
         HeadRecordCore.TakeAllButLastRecords(data, cmd.selection.amount, delimiter)
       else
@@ -181,7 +74,7 @@ module HeadCore {
         return TakeFirstBytes(data, cmd.selection.amount);
       }
     } else {
-      var delimiter := HeadRecordCore.RecordDelimiter(cmd.zeroTerminated);
+      var delimiter := HeadRecordSpec.RecordDelimiter(cmd.zeroTerminated);
       if cmd.selection.fromEnd {
         return HeadRecordCore.TakeAllButLastRecords(
             data, cmd.selection.amount, delimiter
@@ -191,31 +84,6 @@ module HeadCore {
             data, cmd.selection.amount, delimiter
           );
       }
-    }
-  }
-
-  function ShouldPrintHeaders(cmd: HeadSchema.HeadCmd): bool
-  {
-    cmd.headerMode == HeadSchema.HeadersAlways ||
-    (cmd.headerMode == HeadSchema.HeadersMultiple && |cmd.inputs| > 1)
-  } by method {
-    return cmd.headerMode == HeadSchema.HeadersAlways ||
-           (cmd.headerMode == HeadSchema.HeadersMultiple && |cmd.inputs| > 1);
-  }
-
-  function HeaderForInput(cmd: HeadSchema.HeadCmd, input: HeadSchema.Input, printedHeaders: int): BenchWorld.Bytes
-  {
-    if ShouldPrintHeaders(cmd) then
-      (if printedHeaders == 0 then [] else ['\n']) +
-      Spec.HeaderText(InputName(input))
-    else
-      []
-  } by method {
-    if ShouldPrintHeaders(cmd) {
-      return (if printedHeaders == 0 then [] else ['\n']) +
-        Text.HeaderText(InputName(input));
-    } else {
-      return [];
     }
   }
 
@@ -239,15 +107,15 @@ module HeadCore {
   ): BenchWorld.Bytes
   {
     match result
-    case Ok(data) => HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, data)
-    case Err(error) => if (error.StreamFailure? || (error.ReadFailure? && error.readStage == BenchWorld.CloseFailed)) then HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, error.partial) else []
+    case Ok(data) => Spec.HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, data)
+    case Err(error) => if (error.StreamFailure? || (error.ReadFailure? && error.readStage == BenchWorld.CloseFailed)) then Spec.HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, error.partial) else []
   } by method {
     match result
     case Ok(data) =>
-      return HeaderForInput(cmd, input, printedHeaders) +
+      return Spec.HeaderForInput(cmd, input, printedHeaders) +
         RenderData(cmd, data);
     case Err(error) =>
-      return if (error.StreamFailure? || (error.ReadFailure? && error.readStage == BenchWorld.CloseFailed)) then HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, error.partial) else [];
+      return if (error.StreamFailure? || (error.ReadFailure? && error.readStage == BenchWorld.CloseFailed)) then Spec.HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, error.partial) else [];
   }
 
   function ErrorPiece(input: HeadSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
@@ -261,13 +129,13 @@ module HeadCore {
   } by method {
     match input
     case Stdin(_) =>
-      return if result.Err? then Text.StdinReadErrorMessage(result.e) else [];
+      return if result.Err? then Spec.StdinReadErrorMessage(result.e) else [];
     case File(path) =>
       match result
       case Ok(_) =>
         return [];
       case Err(err) =>
-        return Text.ErrorMessage(path, err);
+        return Spec.ErrorMessage(path, err);
   }
 
   function HadErrorPiece(input: HeadSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
@@ -369,7 +237,7 @@ module HeadCore {
   twostate predicate PreparedSummary(raw: HeadSchema.HeadCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
     reads io.stdinRegion
   {
-    var cmd := Command(raw);
+    var cmd := Spec.Command(raw);
     if cmd.mode == HeadSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) + Spec.HelpText() &&
@@ -476,7 +344,7 @@ module HeadCore {
     ghost var preStdin := io.stdin();
     ghost var preStdout := (initialStdout + plannedOut);
     ghost var preStderr := (initialStderr + plannedErr);
-    var cmd := Command(raw);
+    var cmd := Spec.Command(raw);
 
     if cmd.mode == HeadSchema.ModeHelp {
       var help := Spec.HelpText();
@@ -500,7 +368,7 @@ module HeadCore {
 
     if cmd.mode == HeadSchema.ModeInvalidCount {
       var invalid :=
-        Text.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
+        Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
       plannedErr := plannedErr + invalid;
       exit := 1;
       assert io.stdin() == preStdin;
@@ -608,7 +476,7 @@ module HeadCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

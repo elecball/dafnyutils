@@ -1,9 +1,7 @@
-include "FalseUtf8Core.dfy"
-include "FalseTextCore.dfy"
+include "FalseSpec.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/IO.dfy"
 include "FalseSchema.dfy"
-include "FalseSpec.dfy"
 
 module FalseCore {
   import StreamContract = IOContract
@@ -13,7 +11,6 @@ module FalseCore {
   import BenchIO
   import Schema = FalseSchema
   import Spec = FalseSpec
-  import Text = FalseTextCore
 
   twostate predicate PreparedSummary(raw: Schema.FalseCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
 
@@ -80,7 +77,7 @@ module FalseCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

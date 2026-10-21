@@ -31,9 +31,6 @@ module WcSpec {
   import Utf8 = Utf8Semantics
   import SE = StringEscaping
 
-
-
-
   datatype Counts = Counts(lines: int, words: int, chars: int, bytes: int, maxLine: int)
   datatype Entry = Entry(name: string, counts: Counts, wide: bool)
   datatype InputObservation = InputObservation(
@@ -93,7 +90,7 @@ module WcSpec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     ErrorMessageText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) + ErrorMessageText1 + Utf8.Encode(ErrnoText(err)) + ErrorMessageText2
   }
@@ -286,7 +283,7 @@ module WcSpec {
       combined[cuts[i]..cuts[i + 1]] == fragments[i]
   }
 
-  ghost function StdinReadErrorMessage(name: string, error: BenchWorld.IOError): BenchWorld.Bytes
+  function StdinReadErrorMessage(name: string, error: BenchWorld.IOError): BenchWorld.Bytes
   {
     ErrorMessage(if name == StdinReadErrorMessageText0 then StdinReadErrorMessageText1 else name, error)
   }
@@ -717,7 +714,7 @@ module WcSpec {
     true
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorMessageText0 + message + StreamWriteErrorMessageText1)
   }

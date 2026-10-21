@@ -1,7 +1,5 @@
-include "../../core/StringEscaping.dfy"
-include "../../core/Utf8.dfy"
-include "CliSupport.dfy"
 include "MkdirSpec.dfy"
+include "CliSupport.dfy"
 include "MkdirCore.dfy"
 include "MkdirProof.dfy"
 
@@ -10,10 +8,6 @@ module Mkdir {
   export
     provides BenchIO, BenchWorld, BenchItem, CliTypes, CliExtern, S, Core, Spec, Proof, MkdirBenchmarkItem._ctor, MkdirBenchmarkItem.Name, MkdirBenchmarkItem.Schema, MkdirBenchmarkItem.ParseConfig, MkdirBenchmarkItem.Decode, MkdirBenchmarkItem.FormatParseError, MkdirBenchmarkItem.PlanParsed, MkdirBenchmarkItem.PlanParseFailure, MkdirBenchmarkItem.RunCore
     reveals MkdirBenchmarkItem
-
-  import ProtocolUtf8Model = Utf8Semantics
-  import ProtocolEscapingModel = StringEscaping
-  import opened ProtocolModel = MkdirSpec
 
   import BenchIO
   import BenchWorld
@@ -60,7 +54,7 @@ module Mkdir {
                                             "-" + err.rawToken[j..]);
         }
       }
-      msg := ProtocolParseErrorText(normalized);
+      msg := Spec.ParseErrorText(normalized);
     }
 
     method PlanParsed(parsed: CliTypes.ParsedArgs)
@@ -106,71 +100,6 @@ module Mkdir {
     {
       exit := Core.RunCore(raw, io);
     }
-  }
-  function ProtocolEncodeChar(ch: char): BenchWorld.Bytes
-    ensures ProtocolEncodeChar(ch) == ProtocolUtf8Model.EncodeChar(ch)
-    ensures |ProtocolEncodeChar(ch)| == BenchWorld.Utf8ByteWidth(ch)
-    ensures 1 <= |ProtocolEncodeChar(ch)| <= 4
-  {
-    var code := ch as int;
-    if code <= 0x7f then
-      [code as char]
-    else if code <= 0x7ff then
-      [
-        (0xc0 + code / 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else if code <= 0xffff then
-      [
-        (0xe0 + code / 0x1000) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else
-      [
-        (0xf0 + code / 0x40000) as char,
-        (0x80 + (code / 0x1000) % 0x40) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-  }
-
-  function ProtocolEncode(text: string): BenchWorld.Bytes
-    ensures ProtocolEncode(text) == ProtocolUtf8Model.Encode(text)
-    ensures |ProtocolEncode(text)| >= |text|
-    decreases |text|
-  {
-    if text == [] then [] else ProtocolEncodeChar(text[0]) + ProtocolEncode(text[1..])
-  }
-
-  function ProtocolParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
-    ensures ProtocolParseErrorText(err) == ProtocolModel.ParseErrorText(err)
-  {
-    if err.kind == CliTypes.UnknownOption then
-      if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-        ParseErrorTextPart1() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2() +
-        ParseErrorTextPart3()
-      else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
-        UnknownShortText(ProtocolEncodeChar(err.rawToken[1])[0])
-      else
-        ParseErrorTextPart4()
-    else if err.kind == CliTypes.UnexpectedValue then
-      ParseErrorTextPart5() + ProtocolEncode(LongOptionName(err.rawToken)) +
-      ParseErrorTextPart6() +
-      ParseErrorTextPart3()
-    else if err.kind == CliTypes.Ambiguous then
-      ParseErrorTextPart5() + ProtocolEncode(err.rawToken) +
-      ParseErrorTextPart7() +
-      (if |err.rawToken| > 2 && err.rawToken[2] == '=' then
-         ParseErrorTextPart8()
-       else ParseErrorTextPart9()) +
-      ParseErrorTextPart3()
-    else
-      ParseErrorTextPart10() + ProtocolEncode(
-        (if err.kind == CliTypes.MissingValue
-         then ParseErrorTextPart11()
-         else ParseErrorTextPart12())) +
-      ParseErrorTextPart13() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2()
   }
 
 }

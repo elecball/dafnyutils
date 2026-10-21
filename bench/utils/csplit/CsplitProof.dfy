@@ -28,36 +28,6 @@ module CsplitProof {
     case SplitOutOfRange(pieces, line) => Spec.SplitOutOfRange(pieces, line)
   }
 
-  lemma DigitCharEq(d: nat)
-    requires d < 10
-    ensures Core.DigitChar(d) == Schema.DigitChar(d)
-  {
-  }
-
-  lemma DigitsNatEq(n: nat)
-    ensures Core.DigitsNat(n) == Schema.DigitsNat(n)
-    decreases n
-  {
-    if n < 10 {
-      DigitCharEq(n);
-    } else {
-      DigitsNatEq(n / 10);
-      DigitCharEq(n % 10);
-    }
-  }
-
-  lemma CountLineEq(n: nat)
-    ensures Core.CountLine(n) == Spec.CountLine(n)
-  {
-    DigitsNatEq(n);
-  }
-
-  lemma OutputNameEq(index: nat)
-    ensures Core.OutputName(index) == Spec.OutputName(index)
-  {
-    DigitsNatEq(index);
-  }
-
   lemma ValidateNumbersFromRefines(
     all: seq<nat>,
     offset: nat,
@@ -1370,7 +1340,7 @@ module CsplitProof {
             )
     decreases |pieces|
   {
-    OutputNameEq(index);
+
     if |pieces| == 0 {
       var writeStates := [preFs];
       var writeOk: seq<bool> := [];
@@ -1404,7 +1374,7 @@ module CsplitProof {
                                      cleanupStates
       );
     } else {
-      CountLineEq(|pieces[0]|);
+
       var afterWriteFs, ok, err :|
         Spec.WriteObservation(observations,
                               preFs,

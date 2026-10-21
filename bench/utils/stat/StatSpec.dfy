@@ -173,7 +173,7 @@ module StatSpec {
     "\n"
   }
 
-  ghost function ErrorMessageWithReasonSpec(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
+  function ErrorMessageWithReasonSpec(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
   {
     ErrorMessageWithReasonSpecPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
     ErrorMessageWithReasonSpecPart2() + Utf8.Encode(reason) + ErrorMessageWithReasonSpecPart3()
@@ -193,7 +193,7 @@ module StatSpec {
       (('a' as int) + digit - 10) as char
   }
 
-  ghost function BaseNatTextSpec(value: nat, base: nat): string
+  function BaseNatTextSpec(value: nat, base: nat): string
     requires 2 <= base <= 16
     decreases value
   {
@@ -208,7 +208,7 @@ module StatSpec {
     "-"
   }
 
-  ghost function IntTextSpec(value: int): string
+  function IntTextSpec(value: int): string
   {
     if value < 0 then IntTextSpecPart1() + BaseNatTextSpec((-value) as nat, 10)
     else BaseNatTextSpec(value as nat, 10)
@@ -219,7 +219,7 @@ module StatSpec {
     "-"
   }
 
-  ghost function IntHexTextSpec(value: int): string
+  function IntHexTextSpec(value: int): string
   {
     if value < 0 then IntHexTextSpecPart1() + BaseNatTextSpec((-value) as nat, 16)
     else BaseNatTextSpec(value as nat, 16)
@@ -256,7 +256,7 @@ module StatSpec {
     "?"
   }
 
-  ghost function DirectiveTextSpec(
+  function DirectiveTextSpec(
     directive: char,
     status: BenchWorld.FileStatus
   ): BenchWorld.Bytes
@@ -587,7 +587,7 @@ module StatSpec {
     "\n"
   }
 
-  ghost function WriteErrorText(reason: string): StreamWorld.Bytes
+  function WriteErrorText(reason: string): StreamWorld.Bytes
   {
     WriteErrorTextPart1() + Utf8.Encode(reason) + WriteErrorTextPart2()
   }

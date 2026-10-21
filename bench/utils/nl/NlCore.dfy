@@ -1,18 +1,14 @@
-include "NlTextCore.dfy"
+include "NlSchema.dfy"
+include "NlSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
-include "NlSchema.dfy"
-include "NlSpec.dfy"
 
 module NlCore {
-  import Text = NlTextCore
-
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = NlUtf8Core
   import BenchWorld
   import IOContract
   import NlSchema
@@ -39,17 +35,17 @@ module NlCore {
     if cmd.mode == NlSchema.ModeHelp then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == Spec.HelpText() &&
-      plannedStderr == Text.OptionErrorsText(cmd.optionErrors) &&
+      plannedStderr == NlSchema.OptionErrorsText(cmd.optionErrors) &&
       exit == 0
     else if cmd.mode == NlSchema.ModeVersion then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == Spec.VersionText() &&
-      plannedStderr == Text.OptionErrorsText(cmd.optionErrors) &&
+      plannedStderr == NlSchema.OptionErrorsText(cmd.optionErrors) &&
       exit == 0
     else if cmd.mode != NlSchema.ModeRun then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == [] &&
-      plannedStderr == Text.ModeErrorMessage(cmd) &&
+      plannedStderr == Spec.ModeErrorMessage(cmd) &&
       exit == 1
     else
       InputTraceSummary(
@@ -84,20 +80,6 @@ module NlCore {
     } else {
       return data;
     }
-  }
-
-  opaque function IsLogicalPageDelimiterLine(
-    line: BenchWorld.Bytes
-  ): bool
-  {
-    line == [(92 as char), ':'] ||
-    line == [(92 as char), ':', (92 as char), ':'] ||
-    line == [(92 as char), ':', (92 as char), ':', (92 as char), ':']
-  } by method {
-    reveal IsLogicalPageDelimiterLine();
-    return line == [(92 as char), ':'] ||
-           line == [(92 as char), ':', (92 as char), ':'] ||
-           line == [(92 as char), ':', (92 as char), ':', (92 as char), ':'];
   }
 
   opaque ghost function PrefixStdinCore(cmd: NlSchema.NlCmd, before: BenchWorld.Bytes, count: nat,
@@ -148,7 +130,7 @@ module NlCore {
                     case Ok(data) => NormalizeInputData(data)
                     case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                    errorFragments[i] ==
-                   Text.ErrorPiece(cmd.inputs[i], readResults[i])) &&
+                   Spec.ErrorPiece(cmd.inputs[i], readResults[i])) &&
     Spec.FragmentsConcatenate(
       inputFragments, combined, inputCuts) &&
     Spec.FragmentsConcatenate(
@@ -164,69 +146,7 @@ module NlCore {
          combined, lines, terminated, fragments, cuts) &&
        hasDelimiter ==
        (exists i :: 0 <= i < |lines| &&
-                    IsLogicalPageDelimiterLine(lines[i])))
-  }
-
-  function RepeatChar(ch: BenchWorld.RawByte, count: int): BenchWorld.Bytes
-    decreases count
-  {
-    if count <= 0 then [] else [ch] + RepeatChar(ch, count - 1)
-  }
-
-  function DigitChar(d: int): char
-  {
-    if 0 <= d < 10 then
-      (d + ('0' as int)) as char
-    else
-      '0'
-  }
-
-  function Digits(n: int): BenchWorld.Bytes
-    requires 0 <= n
-    decreases n
-  {
-    if n < 10 then
-      [DigitChar(n)]
-    else
-      Digits(n / 10) + [DigitChar(n % 10)]
-  }
-
-  function RenderNumber(
-    format: NlSchema.NumberFormat,
-    n: int,
-    width: int
-  ): BenchWorld.Bytes
-    requires 0 <= n
-  {
-    var digits := Digits(n);
-    if format == NlSchema.FormatLeft then
-      digits + RepeatChar(' ', width - |digits|)
-    else if format == NlSchema.FormatRightZero then
-      RepeatChar('0', width - |digits|) + digits
-    else
-      RepeatChar(' ', width - |digits|) + digits
-  }
-
-  function ShouldNumber(
-    style: NlSchema.BodyStyle,
-    nonempty: bool
-  ): bool
-  {
-    style == NlSchema.NumberAll ||
-    (style == NlSchema.NumberNonEmpty && nonempty)
-  }
-
-  function LinePrefix(
-    cmd: NlSchema.NlCmd,
-    nonempty: bool,
-    n: int
-  ): BenchWorld.Bytes
-    requires 0 <= n
-  {
-    if ShouldNumber(cmd.bodyStyle, nonempty) then
-      RenderNumber(cmd.numberFormat, n, 6) + cmd.separator
-    else
-      RepeatChar(' ', 6 + |cmd.separator|)
+                    Spec.IsLogicalPageDelimiterLine(lines[i])))
   }
 
   ghost predicate LineNumberFromSummary(
@@ -240,7 +160,7 @@ module NlCore {
     numbers[0] == start &&
     forall i {:trigger numbers[i]} :: 0 <= i < |lines| ==>
                                         numbers[i + 1] == numbers[i] +
-                                        (if ShouldNumber(cmd.bodyStyle, |lines[i]| > 0) then 1 else 0)
+                                        (if Spec.ShouldNumber(cmd.bodyStyle, |lines[i]| > 0) then 1 else 0)
   }
 
   ghost predicate LineNumberSummary(
@@ -261,7 +181,7 @@ module NlCore {
   )
   {
     outputFragment ==
-    LinePrefix(cmd, |line| > 0, number as int) + line +
+    Spec.LinePrefix(cmd, |line| > 0, number as int) + line +
     (if terminated then ['\n'] else [])
   }
 
@@ -462,16 +382,16 @@ module NlCore {
   ) returns (found: bool)
     ensures found == (exists i ::
                         (0 <= i < |lines| &&
-                         IsLogicalPageDelimiterLine(lines[i])))
+                         Spec.IsLogicalPageDelimiterLine(lines[i])))
   {
     found := false;
     var i := 0;
     while i < |lines|
       invariant 0 <= i <= |lines|
-      invariant found == (exists j :: 0 <= j < i && IsLogicalPageDelimiterLine(lines[j]))
+      invariant found == (exists j :: 0 <= j < i && Spec.IsLogicalPageDelimiterLine(lines[j]))
       decreases |lines| - i
     {
-      found := found || IsLogicalPageDelimiterLine(lines[i]);
+      found := found || Spec.IsLogicalPageDelimiterLine(lines[i]);
       i := i + 1;
     }
   }
@@ -484,7 +404,7 @@ module NlCore {
   ) returns (out: BenchWorld.Bytes)
     ensures LineRenderSummary(cmd, line, terminated, number, out)
   {
-    var prefix := LinePrefix(cmd, |line| > 0, number as int);
+    var prefix := Spec.LinePrefix(cmd, |line| > 0, number as int);
     out := prefix + line + (if terminated then ['\n'] else []);
     reveal LineRenderSummary();
   }
@@ -531,7 +451,7 @@ module NlCore {
       decreases |lines| - i
     {
       var part := RenderLineMethod(cmd, lines[i], terminated[i], number);
-      var selected := ShouldNumber(cmd.bodyStyle, |lines[i]| > 0);
+      var selected := Spec.ShouldNumber(cmd.bodyStyle, |lines[i]| > 0);
       var next := number + (if selected then 1 else 0);
       AppendByteFragment(outputFragments, out, outputCuts, part);
       out := out + part;
@@ -587,7 +507,7 @@ module NlCore {
 
     if cmd.mode == NlSchema.ModeHelp {
       var help := Spec.HelpText();
-      var diagnostics := Text.OptionErrorsText(cmd.optionErrors);
+      var diagnostics := NlSchema.OptionErrorsText(cmd.optionErrors);
       plannedOut := plannedOut + help;
       plannedErr := plannedErr + diagnostics;
       exit := 0;
@@ -607,7 +527,7 @@ module NlCore {
 
     if cmd.mode == NlSchema.ModeVersion {
       var version := Spec.VersionText();
-      var diagnostics := Text.OptionErrorsText(cmd.optionErrors);
+      var diagnostics := NlSchema.OptionErrorsText(cmd.optionErrors);
       plannedOut := plannedOut + version;
       plannedErr := plannedErr + diagnostics;
       exit := 0;
@@ -626,7 +546,7 @@ module NlCore {
     }
 
     if cmd.mode != NlSchema.ModeRun {
-      var err := Text.ModeErrorMessage(cmd);
+      var err := Spec.ModeErrorMessage(cmd);
       plannedErr := plannedErr + err;
       exit := 1;
       assert io.stdin() == preStdin;
@@ -670,7 +590,7 @@ module NlCore {
                                     case Ok(data) => NormalizeInputData(data)
                                     case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                                    errorFragments[j] ==
-                                   Text.ErrorPiece(cmd.inputs[j], readResults[j])
+                                   Spec.ErrorPiece(cmd.inputs[j], readResults[j])
       invariant Spec.FragmentsConcatenate(
                   inputFragments, combined, inputCuts
                 )
@@ -697,7 +617,7 @@ module NlCore {
         case Stdin =>
           readResult := io.ReadStdin();
           piece := NormalizeInputData(IOContract.ReadResultData(readResult));
-          errorPiece := Text.ErrorPiece(input, readResult);
+          errorPiece := Spec.ErrorPiece(input, readResult);
           pieceHadError := readResult.Err?;
         case File(path) =>
           readResult := io.ReadFile(path);
@@ -709,7 +629,7 @@ module NlCore {
             pieceHadError := false;
           } else {
             piece := [];
-            errorPiece := Text.ErrorMessage(path, readResult.e);
+            errorPiece := Spec.ErrorMessage(path, readResult.e);
             pieceHadError := true;
           }
       }
@@ -724,7 +644,7 @@ module NlCore {
              (match readResult
               case Ok(data) => NormalizeInputData(data)
               case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []);
-      assert errorPiece == Text.ErrorPiece(input, readResult);
+      assert errorPiece == Spec.ErrorPiece(input, readResult);
       assert pieceHadError ==
              Spec.HadErrorPiece(input, readResult);
       AppendByteFragment(inputFragments, combined, inputCuts, piece);
@@ -753,7 +673,7 @@ module NlCore {
                                  case Ok(data) => NormalizeInputData(data)
                                  case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                                 errorFragments[j] ==
-                                Text.ErrorPiece(cmd.inputs[j], readResults[j]) by {
+                                Spec.ErrorPiece(cmd.inputs[j], readResults[j]) by {
         forall j: nat | j < i + 1
           ensures Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, j, preStreams), j, readResults[j],
                                           preStreams
@@ -763,7 +683,7 @@ module NlCore {
                    case Ok(data) => NormalizeInputData(data)
                    case Err(error) => if error.StreamFailure? then NormalizeInputData(error.partial) else []) &&
                   errorFragments[j] ==
-                  Text.ErrorPiece(cmd.inputs[j], readResults[j])
+                  Spec.ErrorPiece(cmd.inputs[j], readResults[j])
         {
           if j == i {
             assert readResults[j] == readResult;
@@ -874,7 +794,7 @@ module NlCore {
         ) &&
         hasDelimiter ==
         (exists j :: 0 <= j < |ls| &&
-                     IsLogicalPageDelimiterLine(ls[j])) by {
+                     Spec.IsLogicalPageDelimiterLine(ls[j])) by {
       assert Spec.LinePartitionRelation(
           combined, lines, terminated, lineFragments, lineCuts
         );
@@ -982,10 +902,10 @@ module NlCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);

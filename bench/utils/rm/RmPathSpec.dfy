@@ -1,16 +1,16 @@
 
 module RmPathSpec {
-  ghost function IsSlash(ch: char): bool
+  function IsSlash(ch: char): bool
   {
     ch == '/'
   }
 
-  ghost predicate SlashFree(text: string)
+  predicate SlashFree(text: string)
   {
     forall i :: 0 <= i < |text| ==> !IsSlash(text[i])
   }
 
-  ghost predicate SlashesOnly(text: string)
+  predicate SlashesOnly(text: string)
   {
     forall i :: 0 <= i < |text| ==> IsSlash(text[i])
   }
@@ -89,7 +89,7 @@ module RmPathSpec {
              MaximalDirnamePrefix(trimmed, prefix, component) &&
              NormalizedDirnamePrefix(prefix, value))
   }
-  ghost function DigitCharSpec(d: nat): char
+  function DigitCharSpec(d: nat): char
     requires d < 10
   {
     if d == 0 then '0'
@@ -104,7 +104,7 @@ module RmPathSpec {
     else '9'
   }
 
-  ghost function DecimalNatSpec(n: nat): string
+  function DecimalNatSpec(n: nat): string
     decreases n
   {
     if n < 10 then
@@ -113,13 +113,13 @@ module RmPathSpec {
       DecimalNatSpec(n / 10) + [DigitCharSpec(n % 10)]
   }
 
-  ghost function NumberedBackupPathSpec(target: string, index: nat): string
+  function NumberedBackupPathSpec(target: string, index: nat): string
     requires index >= 1
   {
     target + ".~" + DecimalNatSpec(index) + "~"
   }
 
-  ghost function SimpleBackupPathSpec(target: string, suffix: string): string
+  function SimpleBackupPathSpec(target: string, suffix: string): string
   {
     target + suffix
   }

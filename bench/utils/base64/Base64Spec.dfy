@@ -67,7 +67,7 @@ module Base64Spec {
   function ErrorSeparator(): BenchWorld.Bytes { ": " }
   function MessageNewline(): BenchWorld.Bytes { "\n" }
 
-  ghost function InvalidWrapMessage(value: string): BenchWorld.Bytes
+  function InvalidWrapMessage(value: string): BenchWorld.Bytes
   {
     InvalidWrapPrefix() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) + MessageNewline()
   }
@@ -77,7 +77,7 @@ module Base64Spec {
     "base64: invalid input\n"
   }
 
-  ghost function ExtraOperandMessage(operand: string): BenchWorld.Bytes
+  function ExtraOperandMessage(operand: string): BenchWorld.Bytes
   {
     ExtraOperandPrefix() + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) + ExtraOperandSuffix()
   }
@@ -98,12 +98,12 @@ module Base64Spec {
     case TimeParseFailure(message, _, _) => message
   }
 
-  ghost function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
+  function StdinReadErrorMessage(error: BenchWorld.IOError): BenchWorld.Bytes
   {
     ReadErrorPrefix() + Utf8.Encode(ErrnoText(error)) + MessageNewline()
   }
 
-  ghost function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ErrorMessage(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     if IOContract.IOErrorIsReadFailure(err) &&
        !(err.ReadFailure? && err.readStage == BenchWorld.CloseFailed) then
@@ -727,7 +727,7 @@ module Base64Spec {
     "base64: write error: " + message + "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorText(message))
   }

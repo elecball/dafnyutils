@@ -4,13 +4,10 @@ include "../../core/CliTypes.dfy"
 include "../../core/StringEscaping.dfy"
 
 module CsplitSchema {
-  // CLI codecs are fixed protocol details, outside the candidate API.
   export
     provides Utf8, BenchWorld, CliTypes, SE, Schema, ParserConfig, ParseLineNumber, ParseLinePatterns, DefaultRaw, Decode, CsplitFormatParseError, PlanParseFailure, PlanParsed
     reveals CsplitMode, Input, CsplitCmdRaw, LineParse, PatternError, PatternParse, IsDigit, IsDeferredPattern, TryHelpText, ParseErrorText, MissingInputMessage, MissingPatternMessage, UnsupportedOptionMessage, InvalidPatternMessage, UnsupportedPatternMessage, PatternErrorMessage, DigitChar, DigitsNat
 
-  import ProtocolUtf8Model = Utf8Semantics
-  import ProtocolEscapingModel = StringEscaping
 
   import Utf8 = Utf8Semantics
   import BenchWorld
@@ -163,7 +160,7 @@ module CsplitSchema {
     "csplit: missing operand\n" + TryHelpText()
   }
 
-  ghost function MissingPatternMessage(input: string): string
+  function MissingPatternMessage(input: string): string
   {
     "csplit: missing operand after " + SE.SpecLocaleQuoteBytes(Utf8.Encode(input)) +
     "\n" + TryHelpText()
@@ -208,7 +205,7 @@ module CsplitSchema {
     else '9'
   }
 
-  ghost function DigitsNat(n: nat): BenchWorld.Bytes
+  function DigitsNat(n: nat): BenchWorld.Bytes
     decreases n
   {
     if n < 10 then [DigitChar(n)] else DigitsNat(n / 10) + [DigitChar(n % 10)]
@@ -218,7 +215,7 @@ module CsplitSchema {
     e: CliTypes.ParseError
   ) returns (b: BenchWorld.Bytes)
   {
-    b := ProtocolEncode(ParseErrorText(e));
+    b := Utf8.Encode(ParseErrorText(e));
   }
 
   method PlanParseFailure(
@@ -283,7 +280,7 @@ module CsplitSchema {
     }
 
     if unsupportedSeen {
-      var msg := ProtocolEncode(
+      var msg := Utf8.Encode(
         UnsupportedOptionMessage(unsupportedToken)
       );
       plan := CliTypes.CliEarlyExit(1, [], msg);
@@ -291,14 +288,14 @@ module CsplitSchema {
     }
 
     if |p.positionals| == 0 {
-      var msg := ProtocolEncode(MissingInputMessage());
+      var msg := Utf8.Encode(MissingInputMessage());
       plan := CliTypes.CliEarlyExit(1, [], msg);
       return;
     }
 
     if |p.positionals| == 1 {
-      var msg := ProtocolEncode(
-        ProtocolMissingPatternMessage(p.positionals[0])
+      var msg := Utf8.Encode(
+        MissingPatternMessage(p.positionals[0])
       );
       plan := CliTypes.CliEarlyExit(1, [], msg);
       return;
@@ -307,7 +304,7 @@ module CsplitSchema {
     var parsed := ParseLinePatterns(p.positionals[1..]);
     match parsed
     case PatternsErr(error) =>
-      var msg := ProtocolEncode(PatternErrorMessage(error));
+      var msg := Utf8.Encode(PatternErrorMessage(error));
       plan := CliTypes.CliEarlyExit(1, [], msg);
     case PatternsOk(lines) =>
       var input :=
@@ -317,114 +314,6 @@ module CsplitSchema {
       plan := CliTypes.CliRun(
         CsplitCmdRaw(ModeRun, input, lines)
       );
-  }
-  function ProtocolEncodeChar(ch: char): BenchWorld.Bytes
-    ensures ProtocolEncodeChar(ch) == ProtocolUtf8Model.EncodeChar(ch)
-    ensures |ProtocolEncodeChar(ch)| == BenchWorld.Utf8ByteWidth(ch)
-    ensures 1 <= |ProtocolEncodeChar(ch)| <= 4
-  {
-    var code := ch as int;
-    if code <= 0x7f then
-      [code as char]
-    else if code <= 0x7ff then
-      [
-        (0xc0 + code / 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else if code <= 0xffff then
-      [
-        (0xe0 + code / 0x1000) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else
-      [
-        (0xf0 + code / 0x40000) as char,
-        (0x80 + (code / 0x1000) % 0x40) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-  }
-
-  function ProtocolEncode(text: string): BenchWorld.Bytes
-    ensures ProtocolEncode(text) == ProtocolUtf8Model.Encode(text)
-    ensures |ProtocolEncode(text)| >= |text|
-    decreases |text|
-  {
-    if text == [] then [] else ProtocolEncodeChar(text[0]) + ProtocolEncode(text[1..])
-  }
-
-  function ProtocolSpecCPrintableByte(byte: char): bool
-    ensures ProtocolSpecCPrintableByte(byte) == ProtocolEscapingModel.SpecCPrintableByte(byte)
-  {
-    0x20 <= byte as int <= 0x7e
-  }
-
-  function ProtocolSpecOctDigit(value: int): char
-    ensures ProtocolSpecOctDigit(value) == ProtocolEscapingModel.SpecOctDigit(value)
-  {
-    if value == 0 then '0'
-    else if value == 1 then '1'
-    else if value == 2 then '2'
-    else if value == 3 then '3'
-    else if value == 4 then '4'
-    else if value == 5 then '5'
-    else if value == 6 then '6'
-    else '7'
-  }
-
-  function ProtocolSpecOctalEscape(byte: char): BenchWorld.Bytes
-    ensures ProtocolSpecOctalEscape(byte) == ProtocolEscapingModel.SpecOctalEscape(byte)
-  {
-    var value := byte as int;
-    ['\\', ProtocolSpecOctDigit((value / 64) % 8), ProtocolSpecOctDigit((value / 8) % 8), ProtocolSpecOctDigit(value % 8)]
-  }
-
-  function ProtocolSpecNamedEscape(byte: char): BenchWorld.Bytes
-    ensures ProtocolSpecNamedEscape(byte) == ProtocolEscapingModel.SpecNamedEscape(byte)
-  {
-    if byte == 7 as char then "\\a"
-    else if byte == 8 as char then "\\b"
-    else if byte == 12 as char then "\\f"
-    else if byte == '\n' then "\\n"
-    else if byte == '\r' then "\\r"
-    else if byte == '\t' then "\\t"
-    else if byte == 11 as char then "\\v"
-    else []
-  }
-
-  function ProtocolSpecLocaleQuoteByte(byte: char): BenchWorld.Bytes
-    ensures ProtocolSpecLocaleQuoteByte(byte) == ProtocolEscapingModel.SpecLocaleQuoteByte(byte)
-  {
-    var named := ProtocolSpecNamedEscape(byte);
-    if named != [] then named
-    else if byte == '\'' then "\\'"
-    else if byte == '\\' then "\\\\"
-    else if ProtocolSpecCPrintableByte(byte) then [byte]
-    else ProtocolSpecOctalEscape(byte)
-  }
-
-  function ProtocolSpecLocaleQuoteBody(bytes: BenchWorld.Bytes): BenchWorld.Bytes
-    ensures ProtocolSpecLocaleQuoteBody(bytes) == ProtocolEscapingModel.SpecLocaleQuoteBody(bytes)
-    decreases |bytes|
-  {
-    if |bytes| == 0 then
-      []
-    else
-      ProtocolSpecLocaleQuoteByte(bytes[0]) + ProtocolSpecLocaleQuoteBody(bytes[1..])
-  }
-
-  function ProtocolSpecLocaleQuoteBytes(bytes: BenchWorld.Bytes): BenchWorld.Bytes
-    ensures ProtocolSpecLocaleQuoteBytes(bytes) == ProtocolEscapingModel.SpecLocaleQuoteBytes(bytes)
-  {
-    "'" + ProtocolSpecLocaleQuoteBody(bytes) + "'"
-  }
-
-  function ProtocolMissingPatternMessage(input: string): string
-    ensures ProtocolMissingPatternMessage(input) == MissingPatternMessage(input)
-  {
-    "csplit: missing operand after " + ProtocolSpecLocaleQuoteBytes(ProtocolEncode(input)) +
-    "\n" + TryHelpText()
   }
 
 }

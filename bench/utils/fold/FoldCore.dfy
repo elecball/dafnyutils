@@ -1,33 +1,18 @@
-include "FoldTextCore.dfy"
+include "FoldSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "FoldSchema.dfy"
-include "FoldSpec.dfy"
 
 module FoldCore {
-  import Text = FoldTextCore
-
   import StreamContract = IOContract
 
   import Result = Results
   import BenchIO
-  import Utf8 = FoldUtf8Core
   import BenchWorld
   import IOContract
   import Schema = FoldSchema
   import Spec = FoldSpec
-
-  function IsDigit(ch: char): bool
-  {
-    '0' <= ch <= '9'
-  }
-
-  function DigitValue(ch: char): nat
-    requires IsDigit(ch)
-  {
-    ((ch as int) - ('0' as int)) as nat
-  }
 
   function ParseNatFrom(
     text: string,
@@ -39,20 +24,20 @@ module FoldCore {
   {
     if i == |text| then
       if acc == 0 then Schema.NatErr else Schema.NatOk(acc)
-    else if !IsDigit(text[i]) then
+    else if !Spec.IsDigit(text[i]) then
       Schema.NatErr
     else
       ParseNatFrom(
-        text, i + 1, acc * 10 + DigitValue(text[i])
+        text, i + 1, acc * 10 + Spec.DigitValue(text[i])
       )
   } by method {
     if i == |text| {
       return if acc == 0 then Schema.NatErr else Schema.NatOk(acc);
-    } else if !IsDigit(text[i]) {
+    } else if !Spec.IsDigit(text[i]) {
       return Schema.NatErr;
     } else {
       return ParseNatFrom(
-          text, i + 1, acc * 10 + DigitValue(text[i])
+          text, i + 1, acc * 10 + Spec.DigitValue(text[i])
         );
     }
   }
@@ -216,43 +201,6 @@ module FoldCore {
     }
   }
 
-  function StepColumn(byteMode: bool, ch: char, column: nat): nat
-  {
-    if byteMode then
-      column + 1
-    else if ch == '\U{0}' then
-      column
-    else if ch == '\U{8}' then
-      if column == 0 then 0 else column - 1
-    else if ch == '\r' then
-      0
-    else if ch == '\t' then
-      column + (8 - column % 8)
-    else
-      column + 1
-  } by method {
-    if byteMode {
-      return column + 1;
-    } else if ch == '\U{0}' {
-      return column;
-    } else if ch == '\U{8}' {
-      return if column == 0 then 0 else column - 1;
-    } else if ch == '\r' {
-      return 0;
-    } else if ch == '\t' {
-      return column + (8 - column % 8);
-    } else {
-      return column + 1;
-    }
-  }
-
-  function IsBlank(ch: char): bool
-  {
-    ch == ' ' || ch == '\t'
-  } by method {
-    return ch == ' ' || ch == '\t';
-  }
-
   twostate predicate PreparedSummary(raw: Schema.FoldCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
     reads io.stdinRegion
   {
@@ -270,7 +218,7 @@ module FoldCore {
     else if cmd.mode == Schema.ModeInvalidWidth then
       io.stdin() == old(io.stdin()) &&
       plannedStdout == [] &&
-      plannedStderr == Text.InvalidWidthMessage(cmd.invalidWidthValue) &&
+      plannedStderr == Spec.InvalidWidthMessage(cmd.invalidWidthValue) &&
       exit == 1
     else
       exists stdoutPart: BenchWorld.Bytes, stderrPart: BenchWorld.Bytes, hadError: bool ::
@@ -396,15 +344,15 @@ module FoldCore {
   }
 
   method GetInvalidWidthMessage(value: string) returns (msg: BenchWorld.Bytes)
-    ensures msg == Text.InvalidWidthMessage(value)
+    ensures msg == Spec.InvalidWidthMessage(value)
   {
-    msg := Text.InvalidWidthMessage(value);
+    msg := Spec.InvalidWidthMessage(value);
   }
 
   method ErrorMessageMethod(path: BenchWorld.Path, err: BenchWorld.IOError) returns (msg: BenchWorld.Bytes)
-    ensures msg == Text.ErrorMessage(path, err)
+    ensures msg == Spec.ErrorMessage(path, err)
   {
-    msg := Text.ErrorMessage(path, err);
+    msg := Spec.ErrorMessage(path, err);
   }
 
   method FittingPrefixMethod(
@@ -458,7 +406,7 @@ module FoldCore {
                   Spec.StepColumn(byteMode, line[end], columns[end]) > width
       decreases |line| - end, if scanning then 1 else 0
     {
-      var nextColumn := StepColumn(byteMode, line[end], column);
+      var nextColumn := Spec.StepColumn(byteMode, line[end], column);
       if nextColumn > width && end > 0 {
         scanning := false;
       } else {
@@ -482,7 +430,7 @@ module FoldCore {
             }
           }
         }
-        if IsBlank(line[previousEnd]) {
+        if Spec.IsBlank(line[previousEnd]) {
           lastBlankEnd := end;
         }
       }
@@ -837,7 +785,7 @@ module FoldCore {
       var msg := GetInvalidWidthMessage(cmd.invalidWidthValue);
       plannedErr := plannedErr + msg;
       exit := 1;
-      assert msg == Text.InvalidWidthMessage(cmd.invalidWidthValue);
+      assert msg == Spec.InvalidWidthMessage(cmd.invalidWidthValue);
       assert PreparedSummary(raw, io, exit, plannedOut, plannedErr) by { hide *; reveal PreparedSummary(); }
       return;
     }
@@ -884,7 +832,7 @@ module FoldCore {
       assert result == Spec.ReadResultAt(cmd, preFs, beforeStdin, i, old(io.trustedStreams()));
       var piece := OutputPieceMethod(cmd, result);
       var diagnostic := if result.Err? then
-        Text.ErrorMessage(if input.Stdin? then "-" else input.path, result.e) else [];
+        Spec.ErrorMessage(if input.Stdin? then "-" else input.path, result.e) else [];
       var failed := hadError || result.Err?;
       JoinFragmentsSnoc(stdoutFragments, piece);
       JoinFragmentsSnoc(stderrFragments, diagnostic);
@@ -955,10 +903,10 @@ module FoldCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);

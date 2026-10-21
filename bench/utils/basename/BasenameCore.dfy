@@ -1,21 +1,18 @@
-include "BasenameUtf8Core.dfy"
-include "BasenameTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "BasenameSpec.dfy"
 include "../../core/IOContract.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
-include "../../core/Utf8.dfy"
 include "BasenameSchema.dfy"
-include "BasenameSpec.dfy"
 
 module BasenameCore {
   import StreamContract = IOContract
 
-  import Utf8 = BasenameUtf8Core
+  import Utf8 = Utf8Semantics
   import BenchIO
   import Schema = BasenameSchema
   import BenchWorld
   import Spec = BasenameSpec
-  import Text = BasenameTextCore
 
   ghost predicate BasenameValueSummary(path: string, value: string)
   {
@@ -74,7 +71,7 @@ module BasenameCore {
 
   ghost predicate RunOutputSummary(cmd: Schema.BasenameCmd, out: string)
   {
-    var sep := if cmd.zeroTerminated then ['\0'] else "\n";
+    var sep := Spec.OutputSeparator(cmd);
     if |cmd.operands| == 0 then
       out == ""
     else if cmd.multiple then
@@ -235,7 +232,7 @@ module BasenameCore {
     ensures RunOutputSummary(cmd, out)
     decreases *
   {
-    var sep := if cmd.zeroTerminated then ['\0'] else "\n";
+    var sep := Spec.OutputSeparator(cmd);
     if cmd.multiple {
       match cmd.suffix
       case Some(s) =>
@@ -285,7 +282,7 @@ module BasenameCore {
     }
 
     if !cmd.multiple && |cmd.operands| > 2 {
-      var err := Text.ExtraOperandMessage(cmd.operands[2]);
+      var err := Spec.ExtraOperandMessageSpec(cmd.operands[2]);
       plannedErr := plannedErr + err;
       exit := 1;
       return;
@@ -327,7 +324,7 @@ module BasenameCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

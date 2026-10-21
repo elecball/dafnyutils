@@ -4,13 +4,10 @@ include "../../core/CliTypes.dfy"
 include "../../core/StringEscaping.dfy"
 
 module CutSchema {
-  // CLI codecs are fixed protocol details, outside the candidate API.
   export
     provides Utf8, BenchWorld, CliTypes, SE, Schema, ParserConfig, ParsePositiveInt, FindChar, FirstNonDigit, PositionParseError, ParseRangeElement, ParseRangeListFrom, ParseRangeList, InputsFromOperands, DefaultSelection, Decode, PlanParsed, ParseErrorMessage, PlanErrorMessage
     reveals CutMode, SelectionKind, Input, Range, Selection, OutputDelimiter, CutCmdRaw, NumberParseResult, RangeParseError, RangeParseResult, RangeListParseResult, PlanError, ParsedPlan, IsDigit, DigitValue, TryHelpText, ParseErrorText, RangeErrorText, PlanErrorText
 
-  import ProtocolUtf8Model = Utf8Semantics
-  import ProtocolEscapingModel = StringEscaping
 
   import Utf8 = Utf8Semantics
   import BenchWorld
@@ -420,7 +417,7 @@ module CutSchema {
       "cut: option '" + e.rawToken + "' is ambiguous\n" + TryHelpText()
   }
 
-  ghost function RangeErrorText(error: RangeParseError): string
+  function RangeErrorText(error: RangeParseError): string
   {
     match error
     case FromOneError =>
@@ -436,7 +433,7 @@ module CutSchema {
       "cut: invalid decreasing range\n" + TryHelpText()
   }
 
-  ghost function PlanErrorText(error: PlanError): string
+  function PlanErrorText(error: PlanError): string
   {
     match error
     case MissingListError =>
@@ -449,208 +446,11 @@ module CutSchema {
 
   method ParseErrorMessage(e: CliTypes.ParseError) returns (message: BenchWorld.Bytes)
   {
-    var text := ParseErrorText(e);
-    message := [];
-    var i := |text|;
-    while 0 < i
-      invariant 0 <= i <= |text|
-      invariant message == ProtocolEncode(text[i..])
-      decreases i
-    {
-      i := i - 1;
-      var code := text[i] as int;
-      var piece: BenchWorld.Bytes :=
-        if code <= 0x7f then
-          [code as char]
-        else if code <= 0x7ff then
-          [
-            (0xc0 + code / 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ]
-        else if code <= 0xffff then
-          [
-            (0xe0 + code / 0x1000) as char,
-            (0x80 + (code / 0x40) % 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ]
-        else
-          [
-            (0xf0 + code / 0x40000) as char,
-            (0x80 + (code / 0x1000) % 0x40) as char,
-            (0x80 + (code / 0x40) % 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ];
-      message := piece + message;
-    }
-    assert message == ProtocolEncode(ParseErrorText(e));
+    message := Utf8.Encode(ParseErrorText(e));
   }
 
   method PlanErrorMessage(error: PlanError) returns (message: BenchWorld.Bytes)
   {
-    var text := ProtocolPlanErrorText(error);
-    message := [];
-    var i := |text|;
-    while 0 < i
-      invariant 0 <= i <= |text|
-      invariant message == ProtocolEncode(text[i..])
-      decreases i
-    {
-      i := i - 1;
-      var code := text[i] as int;
-      var piece: BenchWorld.Bytes :=
-        if code <= 0x7f then
-          [code as char]
-        else if code <= 0x7ff then
-          [
-            (0xc0 + code / 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ]
-        else if code <= 0xffff then
-          [
-            (0xe0 + code / 0x1000) as char,
-            (0x80 + (code / 0x40) % 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ]
-        else
-          [
-            (0xf0 + code / 0x40000) as char,
-            (0x80 + (code / 0x1000) % 0x40) as char,
-            (0x80 + (code / 0x40) % 0x40) as char,
-            (0x80 + code % 0x40) as char
-          ];
-      message := piece + message;
-    }
-    assert message == ProtocolEncode(ProtocolPlanErrorText(error));
+    message := Utf8.Encode(PlanErrorText(error));
   }
-  function ProtocolEncodeChar(ch: char): BenchWorld.Bytes
-    ensures ProtocolEncodeChar(ch) == ProtocolUtf8Model.EncodeChar(ch)
-    ensures |ProtocolEncodeChar(ch)| == BenchWorld.Utf8ByteWidth(ch)
-    ensures 1 <= |ProtocolEncodeChar(ch)| <= 4
-  {
-    var code := ch as int;
-    if code <= 0x7f then
-      [code as char]
-    else if code <= 0x7ff then
-      [
-        (0xc0 + code / 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else if code <= 0xffff then
-      [
-        (0xe0 + code / 0x1000) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else
-      [
-        (0xf0 + code / 0x40000) as char,
-        (0x80 + (code / 0x1000) % 0x40) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-  }
-
-  function ProtocolEncode(text: string): BenchWorld.Bytes
-    ensures ProtocolEncode(text) == ProtocolUtf8Model.Encode(text)
-    ensures |ProtocolEncode(text)| >= |text|
-    decreases |text|
-  {
-    if text == [] then [] else ProtocolEncodeChar(text[0]) + ProtocolEncode(text[1..])
-  }
-
-  function ProtocolSpecCPrintableByte(byte: char): bool
-    ensures ProtocolSpecCPrintableByte(byte) == ProtocolEscapingModel.SpecCPrintableByte(byte)
-  {
-    0x20 <= byte as int <= 0x7e
-  }
-
-  function ProtocolSpecOctDigit(value: int): char
-    ensures ProtocolSpecOctDigit(value) == ProtocolEscapingModel.SpecOctDigit(value)
-  {
-    if value == 0 then '0'
-    else if value == 1 then '1'
-    else if value == 2 then '2'
-    else if value == 3 then '3'
-    else if value == 4 then '4'
-    else if value == 5 then '5'
-    else if value == 6 then '6'
-    else '7'
-  }
-
-  function ProtocolSpecOctalEscape(byte: char): BenchWorld.Bytes
-    ensures ProtocolSpecOctalEscape(byte) == ProtocolEscapingModel.SpecOctalEscape(byte)
-  {
-    var value := byte as int;
-    ['\\', ProtocolSpecOctDigit((value / 64) % 8), ProtocolSpecOctDigit((value / 8) % 8), ProtocolSpecOctDigit(value % 8)]
-  }
-
-  function ProtocolSpecNamedEscape(byte: char): BenchWorld.Bytes
-    ensures ProtocolSpecNamedEscape(byte) == ProtocolEscapingModel.SpecNamedEscape(byte)
-  {
-    if byte == 7 as char then "\\a"
-    else if byte == 8 as char then "\\b"
-    else if byte == 12 as char then "\\f"
-    else if byte == '\n' then "\\n"
-    else if byte == '\r' then "\\r"
-    else if byte == '\t' then "\\t"
-    else if byte == 11 as char then "\\v"
-    else []
-  }
-
-  function ProtocolSpecLocaleQuoteByte(byte: char): BenchWorld.Bytes
-    ensures ProtocolSpecLocaleQuoteByte(byte) == ProtocolEscapingModel.SpecLocaleQuoteByte(byte)
-  {
-    var named := ProtocolSpecNamedEscape(byte);
-    if named != [] then named
-    else if byte == '\'' then "\\'"
-    else if byte == '\\' then "\\\\"
-    else if ProtocolSpecCPrintableByte(byte) then [byte]
-    else ProtocolSpecOctalEscape(byte)
-  }
-
-  function ProtocolSpecLocaleQuoteBody(bytes: BenchWorld.Bytes): BenchWorld.Bytes
-    ensures ProtocolSpecLocaleQuoteBody(bytes) == ProtocolEscapingModel.SpecLocaleQuoteBody(bytes)
-    decreases |bytes|
-  {
-    if |bytes| == 0 then
-      []
-    else
-      ProtocolSpecLocaleQuoteByte(bytes[0]) + ProtocolSpecLocaleQuoteBody(bytes[1..])
-  }
-
-  function ProtocolSpecLocaleQuoteBytes(bytes: BenchWorld.Bytes): BenchWorld.Bytes
-    ensures ProtocolSpecLocaleQuoteBytes(bytes) == ProtocolEscapingModel.SpecLocaleQuoteBytes(bytes)
-  {
-    "'" + ProtocolSpecLocaleQuoteBody(bytes) + "'"
-  }
-
-  function ProtocolRangeErrorText(error: RangeParseError): string
-    ensures ProtocolRangeErrorText(error) == RangeErrorText(error)
-  {
-    match error
-    case FromOneError =>
-      "cut: byte/character positions are numbered from 1\n" + TryHelpText()
-    case InvalidRangeError =>
-      "cut: invalid byte or character range\n" + TryHelpText()
-    case InvalidPositionError(text) =>
-      "cut: invalid byte/character position " +
-      ProtocolSpecLocaleQuoteBytes(ProtocolEncode(text)) + "\n" + TryHelpText()
-    case NoEndpointError =>
-      "cut: invalid range with no endpoint: -\n" + TryHelpText()
-    case DecreasingRangeError =>
-      "cut: invalid decreasing range\n" + TryHelpText()
-  }
-
-  function ProtocolPlanErrorText(error: PlanError): string
-    ensures ProtocolPlanErrorText(error) == PlanErrorText(error)
-  {
-    match error
-    case MissingListError =>
-      "cut: you must specify a list of bytes, characters, or fields\n" + TryHelpText()
-    case OnlyOneListError =>
-      "cut: only one list may be specified\n" + TryHelpText()
-    case SelectionError(rangeError) =>
-      ProtocolRangeErrorText(rangeError)
-  }
-
 }

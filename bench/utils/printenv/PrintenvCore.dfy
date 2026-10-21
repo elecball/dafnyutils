@@ -1,10 +1,9 @@
-include "PrintenvUtf8Core.dfy"
-include "PrintenvTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "PrintenvSpec.dfy"
 include "../../core/World.dfy"
 include "../../core/IO.dfy"
 include "../../core/IOContract.dfy"
 include "PrintenvSchema.dfy"
-include "PrintenvSpec.dfy"
 
 module PrintenvCore {
   import StreamContract = IOContract
@@ -14,15 +13,7 @@ module PrintenvCore {
   import BenchWorld
   import IOContract
   import Spec = PrintenvSpec
-  import Text = PrintenvTextCore
-  import Utf8 = PrintenvUtf8Core
-
-  function Terminator(nullTerminated: bool): BenchWorld.Bytes
-  {
-    if nullTerminated then [(0 as char)] else "\n"
-  } by method {
-    return if nullTerminated then [(0 as char)] else "\n";
-  }
+  import Utf8 = Utf8Semantics
 
   function RenderEnvEntries(entries: seq<string>, terminator: BenchWorld.Bytes): BenchWorld.Bytes
     decreases |entries|
@@ -148,11 +139,11 @@ module PrintenvCore {
   function Output(cmd: Schema.PrintenvCmd, entries: seq<string>): BenchWorld.Bytes
   {
     if |cmd.operands| == 0 then
-      RenderEnvEntries(entries, Terminator(cmd.nullTerminated))
+      RenderEnvEntries(entries, Spec.Terminator(cmd.nullTerminated))
     else
-      LookupOutput(cmd.operands, entries, Terminator(cmd.nullTerminated))
+      LookupOutput(cmd.operands, entries, Spec.Terminator(cmd.nullTerminated))
   } by method {
-    var terminator := Terminator(cmd.nullTerminated);
+    var terminator := Spec.Terminator(cmd.nullTerminated);
     if |cmd.operands| == 0 {
       return RenderEnvEntries(entries, terminator);
     } else {
@@ -253,7 +244,7 @@ module PrintenvCore {
     var errors := diagnostics;
     if outErr != 0 {
       var message := io.GetCLocaleErrnoText(outErr);
-      errors := errors + Text.StreamWriteErrorMessage(message);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
                                     Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));

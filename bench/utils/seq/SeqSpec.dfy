@@ -21,8 +21,6 @@ module SeqSpec {
     | NumbersOk(first: Decimal, step: Decimal, last: Decimal)
     | NumbersErr(stderr: BenchWorld.Bytes)
 
-
-
   function HelpText(): BenchWorld.Bytes
   {
     "Usage: seq [OPTION]... LAST\n"
@@ -90,7 +88,7 @@ module SeqSpec {
     "Try 'seq --help' for more information.\n"
   }
 
-  ghost function Separator(raw: SeqSchema.SeqCmdRaw): BenchWorld.Bytes
+  function Separator(raw: SeqSchema.SeqCmdRaw): BenchWorld.Bytes
   {
     match raw.separator
     case Some(value) => Utf8.Encode(value)
@@ -107,7 +105,7 @@ module SeqSpec {
     (ch as int) - ('0' as int)
   }
 
-  ghost predicate DigitRange(text: string, start: nat, end: nat)
+  predicate DigitRange(text: string, start: nat, end: nat)
   {
     start <= end <= |text| &&
     forall i: nat | start <= i < end :: IsDigit(text[i])
@@ -307,7 +305,7 @@ module SeqSpec {
     "\n"
   }
 
-  ghost function ExtraOperandMessage(token: string): BenchWorld.Bytes
+  function ExtraOperandMessage(token: string): BenchWorld.Bytes
   {
     ExtraOperandMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + ExtraOperandMessagePart2() + TryHelp()
   }
@@ -322,7 +320,7 @@ module SeqSpec {
     "\n"
   }
 
-  ghost function InvalidNumberMessage(token: string): BenchWorld.Bytes
+  function InvalidNumberMessage(token: string): BenchWorld.Bytes
   {
     InvalidNumberMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + InvalidNumberMessagePart2() + TryHelp()
   }
@@ -337,7 +335,7 @@ module SeqSpec {
     "\n"
   }
 
-  ghost function ZeroIncrementMessage(token: string): BenchWorld.Bytes
+  function ZeroIncrementMessage(token: string): BenchWorld.Bytes
   {
     ZeroIncrementMessagePart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(token)) + ZeroIncrementMessagePart2() + TryHelp()
   }
@@ -425,7 +423,7 @@ module SeqSpec {
       '0'
   }
 
-  ghost function DigitsUnsigned(n: int): BenchWorld.Bytes
+  function DigitsUnsigned(n: int): BenchWorld.Bytes
     requires 0 <= n
     decreases n
   {
@@ -435,13 +433,13 @@ module SeqSpec {
       DigitsUnsigned(n / 10) + [DigitChar(n % 10)]
   }
 
-  ghost function Zeros(n: nat): BenchWorld.Bytes
+  function Zeros(n: nat): BenchWorld.Bytes
     decreases n
   {
     if n == 0 then [] else ['0'] + Zeros(n - 1)
   }
 
-  ghost function LeftPadZeros(text: BenchWorld.Bytes, width: nat): BenchWorld.Bytes
+  function LeftPadZeros(text: BenchWorld.Bytes, width: nat): BenchWorld.Bytes
   {
     if width <= |text| then
       text
@@ -456,7 +454,7 @@ module SeqSpec {
   {
   }
 
-  ghost function RenderMagnitude(magnitude: int, scale: nat): BenchWorld.Bytes
+  function RenderMagnitude(magnitude: int, scale: nat): BenchWorld.Bytes
     requires 0 <= magnitude
   {
     if scale == 0 then
@@ -469,7 +467,7 @@ module SeqSpec {
       DigitsUnsigned(integerPart) + ['.'] + LeftPadZeros(DigitsUnsigned(fractionalPart), scale)
   }
 
-  ghost function RenderFixed(value: int, scale: nat, negativeZero: bool): BenchWorld.Bytes
+  function RenderFixed(value: int, scale: nat, negativeZero: bool): BenchWorld.Bytes
   {
     if value < 0 then
       ['-'] + RenderMagnitude(-value, scale)
@@ -479,7 +477,7 @@ module SeqSpec {
       RenderMagnitude(value, scale)
   }
 
-  ghost function PadNumber(text: BenchWorld.Bytes, width: nat): BenchWorld.Bytes
+  function PadNumber(text: BenchWorld.Bytes, width: nat): BenchWorld.Bytes
   {
     if width <= |text| then
       text
@@ -638,7 +636,7 @@ module SeqSpec {
     "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorMessagePart1() + message + StreamWriteErrorMessagePart2())
   }

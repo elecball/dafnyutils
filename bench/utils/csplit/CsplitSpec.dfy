@@ -57,19 +57,6 @@ module CsplitSpec {
                               afterFs, path, ok, err)
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
   function HelpText(): BenchWorld.Bytes
   {
     "Usage: csplit [OPTION]... FILE PATTERN...\n"
@@ -143,7 +130,7 @@ module CsplitSpec {
     " for reading: "
   }
 
-  ghost function ReadErrorMessage(input: Schema.Input, err: BenchWorld.IOError): BenchWorld.Bytes
+  function ReadErrorMessage(input: Schema.Input, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     match input
     case Stdin => ReadErrorMessagePart1() + Utf8.Encode(ReadErrnoText(err)) + ReadErrorMessagePart2()
@@ -167,7 +154,7 @@ module CsplitSpec {
     "\n"
   }
 
-  ghost function WriteErrorMessage(path: BenchWorld.Path, err: int): BenchWorld.Bytes
+  function WriteErrorMessage(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     WriteErrorMessagePart1() + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
     WriteErrorMessagePart2() + Utf8.Encode(WriteErrnoText(err)) + WriteErrorMessagePart3()
@@ -183,7 +170,7 @@ module CsplitSpec {
     ": line number must be greater than zero\n"
   }
 
-  ghost function ZeroLineMessage(line: nat): BenchWorld.Bytes
+  function ZeroLineMessage(line: nat): BenchWorld.Bytes
   {
     ZeroLineMessagePart1() + Schema.DigitsNat(line) + ZeroLineMessagePart2()
   }
@@ -203,7 +190,7 @@ module CsplitSpec {
     "\n"
   }
 
-  ghost function BackwardLineMessage(current: nat, previous: nat): BenchWorld.Bytes
+  function BackwardLineMessage(current: nat, previous: nat): BenchWorld.Bytes
   {
     BackwardLineMessagePart1() + Schema.DigitsNat(current) + BackwardLineMessagePart2() +
     Schema.DigitsNat(previous) + BackwardLineMessagePart3()
@@ -219,7 +206,7 @@ module CsplitSpec {
     "': line number out of range\n"
   }
 
-  ghost function OutOfRangeMessage(line: nat): BenchWorld.Bytes
+  function OutOfRangeMessage(line: nat): BenchWorld.Bytes
   {
     OutOfRangeMessagePart1() + Schema.DigitsNat(line) + OutOfRangeMessagePart2()
   }
@@ -234,19 +221,17 @@ module CsplitSpec {
     "' is the same as preceding line number\n"
   }
 
-  ghost function DuplicateWarning(line: nat): BenchWorld.Bytes
+  function DuplicateWarning(line: nat): BenchWorld.Bytes
   {
     DuplicateWarningPart1() + Schema.DigitsNat(line) + DuplicateWarningPart2()
   }
-
-
 
   function CountLinePart1(): BenchWorld.Bytes
   {
     "\n"
   }
 
-  ghost function CountLine(n: nat): BenchWorld.Bytes
+  function CountLine(n: nat): BenchWorld.Bytes
   {
     Schema.DigitsNat(n) + CountLinePart1()
   }
@@ -261,7 +246,7 @@ module CsplitSpec {
     "xx"
   }
 
-  ghost function OutputName(index: nat): BenchWorld.Path
+  function OutputName(index: nat): BenchWorld.Path
   {
     if index < 10 then
       OutputNamePart1() + Schema.DigitsNat(index)
@@ -760,7 +745,7 @@ module CsplitSpec {
     "\n"
   }
 
-  ghost function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
+  function StreamWriteErrorMessage(message: string): BenchWorld.Bytes
   {
     StreamUtf8.Encode(StreamWriteErrorMessagePart1() + message + StreamWriteErrorMessagePart2())
   }

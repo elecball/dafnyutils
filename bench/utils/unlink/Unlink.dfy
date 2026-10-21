@@ -1,8 +1,8 @@
+include "UnlinkSpec.dfy"
 include "../../core/StringEscaping.dfy"
 include "CliSupport.dfy"
 include "../../core/Utf8.dfy"
 include "UnlinkSchema.dfy"
-include "UnlinkSpec.dfy"
 include "UnlinkCore.dfy"
 include "UnlinkProof.dfy"
 
@@ -12,8 +12,6 @@ module Unlink {
     provides BenchIO, BenchWorld, BenchItem, CliTypes, Utf8, S, Core, Spec, Proof, CliExtern, UnlinkBenchmarkItem._ctor, UnlinkBenchmarkItem.Name, UnlinkBenchmarkItem.Schema, UnlinkBenchmarkItem.ParseConfig, UnlinkBenchmarkItem.Decode, UnlinkBenchmarkItem.FormatParseError, UnlinkBenchmarkItem.PlanParseFailure, UnlinkBenchmarkItem.RunCore
     reveals UnlinkBenchmarkItem
 
-  import ProtocolUtf8Model = Utf8Semantics
-  import ProtocolEscapingModel = StringEscaping
   import opened ProtocolModel = UnlinkSpec
 
   import BenchIO
@@ -47,7 +45,7 @@ module Unlink {
     }
 
     method FormatParseError(err: CliTypes.ParseError) returns (msg: BenchWorld.Bytes) {
-      msg := ProtocolParseErrorText(err);
+      msg := ProtocolModel.ParseErrorText(err);
     }
 
     method PlanParseFailure(
@@ -70,7 +68,7 @@ module Unlink {
           case ParseFailure(_) =>
         }
       }
-      var msg := ProtocolParseErrorText(e);
+      var msg := ProtocolModel.ParseErrorText(e);
       plan := CliTypes.CliEarlyExit(1, [], msg);
     }
 
@@ -81,70 +79,6 @@ module Unlink {
       exit := Core.RunCore(raw, io);
       Proof.CoreSummaryImpliesSpec(raw, io, exit);
     }
-  }
-  function ProtocolEncodeChar(ch: char): BenchWorld.Bytes
-    ensures ProtocolEncodeChar(ch) == ProtocolUtf8Model.EncodeChar(ch)
-    ensures |ProtocolEncodeChar(ch)| == BenchWorld.Utf8ByteWidth(ch)
-    ensures 1 <= |ProtocolEncodeChar(ch)| <= 4
-  {
-    var code := ch as int;
-    if code <= 0x7f then
-      [code as char]
-    else if code <= 0x7ff then
-      [
-        (0xc0 + code / 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else if code <= 0xffff then
-      [
-        (0xe0 + code / 0x1000) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-    else
-      [
-        (0xf0 + code / 0x40000) as char,
-        (0x80 + (code / 0x1000) % 0x40) as char,
-        (0x80 + (code / 0x40) % 0x40) as char,
-        (0x80 + code % 0x40) as char
-      ]
-  }
-
-  function ProtocolEncode(text: string): BenchWorld.Bytes
-    ensures ProtocolEncode(text) == ProtocolUtf8Model.Encode(text)
-    ensures |ProtocolEncode(text)| >= |text|
-    decreases |text|
-  {
-    if text == [] then [] else ProtocolEncodeChar(text[0]) + ProtocolEncode(text[1..])
-  }
-
-  function ProtocolParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
-    ensures ProtocolParseErrorText(err) == ProtocolModel.ParseErrorText(err)
-  {
-    var shortOptionPrefix: string := ParseErrorTextPart4();
-    var text: string := if err.kind == CliTypes.UnknownOption then
-                          if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-                            ParseErrorTextPart1() + err.rawToken + ParseErrorTextPart2() +
-                            ParseErrorTextPart3()
-                          else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
-                            shortOptionPrefix + [err.rawToken[1]] + ParseErrorTextPart2() +
-                            ParseErrorTextPart3()
-                          else
-                            ParseErrorTextPart5()
-                        else if err.kind == CliTypes.UnexpectedValue then
-                          ParseErrorTextPart6() + LongOptionName(err.rawToken) +
-                          ParseErrorTextPart7() +
-                          ParseErrorTextPart3()
-                        else if err.kind == CliTypes.Ambiguous then
-                          ParseErrorTextPart6() + err.rawToken + ParseErrorTextPart8() +
-                          ParseErrorTextPart3()
-                        else
-                          ParseErrorTextPart9() +
-                          (if err.kind == CliTypes.MissingValue
-                           then ParseErrorTextPart10()
-                           else ParseErrorTextPart11()) +
-                          ParseErrorTextPart12() + err.rawToken + ParseErrorTextPart2();
-    ProtocolEncode(text)
   }
 
 }

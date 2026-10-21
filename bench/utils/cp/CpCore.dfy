@@ -1,11 +1,12 @@
-include "CpTextCore.dfy"
+include "../../core/Utf8.dfy"
+include "CpPathSpec.dfy"
 include "CpSpec.dfy"
 include "CpPathProof.dfy"
 include "CpPathCore.dfy"
 include "CpPathBridge.dfy"
 
 module CpCore {
-  import Text = CpTextCore
+  import Text = CpSpec
   import BenchIO
   import BW = BenchWorld
   import C = IOContract
@@ -17,7 +18,7 @@ module CpCore {
   import PathSpec = CpPathSpec
   import Results
   import CliModel
-  import Utf8 = CpUtf8Core
+  import Utf8 = Utf8Semantics
 
   method Metadata(path: string, follow: bool, io: BenchIO.IO) returns (meta: Spec.Metadata)
     ensures Spec.MetadataFields(io.fs(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),path,follow,meta)
@@ -132,7 +133,10 @@ module CpCore {
         assert C.ReadDirSpec(io.fs(),states[|entries|],io.trustedNativeFailures(),states[|entries|],handle,false,"",BW.UnknownDirentKind,err);
         break;
       }
-      assert C.ReadDirSpec(io.fs(),before,io.trustedNativeFailures(),io.dirHandles(),handle,true,item.v.name,item.v.kind,0);
+      assert C.ReadDirSpec(io.fs(),before,io.trustedNativeFailures(),io.dirHandles(),handle,true,item.v.name,item.v.kind,0) by {
+        hide *;
+        assert item.Ok? && item.v.DirectoryItem? && C.ResultErrno(item) == 0;
+      }
       assert C.ReadDirInodeFields(io.fs(),before,handle,item.v.name,true,item.v.inode);
       ghost var previousEntries, previousKinds, previousStates := entries,kinds,states;
       entries := entries + [Spec.DirectoryName(item.v.name,item.v.inode)];
@@ -767,10 +771,7 @@ module CpCore {
     var scanErr,wasOpened := 0,false;
     ghost var chosenMaximum: nat := 0;
     if mode == "simple" {
-      path := Paths.SimpleBackupPath(target,suffix);
-      assert path == PathSpec.SimpleBackupPathSpec(target,suffix) by {
-        reveal Paths.SimpleBackupPath(),PathSpec.SimpleBackupPathSpec();
-      }
+      path := PathSpec.SimpleBackupPathSpec(target,suffix);
       err := 0;
     } else {
       parent := Paths.ComputeDirnameValue(target);
@@ -802,17 +803,10 @@ module CpCore {
         }
         chosenMaximum := maximum;
         if mode == "existing" && maximum == 0 {
-          path := Paths.SimpleBackupPath(target,suffix);
-          assert path == PathSpec.SimpleBackupPathSpec(target,suffix) by {
-            reveal Paths.SimpleBackupPath(),PathSpec.SimpleBackupPathSpec();
-          }
+          path := PathSpec.SimpleBackupPathSpec(target,suffix);
         }
         else {
-          path := Paths.NumberedBackupPath(target,maximum+1);
-          PathProof.DecimalNatSpecEqualsCore(maximum+1);
-          assert path == PathSpec.NumberedBackupPathSpec(target,maximum+1) by {
-            reveal Paths.NumberedBackupPath(),PathSpec.NumberedBackupPathSpec();
-          }
+          path := PathSpec.NumberedBackupPathSpec(target,maximum+1);
         }
         err := 0;
       }
@@ -936,13 +930,19 @@ module CpCore {
                                  Spec.BackupObservation(prepared,preparation,readyMetadata,copied,leafOut,leafErr,leafOK,receipt,restoreOut,restoreErr)) by {
       hide *;
       reveal Spec.BackupLeafFields();
-      if Spec.BackupMode(raw) != "off" && tm.ok && !tm.value.isDir {
+      if Spec.BackupMode(raw) == "off" || !tm.ok || tm.value.isDir {
+        assert Spec.LeafResult(raw,source,target,sm,tm,(mode,linkTarget),before,io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(out,err,ok,receipt));
+      } else {
         assert Spec.BackupPreparation(raw,source,target,sm,before,prepared,io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),preparation);
-        if preparation.BackupReady? {
+        if preparation.BackupRejected? {
+          assert io.fs() == prepared && out == [] && err == preparation.error && !ok;
+          assert receipt == Spec.CopyReceipt(Spec.NoDestinationRecord,false,false);
+        } else {
           assert Spec.MetadataFields(prepared,Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),target,!raw.policy.remove && !raw.policy.symbolic && !raw.policy.hard && !sm.value.isSymlink,readyMetadata);
           assert Spec.LeafResult(raw.(policy := raw.policy.(verbose := false)),source,target,sm,readyMetadata,(mode,linkTarget),prepared,copied,io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(leafOut,leafErr,leafOK,receipt));
           assert Spec.BackupRestoration(raw,preparation.path,target,!leafOK && !receipt.retained && preparation.renamed,copied,io.fs(),io.now(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),restoreOut,restoreErr);
           assert out == (if raw.policy.verbose then (if preparation.renamed then Spec.VerboseBackup(Spec.Q(source),Spec.Q(target),Spec.Q(preparation.path)) else Spec.Verbose(Spec.Q(source),Spec.Q(target))) else [])+leafOut+restoreOut;
+          assert err == leafErr+restoreErr && ok == leafOK;
         }
       }
     }
@@ -1703,6 +1703,7 @@ module CpCore {
         var modeResult := io.GetFileMode(source,true);
         sourceModeOK,sourceModeErr := modeResult.Ok?,C.ResultErrno(modeResult);
         sourceMode := C.ResultValue(modeResult,0 as bv32);
+        assert C.GetFileModeSpec(before,io.trustedNativeFailures(),source,true,sourceModeOK,sourceMode,sourceModeErr);
         if !sourceModeOK {
           var q := Quoted(source,io);
           var reason := Reason(sourceModeErr,io);
@@ -1718,6 +1719,7 @@ module CpCore {
             var result := io.CreateDirectory(target,Spec.ParentCreationMode(raw,sourceMode));
             createOK,createErr := result.Ok?,C.ResultErrno(result);
             created := io.fs();
+            assert C.CreateDirectorySpec(before,io.now(),io.trustedFilesystem(),io.umask(),created,target,Spec.ParentCreationMode(raw,sourceMode),createOK,createErr);
             if !createOK {
               var q := Quoted(target,io);
               var reason := Reason(createErr,io);
@@ -1733,6 +1735,7 @@ module CpCore {
                 var modeResult := io.GetFileMode(target,false);
                 createdModeOK,createdModeErr := modeResult.Ok?,C.ResultErrno(modeResult);
                 createdMode := C.ResultValue(modeResult,0 as bv32);
+                assert C.GetFileModeSpec(created,io.trustedNativeFailures(),target,false,createdModeOK,createdMode,createdModeErr);
                 if !createdModeOK {
                   var q := Quoted(target,io);
                   var reason := Reason(createdModeErr,io);
@@ -1743,6 +1746,7 @@ module CpCore {
                   if (createdMode | (448 as bv32)) != createdMode {
                     var changed := io.SetFileMode(target,false,createdMode | (448 as bv32));
                     changeOK,changeErr := changed.Ok?,C.ResultErrno(changed);
+                    assert C.SetFileModeSpec(created,io.now(),io.trustedNativeFailures(),io.fs(),target,false,createdMode | (448 as bv32),changeOK,changeErr);
                     if !changeOK {
                       var q := Quoted(target,io);
                       var reason := Reason(changeErr,io);
