@@ -198,15 +198,21 @@ Ls: `make build TASK=<utility>` with the existing build configuration and
 builds exited 0. The existing GNU 9.10.13-2cf49 reference binaries were neither
 rebuilt nor modified. Under the C locale, **35 of 36 bounded supported-scope
 comparisons matched stdout, stderr and exit code exactly**: Unlink 7/7, Expand
-9/10, Factor 10/10 and Ls 9/9. The sole mismatch is Expand's pre-existing
-abbreviated `--help`; `expand-help-baseline.json` proves its fixed help text is
-unchanged from the task-3 base. That divergence is reported, not counted as a
+9/10, Factor 10/10 and Ls 9/9. The sole mismatch in that run was Expand's
+pre-existing abbreviated `--help`; `expand-help-baseline.json` proves its fixed
+help text is unchanged from the task-3 base. That divergence is reported, not counted as a
 pass. The initial Ls probe selected unsupported flags; its parser rejections
 remain preserved and are excluded from these comparison counts. Corrected Ls
 probes reused the same DLL. Exact build/source/DLL/reference hashes, commands
 and bounded probes are in `task3-native-continuity/` and
 `task3-native-continuity-ls/`. These results are bounded continuity evidence,
 not a new full GNU oracle-suite claim.
+
+The subsequent [Expand help alignment](../bench/utils/expand/expand.md#help-output-alignment-2026-10-21)
+replaces that abbreviated text with the pinned GNU output and strengthens its
+existing help test to exact byte comparison. Its fresh help comparison and
+focused proofs pass. The 35/36 result and task-3 source pins above remain the
+historical evidence from before that follow-up; they are not a new combined run.
 
 The final codec manifest closes all original 272 job slots: 266 nonzero jobs
 verified 12,479 obligations with no failure, and 6 zero-obligation selections

@@ -432,15 +432,10 @@ def test_slash_repeat_before_more_stops_exits_nonzero_matches_coreutils() -> Non
         assert_expand_parity(["--tabs=/3,6,8"], cwd, input_data=b"a\tb")
 
 
-# Help exits successfully with the shared requested-message contract.
+# Help matches GNU's complete output bytes and successful exit status.
 def test_help_exit_successfully_matches_coreutils() -> None:
     # upstream: coreutils/tests/help/help-version.sh
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        cwd = Path(tmp_dir)
-        assert_requested_message_behavior(
-            run_system_expand(["--help"], cwd),
-            run_bench_expand(["--help"], cwd),
-        )
+    assert_expand_parity(["--help"], ROOT)
 
 
 # Version exits successfully with the shared requested-message contract.
