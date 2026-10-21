@@ -166,8 +166,8 @@ module TruncateSpec {
                                                                                        (exists j: nat :: j < index && parsed[j].modifier != S.Absolute)
                                                                                     then MultipleModifiers()
                                                                                     else if parsed[index].error != [] then parsed[index].error
-                                                                                    else if mode in {S.RoundDown, S.RoundUp} && parsed[index].value == 0
-                                                                                    then DivisionByZero() else [])
+                                                                                      else if mode in {S.RoundDown, S.RoundUp} && parsed[index].value == 0
+                                                                                      then DivisionByZero() else [])
   }
   opaque ghost predicate Resolved(raw: S.TruncateCmdRaw, mode: S.Modifier, value: int, error: W.Bytes)
   {

@@ -4,6 +4,8 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
+dafny format bench
+
 ruff_bin="${RUFF_BIN:-}"
 if [[ -z "$ruff_bin" ]]; then
   if [[ -x "$repo_root/.venv/bin/ruff" ]]; then
@@ -20,4 +22,4 @@ if (( ${#py_files[@]} > 0 )); then
   git add -- "${py_files[@]}"
 fi
 
-python3 -m pytest -q tests/core/test_import_fallback_guards.py
+make test-unit
