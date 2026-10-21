@@ -25,16 +25,16 @@ module ChmodOperandProof {
   {
     hide *;
     reveal Target(), C.ResultValue(), C.FileStatusStructureContractFields(),
-      C.GetFileStatusResultFields(), W.FileStatusForRecord(), W.FsIdAt(),
-      W.InodeFsLookupId(), W.FsContainsPath(), W.InodeFsContainsPath();
+           C.GetFileStatusResultFields(), W.FileStatusForRecord(), W.FsIdAt(),
+           W.InodeFsLookupId(), W.FsContainsPath(), W.InodeFsContainsPath();
   }
 
   lemma HostKeyIdentity(fs: W.FileSystem, left: W.Path, right: W.Path,
-    leftStatus: W.FileStatus, rightStatus: W.FileStatus)
+                        leftStatus: W.FileStatus, rightStatus: W.FileStatus)
     requires C.FileStatusStructureContractFields(fs, left, true, true, leftStatus, 0)
     requires C.FileStatusStructureContractFields(fs, right, true, true, rightStatus, 0)
     ensures (leftStatus.hostKey == rightStatus.hostKey) <==>
-      (W.FsIdAt(fs, Target(fs, left, true)) == W.FsIdAt(fs, Target(fs, right, true)))
+            (W.FsIdAt(fs, Target(fs, left, true)) == W.FsIdAt(fs, Target(fs, right, true)))
   {
     hide *;
     StatusIdentity(fs, left, true, leftStatus);
@@ -73,7 +73,7 @@ module ChmodOperandProof {
     var id := W.FsIdAt(fs, left);
     assert W.ValidInodeFileSystemData(fs);
     reveal W.ValidInodeFileSystemData(), W.InodeNamespaceWellFormed(),
-      W.FsNodeCanHaveChildren(), W.InodeNamespaceRefCount();
+           W.FsNodeCanHaveChildren(), W.InodeNamespaceRefCount();
     assert W.InodeNamespaceWellFormed(fs);
     reveal W.FsIdAt(), W.FsContainsPath(), W.InodeFsContainsPath(), W.InodeFsLookupId();
     assert id in fs.inodes;
@@ -90,7 +90,7 @@ module ChmodOperandProof {
   {
     hide *;
     reveal W.FsContainsPath(), W.InodeFsContainsPath(), W.FsIdAt(), W.InodeFsLookupId(),
-      W.FsNodeAt(), W.InodeFsNodeAt(), W.InodeFsLookupNode();
+           W.FsNodeAt(), W.InodeFsNodeAt(), W.InodeFsLookupNode();
   }
 
 
@@ -105,7 +105,7 @@ module ChmodOperandProof {
     requires Operand.ActivePathsFields(fs,paths)
     requires W.FsContainsPath(fs,path) && W.FsNodeAt(fs,path).Directory?
     ensures (Operand.DirectoryKey(fs,path) in Operand.ActiveKeys(fs,paths)) <==>
-      (W.PathSegments(path) in Operand.ActiveSegments(paths))
+            (W.PathSegments(path) in Operand.ActiveSegments(paths))
   {
     hide *;
     reveal Operand.ActivePathsFields(), Operand.ActiveKeys(), Operand.ActiveSegments();
@@ -115,7 +115,7 @@ module ChmodOperandProof {
     reveal Operand.DirectoryKey();
     if Operand.DirectoryKey(fs,path) in Operand.ActiveKeys(fs,paths) {
       var ancestor: W.Path :| ancestor in paths && W.FsContainsPath(fs,ancestor) &&
-        Operand.DirectoryKey(fs,ancestor) == Operand.DirectoryKey(fs,path);
+                              Operand.DirectoryKey(fs,ancestor) == Operand.DirectoryKey(fs,path);
       PathRecord(fs,ancestor);
       assert W.FsIdAt(fs,ancestor) in fs.inodes && W.FsIdAt(fs,path) in fs.inodes by {
         reveal W.FsIdAt(), W.InodeFsLookupId(), W.FsContainsPath(), W.InodeFsContainsPath();
@@ -140,7 +140,7 @@ module ChmodOperandProof {
     reveal Operand.ActivePathsFields(), Operand.ActiveKeys();
     forall path | path in paths
       ensures W.FsContainsPath(after,path) && W.FsNodeAt(after,path).Directory? &&
-        Operand.DirectoryKey(before,path) == Operand.DirectoryKey(after,path)
+              Operand.DirectoryKey(before,path) == Operand.DirectoryKey(after,path)
     {
       PathRecord(before,path);
       ModelProof.FileSystemTopologyPathFields(before,after,path);
@@ -166,7 +166,7 @@ module ChmodOperandProof {
   }
 
   lemma {:isolate_assertions} PreserveAnchor(before:W.FileSystem,after:W.FileSystem,handles:map<int,W.DirHandleState>,
-    origins:map<int,W.FileSystem>,parent:int,path:W.Path)
+                                             origins:map<int,W.FileSystem>,parent:int,path:W.Path)
     requires W.FileSystemTopologyUnchangedExceptMode(before,after)
     requires C.DirectoryParentAnchorForRequestFields(before,handles,origins,parent,path)
     ensures C.DirectoryParentAnchorForRequestFields(after,handles,origins,parent,path)
@@ -248,10 +248,10 @@ module ChmodOperandProof {
     reveal C.DirectoryEntriesForPathFields(),C.DirectoryEntriesForTreeFields(),C.EntryForNode(),C.ValidLeafName(),W.LeafName();
   }
   lemma ShiftStatus(context: Base.ObservationContext, fs: W.FileSystem, native: W.CwdContext,
-    operand: Operand.Operand, offset: nat, follow: bool)
+                    operand: Operand.Operand, offset: nat, follow: bool)
     ensures Operand.StatusAt(context, fs, native, operand, offset, follow) ==
-      Operand.StatusAt(Base.AtCursor(context, context.cursor+offset), fs,
-        Operand.AtOffset(native, offset), operand, 0, follow)
+            Operand.StatusAt(Base.AtCursor(context, context.cursor+offset), fs,
+                             Operand.AtOffset(native, offset), operand, 0, follow)
   {
     hide *;
     reveal Operand.StatusAt(), Base.AtCursor(), Operand.AtOffset();
@@ -287,34 +287,34 @@ module ChmodOperandProof {
   {
     hide *;
     reveal C.CwdContextReadStepFields(), Operand.AnchorSnapshot(),
-      C.DirectoryParentAnchorForContextRequestFields();
+           C.DirectoryParentAnchorForContextRequestFields();
   }
 
   lemma {:isolate_assertions} ModeTopologyIdentity(topology: W.LiveDirectoryTopology,
-    key: W.HostInodeKey, mode: bv32, now: int)
+                                                   key: W.HostInodeKey, mode: bv32, now: int)
     ensures var after := C.ModeChangedTopologyFields(topology, key, mode, now);
-      after.root == topology.root && after.nodes.Keys == topology.nodes.Keys
+            after.root == topology.root && after.nodes.Keys == topology.nodes.Keys
     ensures forall position | position in topology.nodes ::
-      var after := C.ModeChangedTopologyFields(topology, key, mode, now).nodes[position];
-      var before := topology.nodes[position];
-      after.status.hostKey == before.status.hostKey && after.parent == before.parent &&
-      after.pathname == before.pathname && after.entries.Keys == before.entries.Keys &&
-      after.selfRawInode == before.selfRawInode && after.parentRawInode == before.parentRawInode &&
-      after.parentMountBoundary == before.parentMountBoundary
+              var after := C.ModeChangedTopologyFields(topology, key, mode, now).nodes[position];
+              var before := topology.nodes[position];
+              after.status.hostKey == before.status.hostKey && after.parent == before.parent &&
+              after.pathname == before.pathname && after.entries.Keys == before.entries.Keys &&
+              after.selfRawInode == before.selfRawInode && after.parentRawInode == before.parentRawInode &&
+              after.parentMountBoundary == before.parentMountBoundary
   {
     hide *;
     reveal C.ModeChangedTopologyFields(), C.ModeChangedDirectoryFields(), C.ModeChangedStatusFields();
   }
 
   lemma {:isolate_assertions} ModePreservesAnchor(fs: W.FileSystem, before: W.CwdContext, now: int,
-    afterFs: W.FileSystem, after: W.CwdContext, resolved: W.IOResult<W.CwdTarget>,
-    mode: bv32, ok: bool, err: int, operand: Operand.Operand)
+                                                  afterFs: W.FileSystem, after: W.CwdContext, resolved: W.IOResult<W.CwdTarget>,
+                                                                                                                   mode: bv32, ok: bool, err: int, operand: Operand.Operand)
     requires C.SetFileModeFromCwdTargetContractFields(fs, before, now, afterFs, after, resolved, mode, ok, err)
     requires Operand.AnchorSnapshot(fs, before, operand)
     ensures Operand.AnchorSnapshot(afterFs, after, operand)
     ensures W.FileSystemTopologyUnchangedExceptMode(fs, afterFs)
     ensures after.capabilities == before.capabilities && after.legacyHandles == before.legacyHandles &&
-      after.legacyOrigins == before.legacyOrigins && after.position == before.position && after.hint == before.hint
+            after.legacyOrigins == before.legacyOrigins && after.position == before.position && after.hint == before.hint
     ensures after.ordinal == before.ordinal+1
   {
     hide *;
@@ -328,7 +328,7 @@ module ChmodOperandProof {
       ModeTopologyIdentity(before.topology, key, mode, now);
       reveal Operand.AnchorSnapshot(), C.DirectoryParentAnchorForContextRequestFields();
       if operand.DirectoryOperand? && operand.path != "" && !((0 as char) in operand.path) &&
-        !W.IsAbsolutePath(operand.path) {
+         !W.IsAbsolutePath(operand.path) {
         if operand.parent in before.capabilities {
           reveal C.DirectoryCapabilityAnchorCurrentFields();
         } else if operand.parent in before.legacyHandles {
@@ -340,7 +340,7 @@ module ChmodOperandProof {
   }
 
   lemma {:isolate_assertions} FreshCapability(context: Base.ObservationContext, fs: W.FileSystem,
-    before: W.CwdContext, operand: Operand.Operand, after: W.CwdContext, handle: int)
+                                              before: W.CwdContext, operand: Operand.Operand, after: W.CwdContext, handle: int)
     requires Operand.OpenFields(context, fs, before, operand, after, true, handle, 0)
     ensures handle !in before.capabilities && handle !in before.legacyHandles && handle in after.capabilities
     ensures after.capabilities.Keys == before.capabilities.Keys+{handle}
@@ -357,43 +357,43 @@ module ChmodOperandProof {
   }
 
   lemma {:isolate_assertions} ContextAnchorFrame(fs: W.FileSystem, before: W.CwdContext, after: W.CwdContext,
-    operand: Operand.Operand)
+                                                 operand: Operand.Operand)
     requires Operand.AnchorSnapshot(fs, before, operand)
     requires C.Extends(before.topology, after.topology)
     requires after.legacyHandles == before.legacyHandles && after.legacyOrigins == before.legacyOrigins
     requires (operand.DirectoryOperand? && operand.path != "" && !((0 as char) in operand.path) &&
-      !W.IsAbsolutePath(operand.path)) ==>
-      (operand.parent in after.capabilities <==> operand.parent in before.capabilities)
+              !W.IsAbsolutePath(operand.path)) ==>
+               (operand.parent in after.capabilities <==> operand.parent in before.capabilities)
     requires operand.DirectoryOperand? && operand.parent in before.capabilities ==>
-      operand.parent in after.capabilities &&
-      after.capabilities[operand.parent].position == before.capabilities[operand.parent].position &&
-      after.capabilities[operand.parent].anchorTopology == before.capabilities[operand.parent].anchorTopology
+               operand.parent in after.capabilities &&
+               after.capabilities[operand.parent].position == before.capabilities[operand.parent].position &&
+               after.capabilities[operand.parent].anchorTopology == before.capabilities[operand.parent].anchorTopology
     ensures Operand.AnchorSnapshot(fs, after, operand)
   {
     hide *;
     reveal Operand.AnchorSnapshot(), C.DirectoryParentAnchorForContextRequestFields(), C.Extends(),
-      C.DirectoryCapabilityAnchorCurrentFields();
+           C.DirectoryCapabilityAnchorCurrentFields();
   }
 
   lemma {:isolate_assertions} ModePreservesReadCurrent(topology: W.LiveDirectoryTopology,
-    capability: W.DirectoryCapabilityState, key: W.HostInodeKey, mode: bv32, now: int)
+                                                       capability: W.DirectoryCapabilityState, key: W.HostInodeKey, mode: bv32, now: int)
     requires C.DirectoryCapabilityReadCurrentFields(topology, capability)
     ensures C.DirectoryCapabilityReadCurrentFields(C.ModeChangedTopologyFields(topology, key, mode, now), capability)
   {
     hide *;
     ModeTopologyIdentity(topology, key, mode, now);
     reveal C.DirectoryCapabilityReadCurrentFields(), C.DirectoryCapabilityAnchorCurrentFields(),
-      C.DirectoryCapabilityNamesFields();
+           C.DirectoryCapabilityNamesFields();
   }
 
   lemma {:isolate_assertions} ExtensionPreservesReadCurrent(before: W.LiveDirectoryTopology,
-    after: W.LiveDirectoryTopology, capability: W.DirectoryCapabilityState)
+                                                            after: W.LiveDirectoryTopology, capability: W.DirectoryCapabilityState)
     requires C.Extends(before, after)
     requires C.DirectoryCapabilityReadCurrentFields(before, capability)
     ensures C.DirectoryCapabilityReadCurrentFields(after, capability)
   {
     hide *;
     reveal C.Extends(), C.DirectoryCapabilityReadCurrentFields(), C.DirectoryCapabilityAnchorCurrentFields(),
-      C.DirectoryCapabilityNamesFields();
+           C.DirectoryCapabilityNamesFields();
   }
 }

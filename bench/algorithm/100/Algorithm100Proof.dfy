@@ -13,7 +13,7 @@ module Algorithm100Proof {
   {
     if CliSpec.Valid(raw) {
       var output_lines :| CliCore.AnswerSummary(raw.n, raw.m, raw.screen, output_lines) &&
-        CliSpec.Output(io, CliSpec.OutputText(output_lines), exit);
+                          CliSpec.Output(io, CliSpec.OutputText(output_lines), exit);
       AnswerSummaryImpliesAnswer(raw.n, raw.m, raw.screen, output_lines);
     }
   }

@@ -176,7 +176,7 @@ module StatSpec {
   ghost function ErrorMessageWithReasonSpec(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
   {
     ErrorMessageWithReasonSpecPart1() + SE.SpecQuoteAfBytes(Utf8.Encode(path)) +
-      ErrorMessageWithReasonSpecPart2() + Utf8.Encode(reason) + ErrorMessageWithReasonSpecPart3()
+    ErrorMessageWithReasonSpecPart2() + Utf8.Encode(reason) + ErrorMessageWithReasonSpecPart3()
   }
 
   ghost function ErrorMessageSpec(path: BenchWorld.Path, errno: int): BenchWorld.Bytes
@@ -262,22 +262,22 @@ module StatSpec {
   ): BenchWorld.Bytes
   {
     Utf8.Encode(if directive == '%' then DirectiveTextSpecPart1()
-    else if directive == 'a' then BaseNatTextSpec((status.mode as int) as nat, 8)
-    else if directive == 'b' then BaseNatTextSpec(status.storage.allocatedBlocks, 10)
-    else if directive == 'B' then BaseNatTextSpec(BenchWorld.STAT_BLOCK_BYTES, 10)
-    else if directive == 'd' then IntTextSpec(status.hostKey.device)
-    else if directive == 'D' then IntHexTextSpec(status.hostKey.device)
-    else if directive == 'f' then BaseNatTextSpec(RawModeValueSpec(status), 16)
-    else if directive == 'g' then BaseNatTextSpec(status.ownership.gid, 10)
-    else if directive == 'h' then BaseNatTextSpec(status.linkCount, 10)
-    else if directive == 'i' then IntTextSpec(status.hostKey.inode)
-    else if directive == 'o' then BaseNatTextSpec(status.storage.preferredIoBlockBytes, 10)
-    else if directive == 's' then BaseNatTextSpec(status.storage.size, 10)
-    else if directive == 'u' then BaseNatTextSpec(status.ownership.uid, 10)
-    else if directive == 'X' then IntTextSpec(status.times.atimeSec)
-    else if directive == 'Y' then IntTextSpec(status.times.mtimeSec)
-    else if directive == 'Z' then IntTextSpec(status.times.ctimeSec)
-    else DirectiveTextSpecPart2())
+                else if directive == 'a' then BaseNatTextSpec((status.mode as int) as nat, 8)
+                else if directive == 'b' then BaseNatTextSpec(status.storage.allocatedBlocks, 10)
+                else if directive == 'B' then BaseNatTextSpec(BenchWorld.STAT_BLOCK_BYTES, 10)
+                else if directive == 'd' then IntTextSpec(status.hostKey.device)
+                else if directive == 'D' then IntHexTextSpec(status.hostKey.device)
+                else if directive == 'f' then BaseNatTextSpec(RawModeValueSpec(status), 16)
+                else if directive == 'g' then BaseNatTextSpec(status.ownership.gid, 10)
+                else if directive == 'h' then BaseNatTextSpec(status.linkCount, 10)
+                else if directive == 'i' then IntTextSpec(status.hostKey.inode)
+                else if directive == 'o' then BaseNatTextSpec(status.storage.preferredIoBlockBytes, 10)
+                else if directive == 's' then BaseNatTextSpec(status.storage.size, 10)
+                else if directive == 'u' then BaseNatTextSpec(status.ownership.uid, 10)
+                else if directive == 'X' then IntTextSpec(status.times.atimeSec)
+                else if directive == 'Y' then IntTextSpec(status.times.mtimeSec)
+                else if directive == 'Z' then IntTextSpec(status.times.ctimeSec)
+                else DirectiveTextSpecPart2())
   }
 
   ghost predicate FormatStepRelation(
@@ -365,8 +365,8 @@ module StatSpec {
     format: string,
     path: BenchWorld.Path,
     result: BenchWorld.IOResult<BenchWorld.FileStatus>,
-                              stdoutFragment: BenchWorld.Bytes,
-                              stderrFragment: BenchWorld.Bytes
+                                stdoutFragment: BenchWorld.Bytes,
+                                stderrFragment: BenchWorld.Bytes
   )
   {
     match result
@@ -399,7 +399,7 @@ module StatSpec {
     case UnboundStatusObservations => IOContract.GetFileStatusResultFields(fs, path, cmd.followSymlink)
     case BoundStatusObservations(observations, firstStatus, failures) =>
       IOContract.ObservedNativeStatusResultFields(observations, failures, firstStatus + index,
-                                                fs, path, cmd.followSymlink)
+                                                  fs, path, cmd.followSymlink)
   }
 
   ghost predicate RunFilesRelation(
@@ -604,7 +604,7 @@ module StatSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)

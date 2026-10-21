@@ -690,8 +690,8 @@ module CpCore {
     var backup := Spec.BackupMode(raw) != "off";
     var active := !(same && raw.policy.hard) && !(raw.policy.dereference && (!same || !tl.ok || !sl.ok));
     var askEntry := active && ((!raw.policy.dereference && bothLinks) ||
-                    (!(raw.policy.dereference && bothLinks && raw.policy.remove) &&
-                     ((backup && sameLink) || (!backup && raw.policy.remove && !tl.value.isSymlink && sameLink && tl.value.linkCount > 1))));
+                               (!(raw.policy.dereference && bothLinks && raw.policy.remove) &&
+                                ((backup && sameLink) || (!backup && raw.policy.remove && !tl.value.isSymlink && sameLink && tl.value.linkCount > 1))));
     var sameEntry := false;
     if askEntry { sameEntry := SameEntry(source,target,io); }
     var askFollow := active && !raw.policy.dereference && !bothLinks && !backup &&
@@ -896,7 +896,7 @@ module CpCore {
   }
 
   method {:isolate_assertions} CopyBackupLeaf(raw: S.CpCmdRaw, source: string, target: string, sm: Spec.Metadata, tm: Spec.Metadata,
-                        mode: bv32, linkTarget: string, io: BenchIO.IO) returns (out: BW.Bytes, err: BW.Bytes, ok: bool, receipt: Spec.CopyReceipt)
+                                              mode: bv32, linkTarget: string, io: BenchIO.IO) returns (out: BW.Bytes, err: BW.Bytes, ok: bool, receipt: Spec.CopyReceipt)
     modifies io.fsRegion,io.dirHandlesRegion
     ensures io.dirHandles() == old(io.dirHandles())
     ensures Spec.BackupLeaf(raw,source,target,sm,tm,(mode,linkTarget),old(io.fs()),io.fs(),io.props(),io.now(),io.credentials(),Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),io.trustedStreams(),(out,err,ok,receipt))
@@ -972,10 +972,10 @@ module CpCore {
   }
 
   lemma {:isolate_assertions} CompleteFileTree(raw: S.CpCmdRaw, tree: Spec.SourceTree, target: string, tm: Spec.Metadata,
-                         before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-                         credentials: BW.ProcessCredentials, mask: bv32, provider: Spec.FilesystemProvider,
-                         streams: Spec.StreamProvider, out: BW.Bytes, err: BW.Bytes, ok: bool,
-                         linkState: (Spec.LinkMap,Spec.LinkMap,bool), record: Spec.CopyReceipt, allowed: bool, returnNow: bool)
+                                               before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
+                                               credentials: BW.ProcessCredentials, mask: bv32, provider: Spec.FilesystemProvider,
+                                               streams: Spec.StreamProvider, out: BW.Bytes, err: BW.Bytes, ok: bool,
+                                               linkState: (Spec.LinkMap,Spec.LinkMap,bool), record: Spec.CopyReceipt, allowed: bool, returnNow: bool)
     requires tree.FileSource?
     requires Spec.MetadataFields(before,provider,target,!raw.policy.remove && !raw.policy.symbolic && !raw.policy.hard && !tree.metadata.value.isSymlink && Spec.BackupMode(raw) == "off",tm)
     requires if tm.ok && !raw.policy.skip && raw.policy.update != "none" && raw.policy.update != "none-fail" then
@@ -992,7 +992,7 @@ module CpCore {
     hide *;
     reveal Spec.CopyTree();
     assert Spec.FileTreeFields(raw,tree,target,before,after,props,now,credentials,provider,streams,
-      out,err,ok,linkState,record,Spec.FileTreeObservation(tm,allowed,returnNow)) by {
+                               out,err,ok,linkState,record,Spec.FileTreeObservation(tm,allowed,returnNow)) by {
       reveal Spec.FileTreeFields();
     }
   }
@@ -1049,23 +1049,23 @@ module CpCore {
                                observed: Spec.DirectoryReadyObservation)
     requires tm.ok && tm.value.isDir ==> after == before && ok && err == []
     requires !(tm.ok && tm.value.isDir) ==>
-      C.CreateDirectorySpec(before,now,provider.filesystem,mask,observed.created,target,Spec.DirectoryCreationMode(raw,sourceMode),observed.createOK,observed.createErr)
+               C.CreateDirectorySpec(before,now,provider.filesystem,mask,observed.created,target,Spec.DirectoryCreationMode(raw,sourceMode),observed.createOK,observed.createErr)
     requires !(tm.ok && tm.value.isDir) && !observed.createOK ==>
-      after == observed.created && !ok && err == Spec.CreateDirectoryError(Spec.Q(target),Spec.E(observed.createErr))
+               after == observed.created && !ok && err == Spec.CreateDirectoryError(Spec.Q(target),Spec.E(observed.createErr))
     requires !(tm.ok && tm.value.isDir) && observed.createOK ==>
-      Spec.MetadataFields(observed.created,provider,target,false,observed.metadata)
+               Spec.MetadataFields(observed.created,provider,target,false,observed.metadata)
     requires !(tm.ok && tm.value.isDir) && observed.createOK && !observed.metadata.ok ==>
-      after == observed.created && !ok && err == Spec.CannotStat(Spec.Q(target),Spec.E(observed.metadata.err))
+               after == observed.created && !ok && err == Spec.CannotStat(Spec.Q(target),Spec.E(observed.metadata.err))
     requires !(tm.ok && tm.value.isDir) && observed.createOK && observed.metadata.ok ==>
-      C.GetFileModeSpec(observed.created,provider.failures,target,false,observed.modeOK,observed.mode,observed.modeErr)
+               C.GetFileModeSpec(observed.created,provider.failures,target,false,observed.modeOK,observed.mode,observed.modeErr)
     requires !(tm.ok && tm.value.isDir) && observed.createOK && observed.metadata.ok && !observed.modeOK ==>
-      after == observed.created && !ok && err == Spec.CannotStat(Spec.Q(target),Spec.E(observed.modeErr))
+               after == observed.created && !ok && err == Spec.CannotStat(Spec.Q(target),Spec.E(observed.modeErr))
     requires !(tm.ok && tm.value.isDir) && observed.createOK && observed.metadata.ok && observed.modeOK && (observed.mode & (448 as bv32)) != (448 as bv32) ==>
-      C.SetFileModeSpec(observed.created,now,provider.failures,after,target,false,observed.mode | (448 as bv32),observed.changeOK,observed.changeErr)
+               C.SetFileModeSpec(observed.created,now,provider.failures,after,target,false,observed.mode | (448 as bv32),observed.changeOK,observed.changeErr)
     requires !(tm.ok && tm.value.isDir) && observed.createOK && observed.metadata.ok && observed.modeOK && (observed.mode & (448 as bv32)) == (448 as bv32) ==>
-      after == observed.created && observed.changeOK && observed.changeErr == 0
+               after == observed.created && observed.changeOK && observed.changeErr == 0
     requires !(tm.ok && tm.value.isDir) && observed.createOK && observed.metadata.ok && observed.modeOK ==>
-      ok == observed.changeOK && err == (if ok then [] else Spec.ParentSetModeError(Spec.Q(target),Spec.E(observed.changeErr)))
+               ok == observed.changeOK && err == (if ok then [] else Spec.ParentSetModeError(Spec.Q(target),Spec.E(observed.changeErr)))
     ensures Spec.DirectoryReady(raw,target,tm,sourceMode,before,after,now,mask,provider,ok,err,observed.mode)
   {
     hide *;
@@ -1124,8 +1124,8 @@ module CpCore {
       }
     }
     CompleteDirectoryReady(raw,target,tm,sourceMode,before,io.fs(),io.now(),io.umask(),
-      Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ok,err,
-      Spec.DirectoryReadyObservation(created,createOK,createErr,metadata,modeOK,mode,modeErr,changeOK,changeErr));
+                           Spec.FilesystemProvider(io.trustedFilesystem(),io.trustedNativeFailures()),ok,err,
+                           Spec.DirectoryReadyObservation(created,createOK,createErr,metadata,modeOK,mode,modeErr,changeOK,changeErr));
   }
 
   method CopyBackupDirectory(raw: S.CpCmdRaw, tree: Spec.SourceTree, target: string, tm: Spec.Metadata,
@@ -1276,7 +1276,7 @@ module CpCore {
           if linkResult.Ok? { linkTarget := linkResult.v; }
         }
         value := if linkResult.Ok? then Spec.FileSource(path,metadata,mode,linkTarget)
-          else Spec.LinkFailureSource(path,metadata,mode,linkResult.e);
+        else Spec.LinkFailureSource(path,metadata,mode,linkResult.e);
       }
     }
     assert stopped || Spec.TreeHeight(value) <= Spec.ForestHeight(original) by {
@@ -1596,23 +1596,23 @@ module CpCore {
     }
     ghost var candidateSelf := self;
     assert (if tree.DirectorySource? && tree.scanErr == 0 then
-      Spec.SelfDestination(before,io.cwd(),provider,tree.path,target,inside) &&
-      (if inside then Spec.MetadataFields(before,provider,target,raw.policy.keepDirectorySymlink,beforeTarget) &&
-        candidateSelf == (!beforeTarget.ok || (if beforeTarget.value.isDir then
-          Spec.Identity(beforeTarget) != Spec.Identity(tree.metadata) else Spec.BackupMode(raw) != "off"))
-       else !candidateSelf)
-      else !candidateSelf);
+              Spec.SelfDestination(before,io.cwd(),provider,tree.path,target,inside) &&
+              (if inside then Spec.MetadataFields(before,provider,target,raw.policy.keepDirectorySymlink,beforeTarget) &&
+                              candidateSelf == (!beforeTarget.ok || (if beforeTarget.value.isDir then
+                                                                       Spec.Identity(beforeTarget) != Spec.Identity(tree.metadata) else Spec.BackupMode(raw) != "off"))
+               else !candidateSelf)
+            else !candidateSelf);
     out,err,ok,links,record := CopyTree(raw,tree,target,known,self,io);
     ghost var childErr,childOK := err,ok;
     assert Spec.CopyTree(raw,tree,target,before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),
-      provider,io.trustedStreams(),out,childErr,childOK,(known,links,candidateSelf),record);
+                         provider,io.trustedStreams(),out,childErr,childOK,(known,links,candidateSelf),record);
     if self {
       var tm := Metadata(target,true,io);
       afterTarget := tm;
       self := record.selfCopy && tm.ok && tm.value.isDir;
     }
     assert (if candidateSelf then Spec.MetadataFields(io.fs(),provider,target,true,afterTarget) &&
-      self == (record.selfCopy && afterTarget.ok && afterTarget.value.isDir) else !self);
+                                  self == (record.selfCopy && afterTarget.ok && afterTarget.value.isDir) else !self);
     if self {
       var qs := Quoted(tree.path,io);
       var qt := Quoted(target,io);
@@ -1620,7 +1620,7 @@ module CpCore {
       ok := false;
     }
     assert err == childErr + (if self then Spec.IntoSelf(Spec.Q(tree.path),Spec.Q(target)) else []) &&
-      ok == (childOK && !self);
+           ok == (childOK && !self);
     assert Spec.RootOutcome(raw,tree,target,io.cwd(),before,io.fs(),io.props(),io.now(),io.credentials(),io.umask(),provider,io.trustedStreams(),(out,err,ok,record),(candidateSelf,self,childErr,childOK,inside,beforeTarget,afterTarget),(known,links)) by {
       hide *;
       reveal Spec.RootOutcome();
@@ -1772,7 +1772,7 @@ module CpCore {
     while i < |path|
       invariant 0 <= i <= |path|
       invariant forall j | 0 <= j < |offsets| ::
-        0 < offsets[j] < i && path[offsets[j]] == '/' && path[offsets[j]-1] != '/'
+                  0 < offsets[j] < i && path[offsets[j]] == '/' && path[offsets[j]-1] != '/'
       invariant forall j,k | 0 <= j < k < |offsets| :: offsets[j] < offsets[k]
       invariant forall index | 0 < index < i && path[index] == '/' && path[index-1] != '/' :: index in offsets
       modifies {}

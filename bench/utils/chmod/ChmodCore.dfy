@@ -508,9 +508,9 @@ module ChmodCore {
   ) returns (ok: bool)
     modifies output
     ensures var result := SuccessfulChangeResultForPost(cmd, plan, path, before, requested, isDir,
-      old(io.fs()), postOk, postMode, postErr);
-      output.stdout == old(output.stdout) + result.stdoutChunk &&
-      output.stderr == old(output.stderr) + result.stderrChunk && ok == result.ok
+                                                        old(io.fs()), postOk, postMode, postErr);
+            output.stdout == old(output.stdout) + result.stdoutChunk &&
+            output.stderr == old(output.stderr) + result.stderrChunk && ok == result.ok
   {
     hide *;
     reveal SuccessfulChangeResultForPost();
@@ -661,8 +661,8 @@ module ChmodCore {
               )
             else
               var fs2 := CoreModeSetFs(
-                fs, true, changeTarget, desired, now
-              );
+                           fs, true, changeTarget, desired, now
+                         );
               var after := BenchWorld.NormalizeMode(desired);
               CoreSuccessfulChangeResult(
                 cmd, plan, path, actual, true, before, after, isDir, fs2
@@ -734,8 +734,8 @@ module ChmodCore {
     else
       var step := CorePathStep(cmd, plan, cwd, fs, files[i], now);
       var rest := CoreRunFilesFrom(
-        files, i + 1, cmd, plan, cwd, step.fs, now
-      );
+                    files, i + 1, cmd, plan, cwd, step.fs, now
+                  );
       CoreBatchResult(
         rest.fs,
         step.stdoutChunk + rest.stdoutChunk,
@@ -929,7 +929,7 @@ module ChmodCore {
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -944,7 +944,7 @@ module ChmodCore {
       finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Spec.WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -952,11 +952,11 @@ module ChmodCore {
       errCommitted := IOContract.WriteResultCommitted(result);
       errErr := IOContract.ResultErrno(result);
       assert IOContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                        finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
 
@@ -970,25 +970,25 @@ module ChmodCore {
   }
 
   ghost function SuccessfulChangeResultForPost(cmd: Schema.ChmodCmd, plan: CoreModePlan,
-    path: string, before: bv32,
-    requested: bv32, isDir: bool, fs: BenchWorld.FileSystem, postOk: bool, postMode: bv32, postErr: int): CorePathResult
+                                               path: string, before: bv32,
+                                               requested: bv32, isDir: bool, fs: BenchWorld.FileSystem, postOk: bool, postMode: bv32, postErr: int): CorePathResult
   {
     if CorePostChangeLookupNeeded(cmd, requested) && !postOk then
       var naive := CoreNaiveMode(plan, before, isDir);
       var surprise := CoreDiagnoseSurprise(cmd, plan, before, requested, isDir);
       CorePathResult(fs,
-        if cmd.verbose then RetainedMessageCore(path, requested) else [],
-        (if cmd.silent then [] else GettingNewAttributesMessageCore(path,
-          IOContract.CLocaleErrnoTextResult(postErr))) +
-        (if surprise then SurpriseModeMessageCore(path, requested, naive) else []),
-        !surprise, CorePathRetained(requested))
+                     if cmd.verbose then RetainedMessageCore(path, requested) else [],
+                     (if cmd.silent then [] else GettingNewAttributesMessageCore(path,
+                                                                                 IOContract.CLocaleErrnoTextResult(postErr))) +
+                     (if surprise then SurpriseModeMessageCore(path, requested, naive) else []),
+                     !surprise, CorePathRetained(requested))
     else
       var after := if CorePostChangeLookupNeeded(cmd, requested) && postOk then postMode else requested;
       var naive := CoreNaiveMode(plan, before, isDir);
       var surprise := CoreDiagnoseSurprise(cmd, plan, before, after, isDir);
       CorePathResult(fs, CoreSuccessStdout(cmd, path, before, after),
-        if surprise then SurpriseModeMessageCore(path, after, naive) else [], !surprise,
-        if surprise then CorePathSurprise(before, after, naive)
-        else if before == after then CorePathRetained(after) else CorePathChanged(before, after))
+                     if surprise then SurpriseModeMessageCore(path, after, naive) else [], !surprise,
+                     if surprise then CorePathSurprise(before, after, naive)
+                     else if before == after then CorePathRetained(after) else CorePathChanged(before, after))
   }
 }

@@ -21,8 +21,8 @@ module RmTextCore {
   {
     var encoded := Utf8.Encode(path);
     var trigger := exists i: int ::
-      0 <= i < |encoded| && encoded[i] != ':' &&
-      Escaping.SpecShellQuoteTriggerByte(encoded[i],i == 0,|encoded| == 1);
+                     0 <= i < |encoded| && encoded[i] != ':' &&
+                     Escaping.SpecShellQuoteTriggerByte(encoded[i],i == 0,|encoded| == 1);
     var quoted := if trigger then Escaping.SpecQuoteAfBytes(encoded) else encoded;
     HyphenSuggestionPart1() + quoted + HyphenSuggestionPart2() + Escaping.SpecQuoteAfBytes(encoded) + HyphenSuggestionPart3()
   }
@@ -65,7 +65,7 @@ module RmTextCore {
       RefusalMessagePart13()
     case ParentRefusal =>
       RefusalMessagePart14() + quotedParent + RefusalMessagePart15() +
-        quoted + RefusalMessagePart3()
+      quoted + RefusalMessagePart3()
     case NoRefusal => []
   }
 

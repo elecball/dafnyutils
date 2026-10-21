@@ -41,10 +41,10 @@ module PrintfProof {
     requires start < |format|
     requires nextArg <= |args|
     ensures Spec.FormatStopRelation(format, start, status, stderr) ==
-      (Core.ClassifyFragment(format, args, start, nextArg) ==
-         Spec.StopFragment(status, stderr) ||
-       (Core.ClassifyFragment(format, args, start, nextArg) == Spec.NoFragment &&
-        status == 2 && stderr == Spec.UnsupportedFormatMessage()))
+            (Core.ClassifyFragment(format, args, start, nextArg) ==
+             Spec.StopFragment(status, stderr) ||
+             (Core.ClassifyFragment(format, args, start, nextArg) == Spec.NoFragment &&
+              status == 2 && stderr == Spec.UnsupportedFormatMessage()))
   {
   }
 
@@ -57,12 +57,12 @@ module PrintfProof {
     requires start <= |format|
     requires startArg <= |args|
     ensures Spec.FormatDerivationRelation(
-      format, args, start, startArg,
-      Core.RenderPass(format, args, start, startArg).2,
-      Core.RenderPass(format, args, start, startArg).1,
-      Core.RenderPass(format, args, start, startArg).0,
-      Core.RenderPass(format, args, start, startArg).3,
-      derivation)
+              format, args, start, startArg,
+              Core.RenderPass(format, args, start, startArg).2,
+              Core.RenderPass(format, args, start, startArg).1,
+              Core.RenderPass(format, args, start, startArg).0,
+              Core.RenderPass(format, args, start, startArg).3,
+              derivation)
     decreases |format| - start
   {
     if start == |format| {
@@ -93,20 +93,20 @@ module PrintfProof {
   ) returns (derivation: Spec.RepeatedDerivation)
     requires startArg <= |args|
     ensures Spec.RepeatedPassesFromRelation(
-      format, args, startArg,
-      Core.RenderRepeatedFrom(format, args, startArg).0,
-      Core.RenderRepeatedFrom(format, args, startArg).1,
-      Core.RenderRepeatedFrom(format, args, startArg).2,
-      derivation)
+              format, args, startArg,
+              Core.RenderRepeatedFrom(format, args, startArg).0,
+              Core.RenderRepeatedFrom(format, args, startArg).1,
+              Core.RenderRepeatedFrom(format, args, startArg).2,
+              derivation)
     decreases |args| - startArg
   {
     var pass := Core.RenderPass(format, args, 0, startArg);
     var passDerivation := BuildFormatDerivation(format, args, 0, startArg);
     assert Spec.FormatPassRelation(
-      format, args, startArg, pass.2, pass.1, pass.0, pass.3) by {
+        format, args, startArg, pass.2, pass.1, pass.0, pass.3) by {
       assert exists d: Spec.FormatDerivation ::
-        Spec.FormatDerivationRelation(
-          format, args, 0, startArg, pass.2, pass.1, pass.0, pass.3, d) by {
+          Spec.FormatDerivationRelation(
+            format, args, 0, startArg, pass.2, pass.1, pass.0, pass.3, d) by {
         ghost var d := passDerivation;
       }
     }
@@ -124,19 +124,19 @@ module PrintfProof {
 
   lemma RenderRepeatedRefines(format: string, args: seq<string>)
     ensures Spec.RenderRelation(
-      format, args,
-      Core.RenderRepeated(format, args).0 != 2,
-      Core.RenderRepeated(format, args).1,
-      Core.RenderRepeated(format, args).2)
+              format, args,
+              Core.RenderRepeated(format, args).0 != 2,
+              Core.RenderRepeated(format, args).1,
+              Core.RenderRepeated(format, args).2)
   {
     var derivation := BuildRepeatedDerivation(format, args, 0);
     assert exists status: int, d: Spec.RepeatedDerivation ::
-      (status == 0 || status == 1 || status == 2) &&
-      (Core.RenderRepeated(format, args).0 != 2) == (status != 2) &&
-      Spec.RepeatedPassesFromRelation(
-        format, args, 0, status,
-        Core.RenderRepeated(format, args).1,
-        Core.RenderRepeated(format, args).2, d) by {
+        (status == 0 || status == 1 || status == 2) &&
+        (Core.RenderRepeated(format, args).0 != 2) == (status != 2) &&
+        Spec.RepeatedPassesFromRelation(
+          format, args, 0, status,
+          Core.RenderRepeated(format, args).1,
+          Core.RenderRepeated(format, args).2, d) by {
       ghost var status := Core.RenderRepeated(format, args).0;
       ghost var d := derivation;
     }
@@ -144,7 +144,7 @@ module PrintfProof {
 
   lemma EvaluateRefines(raw: Schema.PrintfCmdRaw)
     ensures Spec.EvaluationRelation(
-      raw, Core.Evaluate(raw).0, Core.Evaluate(raw).1, Core.Evaluate(raw).2)
+              raw, Core.Evaluate(raw).0, Core.Evaluate(raw).1, Core.Evaluate(raw).2)
   {
     if !Schema.HelpSelected(raw) &&
        !Schema.VersionSelected(raw) &&
@@ -166,9 +166,9 @@ module PrintfProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                           old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

@@ -20,15 +20,15 @@ module TrueCore {
   {
     plannedStderr == old(io.stderr()) &&
     (    var cmd := Schema.Command(raw);
-    if cmd.mode == Schema.ModeHelp then
-      plannedStdout == old(io.stdout()) + Spec.HelpTextSpec() &&
-      exit == 0
-    else if cmd.mode == Schema.ModeVersion then
-      plannedStdout == old(io.stdout()) + Spec.VersionTextSpec() &&
-      exit == 0
-    else
-      plannedStdout == old(io.stdout()) &&
-      exit == 0)
+         if cmd.mode == Schema.ModeHelp then
+           plannedStdout == old(io.stdout()) + Spec.HelpTextSpec() &&
+           exit == 0
+         else if cmd.mode == Schema.ModeVersion then
+           plannedStdout == old(io.stdout()) + Spec.VersionTextSpec() &&
+           exit == 0
+         else
+           plannedStdout == old(io.stdout()) &&
+           exit == 0)
   }
 
   method Prepare(raw: Schema.TrueCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
@@ -60,15 +60,15 @@ module TrueCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                      old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var outErr := 0;
     if out != [] {
@@ -81,13 +81,13 @@ module TrueCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
       errErr := StreamContract.ResultErrno(diagnosed);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }

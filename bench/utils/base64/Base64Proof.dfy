@@ -533,12 +533,12 @@ module Base64Proof {
     requires width > 0
     requires (|encoded| == 0) == (|chunks| == 0)
     requires forall line: int {:trigger line * width} :: 0 <= line < |chunks| ==>
-      var start := line * width;
-      var end := if (line + 1) * width < |encoded| then (line + 1) * width else |encoded|;
-      start < |encoded| && start < end <= |encoded| &&
-      chunks[line] == encoded[start..end] + ['\n'] &&
-      (line + 1 < |chunks| ==> (line + 1) * width < |encoded|) &&
-      (line + 1 == |chunks| ==> (line + 1) * width >= |encoded|)
+                                                           var start := line * width;
+                                                           var end := if (line + 1) * width < |encoded| then (line + 1) * width else |encoded|;
+                                                           start < |encoded| && start < end <= |encoded| &&
+                                                           chunks[line] == encoded[start..end] + ['\n'] &&
+                                                           (line + 1 < |chunks| ==> (line + 1) * width < |encoded|) &&
+                                                           (line + 1 == |chunks| ==> (line + 1) * width >= |encoded|)
     requires Spec.FragmentsConcatenate(chunks, output, cuts)
     ensures Spec.WrappedWitnessRelation(encoded, width, output, chunks, cuts)
   {
@@ -871,9 +871,9 @@ module Base64Proof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                           old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

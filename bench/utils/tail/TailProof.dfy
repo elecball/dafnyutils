@@ -35,16 +35,16 @@ module TailProof {
   }
 
   lemma PrefixStdinCharacterization(cmd: Schema.TailCmd, preStdin: BW.Bytes,
-    preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult)
+                                    preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult)
     ensures Spec.StdinTraceRelation(cmd, preStdin,
-      Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams), preStreams,
-      seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams)))
+                                    Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams), preStreams,
+                                    seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams)))
   {
     forall i: nat | i < |cmd.inputs|
       ensures Core.PrefixStdinCore(cmd, preStdin, i + 1, preStreams) ==
-        (if cmd.inputs[i].Stdin? then IOContract.ObservedReadStdinRemainingFields(
-          Core.PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
-         else Core.PrefixStdinCore(cmd, preStdin, i, preStreams))
+              (if cmd.inputs[i].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+                                              Core.PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
+               else Core.PrefixStdinCore(cmd, preStdin, i, preStreams))
     {
       Core.PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
     }
@@ -59,8 +59,8 @@ module TailProof {
   )
     requires i < |cmd.inputs|
     ensures Spec.ReadResultRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
-              Core.ReadResultCore(cmd, preFs, preStdin, i, preStreams),
-              preStreams
+                                    Core.ReadResultCore(cmd, preFs, preStdin, i, preStreams),
+                                    preStreams
             )
   {
 
@@ -301,7 +301,7 @@ module TailProof {
     cmd: Schema.TailCmd,
     input: Schema.Input,
     result: BW.IOResult<BW.Bytes>,
-                      printedHeaders: nat
+                        printedHeaders: nat
   )
     ensures Spec.OutputFragmentRelation(
               cmd,
@@ -494,9 +494,9 @@ module TailProof {
               headerCounts[i] + (if observations[i].hasHeader then 1 else 0)
     ensures forall i: nat {:trigger observations[i]} | i < |observations| ::
               Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
-                observations[i],
-                headerCounts[i],
-                preStreams
+                                            observations[i],
+                                            headerCounts[i],
+                                            preStreams
               )
     ensures Spec.FragmentsConcatenate(
               Spec.ObservationStdoutFragments(observations),
@@ -575,15 +575,15 @@ module TailProof {
       );
       assert forall j: nat {:trigger observations[j]} | j < |observations| ::
           Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, j, preStreams), j,
-            observations[j],
-            headerCounts[j],
-            preStreams
+                                        observations[j],
+                                        headerCounts[j],
+                                        preStreams
           ) by {
         forall j: nat {:trigger observations[j]} | j < |observations|
           ensures Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, j, preStreams), j,
-                    observations[j],
-                    headerCounts[j],
-                    preStreams
+                                                observations[j],
+                                                headerCounts[j],
+                                                preStreams
                   )
         {
           if j < |priorObservations| {
@@ -661,9 +661,9 @@ module TailProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                           old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

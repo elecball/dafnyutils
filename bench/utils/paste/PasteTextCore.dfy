@@ -33,7 +33,7 @@ module PasteTextCore {
   {
     var rendered :=
       if exists i: nat :: i < |text| &&
-          (text[i] == ':' || text[i] == '"' || !SE.SpecCPrintableByte(text[i]))
+                          (text[i] == ':' || text[i] == '"' || !SE.SpecCPrintableByte(text[i]))
       then SE.SpecDoubleQuote(text)
       else text;
     Model.DelimiterBackslashErrorText0 + rendered + Model.DelimiterBackslashErrorText1

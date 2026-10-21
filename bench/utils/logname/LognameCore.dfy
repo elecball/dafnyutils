@@ -44,11 +44,11 @@ module LognameCore {
   ghost predicate LoginNameResultFields(
     props: map<string, string>,
     login: BenchWorld.IOResult<string>,
-                             preStdout: BenchWorld.Bytes,
-                             preStderr: BenchWorld.Bytes,
-                             stdout: BenchWorld.Bytes,
-                             stderr: BenchWorld.Bytes,
-                             exit: int
+                               preStdout: BenchWorld.Bytes,
+                               preStderr: BenchWorld.Bytes,
+                               stdout: BenchWorld.Bytes,
+                               stderr: BenchWorld.Bytes,
+                               exit: int
   )
   {
     IOContract.GetLoginNameContractFields(props, login) &&
@@ -147,10 +147,10 @@ module LognameCore {
           exit
         );
       assert LoginNameResultFields(old(io.props()), login, old(io.stdout()), old(io.stderr()),
-        old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr, exit);
+                                   old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr, exit);
       assert exists loginWitness: BenchWorld.IOResult<string> ::
-        LoginNameResultFields(old(io.props()), loginWitness, old(io.stdout()), old(io.stderr()),
-          old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr, exit);
+          LoginNameResultFields(old(io.props()), loginWitness, old(io.stdout()), old(io.stderr()),
+                                old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr, exit);
       assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
     case Err(_) =>
       var err := GetNoLoginNameMessage();
@@ -166,10 +166,10 @@ module LognameCore {
           exit
         );
       assert LoginNameResultFields(old(io.props()), login, old(io.stdout()), old(io.stderr()),
-        old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr, exit);
+                                   old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr, exit);
       assert exists loginWitness: BenchWorld.IOResult<string> ::
-        LoginNameResultFields(old(io.props()), loginWitness, old(io.stdout()), old(io.stderr()),
-          old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr, exit);
+          LoginNameResultFields(old(io.props()), loginWitness, old(io.stdout()), old(io.stderr()),
+                                old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr, exit);
       assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
   }
 
@@ -178,15 +178,15 @@ module LognameCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                      old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var outErr := 0;
     if out != [] {
@@ -199,13 +199,13 @@ module LognameCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
       errErr := StreamContract.ResultErrno(diagnosed);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }

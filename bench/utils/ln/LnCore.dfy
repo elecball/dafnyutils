@@ -56,16 +56,16 @@ module LnCore {
     follow: bool, ok: bool, status: BenchWorld.FileStatus, err: int, cursor: nat
   )
     requires IOContract.GetFileStatusSpec(observations.times, observations.failures,
-      observations.cursor, cursor, fs, path, follow, ok, status, err)
+                                          observations.cursor, cursor, fs, path, follow, ok, status, err)
     ensures Spec.DirectoryObservation(fs, observations, path, follow,
-      ok, ok && status.kind == BenchWorld.DirectoryKind, err)
+                                      ok, ok && status.kind == BenchWorld.DirectoryKind, err)
     ensures cursor == observations.cursor + 1
   {
     hide *;
     reveal IOContract.GetFileStatusSpec(), IOContract.ObservedNativeFileStatusContractFields();
     reveal Spec.DirectoryObservation(), Spec.ObservedDirectory(), IOContract.ResultErrno();
     match IOContract.ObservedNativeStatusResultFields(
-      observations.times, observations.failures, observations.cursor, fs, path, follow)
+        observations.times, observations.failures, observations.cursor, fs, path, follow)
     case Ok(_) =>
     case Err(_) =>
   }
@@ -87,7 +87,7 @@ module LnCore {
         IOContract.CreateSymlinkSpec(
           beforeFs, now, trustedFilesystem.credentials, trustedFilesystem.failures, afterFs, destination, source, ok, err) &&
         diagnostic == (if ok then [] else
-          Spec.CreateSymlinkErrorMessageSpec(destination, source, err)) &&
+                       Spec.CreateSymlinkErrorMessageSpec(destination, source, err)) &&
         success == ok
     else
       exists sourceOk: bool, sourceIsDir: bool, sourceErr: int ::
@@ -107,7 +107,7 @@ module LnCore {
                beforeFs, now, trustedFilesystem.filesystem, afterFs,
                source, destination, ok, err) &&
              diagnostic == (if ok then [] else
-               Spec.CreateHardLinkErrorMessageSpec(source, destination, err)) &&
+                            Spec.CreateHardLinkErrorMessageSpec(source, destination, err)) &&
              success == ok)
   }
 
@@ -124,10 +124,10 @@ module LnCore {
   )
   {
     exists states: seq<BenchWorld.FileSystem>,
-           diagnostics: seq<BenchWorld.Bytes>,
-           results: seq<bool>,
-           pieces: seq<BenchWorld.Bytes>,
-           stepResults: seq<bool> ::
+      diagnostics: seq<BenchWorld.Bytes>,
+      results: seq<bool>,
+      pieces: seq<BenchWorld.Bytes>,
+      stepResults: seq<bool> ::
       |states| == |sources| + 1 &&
       |diagnostics| == |sources| + 1 &&
       |results| == |sources| + 1 &&
@@ -140,12 +140,12 @@ module LnCore {
       results[0] &&
       results[|sources|] == success &&
       (forall i: nat :: i < |sources| ==>
-          CoreStepSummary(
-            states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
-            sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
-            pieces[i], stepResults[i]) &&
-          diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
-          results[i + 1] == (results[i] && stepResults[i]))
+                          CoreStepSummary(
+                            states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
+                            sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
+                            pieces[i], stepResults[i]) &&
+                          diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
+                          results[i + 1] == (results[i] && stepResults[i]))
   }
 
   lemma AppendAssociative<T>(left: seq<T>, middle: seq<T>, right: seq<T>)
@@ -159,51 +159,51 @@ module LnCore {
     var cmd := Schema.Command(raw);
     io.statusCursor() == old(io.statusCursor()) + Spec.StatusReadCount(cmd, old(io.fs()), old(Spec.Context(io))) &&
     (if cmd.mode == Schema.ModeHelp then
-      io.fs() == old(io.fs()) &&
-      plannedStdout == [] + Spec.HelpTextSpec() &&
-      plannedStderr == [] && exit == 0
-    else if cmd.mode == Schema.ModeVersion then
-      io.fs() == old(io.fs()) &&
-      plannedStdout == [] + Spec.VersionTextSpec() &&
-      plannedStderr == [] && exit == 0
-    else if |cmd.operands| == 0 then
-      io.fs() == old(io.fs()) &&
-      plannedStdout == [] &&
-      plannedStderr == [] + Spec.MissingOperandMessageSpec() && exit == 1
-    else if |cmd.operands| > 2 then
-      var target := cmd.operands[|cmd.operands| - 1];
-      plannedStdout == [] &&
-      (exists targetOk: bool, targetIsDir: bool, targetErr: int ::
-        Spec.DirectoryObservation(
-          old(io.fs()), old(Spec.Context(io)), target, true, targetOk, targetIsDir, targetErr) &&
-        (if !(targetOk && targetIsDir) then
-           io.fs() == old(io.fs()) &&
-           plannedStderr == [] +
+       io.fs() == old(io.fs()) &&
+       plannedStdout == [] + Spec.HelpTextSpec() &&
+       plannedStderr == [] && exit == 0
+     else if cmd.mode == Schema.ModeVersion then
+       io.fs() == old(io.fs()) &&
+       plannedStdout == [] + Spec.VersionTextSpec() &&
+       plannedStderr == [] && exit == 0
+     else if |cmd.operands| == 0 then
+       io.fs() == old(io.fs()) &&
+       plannedStdout == [] &&
+       plannedStderr == [] + Spec.MissingOperandMessageSpec() && exit == 1
+     else if |cmd.operands| > 2 then
+       var target := cmd.operands[|cmd.operands| - 1];
+       plannedStdout == [] &&
+       (exists targetOk: bool, targetIsDir: bool, targetErr: int ::
+          Spec.DirectoryObservation(
+            old(io.fs()), old(Spec.Context(io)), target, true, targetOk, targetIsDir, targetErr) &&
+          (if !(targetOk && targetIsDir) then
+             io.fs() == old(io.fs()) &&
+             plannedStderr == [] +
              Spec.TargetDirectoryErrorMessageSpec(target, if targetOk then 20 else targetErr) &&
-           exit == 1
-         else
-           exists diagnostic: BenchWorld.Bytes, success: bool
-             {:trigger CoreBatchSummary(old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + 1), cmd.operands[..|cmd.operands| - 1],
-               target, cmd.symbolic, diagnostic, success)} ::
-             CoreBatchSummary(
-               old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + 1),
-               cmd.operands[..|cmd.operands| - 1], target, cmd.symbolic,
-               diagnostic, success) &&
-             plannedStderr == [] + diagnostic &&
-             exit == (if success then 0 else 1)))
-    else
-      var source := cmd.operands[0];
-      var destination := CoreDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
-      plannedStdout == [] &&
-      (exists diagnostic: BenchWorld.Bytes, success: bool
-        {:trigger CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
-          Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)), source, destination, cmd.symbolic,
-          diagnostic, success)} ::
-        CoreStepSummary(
-          old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),
-          source, destination, cmd.symbolic, diagnostic, success) &&
-        plannedStderr == [] + diagnostic &&
-        exit == (if success then 0 else 1)))
+             exit == 1
+           else
+             exists diagnostic: BenchWorld.Bytes, success: bool
+               {:trigger CoreBatchSummary(old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + 1), cmd.operands[..|cmd.operands| - 1],
+                                          target, cmd.symbolic, diagnostic, success)} ::
+               CoreBatchSummary(
+                 old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + 1),
+                 cmd.operands[..|cmd.operands| - 1], target, cmd.symbolic,
+                 diagnostic, success) &&
+               plannedStderr == [] + diagnostic &&
+               exit == (if success then 0 else 1)))
+     else
+       var source := cmd.operands[0];
+       var destination := CoreDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
+       plannedStdout == [] &&
+       (exists diagnostic: BenchWorld.Bytes, success: bool
+          {:trigger CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
+                                    Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)), source, destination, cmd.symbolic,
+                                    diagnostic, success)} ::
+          CoreStepSummary(
+            old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),
+            source, destination, cmd.symbolic, diagnostic, success) &&
+          plannedStderr == [] + diagnostic &&
+          exit == (if success then 0 else 1)))
   }
 
   opaque twostate predicate CoreSummary(raw: Schema.LnCmdRaw, io: BenchIO.IO, exit: int)
@@ -216,20 +216,20 @@ module LnCore {
   }
 
   twostate lemma SinglePreparedWitness(raw: Schema.LnCmdRaw, io: BenchIO.IO,
-    exit: int, output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
-    success: bool)
+                                       exit: int, output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+                                       success: bool)
     requires Schema.Command(raw).mode == Schema.ModeRun
     requires 1 <= |Schema.Command(raw).operands| <= 2
     requires io.statusCursor() == old(io.statusCursor()) +
-      Spec.StatusReadCount(Schema.Command(raw), old(io.fs()), old(Spec.Context(io)))
+                                  Spec.StatusReadCount(Schema.Command(raw), old(io.fs()), old(Spec.Context(io)))
     requires output == []
     requires exit == (if success then 0 else 1)
     requires CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
-      Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) +
-        Spec.DestinationReadCount(Schema.Command(raw).operands)),
-      Schema.Command(raw).operands[0],
-      CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
-      Schema.Command(raw).symbolic, diagnostics, success)
+                             Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) +
+                                           Spec.DestinationReadCount(Schema.Command(raw).operands)),
+                             Schema.Command(raw).operands[0],
+                             CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
+                             Schema.Command(raw).symbolic, diagnostics, success)
     ensures PreparedSummary(raw, io, exit, output, diagnostics)
   {
     hide *;
@@ -238,20 +238,20 @@ module LnCore {
     var source := cmd.operands[0];
     var destination := CoreDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
     var context := Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) +
-      Spec.DestinationReadCount(cmd.operands));
+                                 Spec.DestinationReadCount(cmd.operands));
     assert CoreStepSummary(old(io.fs()), io.fs(), old(io.now()), context,
-      source, destination, cmd.symbolic, diagnostics, success);
+                           source, destination, cmd.symbolic, diagnostics, success);
     assert exists diagnostic: BenchWorld.Bytes, result: bool ::
-      diagnostic == diagnostics && result == success &&
-      CoreStepSummary(old(io.fs()), io.fs(), old(io.now()), context,
-        source, destination, cmd.symbolic, diagnostic, result) &&
-      diagnostics == [] + diagnostic && exit == (if result then 0 else 1);
+        diagnostic == diagnostics && result == success &&
+        CoreStepSummary(old(io.fs()), io.fs(), old(io.now()), context,
+                        source, destination, cmd.symbolic, diagnostic, result) &&
+        diagnostics == [] + diagnostic && exit == (if result then 0 else 1);
     assert exists diagnostic: BenchWorld.Bytes, result: bool
-      {:trigger CoreStepSummary(old(io.fs()), io.fs(), old(io.now()), context,
-        source, destination, cmd.symbolic, diagnostic, result)} ::
-      CoreStepSummary(old(io.fs()), io.fs(), old(io.now()), context,
-        source, destination, cmd.symbolic, diagnostic, result) &&
-      diagnostics == [] + diagnostic && exit == (if result then 0 else 1);
+        {:trigger CoreStepSummary(old(io.fs()), io.fs(), old(io.now()), context,
+                                  source, destination, cmd.symbolic, diagnostic, result)} ::
+        CoreStepSummary(old(io.fs()), io.fs(), old(io.now()), context,
+                        source, destination, cmd.symbolic, diagnostic, result) &&
+        diagnostics == [] + diagnostic && exit == (if result then 0 else 1);
   }
 
   lemma CoreBatchWitness(
@@ -267,10 +267,10 @@ module LnCore {
     requires diagnostics[0] == [] && diagnostics[|sources|] == diagnostic
     requires results[0] && results[|sources|] == success
     requires forall j: nat | j < |sources| ::
-      CoreStepSummary(states[j], states[j + 1], now, Spec.AtCursor(provider, provider.cursor + (if symbolic then 0 else j)), sources[j],
-        Spec.InDirectory(target, sources[j]), symbolic, pieces[j], stepResults[j]) &&
-      diagnostics[j + 1] == diagnostics[j] + pieces[j] &&
-      results[j + 1] == (results[j] && stepResults[j])
+               CoreStepSummary(states[j], states[j + 1], now, Spec.AtCursor(provider, provider.cursor + (if symbolic then 0 else j)), sources[j],
+                               Spec.InDirectory(target, sources[j]), symbolic, pieces[j], stepResults[j]) &&
+               diagnostics[j + 1] == diagnostics[j] + pieces[j] &&
+               results[j + 1] == (results[j] && stepResults[j])
     ensures CoreBatchSummary(beforeFs, afterFs, now, provider, sources, target, symbolic, diagnostic, success)
   {
     hide *;
@@ -310,8 +310,8 @@ module LnCore {
   ) returns (diagnostic: BenchWorld.Bytes, allOk: bool)
     modifies io.fsRegion, io.statusObservationsRegion
     ensures CoreBatchSummary(
-      old(io.fs()), io.fs(), old(io.now()), old(Spec.Context(io)),
-      sources, target, symbolic, diagnostic, allOk)
+              old(io.fs()), io.fs(), old(io.now()), old(Spec.Context(io)),
+              sources, target, symbolic, diagnostic, allOk)
     ensures io.statusCursor() == old(io.statusCursor()) + (if symbolic then 0 else |sources|)
   {
     hide *;
@@ -335,12 +335,12 @@ module LnCore {
       invariant |results| == i + 1 && results[0] && results[i] == allOk
       invariant |pieces| == i && |stepResults| == i
       invariant forall j: nat :: j < i ==>
-          CoreStepSummary(
-            states[j], states[j + 1], preNow, Spec.AtCursor(preTrusted, preTrusted.cursor + (if symbolic then 0 else j)),
-            sources[j], Spec.InDirectory(target, sources[j]), symbolic,
-            pieces[j], stepResults[j]) &&
-          diagnostics[j + 1] == diagnostics[j] + pieces[j] &&
-          results[j + 1] == (results[j] && stepResults[j])
+                                   CoreStepSummary(
+                                     states[j], states[j + 1], preNow, Spec.AtCursor(preTrusted, preTrusted.cursor + (if symbolic then 0 else j)),
+                                     sources[j], Spec.InDirectory(target, sources[j]), symbolic,
+                                     pieces[j], stepResults[j]) &&
+                                   diagnostics[j + 1] == diagnostics[j] + pieces[j] &&
+                                   results[j + 1] == (results[j] && stepResults[j])
       decreases |sources| - i
     {
       var source := sources[i];
@@ -362,8 +362,8 @@ module LnCore {
           piece := CreateSymlinkErrorMessageCore(destination, source, err, io);
         }
         assert CoreStepSummary(
-          beforeStepFs, io.fs(), preNow, beforeStepContext,
-          source, destination, symbolic, piece, stepOk) by {
+            beforeStepFs, io.fs(), preNow, beforeStepContext,
+            source, destination, symbolic, piece, stepOk) by {
           hide *;
           reveal CoreStepSummary();
         }
@@ -374,7 +374,7 @@ module LnCore {
         var sourceErr := IOContract.ResultErrno(getFileStatusResult);
         var sourceIsDir := sourceOk && sourceStatus.kind == BenchWorld.DirectoryKind;
         StatusImpliesDirectory(beforeStepFs, beforeStepContext, source, false,
-          sourceOk, sourceStatus, sourceErr, io.statusCursor());
+                               sourceOk, sourceStatus, sourceErr, io.statusCursor());
         if !sourceOk {
           piece := FailedAccessMessageCore(source, sourceErr, io);
         } else if sourceIsDir {
@@ -388,17 +388,17 @@ module LnCore {
             piece := CreateHardLinkErrorMessageCore(source, destination, err, io);
           }
           assert IOContract.CreateHardLinkSpec(
-            beforeStepFs, preNow, preTrusted.filesystem,
-            io.fs(), source, destination, ok, err) by {
+              beforeStepFs, preNow, preTrusted.filesystem,
+              io.fs(), source, destination, ok, err) by {
             hide *;
             reveal IOContract.ResultErrno();
           }
         }
         assert Spec.DirectoryObservation(
-          beforeStepFs, beforeStepContext, source, false, sourceOk, sourceIsDir, sourceErr);
+            beforeStepFs, beforeStepContext, source, false, sourceOk, sourceIsDir, sourceErr);
         assert CoreStepSummary(
-          beforeStepFs, io.fs(), preNow, beforeStepContext,
-          source, destination, symbolic, piece, stepOk) by {
+            beforeStepFs, io.fs(), preNow, beforeStepContext,
+            source, destination, symbolic, piece, stepOk) by {
           hide *;
           reveal CoreStepSummary();
         }
@@ -416,12 +416,12 @@ module LnCore {
       diagnostic := diagnostic + piece;
       allOk := allOk && stepOk;
       assert forall j: nat :: j < i + 1 ==>
-          CoreStepSummary(
-            states[j], states[j + 1], preNow, Spec.AtCursor(preTrusted, preTrusted.cursor + (if symbolic then 0 else j)),
-            sources[j], Spec.InDirectory(target, sources[j]), symbolic,
-            pieces[j], stepResults[j]) &&
-          diagnostics[j + 1] == diagnostics[j] + pieces[j] &&
-          results[j + 1] == (results[j] && stepResults[j]) by {
+                                CoreStepSummary(
+                                  states[j], states[j + 1], preNow, Spec.AtCursor(preTrusted, preTrusted.cursor + (if symbolic then 0 else j)),
+                                  sources[j], Spec.InDirectory(target, sources[j]), symbolic,
+                                  pieces[j], stepResults[j]) &&
+                                diagnostics[j + 1] == diagnostics[j] + pieces[j] &&
+                                results[j + 1] == (results[j] && stepResults[j]) by {
         hide *;
         forall j: nat | j < i + 1
           ensures
@@ -446,7 +446,7 @@ module LnCore {
       i := i + 1;
     }
     CoreBatchWitness(preFs, io.fs(), preNow, preTrusted, sources, target, symbolic,
-      diagnostic, allOk, states, diagnostics, results, pieces, stepResults);
+                     diagnostic, allOk, states, diagnostics, results, pieces, stepResults);
   }
 
   method {:isolate_assertions} Prepare(raw: Schema.LnCmdRaw, io: BenchIO.IO) returns (exit: int, plannedStdout: StreamWorld.Bytes, plannedStderr: StreamWorld.Bytes)
@@ -500,7 +500,7 @@ module LnCore {
       var targetErr := IOContract.ResultErrno(getFileStatusResult2);
       var targetIsDir := targetOk && targetStatus.kind == BenchWorld.DirectoryKind;
       StatusImpliesDirectory(preFs, preTrusted, target, true,
-        targetOk, targetStatus, targetErr, io.statusCursor());
+                             targetOk, targetStatus, targetErr, io.statusCursor());
       if !(targetOk && targetIsDir) {
         var message := TargetDirectoryErrorMessageCore(target, if targetOk then 20 else targetErr, io);
         plannedStderr := plannedStderr + message;
@@ -548,7 +548,7 @@ module LnCore {
       dirErr := IOContract.ResultErrno(getFileStatusResult3);
       dirIsDir := dirOk && status.kind == BenchWorld.DirectoryKind;
       StatusImpliesDirectory(preFs, preTrusted, cmd.operands[1], true,
-        dirOk, status, dirErr, io.statusCursor());
+                             dirOk, status, dirErr, io.statusCursor());
       DirectoryProbeMatchesCore(preFs, preTrusted, cmd.operands[1], dirOk, dirIsDir, dirErr);
       destination := if dirOk && dirIsDir then
         Path.InDirectory(cmd.operands[1], source) else cmd.operands[1];
@@ -574,14 +574,14 @@ module LnCore {
         exit := 1;
       }
       assert IOContract.CreateSymlinkSpec(
-        preFs, preNow, stepContext.credentials, stepContext.failures, io.fs(), destination, source, ok, err) by {
+          preFs, preNow, stepContext.credentials, stepContext.failures, io.fs(), destination, source, ok, err) by {
         hide *;
         reveal IOContract.CreateSymlinkSpec();
       }
       assert (plannedStdout) == preStdout;
       assert CoreStepSummary(
-        preFs, io.fs(), preNow, stepContext, source, destination,
-        cmd.symbolic, diagnostic, ok) by {
+          preFs, io.fs(), preNow, stepContext, source, destination,
+          cmd.symbolic, diagnostic, ok) by {
         hide *;
         reveal CoreStepSummary();
       }
@@ -590,8 +590,8 @@ module LnCore {
       assert stepContext == Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands));
       assert destination == CoreDestination(old(io.fs()), old(Spec.Context(io)), cmd.operands);
       assert CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
-        Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),
-        source, destination, cmd.symbolic, diagnostic, ok);
+                             Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),
+                             source, destination, cmd.symbolic, diagnostic, ok);
       assert io.statusCursor() == old(io.statusCursor()) + Spec.StatusReadCount(cmd, preFs, preTrusted) by {
         hide *;
         reveal Spec.StatusReadCount(), Spec.DestinationReadCount();
@@ -601,10 +601,10 @@ module LnCore {
       assert source == Schema.Command(raw).operands[0];
       assert destination == CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands);
       assert CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
-        Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(Schema.Command(raw).operands)),
-        Schema.Command(raw).operands[0],
-        CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
-        Schema.Command(raw).symbolic, plannedStderr, ok);
+                             Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(Schema.Command(raw).operands)),
+                             Schema.Command(raw).operands[0],
+                             CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
+                             Schema.Command(raw).symbolic, plannedStderr, ok);
       SinglePreparedWitness@PrepareStart(raw, io, exit, plannedStdout, plannedStderr, ok);
       return;
     }
@@ -617,7 +617,7 @@ module LnCore {
     var sourceErr := IOContract.ResultErrno(getFileStatusResult4);
     var sourceIsDir := sourceOk && sourceStatus.kind == BenchWorld.DirectoryKind;
     StatusImpliesDirectory(preFs, stepContext, source, false,
-      sourceOk, sourceStatus, sourceErr, io.statusCursor());
+                           sourceOk, sourceStatus, sourceErr, io.statusCursor());
     if !sourceOk {
       diagnostic := FailedAccessMessageCore(source, sourceErr, io);
       plannedStderr := plannedStderr + (diagnostic);
@@ -631,7 +631,7 @@ module LnCore {
       var ok := createHardLinkResult2.Ok?;
       var err := IOContract.ResultErrno(createHardLinkResult2);
       assert IOContract.CreateHardLinkSpec(
-        preFs, preNow, preTrusted.filesystem, io.fs(), source, destination, ok, err) by {
+          preFs, preNow, preTrusted.filesystem, io.fs(), source, destination, ok, err) by {
         hide *;
         reveal IOContract.ResultErrno();
       }
@@ -645,11 +645,11 @@ module LnCore {
       }
     }
     assert Spec.DirectoryObservation(
-      preFs, stepContext, source, false, sourceOk, sourceIsDir, sourceErr);
+        preFs, stepContext, source, false, sourceOk, sourceIsDir, sourceErr);
     assert (plannedStdout) == preStdout;
     assert CoreStepSummary(
-      preFs, io.fs(), preNow, stepContext, source, destination,
-      cmd.symbolic, diagnostic, success) by {
+        preFs, io.fs(), preNow, stepContext, source, destination,
+        cmd.symbolic, diagnostic, success) by {
       hide *;
       reveal CoreStepSummary();
     }
@@ -662,17 +662,17 @@ module LnCore {
     assert source == Schema.Command(raw).operands[0];
     assert destination == CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands);
     assert CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
-      Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),
-      source, destination, cmd.symbolic, diagnostic, success);
+                           Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(cmd.operands)),
+                           source, destination, cmd.symbolic, diagnostic, success);
     assert io.statusCursor() == old(io.statusCursor()) + Spec.StatusReadCount(cmd, preFs, preTrusted) by {
       hide *;
       reveal Spec.StatusReadCount(), Spec.DestinationReadCount();
     }
     assert CoreStepSummary(old(io.fs()), io.fs(), old(io.now()),
-      Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(Schema.Command(raw).operands)),
-      Schema.Command(raw).operands[0],
-      CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
-      Schema.Command(raw).symbolic, plannedStderr, success);
+                           Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + Spec.DestinationReadCount(Schema.Command(raw).operands)),
+                           Schema.Command(raw).operands[0],
+                           CoreDestination(old(io.fs()), old(Spec.Context(io)), Schema.Command(raw).operands),
+                           Schema.Command(raw).symbolic, plannedStderr, success);
     SinglePreparedWitness@PrepareStart(raw, io, exit, plannedStdout, plannedStderr, success);
   }
 
@@ -681,7 +681,7 @@ module LnCore {
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -696,7 +696,7 @@ module LnCore {
       finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -704,11 +704,11 @@ module LnCore {
       errCommitted := StreamContract.WriteResultCommitted(result);
       errErr := StreamContract.ResultErrno(result);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                            finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
   method RunCore(raw: Schema.LnCmdRaw, io: BenchIO.IO) returns (exit: int)

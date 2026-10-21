@@ -428,16 +428,16 @@ module NlSchema {
     var errors, request := PriorOptionState(argv, e.tokenIndex);
     if request == CliTypes.RequestHelp {
       plan := CliTypes.CliRun(NlCmdRaw(
-        CliTypes.None, CliTypes.None, CliTypes.None,
-        true, false, 0, -1, errors, []
-      ));
+                                CliTypes.None, CliTypes.None, CliTypes.None,
+                                true, false, 0, -1, errors, []
+                              ));
       return;
     }
     if request == CliTypes.RequestVersion {
       plan := CliTypes.CliRun(NlCmdRaw(
-        CliTypes.None, CliTypes.None, CliTypes.None,
-        false, true, -1, 0, errors, []
-      ));
+                                CliTypes.None, CliTypes.None, CliTypes.None,
+                                false, true, -1, 0, errors, []
+                              ));
       return;
     }
     var msg := FormatParseError(e);

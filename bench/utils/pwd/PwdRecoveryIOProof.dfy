@@ -29,7 +29,7 @@ module PwdRecoveryIOProof {
     requires request.handle in request.capabilities
     requires !request.capabilities[request.handle].includeDots
     ensures response.err == 0 && response.read.DirectoryItem? ==>
-      InodeChildNameValid(response.read.name)
+              InodeChildNameValid(response.read.name)
   {
     hide *;
     reveal C.DirectoryResponseFields(), C.DirectoryRequestFields();
@@ -54,42 +54,42 @@ module PwdRecoveryIOProof {
     reveal C.DirectoryStatusSameStructure();
     if response.err == 0 && request.operation == DirectoryFstat {
       var handle :| handle in request.capabilities &&
-        request.capabilities[handle].descriptor == [request.fd] &&
-        C.DirectoryStatusSameStructure(
-          request.topology.nodes[request.capabilities[handle].position].status,response.status);
+                    request.capabilities[handle].descriptor == [request.fd] &&
+                    C.DirectoryStatusSameStructure(
+                      request.topology.nodes[request.capabilities[handle].position].status,response.status);
     }
   }
 
   lemma OperationCapabilities(request: DirectoryRequest, observations: DirectoryObservations,
-    response: DirectoryResponse, position: DirectoryPosition,
-    capabilities: map<int,DirectoryCapabilityState>, ordinal: nat,
-    statusOrdinal: nat, cwdHint: Path)
+                              response: DirectoryResponse, position: DirectoryPosition,
+                              capabilities: map<int,DirectoryCapabilityState>, ordinal: nat,
+                              statusOrdinal: nat, cwdHint: Path)
     requires C.DirectoryOperationSpec(request,observations,response,position,
-      capabilities,ordinal,statusOrdinal,cwdHint)
+                                      capabilities,ordinal,statusOrdinal,cwdHint)
     ensures (request.operation != DirectoryOpenParent && request.operation != DirectoryGetDescriptor &&
-      request.operation != DirectoryReadNext && request.operation != DirectoryClose) ==>
-      capabilities == request.capabilities
+             request.operation != DirectoryReadNext && request.operation != DirectoryClose) ==>
+              capabilities == request.capabilities
     ensures request.operation == DirectoryOpenParent && response.err == 0 ==>
-      response.handle in capabilities && capabilities[response.handle].anchorFs == request.fs &&
-      !capabilities[response.handle].includeDots &&
-      C.DirectoryCapabilityReadCurrentFields(request.topology,capabilities[response.handle])
+              response.handle in capabilities && capabilities[response.handle].anchorFs == request.fs &&
+              !capabilities[response.handle].includeDots &&
+              C.DirectoryCapabilityReadCurrentFields(request.topology,capabilities[response.handle])
     ensures request.operation == DirectoryGetDescriptor && response.err == 0 ==>
-      request.handle in capabilities && capabilities[request.handle].descriptor == [response.fd] && response.fd >= 0
+              request.handle in capabilities && capabilities[request.handle].descriptor == [response.fd] && response.fd >= 0
     ensures request.operation == DirectoryReadNext && request.handle in request.capabilities ==>
-      request.handle in capabilities &&
-      capabilities[request.handle].anchorFs == request.capabilities[request.handle].anchorFs &&
-      capabilities[request.handle].includeDots == request.capabilities[request.handle].includeDots &&
-      C.DirectoryCapabilityReadCurrentFields(request.topology,capabilities[request.handle])
+              request.handle in capabilities &&
+              capabilities[request.handle].anchorFs == request.capabilities[request.handle].anchorFs &&
+              capabilities[request.handle].includeDots == request.capabilities[request.handle].includeDots &&
+              C.DirectoryCapabilityReadCurrentFields(request.topology,capabilities[request.handle])
     ensures request.operation == DirectoryClose ==> request.handle !in capabilities
     ensures (request.operation == DirectoryGetDescriptor && request.handle in request.capabilities &&
-      C.DirectoryCapabilityReadCurrentFields(request.topology,request.capabilities[request.handle])) ==>
-      request.handle in capabilities &&
-      capabilities[request.handle].anchorFs == request.capabilities[request.handle].anchorFs &&
-      capabilities[request.handle].includeDots == request.capabilities[request.handle].includeDots &&
-      C.DirectoryCapabilityReadCurrentFields(request.topology,capabilities[request.handle]) &&
-      (response.err == 0 ==>
-        C.DirectoryOperationCapabilitiesCurrentFields(request.topology,capabilities,DirectoryFchdir,0,response.fd) &&
-        C.DirectoryOperationCapabilitiesCurrentFields(request.topology,capabilities,DirectoryFstat,0,response.fd))
+             C.DirectoryCapabilityReadCurrentFields(request.topology,request.capabilities[request.handle])) ==>
+              request.handle in capabilities &&
+              capabilities[request.handle].anchorFs == request.capabilities[request.handle].anchorFs &&
+              capabilities[request.handle].includeDots == request.capabilities[request.handle].includeDots &&
+              C.DirectoryCapabilityReadCurrentFields(request.topology,capabilities[request.handle]) &&
+              (response.err == 0 ==>
+                 C.DirectoryOperationCapabilitiesCurrentFields(request.topology,capabilities,DirectoryFchdir,0,response.fd) &&
+                 C.DirectoryOperationCapabilitiesCurrentFields(request.topology,capabilities,DirectoryFstat,0,response.fd))
   {
     hide *;
     reveal C.DirectoryOperationSpec(), C.DirectoryResponseFields(), C.DirectoryRequestFields();
@@ -116,10 +116,10 @@ module PwdRecoveryIOProof {
   }
 
   lemma RootStatusKind(observations: StatusTimeObservations,
-    failures: (NativeFailureRequest)->int, beforeCursor: nat, afterCursor: nat,
-    fs: FileSystem, result: IOResult<FileStatus>)
+                       failures: (NativeFailureRequest)->int, beforeCursor: nat, afterCursor: nat,
+                       fs: FileSystem, result: IOResult<FileStatus>)
     requires C.GetFileStatusSpec(observations,failures,beforeCursor,afterCursor,fs,"/",false,
-      result.Ok?,C.ResultValue(result,DEFAULT_FILE_STATUS),C.ResultErrno(result))
+                                 result.Ok?,C.ResultValue(result,DEFAULT_FILE_STATUS),C.ResultErrno(result))
     ensures C.ResultErrno(result) >= 0
     ensures result.Err? ==> C.ResultErrno(result) > 0
     ensures result.Ok? ==> result.v.kind == DirectoryKind

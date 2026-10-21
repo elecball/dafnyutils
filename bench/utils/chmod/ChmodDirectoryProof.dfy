@@ -49,7 +49,7 @@ module ChmodDirectoryProof {
   }
 
   lemma {:isolate_assertions} UniqueName(fs: W.FileSystem, path: W.Path,
-    left: W.DirEntry, right: W.DirEntry)
+                                         left: W.DirEntry, right: W.DirEntry)
     requires W.FsContainsPath(fs, path)
     requires left in C.DirectoryEntriesForPathFields(fs, path) && right in C.DirectoryEntriesForPathFields(fs, path)
     requires left.name == right.name
@@ -59,13 +59,13 @@ module ChmodDirectoryProof {
     reveal C.DirectoryEntriesForPathFields(), C.DirectoryEntriesForTreeFields();
     assert W.ValidInodeFileSystemData(fs);
     reveal W.ValidInodeFileSystemData(), W.InodeNamespaceWellFormed(), W.FsContainsPath(),
-      W.InodeFsContainsPath(), W.InodeFsLookupId();
+           W.InodeFsContainsPath(), W.InodeFsLookupId();
     var tree := W.InodeFsLookupTreeSegments(fs.inodes, fs.namespace, W.PathSegments(path)).v;
     Lookup.InodeLookupTreeWellFormed(fs.inodes, fs.namespace, W.PathSegments(path), tree);
     var lname :| lname in tree.children && C.ValidLeafName(lname) &&
-      left == C.EntryForNode(lname, C.InodeTreeChildNodeFields(fs, tree, lname));
+                 left == C.EntryForNode(lname, C.InodeTreeChildNodeFields(fs, tree, lname));
     var rname :| rname in tree.children && C.ValidLeafName(rname) &&
-      right == C.EntryForNode(rname, C.InodeTreeChildNodeFields(fs, tree, rname));
+                 right == C.EntryForNode(rname, C.InodeTreeChildNodeFields(fs, tree, rname));
     reveal C.EntryForNode(), C.ValidLeafName(), W.LeafName();
     assert lname == left.name && rname == right.name;
   }
@@ -98,9 +98,9 @@ module ChmodDirectoryProof {
   }
 
   lemma {:isolate_assertions} Schedule(cmd: Schema.ChmodCmd, plan: Base.SpecModePlan,
-    scope: Spec.Scope, display: string, operand: Operand.Operand, top: bool,
-    keys: set<W.HostInodeKey>, fs: W.FileSystem, native: W.CwdContext, cursor: nat,
-    visit: Spec.Visit) returns (entries: seq<W.DirEntry>)
+                                       scope: Spec.Scope, display: string, operand: Operand.Operand, top: bool,
+                                       keys: set<W.HostInodeKey>, fs: W.FileSystem, native: W.CwdContext, cursor: nat,
+                                       visit: Spec.Visit) returns (entries: seq<W.DirEntry>)
     requires cmd.recursive && scope.context.cwd == scope.cwd
     requires C.CwdContextFields(fs, native)
     requires Spec.VisitFields(cmd, plan, scope, display, operand, top, keys, fs, native, cursor, visit)
@@ -111,16 +111,16 @@ module ChmodDirectoryProof {
     ensures |entries| == |visit.listing.children|
     ensures W.FsContainsPath(visit.change.result.fs, Normal.LogicalIdentity(cmd, scope, visit.entry).resolvedPath)
     ensures Recursive.ValidOpenSchedule(C.DirectoryEntriesForPathFields(visit.change.result.fs,
-      Normal.LogicalIdentity(cmd, scope, visit.entry).resolvedPath), entries, Recursive.RecursiveEof)
+                                                                        Normal.LogicalIdentity(cmd, scope, visit.entry).resolvedPath), entries, Recursive.RecursiveEof)
     ensures forall i: nat | i < |entries| :: visit.listing.readSteps[i].response.read.DirectoryItem?
     ensures forall i: nat | i < |entries| ::
-      entries[i].name == visit.listing.readSteps[i].response.read.name && W.InodeChildNameValid(entries[i].name)
+              entries[i].name == visit.listing.readSteps[i].response.read.name && W.InodeChildNameValid(entries[i].name)
     ensures forall i: nat | i < |entries| ::
-      var read := visit.listing.readSteps[i];
-      Operand.ModelPath(scope.cwd, read.after, Operand.DirectoryOperand(visit.listing.handle, entries[i].name)) ==
-        W.AppendPath(Normal.LogicalIdentity(cmd, scope, visit.entry).resolvedPath, entries[i].name)
+              var read := visit.listing.readSteps[i];
+              Operand.ModelPath(scope.cwd, read.after, Operand.DirectoryOperand(visit.listing.handle, entries[i].name)) ==
+              W.AppendPath(Normal.LogicalIdentity(cmd, scope, visit.entry).resolvedPath, entries[i].name)
     ensures forall i: nat | i <= |entries| ::
-      C.CwdContextFields(visit.listing.states[i].fs, visit.listing.states[i].native)
+              C.CwdContextFields(visit.listing.states[i].fs, visit.listing.states[i].native)
   {
     hide *;
     reveal Spec.VisitFields(), Spec.SuccessfulVisit(), Spec.CompatibleVisit();
@@ -130,7 +130,7 @@ module ChmodDirectoryProof {
     var listing := visit.listing;
     var handle := listing.handle;
     assert entry.fs == fs && entry.native == native && entry.cursor == cursor &&
-      entry.identity.displayPath == display && entry.identity.operand == operand && entry.identity.top == top by {
+           entry.identity.displayPath == display && entry.identity.operand == operand && entry.identity.top == top by {
       reveal Spec.EntryFields();
     }
     assert entry.identity.isDirectory;
@@ -154,10 +154,10 @@ module ChmodDirectoryProof {
       invariant i <= n && |entries| == i
       invariant Recursive.DuplicateFreePrefix(entries)
       invariant forall j: nat | j < i :: (listing.readSteps[j].response.read.DirectoryItem? && entries[j] in snapshot &&
-        entries[j].name == listing.readSteps[j].response.read.name && W.InodeChildNameValid(entries[j].name))
+                                          entries[j].name == listing.readSteps[j].response.read.name && W.InodeChildNameValid(entries[j].name))
       invariant forall j: nat | j < i ::
-        Operand.ModelPath(scope.cwd, listing.readSteps[j].after, Operand.DirectoryOperand(handle, entries[j].name)) ==
-          W.AppendPath(identity.resolvedPath, entries[j].name)
+                  Operand.ModelPath(scope.cwd, listing.readSteps[j].after, Operand.DirectoryOperand(handle, entries[j].name)) ==
+                  W.AppendPath(identity.resolvedPath, entries[j].name)
       invariant forall j: nat | j <= i :: C.CwdContextFields(listing.states[j].fs, listing.states[j].native)
       invariant FrameSpec.FrameFields(listing.afterOpen, listing.states[i].native)
       invariant W.FileSystemTopologyUnchangedExceptMode(change.result.fs, listing.states[i].fs)
@@ -166,18 +166,18 @@ module ChmodDirectoryProof {
       invariant !listing.states[i].native.capabilities[handle].includeDots
       invariant listing.states[i].native.capabilities[handle].remaining == snapshotNames-Names(entries)
       invariant C.DirectoryCapabilityReadCurrentFields(listing.states[i].native.topology,
-        listing.states[i].native.capabilities[handle])
+                                                       listing.states[i].native.capabilities[handle])
       decreases n-i
     {
       var before := listing.states[i];
       var read := listing.readSteps[i];
       var child := listing.children[i];
       assert Spec.DirectoryStepFields(cmd, plan, scope, entry.identity, keys, handle,
-        before, listing.states[i+1], read, child);
+                                      before, listing.states[i+1], read, child);
       reveal Spec.DirectoryStepFields(), Spec.ReadFields();
       Directory.ReadShape(before.fs, read.before, scope.directories, handle, before.cursor, read.response, read.after);
       State.DirectoryState(before.fs, read.before, scope.directories, W.DirectoryReadNext,
-        handle, before.cursor, read.response, read.after);
+                           handle, before.cursor, read.response, read.after);
       Frame.Transitive(listing.afterOpen, read.before, read.after);
       Frame.Projection(listing.afterOpen, read.after);
       var name := read.response.read.name;
@@ -192,9 +192,9 @@ module ChmodDirectoryProof {
       assert read.after.topology.nodes[position].pathname == [identity.resolvedPath] by { reveal FrameSpec.FrameFields(); }
       AppendLeafNotRoot(display, name);
       assert Operand.ModelPath(scope.cwd, read.after, Operand.DirectoryOperand(handle, name)) ==
-        W.AppendPath(identity.resolvedPath, name) by { reveal Operand.ModelPath(); }
+             W.AppendPath(identity.resolvedPath, name) by { reveal Operand.ModelPath(); }
       Visits.VisitFrame(cmd, plan, scope, W.AppendPath(display, name), Operand.DirectoryOperand(handle, name),
-        false, keys+{entry.identity.key}, before.fs, read.after, before.cursor, child);
+                        false, keys+{entry.identity.key}, before.fs, read.after, before.cursor, child);
       var childResult := Spec.Result(child);
       assert listing.states[i+1].fs == childResult.fs && listing.states[i+1].native == childResult.native;
       assert childResult.native.capabilities == read.after.capabilities;
@@ -213,7 +213,7 @@ module ChmodDirectoryProof {
     assert terminal.before == last.native && terminal.response.err == 0 && terminal.response.read.DirectoryEnd?;
     assert last.native.capabilities[handle].remaining == {} by {
       reveal Spec.ReadFields(), C.ContextOperationSpec(), C.DirectoryRequestForContextFields(),
-        C.DirectoryOperationSpec(), C.DirectoryResponseFields();
+             C.DirectoryOperationSpec(), C.DirectoryResponseFields();
     }
     assert snapshotNames == Names(entries) by { reveal Names(); }
     CompleteNames(change.result.fs, identity.resolvedPath, entries);

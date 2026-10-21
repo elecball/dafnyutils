@@ -142,30 +142,30 @@ module MkdirSpec {
   ghost function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
   {
     if err.kind == CliTypes.UnknownOption then
-        if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-          ParseErrorTextPart1() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2() +
-          ParseErrorTextPart3()
-        else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
-          UnknownShortText(Utf8.EncodeChar(err.rawToken[1])[0])
-        else
-          ParseErrorTextPart4()
-      else if err.kind == CliTypes.UnexpectedValue then
-        ParseErrorTextPart5() + Utf8.Encode(LongOptionName(err.rawToken)) +
-        ParseErrorTextPart6() +
+      if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
+        ParseErrorTextPart1() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2() +
         ParseErrorTextPart3()
-      else if err.kind == CliTypes.Ambiguous then
-        ParseErrorTextPart5() + Utf8.Encode(err.rawToken) +
-        ParseErrorTextPart7() +
-        (if |err.rawToken| > 2 && err.rawToken[2] == '=' then
-          ParseErrorTextPart8()
-         else ParseErrorTextPart9()) +
-        ParseErrorTextPart3()
+      else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
+        UnknownShortText(Utf8.EncodeChar(err.rawToken[1])[0])
       else
-        ParseErrorTextPart10() + Utf8.Encode(
+        ParseErrorTextPart4()
+    else if err.kind == CliTypes.UnexpectedValue then
+      ParseErrorTextPart5() + Utf8.Encode(LongOptionName(err.rawToken)) +
+      ParseErrorTextPart6() +
+      ParseErrorTextPart3()
+    else if err.kind == CliTypes.Ambiguous then
+      ParseErrorTextPart5() + Utf8.Encode(err.rawToken) +
+      ParseErrorTextPart7() +
+      (if |err.rawToken| > 2 && err.rawToken[2] == '=' then
+         ParseErrorTextPart8()
+       else ParseErrorTextPart9()) +
+      ParseErrorTextPart3()
+    else
+      ParseErrorTextPart10() + Utf8.Encode(
         (if err.kind == CliTypes.MissingValue
-        then ParseErrorTextPart11()
-        else ParseErrorTextPart12())) +
-        ParseErrorTextPart13() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2()
+         then ParseErrorTextPart11()
+         else ParseErrorTextPart12())) +
+      ParseErrorTextPart13() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2()
   }
 
   function MissingOperandText(): BenchWorld.Bytes {
@@ -225,10 +225,10 @@ module MkdirSpec {
     outCuts[0] == 0 && errCuts[0] == 0 &&
     outCuts[|paths|] == |output| && errCuts[|paths|] == |diagnostics| &&
     (forall i {:trigger outCuts[i]} {:trigger errCuts[i]} | 0 <= i < |paths| ::
-      outCuts[i] <= outCuts[i + 1] <= |output| &&
-      errCuts[i] <= errCuts[i + 1] <= |diagnostics| &&
-      output[outCuts[i]..outCuts[i + 1]] == OutputPiece(verbose, paths[i], successes[i]) &&
-      diagnostics[errCuts[i]..errCuts[i + 1]] == ErrorPiece(paths[i], successes[i], errors[i]))
+       outCuts[i] <= outCuts[i + 1] <= |output| &&
+       errCuts[i] <= errCuts[i + 1] <= |diagnostics| &&
+       output[outCuts[i]..outCuts[i + 1]] == OutputPiece(verbose, paths[i], successes[i]) &&
+       diagnostics[errCuts[i]..errCuts[i + 1]] == ErrorPiece(paths[i], successes[i], errors[i]))
   }
 
   ghost predicate CreationResults(
@@ -237,8 +237,8 @@ module MkdirSpec {
   {
     |states| == |paths| + 1 && |successes| == |paths| && |errors| == |paths| &&
     (forall i | 0 <= i < |paths| ::
-      C.CreateDirectorySpec(states[i], now, observations, mask, states[i + 1],
-        paths[i], 511 as bv32, successes[i], errors[i]))
+       C.CreateDirectorySpec(states[i], now, observations, mask, states[i + 1],
+                             paths[i], 511 as bv32, successes[i], errors[i]))
   }
 
   ghost predicate RunRelation(
@@ -249,7 +249,7 @@ module MkdirSpec {
   {
     var paths := Schema.Operands(raw);
     exists states: seq<BenchWorld.FileSystem>, successes: seq<bool>, errors: seq<int>,
-           outCuts: seq<nat>, errCuts: seq<nat> ::
+      outCuts: seq<nat>, errCuts: seq<nat> ::
       CreationResults(paths, states, successes, errors, now, mask, observations) &&
       states[0] == before && states[|paths|] == after &&
       OrderedPieces(paths, raw.verbose, successes, errors, output, diagnostics, outCuts, errCuts) &&
@@ -281,7 +281,7 @@ module MkdirSpec {
     outObservation.StreamWriteResult? &&
     var outErr := outObservation.err;
     var finalDiagnostic := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(C.CLocaleErrnoTextResult(outErr)));
+                           (if outErr == 0 then [] else WriteErrorText(C.CLocaleErrnoTextResult(outErr)));
     var errObservation := observations(BenchWorld.StreamWriteStderr(beforeErr, finalDiagnostic));
     errObservation.StreamWriteResult? &&
     C.WriteStdoutSpec(beforeOut, observations, afterOut, output, outObservation.committed, outErr) &&
@@ -295,8 +295,8 @@ module MkdirSpec {
   {
     exists output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, creationExit: int ::
       RunRelation(raw, old(io.fs()), io.fs(), io.now(), io.umask(),
-        io.trustedFilesystem(), output, diagnostics, creationExit) &&
+                  io.trustedFilesystem(), output, diagnostics, creationExit) &&
       StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-        io.trustedStreams(), output, diagnostics, creationExit, exit)
+                    io.trustedStreams(), output, diagnostics, creationExit, exit)
   }
 }

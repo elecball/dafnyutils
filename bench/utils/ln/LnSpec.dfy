@@ -26,34 +26,34 @@ module LnSpec {
 
   ghost function Context(io: BenchIO.IO): (context: ObservationContext)
     reads io.trustedFilesystemRegion, io.trustedNativeFailuresRegion,
-      io.credentialsRegion, io.statusObservationsRegion
+          io.credentialsRegion, io.statusObservationsRegion
     ensures context == ObservationContext(io.trustedFilesystem(), io.trustedNativeFailures(),
-      io.statusObservations(), io.statusCursor(), io.credentials())
+                                          io.statusObservations(), io.statusCursor(), io.credentials())
   {
     ObservationContext(io.trustedFilesystem(), io.trustedNativeFailures(),
-      io.statusObservations(), io.statusCursor(), io.credentials())
+                       io.statusObservations(), io.statusCursor(), io.credentials())
   }
 
   ghost function AtCursor(observations: ObservationContext, cursor: nat): (context: ObservationContext)
     ensures context == ObservationContext(observations.filesystem, observations.failures,
-      observations.times, cursor, observations.credentials)
+                                          observations.times, cursor, observations.credentials)
   {
     observations.(cursor := cursor)
   }
 
   ghost function ObservedDirectory(fs: BenchWorld.FileSystem, observations: ObservationContext,
-    path: string, follow: bool): bool
+                                   path: string, follow: bool): bool
   {
     var result := IOContract.ObservedNativeStatusResultFields(
-      observations.times, observations.failures, observations.cursor, fs, path, follow);
+                    observations.times, observations.failures, observations.cursor, fs, path, follow);
     result.Ok? && result.v.kind == BenchWorld.DirectoryKind
   }
 
   ghost predicate DirectoryObservation(fs: BenchWorld.FileSystem, observations: ObservationContext,
-    path: string, follow: bool, ok: bool, isDir: bool, err: int)
+                                       path: string, follow: bool, ok: bool, isDir: bool, err: int)
   {
     var result := IOContract.ObservedNativeStatusResultFields(
-      observations.times, observations.failures, observations.cursor, fs, path, follow);
+                    observations.times, observations.failures, observations.cursor, fs, path, follow);
     ok == result.Ok? && isDir == ObservedDirectory(fs, observations, path, follow) &&
     err == IOContract.ResultErrno(result)
   }
@@ -65,12 +65,12 @@ module LnSpec {
   }
 
   ghost function StatusReadCount(cmd: Schema.LnCmd, fs: BenchWorld.FileSystem,
-    observations: ObservationContext): nat
+                                 observations: ObservationContext): nat
   {
     if cmd.mode != Schema.ModeRun || |cmd.operands| == 0 then 0
     else if |cmd.operands| > 2 then
       1 + (if ObservedDirectory(fs, observations, cmd.operands[|cmd.operands| - 1], true)
-        then (if cmd.symbolic then 0 else |cmd.operands| - 1) else 0)
+           then (if cmd.symbolic then 0 else |cmd.operands| - 1) else 0)
     else DestinationReadCount(cmd.operands) + (if cmd.symbolic then 0 else 1)
   }
 
@@ -378,7 +378,7 @@ module LnSpec {
                beforeFs, now, trustedFilesystem.filesystem, afterFs,
                source, destination, ok, err) &&
              diagnostic == (if ok then [] else
-               CreateHardLinkErrorMessageSpec(source, destination, err)) &&
+                            CreateHardLinkErrorMessageSpec(source, destination, err)) &&
              success == ok)
   }
 
@@ -395,10 +395,10 @@ module LnSpec {
   )
   {
     exists states: seq<BenchWorld.FileSystem>,
-           diagnostics: seq<BenchWorld.Bytes>,
-           results: seq<bool>,
-           pieces: seq<BenchWorld.Bytes>,
-           stepResults: seq<bool> ::
+      diagnostics: seq<BenchWorld.Bytes>,
+      results: seq<bool>,
+      pieces: seq<BenchWorld.Bytes>,
+      stepResults: seq<bool> ::
       |states| == |sources| + 1 &&
       |diagnostics| == |sources| + 1 &&
       |results| == |sources| + 1 &&
@@ -411,12 +411,12 @@ module LnSpec {
       results[0] &&
       results[|sources|] == success &&
       (forall i: nat :: i < |sources| ==>
-          LinkStepRelation(
-            states[i], states[i + 1], now, AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
-            sources[i], InDirectory(directory, sources[i]), symbolic,
-            pieces[i], stepResults[i]) &&
-          diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
-          results[i + 1] == (results[i] && stepResults[i]))
+                          LinkStepRelation(
+                            states[i], states[i + 1], now, AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
+                            sources[i], InDirectory(directory, sources[i]), symbolic,
+                            pieces[i], stepResults[i]) &&
+                          diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
+                          results[i + 1] == (results[i] && stepResults[i]))
   }
 
   ghost function LinkNameIsDirectoryFs(fs: BenchWorld.FileSystem, linkName: BenchWorld.Path): bool
@@ -458,7 +458,7 @@ module LnSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
@@ -483,53 +483,53 @@ module LnSpec {
     var cmd := Schema.Command(raw);
     io.statusCursor() == old(io.statusCursor()) + StatusReadCount(cmd, old(io.fs()), old(Context(io))) &&
     (if cmd.mode == Schema.ModeHelp then
-      io.fs() == old(io.fs()) &&
-      plannedStdout == [] + HelpTextSpec() &&
-      plannedStderr == [] &&
-      exit == 0
-    else if cmd.mode == Schema.ModeVersion then
-      io.fs() == old(io.fs()) &&
-      plannedStdout == [] + VersionTextSpec() &&
-      plannedStderr == [] &&
-      exit == 0
-    else if |cmd.operands| == 0 then
-      io.fs() == old(io.fs()) &&
-      plannedStdout == [] &&
-      plannedStderr == [] + MissingOperandMessageSpec() &&
-      exit == 1
-    else if |cmd.operands| > 2 then
-      var target := cmd.operands[|cmd.operands| - 1];
-      plannedStdout == [] &&
-      (exists targetOk: bool, targetIsDir: bool, targetErr: int ::
-        DirectoryObservation(
-          old(io.fs()), old(Context(io)), target, true, targetOk, targetIsDir, targetErr) &&
-        (if !(targetOk && targetIsDir) then
-           io.fs() == old(io.fs()) &&
-           plannedStderr == [] +
+       io.fs() == old(io.fs()) &&
+       plannedStdout == [] + HelpTextSpec() &&
+       plannedStderr == [] &&
+       exit == 0
+     else if cmd.mode == Schema.ModeVersion then
+       io.fs() == old(io.fs()) &&
+       plannedStdout == [] + VersionTextSpec() &&
+       plannedStderr == [] &&
+       exit == 0
+     else if |cmd.operands| == 0 then
+       io.fs() == old(io.fs()) &&
+       plannedStdout == [] &&
+       plannedStderr == [] + MissingOperandMessageSpec() &&
+       exit == 1
+     else if |cmd.operands| > 2 then
+       var target := cmd.operands[|cmd.operands| - 1];
+       plannedStdout == [] &&
+       (exists targetOk: bool, targetIsDir: bool, targetErr: int ::
+          DirectoryObservation(
+            old(io.fs()), old(Context(io)), target, true, targetOk, targetIsDir, targetErr) &&
+          (if !(targetOk && targetIsDir) then
+             io.fs() == old(io.fs()) &&
+             plannedStderr == [] +
              TargetDirectoryErrorMessageSpec(target, if targetOk then 20 else targetErr) &&
-           exit == 1
-         else
-           exists diagnostic: BenchWorld.Bytes, success: bool
-             {:trigger LinkBatchRelation(old(io.fs()), io.fs(), old(io.now()), AtCursor(old(Context(io)), old(io.statusCursor()) + 1), cmd.operands[..|cmd.operands| - 1],
-               target, cmd.symbolic, diagnostic, success)} ::
-             LinkBatchRelation(
-               old(io.fs()), io.fs(), old(io.now()), AtCursor(old(Context(io)), old(io.statusCursor()) + 1),
-               cmd.operands[..|cmd.operands| - 1], target, cmd.symbolic,
-               diagnostic, success) &&
-             plannedStderr == [] + diagnostic &&
-             exit == (if success then 0 else 1)))
-    else
-      var source := cmd.operands[0];
-      var destination := LinkDestination(old(io.fs()), old(Context(io)), cmd.operands);
-      plannedStdout == [] &&
-      (exists diagnostic: BenchWorld.Bytes, success: bool
-        {:trigger LinkStepRelation(old(io.fs()), io.fs(), old(io.now()),
-          AtCursor(old(Context(io)), old(io.statusCursor()) + DestinationReadCount(cmd.operands)),
-          source, destination, cmd.symbolic, diagnostic, success)} ::
-        LinkStepRelation(old(io.fs()), io.fs(), old(io.now()),
-          AtCursor(old(Context(io)), old(io.statusCursor()) + DestinationReadCount(cmd.operands)),
-          source, destination, cmd.symbolic, diagnostic, success) &&
-        plannedStderr == diagnostic && exit == (if success then 0 else 1)))
+             exit == 1
+           else
+             exists diagnostic: BenchWorld.Bytes, success: bool
+               {:trigger LinkBatchRelation(old(io.fs()), io.fs(), old(io.now()), AtCursor(old(Context(io)), old(io.statusCursor()) + 1), cmd.operands[..|cmd.operands| - 1],
+                                           target, cmd.symbolic, diagnostic, success)} ::
+               LinkBatchRelation(
+                 old(io.fs()), io.fs(), old(io.now()), AtCursor(old(Context(io)), old(io.statusCursor()) + 1),
+                 cmd.operands[..|cmd.operands| - 1], target, cmd.symbolic,
+                 diagnostic, success) &&
+               plannedStderr == [] + diagnostic &&
+               exit == (if success then 0 else 1)))
+     else
+       var source := cmd.operands[0];
+       var destination := LinkDestination(old(io.fs()), old(Context(io)), cmd.operands);
+       plannedStdout == [] &&
+       (exists diagnostic: BenchWorld.Bytes, success: bool
+          {:trigger LinkStepRelation(old(io.fs()), io.fs(), old(io.now()),
+                                     AtCursor(old(Context(io)), old(io.statusCursor()) + DestinationReadCount(cmd.operands)),
+                                     source, destination, cmd.symbolic, diagnostic, success)} ::
+          LinkStepRelation(old(io.fs()), io.fs(), old(io.now()),
+                           AtCursor(old(Context(io)), old(io.statusCursor()) + DestinationReadCount(cmd.operands)),
+                           source, destination, cmd.symbolic, diagnostic, success) &&
+          plannedStderr == diagnostic && exit == (if success then 0 else 1)))
   }
 
   twostate predicate Spec(raw: Schema.LnCmdRaw, io: BenchIO.IO, exit: int)

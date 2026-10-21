@@ -45,16 +45,16 @@ module HeadProof {
   }
 
   lemma PrefixStdinRelation(cmd: Schema.HeadCmd, preStdin: BW.Bytes,
-    preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult)
+                            preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult)
     ensures Spec.StdinTraceRelation(cmd, preStdin,
-      Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams), preStreams,
-      seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams)))
+                                    Core.PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams), preStreams,
+                                    seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams)))
   {
     forall i: nat | i < |cmd.inputs|
       ensures Core.PrefixStdinCore(cmd, preStdin, i + 1, preStreams) ==
-        (if cmd.inputs[i].Stdin? then IOContract.ObservedReadStdinRemainingFields(
-          Core.PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
-         else Core.PrefixStdinCore(cmd, preStdin, i, preStreams))
+              (if cmd.inputs[i].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+                                              Core.PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
+               else Core.PrefixStdinCore(cmd, preStdin, i, preStreams))
     {
       Core.PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
     }
@@ -68,7 +68,7 @@ module HeadProof {
   )
     requires i < |cmd.inputs|
     ensures Spec.ReadResultRelation(cmd, preFs, preStreams, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
-              Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
+                                    Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
             )
   {
 
@@ -297,26 +297,26 @@ module HeadProof {
   )
     requires i < |cmd.inputs|
     ensures Spec.InputObservationRelation(cmd, preFs, preStreams, Core.PrefixStdinCore(cmd, preStdin, i, preStreams),
-              i,
-              Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i),
-              Core.PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i),
-              Core.OutputPiece(
-                cmd,
-                cmd.inputs[i],
-                Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i),
-                Core.PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i)
-              ),
-              Core.ErrorPiece(
-                cmd.inputs[i],
-                Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
-              ),
-              Core.IsSuccessfulRead(
-                Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
-              ),
-              Core.HadErrorPiece(
-                cmd.inputs[i],
-                Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
-              )
+                                          i,
+                                          Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i),
+                                          Core.PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i),
+                                          Core.OutputPiece(
+                                            cmd,
+                                            cmd.inputs[i],
+                                            Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i),
+                                            Core.PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i)
+                                          ),
+                                          Core.ErrorPiece(
+                                            cmd.inputs[i],
+                                            Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
+                                          ),
+                                          Core.IsSuccessfulRead(
+                                            Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
+                                          ),
+                                          Core.HadErrorPiece(
+                                            cmd.inputs[i],
+                                            Core.ReadResultCore(cmd, preFs, preStreams, preStdin, i)
+                                          )
             )
   {
     ReadResultRelation(cmd, preFs, preStreams, preStdin, i);
@@ -714,14 +714,14 @@ module HeadProof {
     requires count <= |cmd.inputs|
     requires i < count
     ensures Spec.InputObservationRelation(cmd, preFs, preStreams, Core.PrefixStdinCore(cmd, preStdin, i, preStreams),
-              i,
-              CoreResults(cmd, preFs, preStreams, preStdin, count)[i],
-              |set j: nat |
-              j < i && CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[j]|,
-              CoreOutputFragments(cmd, preFs, preStreams, preStdin, count)[i],
-              CoreErrorFragments(cmd, preFs, preStreams, preStdin, count)[i],
-              CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[i],
-              CoreFailed(cmd, preFs, preStreams, preStdin, count)[i]
+                                          i,
+                                          CoreResults(cmd, preFs, preStreams, preStdin, count)[i],
+                                          |set j: nat |
+                                          j < i && CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[j]|,
+                                          CoreOutputFragments(cmd, preFs, preStreams, preStdin, count)[i],
+                                          CoreErrorFragments(cmd, preFs, preStreams, preStdin, count)[i],
+                                          CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[i],
+                                          CoreFailed(cmd, preFs, preStreams, preStdin, count)[i]
             )
   {
     PrefixSuccessCountCardinality(cmd, preFs, preStreams, preStdin, i);
@@ -759,26 +759,26 @@ module HeadProof {
     requires count <= |cmd.inputs|
     ensures forall i: nat | i < count ::
               Spec.InputObservationRelation(cmd, preFs, preStreams, Core.PrefixStdinCore(cmd, preStdin, i, preStreams),
-                i,
-                CoreResults(cmd, preFs, preStreams, preStdin, count)[i],
-                |set j: nat |
-                j < i && CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[j]|,
-                CoreOutputFragments(cmd, preFs, preStreams, preStdin, count)[i],
-                CoreErrorFragments(cmd, preFs, preStreams, preStdin, count)[i],
-                CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[i],
-                CoreFailed(cmd, preFs, preStreams, preStdin, count)[i]
+                                            i,
+                                            CoreResults(cmd, preFs, preStreams, preStdin, count)[i],
+                                            |set j: nat |
+                                            j < i && CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[j]|,
+                                            CoreOutputFragments(cmd, preFs, preStreams, preStdin, count)[i],
+                                            CoreErrorFragments(cmd, preFs, preStreams, preStdin, count)[i],
+                                            CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[i],
+                                            CoreFailed(cmd, preFs, preStreams, preStdin, count)[i]
               )
   {
     forall i: nat | i < count
       ensures Spec.InputObservationRelation(cmd, preFs, preStreams, Core.PrefixStdinCore(cmd, preStdin, i, preStreams),
-                i,
-                CoreResults(cmd, preFs, preStreams, preStdin, count)[i],
-                |set j: nat |
-                j < i && CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[j]|,
-                CoreOutputFragments(cmd, preFs, preStreams, preStdin, count)[i],
-                CoreErrorFragments(cmd, preFs, preStreams, preStdin, count)[i],
-                CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[i],
-                CoreFailed(cmd, preFs, preStreams, preStdin, count)[i]
+                                            i,
+                                            CoreResults(cmd, preFs, preStreams, preStdin, count)[i],
+                                            |set j: nat |
+                                            j < i && CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[j]|,
+                                            CoreOutputFragments(cmd, preFs, preStreams, preStdin, count)[i],
+                                            CoreErrorFragments(cmd, preFs, preStreams, preStdin, count)[i],
+                                            CoreSuccessful(cmd, preFs, preStreams, preStdin, count)[i],
+                                            CoreFailed(cmd, preFs, preStreams, preStdin, count)[i]
               )
     {
       InputObservationAt(cmd, preFs, preStreams, preStdin, count, i);
@@ -949,9 +949,9 @@ module HeadProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                           old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

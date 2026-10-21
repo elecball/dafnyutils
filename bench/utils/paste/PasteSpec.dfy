@@ -107,7 +107,7 @@ module PasteSpec {
   {
     var rendered :=
       if exists i: nat :: i < |text| &&
-          (text[i] == ':' || text[i] == '"' || !SE.SpecCPrintableByte(text[i]))
+                          (text[i] == ':' || text[i] == '"' || !SE.SpecCPrintableByte(text[i]))
       then SE.SpecDoubleQuote(text)
       else text;
     DelimiterBackslashErrorText0 + rendered + DelimiterBackslashErrorText1
@@ -176,16 +176,16 @@ module PasteSpec {
 
   ghost predicate EntryRelation(
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-                              recordDelimiter: BenchWorld.RawByte,
-                              entry: Entry
+                                recordDelimiter: BenchWorld.RawByte,
+                                entry: Entry
   )
   {
     entry.readOk == (result.Ok? || !BlockingReadFailure(result.e)) &&
-      exists terminated: seq<bool>,
-        fragments: seq<BenchWorld.Bytes>,
-        cuts: seq<nat> ::
-        LinePartitionRelation(
-          IOContract.ReadResultData(result), recordDelimiter, entry.lines, terminated, fragments, cuts)
+    exists terminated: seq<bool>,
+      fragments: seq<BenchWorld.Bytes>,
+      cuts: seq<nat> ::
+      LinePartitionRelation(
+        IOContract.ReadResultData(result), recordDelimiter, entry.lines, terminated, fragments, cuts)
   }
 
   ghost predicate InputObservationRelation(
@@ -206,7 +206,7 @@ module PasteSpec {
     match cmd.inputs[i]
     case Stdin =>
       observation.errorPiece == (if observation.result.Ok? then []
-        else ErrorMessage("-", observation.result.e)) &&
+                                 else ErrorMessage("-", observation.result.e)) &&
       observation.failed == observation.result.Err? &&
       !observation.blocking
     case File(path) =>
@@ -409,8 +409,8 @@ module PasteSpec {
     states[|cmd.inputs|] == after &&
     forall i: nat {:trigger states[i + 1]} | i < |cmd.inputs| ::
       states[i + 1] == (if cmd.inputs[i].Stdin?
-        then IOContract.ObservedReadStdinRemainingFields(states[i], observations)
-        else states[i])
+                        then IOContract.ObservedReadStdinRemainingFields(states[i], observations)
+                        else states[i])
   }
 
   ghost predicate StdinDataRelation(
@@ -423,7 +423,7 @@ module PasteSpec {
     forall i: nat {:trigger cuts[i]} | i < |cmd.inputs| ::
       cuts[i] <= cuts[i + 1] <= |data| &&
       data[cuts[i]..cuts[i + 1]] == (if cmd.inputs[i].Stdin?
-        then IOContract.ReadResultData(observations[i].result) else [])
+                                     then IOContract.ReadResultData(observations[i].result) else [])
   }
 
   ghost predicate EscapedDelimiterRelation(
@@ -729,7 +729,7 @@ module PasteSpec {
 
   twostate predicate PreparedSpec(raw: PasteSchema.PasteCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
     reads io.Footprint() - {
-    io.stdoutRegion, io.stderrRegion}
+            io.stdoutRegion, io.stderrRegion}
   {
     SpecCmd(PasteSchema.Command(raw), io, exit, plannedStdout, plannedStderr)
   }
@@ -755,7 +755,7 @@ module PasteSpec {
     var stdoutResult := observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
     stdoutResult.StreamWriteResult? &&
     var errors := diagnostics + (if stdoutResult.err == 0 then [] else
-      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+                                 StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
     var stderrResult := observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
     stderrResult.StreamWriteResult? &&
     StreamContract.WriteStdoutSpec(
@@ -766,13 +766,13 @@ module PasteSpec {
   }
 
   twostate predicate Emission(raw: PasteSchema.PasteCmdRaw, io: BenchIO.IO,
-    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
-    normalExit: int, exit: int)
+                              out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+                              normalExit: int, exit: int)
     reads io.Footprint()
   {
     if Emits(raw) then
       EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                 io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
     else
       io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
       exit == normalExit
@@ -783,7 +783,7 @@ module PasteSpec {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSpec(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                   old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

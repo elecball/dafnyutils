@@ -23,7 +23,7 @@ module LsProof {
   )
     requires observation.source.StatusEntryEvidence?
     requires !Spec.EntryStatusRequiredSpec(
-      cmd, Spec.ClassifiedDirentKindSpec(observation.entryKind), observation.displayName)
+               cmd, Spec.ClassifiedDirentKindSpec(observation.entryKind), observation.displayName)
     ensures !Spec.DirectorySourceRelation(cmd, fs, path, observation)
   {
   }
@@ -48,15 +48,15 @@ module LsProof {
   )
     requires !Spec.EntryRenderSortMetadataRequiredSpec(cmd) && !cmd.recursive
     requires Spec.DirectoryObservationRelation(
-      cmd,fs,path,firstStatus,afterStatus,complete,observations,expected)
+               cmd,fs,path,firstStatus,afterStatus,complete,observations,expected)
     ensures afterStatus == firstStatus
   {
     var cuts: seq<nat> :|
       |cuts| == |observations| + 1 && cuts[0] == firstStatus &&
       cuts[|observations|] == afterStatus &&
       (forall i: nat | i < |observations| ::
-        observations[i].statusOrdinal == cuts[i] &&
-        cuts[i + 1] == cuts[i] + Spec.EntryStatusCallCount(observations[i]));
+         observations[i].statusOrdinal == cuts[i] &&
+         cuts[i + 1] == cuts[i] + Spec.EntryStatusCallCount(observations[i]));
     forall i: nat | i < |observations|
       ensures cuts[i + 1] == cuts[i]
     {
@@ -664,7 +664,7 @@ module LsProof {
       DirectPositionsCoreSuffix(sorted, i + 1);
       var tail := Core.DirectPositionsCore(sorted, i + 1);
       assert {:fuel Core.DirectPositionsCore, 1, 2} Core.DirectPositionsCore(sorted, i) ==
-        (if sorted[i].operandClass == Spec.DirectOperand then [i] else []) + tail;
+                                                    (if sorted[i].operandClass == Spec.DirectOperand then [i] else []) + tail;
       forall j: nat | i <= j < |sorted|
         ensures (sorted[j].operandClass == Spec.DirectOperand <==>
                  exists k: nat :: k < |Core.DirectPositionsCore(sorted, i)| &&
@@ -732,7 +732,7 @@ module LsProof {
       DirectoryPositionsCoreSuffix(sorted, i + 1);
       var tail := Core.DirectoryPositionsCore(sorted, i + 1);
       assert {:fuel Core.DirectoryPositionsCore, 1, 2} Core.DirectoryPositionsCore(sorted, i) ==
-        (if sorted[i].operandClass == Spec.ExpandedDirectory && sorted[i].sectionAvailable then [i] else []) + tail;
+                                                       (if sorted[i].operandClass == Spec.ExpandedDirectory && sorted[i].sectionAvailable then [i] else []) + tail;
       forall j: nat | i <= j < |sorted|
         ensures ((sorted[j].operandClass == Spec.ExpandedDirectory &&
                   sorted[j].sectionAvailable) <==>
@@ -842,11 +842,11 @@ module LsProof {
     var groups := Core.OutputGroupsCore(cmd, sorted);
     var offset := if |directPositions| == 0 then 0 else 1;
     var queuedSuffix := if |directoryPositions| == 0 &&
-      Core.HasQueuedDirectoryCore(sorted) then "\n" else [];
+                           Core.HasQueuedDirectoryCore(sorted) then "\n" else [];
     assert |groups| == |directoryPositions| + offset;
     if |directPositions| > 0 {
       assert groups[0] == Spec.OutputGroup(
-        directIndices, directBody + queuedSuffix, false);
+                            directIndices, directBody + queuedSuffix, false);
     }
     forall k: nat | k < |directoryPositions|
       ensures groups[k + offset] == Spec.OutputGroup(
@@ -857,7 +857,7 @@ module LsProof {
         assert groups == Core.DirectoryGroupsCore(sorted, directoryPositions);
       } else {
         assert groups == [Spec.OutputGroup(
-                           directIndices, directBody + queuedSuffix, false)] +
+                            directIndices, directBody + queuedSuffix, false)] +
                          Core.DirectoryGroupsCore(sorted, directoryPositions);
       }
     }
@@ -865,7 +865,7 @@ module LsProof {
       ensures directFragments[k] == Spec.RenderOperandSpec(cmd, sorted, directPositions[k])
     {
       RenderAlignedEntryBridge(cmd, sorted[directPositions[k]].renderName,
-        sorted[directPositions[k]].status, Spec.OperandWidthsSpec(cmd, sorted));
+                               sorted[directPositions[k]].status, Spec.OperandWidthsSpec(cmd, sorted));
     }
     assert Spec.OutputGroupsWitnessRelation(
         cmd, sorted, groups, directPositions, directoryPositions, directIndices,
@@ -1036,7 +1036,7 @@ module LsProof {
       (if readErr == 0 then [] else Spec.ReadDirectoryErrorMessageSpec(displayPath, readErr)) +
       Spec.CloseDirectoryErrorMessageSpec(displayPath, closeErr) &&
       hadError == (readErr != 0 || closeErr != 0 ||
-        exists i: nat :: i < |observations| && Spec.ObservationFailedSpec(observations[i]));
+                   exists i: nat :: i < |observations| && Spec.ObservationFailedSpec(observations[i]));
     SortEntriesCoreSatisfiesRelation(cmd, rawObservations);
     TotalLineBridge(cmd, rawObservations);
     ObservationPiecesImpliesSpec(cmd, observations, outputFragments);
@@ -1114,81 +1114,81 @@ module LsProof {
     hide *;
     reveal Core.RecursiveDirectorySummary(cmd, fs, displayPath, accessPath, ancestors, tree);
     assert Spec.RecursiveNativeDirectoryTrace(cmd, fs, accessPath, tree) &&
-    Spec.RecursiveNativeCallsFields(cmd,fs,tree) &&
-    cmd.statusContext.BoundStatusObservations? &&
-    Spec.OpenDirectoryObservation(cmd, fs, accessPath, tree.openOk, tree.openErr) &&
-    (tree.openOk ==> Spec.OpenedDirectoryStatusObservation(
-      cmd, fs, accessPath, tree.firstStatus, tree.statusOk,
-      tree.openedStatus, tree.statusErr)) &&
-    (if !tree.openOk then
-       tree.openErr > 0 && !tree.statusOk && !tree.cycle &&
-       tree.listingFirstStatus == tree.firstStatus &&
-       tree.listingAfterStatus == tree.firstStatus &&
-       tree.afterStatus == tree.firstStatus &&
-       tree.observations == [] && tree.children == map[] && tree.cycles == {} &&
-       tree.output == [] &&
-       tree.errors == Spec.OpenDirectoryErrorMessageSpec(displayPath, tree.openErr) &&
-       tree.hadError
-     else if !tree.statusOk then
-       tree.openErr == 0 && tree.statusErr > 0 && !tree.cycle &&
-       tree.listingFirstStatus == tree.firstStatus+1 &&
-       tree.listingAfterStatus == tree.firstStatus+1 &&
-       tree.afterStatus == tree.firstStatus+1 &&
-       tree.observations == [] && tree.children == map[] && tree.cycles == {} &&
-       tree.output == [] &&
-       tree.errors == Spec.DirectoryIdentityErrorMessageSpec(displayPath, tree.statusErr) &&
-       tree.hadError
-     else
-       tree.openErr == 0 && tree.statusErr == 0 &&
-       tree.listingFirstStatus == tree.firstStatus + 1 &&
-       tree.openedStatus.kind == BenchWorld.DirectoryKind &&
-       (if tree.cycle then
-          tree.openedStatus.hostKey in ancestors &&
-          tree.listingAfterStatus == tree.listingFirstStatus &&
-          tree.afterStatus == tree.listingFirstStatus &&
-          tree.observations == [] && tree.children == map[] && tree.cycles == {} &&
-          tree.output == [] && tree.errors == Spec.RecursiveCycleMessageSpec(displayPath) &&
-          tree.hadError
-        else
-          tree.openedStatus.hostKey !in ancestors &&
-          Core.DirectoryListingSummary(
-            cmd, displayPath, fs, accessPath, tree.listingFirstStatus,
-            tree.listingAfterStatus,
-            tree.observations, tree.readErr,
-            tree.listingOutput, tree.listingErrors, tree.listingHadError, tree.nativeTrace) &&
-          (exists statusCuts: seq<nat> ::
-            |statusCuts| == |tree.observations| + 1 &&
-            statusCuts[0] == tree.listingAfterStatus &&
-            statusCuts[|tree.observations|] == tree.afterStatus &&
-            (forall i: nat | i < |tree.observations| ::
-              (if i in tree.children then
-                 tree.children[i].firstStatus == statusCuts[i] &&
-                 tree.children[i].afterStatus == statusCuts[i + 1]
-               else statusCuts[i] == statusCuts[i + 1]))) &&
-          tree.cycles <= tree.children.Keys &&
-          (forall i: nat :: i < |tree.observations| ==>
-            (i in tree.children <==> Spec.RecursiveEntryEligible(tree.observations[i])) &&
-            (i in tree.cycles <==> i in tree.children && tree.children[i].cycle)) &&
-          (forall i: nat :: i in tree.children ==>
-            i < |tree.observations| &&
-            Core.RecursiveDirectorySummary(
-              cmd, fs,
-              Spec.ChildDisplayPath(displayPath, tree.observations[i].displayName),
-              tree.observations[i].accessPath,
-              ancestors + {tree.openedStatus.hostKey}, tree.children[i])) &&
-          tree.output == Spec.DirectoryHeaderSpec(displayPath) + tree.listingOutput +
-            Core.RecursiveChildOutputPrefixCore(
-              tree.observations, tree.children, |tree.observations|) &&
-          tree.errors == tree.listingErrors + Core.RecursiveChildErrorPrefixCore(
-            displayPath, tree.observations, tree.children, tree.cycles,
-            |tree.observations|) &&
-          tree.hadError ==
-            (tree.listingHadError ||
-             exists i: nat :: i in tree.children && tree.children[i].hadError)));
+           Spec.RecursiveNativeCallsFields(cmd,fs,tree) &&
+           cmd.statusContext.BoundStatusObservations? &&
+           Spec.OpenDirectoryObservation(cmd, fs, accessPath, tree.openOk, tree.openErr) &&
+           (tree.openOk ==> Spec.OpenedDirectoryStatusObservation(
+                cmd, fs, accessPath, tree.firstStatus, tree.statusOk,
+                tree.openedStatus, tree.statusErr)) &&
+           (if !tree.openOk then
+              tree.openErr > 0 && !tree.statusOk && !tree.cycle &&
+              tree.listingFirstStatus == tree.firstStatus &&
+              tree.listingAfterStatus == tree.firstStatus &&
+              tree.afterStatus == tree.firstStatus &&
+              tree.observations == [] && tree.children == map[] && tree.cycles == {} &&
+              tree.output == [] &&
+              tree.errors == Spec.OpenDirectoryErrorMessageSpec(displayPath, tree.openErr) &&
+              tree.hadError
+            else if !tree.statusOk then
+              tree.openErr == 0 && tree.statusErr > 0 && !tree.cycle &&
+              tree.listingFirstStatus == tree.firstStatus+1 &&
+              tree.listingAfterStatus == tree.firstStatus+1 &&
+              tree.afterStatus == tree.firstStatus+1 &&
+              tree.observations == [] && tree.children == map[] && tree.cycles == {} &&
+              tree.output == [] &&
+              tree.errors == Spec.DirectoryIdentityErrorMessageSpec(displayPath, tree.statusErr) &&
+              tree.hadError
+            else
+              tree.openErr == 0 && tree.statusErr == 0 &&
+              tree.listingFirstStatus == tree.firstStatus + 1 &&
+              tree.openedStatus.kind == BenchWorld.DirectoryKind &&
+              (if tree.cycle then
+                 tree.openedStatus.hostKey in ancestors &&
+                 tree.listingAfterStatus == tree.listingFirstStatus &&
+                 tree.afterStatus == tree.listingFirstStatus &&
+                 tree.observations == [] && tree.children == map[] && tree.cycles == {} &&
+                 tree.output == [] && tree.errors == Spec.RecursiveCycleMessageSpec(displayPath) &&
+                 tree.hadError
+               else
+                 tree.openedStatus.hostKey !in ancestors &&
+                 Core.DirectoryListingSummary(
+                   cmd, displayPath, fs, accessPath, tree.listingFirstStatus,
+                   tree.listingAfterStatus,
+                   tree.observations, tree.readErr,
+                   tree.listingOutput, tree.listingErrors, tree.listingHadError, tree.nativeTrace) &&
+                 (exists statusCuts: seq<nat> ::
+                    |statusCuts| == |tree.observations| + 1 &&
+                    statusCuts[0] == tree.listingAfterStatus &&
+                    statusCuts[|tree.observations|] == tree.afterStatus &&
+                    (forall i: nat | i < |tree.observations| ::
+                       (if i in tree.children then
+                          tree.children[i].firstStatus == statusCuts[i] &&
+                          tree.children[i].afterStatus == statusCuts[i + 1]
+                        else statusCuts[i] == statusCuts[i + 1]))) &&
+                 tree.cycles <= tree.children.Keys &&
+                 (forall i: nat :: i < |tree.observations| ==>
+                                     (i in tree.children <==> Spec.RecursiveEntryEligible(tree.observations[i])) &&
+                                     (i in tree.cycles <==> i in tree.children && tree.children[i].cycle)) &&
+                 (forall i: nat :: i in tree.children ==>
+                                     i < |tree.observations| &&
+                                     Core.RecursiveDirectorySummary(
+                                       cmd, fs,
+                                       Spec.ChildDisplayPath(displayPath, tree.observations[i].displayName),
+                                       tree.observations[i].accessPath,
+                                       ancestors + {tree.openedStatus.hostKey}, tree.children[i])) &&
+                 tree.output == Spec.DirectoryHeaderSpec(displayPath) + tree.listingOutput +
+                 Core.RecursiveChildOutputPrefixCore(
+                   tree.observations, tree.children, |tree.observations|) &&
+                 tree.errors == tree.listingErrors + Core.RecursiveChildErrorPrefixCore(
+                   displayPath, tree.observations, tree.children, tree.cycles,
+                   |tree.observations|) &&
+                 tree.hadError ==
+                 (tree.listingHadError ||
+                  exists i: nat :: i in tree.children && tree.children[i].hadError)));
     hide Core.RecursiveDirectorySummary();
     if !tree.openOk || !tree.statusOk || tree.cycle {
       assert Spec.RecursiveDirectoryRelation(
-        cmd, fs, displayPath, accessPath, ancestors, tree) by {
+          cmd, fs, displayPath, accessPath, ancestors, tree) by {
         reveal Spec.RecursiveDirectoryRelation();
       }
       return;
@@ -1234,7 +1234,7 @@ module LsProof {
         tree.output == Spec.DirectoryHeaderSpec(displayPath) + tree.listingOutput + childOutput &&
         tree.errors == tree.listingErrors + childErrors;
     assert Spec.RecursiveDirectoryRelation(
-      cmd, fs, displayPath, accessPath, ancestors, tree) by {
+        cmd, fs, displayPath, accessPath, ancestors, tree) by {
       reveal Spec.RecursiveDirectoryRelation();
     }
   }
@@ -1259,13 +1259,13 @@ module LsProof {
     requires observation.sectionAvailable && !observation.hasCycle
     requires observation.directoryFailed == Spec.DirectoryOperationFailed(observation.nativeTrace, readErr)
     requires Spec.DirectoryListingRelation(
-      cmd, observation.operand, fs, observation.path,
-      observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
-      observation.afterStatus, entries, readErr, listingOutput,
-      observation.sectionErrors, observation.failed, observation.nativeTrace)
+               cmd, observation.operand, fs, observation.path,
+               observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
+               observation.afterStatus, entries, readErr, listingOutput,
+               observation.sectionErrors, observation.failed, observation.nativeTrace)
     requires observation.body ==
-      (if |cmd.operands| > 1 then Spec.DirectoryHeaderSpec(observation.operand) else []) +
-      listingOutput
+             (if |cmd.operands| > 1 then Spec.DirectoryHeaderSpec(observation.operand) else []) +
+             listingOutput
     ensures Spec.OperandObservationRelation(cmd, fs, cwd, observation)
   {
     hide *;
@@ -1302,7 +1302,7 @@ module LsProof {
               tree.openOk && tree.nativeTrace == observation.nativeTrace &&
               observation.nativeCalls == observation.statusCalls+tree.nativeCalls &&
               tree.firstStatus == observation.firstStatus +
-                Spec.ObservedOperandStatusCallCount(cmd,fs,observation) &&
+              Spec.ObservedOperandStatusCallCount(cmd,fs,observation) &&
               tree.afterStatus == observation.afterStatus &&
               observation.body == tree.output &&
               observation.sectionErrors == tree.errors &&
@@ -1313,22 +1313,22 @@ module LsProof {
               cmd, fs, observation.operand, observation.path,
               {}, tree);
             assert exists candidateTree: Spec.RecursiveWitness ::
-              Spec.RecursiveDirectoryRelation(
-                cmd, fs, observation.operand, observation.path,
-                {}, candidateTree) &&
-              candidateTree.openOk && candidateTree.nativeTrace == observation.nativeTrace &&
-              observation.nativeCalls == observation.statusCalls+candidateTree.nativeCalls &&
-              candidateTree.firstStatus == observation.firstStatus +
+                Spec.RecursiveDirectoryRelation(
+                  cmd, fs, observation.operand, observation.path,
+                  {}, candidateTree) &&
+                candidateTree.openOk && candidateTree.nativeTrace == observation.nativeTrace &&
+                observation.nativeCalls == observation.statusCalls+candidateTree.nativeCalls &&
+                candidateTree.firstStatus == observation.firstStatus +
                 Spec.ObservedOperandStatusCallCount(cmd,fs,observation) &&
-              candidateTree.afterStatus == observation.afterStatus &&
-              observation.body == candidateTree.output &&
-              observation.sectionErrors == candidateTree.errors &&
-              observation.failed == candidateTree.hadError &&
+                candidateTree.afterStatus == observation.afterStatus &&
+                observation.body == candidateTree.output &&
+                observation.sectionErrors == candidateTree.errors &&
+                observation.failed == candidateTree.hadError &&
                 observation.hasCycle == Spec.RecursiveHasCycle(candidateTree) &&
-              observation.directoryFailed == Spec.RecursiveRootFailed(candidateTree) by {
+                observation.directoryFailed == Spec.RecursiveRootFailed(candidateTree) by {
               assert Spec.RecursiveDirectoryRelation(
-                cmd, fs, observation.operand, observation.path,
-                {}, tree);
+                  cmd, fs, observation.operand, observation.path,
+            {}, tree);
             }
             assert Spec.OperandObservationRelation(cmd, fs, cwd, observation) by {
               reveal Spec.OperandObservationRelation();
@@ -1358,21 +1358,21 @@ module LsProof {
                   observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
                   observation.afterStatus, witnessEntries, witnessErr,
                   witnessOutput, observation.sectionErrors, observation.failed, observation.nativeTrace)} ::
-              Spec.DirectoryListingRelation(
-                cmd, observation.operand, fs, observation.path,
-                observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
-                observation.afterStatus, witnessEntries, witnessErr,
-                witnessOutput, observation.sectionErrors, observation.failed, observation.nativeTrace) &&
-              observation.directoryFailed == Spec.DirectoryOperationFailed(observation.nativeTrace, witnessErr) &&
-              observation.body ==
+                Spec.DirectoryListingRelation(
+                  cmd, observation.operand, fs, observation.path,
+                  observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
+                  observation.afterStatus, witnessEntries, witnessErr,
+                  witnessOutput, observation.sectionErrors, observation.failed, observation.nativeTrace) &&
+                observation.directoryFailed == Spec.DirectoryOperationFailed(observation.nativeTrace, witnessErr) &&
+                observation.body ==
                 (if |cmd.operands| > 1
                  then Spec.DirectoryHeaderSpec(observation.operand)
                  else []) + witnessOutput by {
               assert Spec.DirectoryListingRelation(
-                cmd, observation.operand, fs, observation.path,
-                observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
-                observation.afterStatus, entries, readErr,
-                listingOutput, observation.sectionErrors, observation.failed, observation.nativeTrace);
+                  cmd, observation.operand, fs, observation.path,
+                  observation.firstStatus + Spec.ObservedOperandStatusCallCount(cmd,fs,observation),
+                  observation.afterStatus, entries, readErr,
+                  listingOutput, observation.sectionErrors, observation.failed, observation.nativeTrace);
             }
             FlatOperandRelationWitness(
               cmd, fs, cwd, observation, entries, readErr, listingOutput);
@@ -1404,11 +1404,11 @@ module LsProof {
     requires statusCuts[0] == firstStatus
     requires statusCuts[|observations|] == afterStatus
     requires forall i: nat | i < |observations| ::
-      observations[i].firstStatus == statusCuts[i] &&
-      observations[i].afterStatus == statusCuts[i + 1]
+               observations[i].firstStatus == statusCuts[i] &&
+               observations[i].afterStatus == statusCuts[i + 1]
     requires forall i: nat | i < |observations| ::
-      observations[i].index == i &&
-      Spec.OperandObservationRelation(cmd, fs, cwd, observations[i])
+               observations[i].index == i &&
+               Spec.OperandObservationRelation(cmd, fs, cwd, observations[i])
     requires Spec.OperandSortingRelation(cmd, observations, sorted)
     requires Spec.OutputGroupsRelation(cmd, sorted, groups)
     requires Spec.SeparatedGroupsRelation(groups, output)
@@ -1446,8 +1446,8 @@ module LsProof {
       statusCuts[0] == firstStatus &&
       statusCuts[|observations|] == afterStatus &&
       (forall i: nat | i < |observations| ::
-        observations[i].firstStatus == statusCuts[i] &&
-        observations[i].afterStatus == statusCuts[i + 1]) &&
+         observations[i].firstStatus == statusCuts[i] &&
+         observations[i].afterStatus == statusCuts[i + 1]) &&
       (forall i: nat | i < |observations| ::
          observations[i].index == i &&
          Core.OperandObservationSummary(cmd, fs, cwd, observations[i])) &&
@@ -1507,6 +1507,6 @@ module LsProof {
       Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
                           io.trustedStreams(), output, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      output, diagnostics);
+                                       output, diagnostics);
   }
 }

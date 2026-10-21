@@ -69,7 +69,7 @@ module ChmodRecursiveTextCore {
   }
 
   function NativeAccessText(cmd: Schema.ChmodCmd, path: string, kind: RecursiveFailureKind,
-    reason: string): BenchWorld.Bytes
+                            reason: string): BenchWorld.Bytes
     ensures NativeAccessText(cmd, path, kind, reason) == Model.NativeAccessText(cmd, path, kind, reason)
   {
     if cmd.silent then []

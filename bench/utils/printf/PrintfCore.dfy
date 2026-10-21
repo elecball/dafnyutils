@@ -53,14 +53,14 @@ module PrintfCore {
         var digitStart := start + 1;
         var digits := Spec.OctalCount(format, digitStart);
         Spec.OneFragment(Spec.FormatFragment(
-          digitStart + digits, nextArg,
-          [(Spec.OctalValue(format, digitStart, digits) % 256) as char]))
+                           digitStart + digits, nextArg,
+                           [(Spec.OctalValue(format, digitStart, digits) % 256) as char]))
       else if format[start + 1] == 'x' then
         var digits := Spec.HexCount(format, start + 2);
         if digits == 0 then Spec.StopFragment(2, Spec.MissingHexMessage())
         else Spec.OneFragment(Spec.FormatFragment(
-          start + 2 + digits, nextArg,
-          [(Spec.HexValue(format, start + 2, digits) % 256) as char]))
+                                start + 2 + digits, nextArg,
+                                [(Spec.HexValue(format, start + 2, digits) % 256) as char]))
       else if format[start + 1] == 'u' || format[start + 1] == 'U' then
         var upper := format[start + 1] == 'U';
         var width := if upper then 8 else 4;
@@ -72,10 +72,10 @@ module PrintfCore {
             Spec.StopFragment(2, Spec.InvalidUnicodeMessage(value, upper))
           else
             Spec.OneFragment(Spec.FormatFragment(
-              start + 2 + width, nextArg, Spec.UnicodeBytes(value)))
+                               start + 2 + width, nextArg, Spec.UnicodeBytes(value)))
       else
         Spec.OneFragment(Spec.FormatFragment(
-          start + 2, nextArg, ['\\'] + Utf8.EncodeChar(format[start + 1])))
+                           start + 2, nextArg, ['\\'] + Utf8.EncodeChar(format[start + 1])))
     else if format[start] == '%' then
       if start + 1 >= |format| then
         Spec.NoFragment
@@ -98,7 +98,7 @@ module PrintfCore {
     requires nextArg <= |args|
     ensures 0 <= RenderPass(format, args, i, nextArg).0 <= 2
     ensures RenderPass(format, args, i, nextArg).0 == 0 ==>
-            RenderPass(format, args, i, nextArg).3 == []
+              RenderPass(format, args, i, nextArg).3 == []
     ensures nextArg <= RenderPass(format, args, i, nextArg).2 <= |args|
     decreases |format| - i
   {
@@ -231,15 +231,15 @@ module PrintfCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                      old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var outErr := 0;
     if out != [] {
@@ -252,13 +252,13 @@ module PrintfCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
       errErr := StreamContract.ResultErrno(diagnosed);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }

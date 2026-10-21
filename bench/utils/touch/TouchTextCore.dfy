@@ -20,14 +20,14 @@ module TouchTextCore {
   {
     var prefix: string := MissingShortRequiredArgumentMessageSpecPart1();
     Utf8.Encode(prefix + [option] + MissingShortRequiredArgumentMessageSpecPart2() +
-    MissingShortRequiredArgumentMessageSpecPart3())
+                MissingShortRequiredArgumentMessageSpecPart3())
   }
 
   function MissingLongRequiredArgumentMessageSpec(option: string): BenchWorld.Bytes
     ensures MissingLongRequiredArgumentMessageSpec(option) == Model.MissingLongRequiredArgumentMessageSpec(option)
   {
     Utf8.Encode(MissingLongRequiredArgumentMessageSpecPart1() + option + MissingLongRequiredArgumentMessageSpecPart2() +
-    MissingLongRequiredArgumentMessageSpecPart3())
+                MissingLongRequiredArgumentMessageSpecPart3())
   }
 
   function ParseErrorMessageSpec(e: CliTypes.ParseError): BenchWorld.Bytes
@@ -46,10 +46,10 @@ module TouchTextCore {
   {
     InvalidTimeMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
     Utf8.Encode(InvalidTimeMessageSpecPart2() +
-    InvalidTimeMessageSpecPart3() +
-    InvalidTimeMessageSpecPart4() +
-    InvalidTimeMessageSpecPart5() +
-    InvalidTimeMessageSpecPart6())
+                InvalidTimeMessageSpecPart3() +
+                InvalidTimeMessageSpecPart4() +
+                InvalidTimeMessageSpecPart5() +
+                InvalidTimeMessageSpecPart6())
   }
 
   function AmbiguousTimeMessageSpec(value: string): BenchWorld.Bytes
@@ -57,10 +57,10 @@ module TouchTextCore {
   {
     AmbiguousTimeMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
     Utf8.Encode(AmbiguousTimeMessageSpecPart2() +
-    AmbiguousTimeMessageSpecPart3() +
-    AmbiguousTimeMessageSpecPart4() +
-    AmbiguousTimeMessageSpecPart5() +
-    AmbiguousTimeMessageSpecPart6())
+                AmbiguousTimeMessageSpecPart3() +
+                AmbiguousTimeMessageSpecPart4() +
+                AmbiguousTimeMessageSpecPart5() +
+                AmbiguousTimeMessageSpecPart6())
   }
 
   function InvalidDateMessageSpec(value: string): BenchWorld.Bytes

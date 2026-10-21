@@ -308,18 +308,18 @@ module CommSpec {
          else
            var leftData := first.v;
            var rightData := second.v;
-          ((Render.DataSortedRelation(leftData, cmd.zeroTerminated) &&
-            Render.DataSortedRelation(rightData, cmd.zeroTerminated) &&
-            (exists stdoutPart: BenchWorld.Bytes ::
-               Render.OutputRelation(cmd, leftData, rightData, stdoutPart) &&
-               plannedStdout == old(io.stdout()) + stdoutPart) &&
-            plannedStderr == old(io.stderr()) &&
-            exit == 0) ||
-           ((Render.DataUnsorted(leftData, cmd.zeroTerminated) ||
-             Render.DataUnsorted(rightData, cmd.zeroTerminated)) &&
-            plannedStdout == old(io.stdout()) &&
-            plannedStderr == old(io.stderr()) + UnsortedInputMessageSpec() &&
-            exit == 1)))
+           ((Render.DataSortedRelation(leftData, cmd.zeroTerminated) &&
+             Render.DataSortedRelation(rightData, cmd.zeroTerminated) &&
+             (exists stdoutPart: BenchWorld.Bytes ::
+                Render.OutputRelation(cmd, leftData, rightData, stdoutPart) &&
+                plannedStdout == old(io.stdout()) + stdoutPart) &&
+             plannedStderr == old(io.stderr()) &&
+             exit == 0) ||
+            ((Render.DataUnsorted(leftData, cmd.zeroTerminated) ||
+              Render.DataUnsorted(rightData, cmd.zeroTerminated)) &&
+             plannedStdout == old(io.stdout()) &&
+             plannedStderr == old(io.stderr()) + UnsortedInputMessageSpec() &&
+             exit == 1)))
   }
 
   twostate predicate PreparedSpec(raw: Schema.CommCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
@@ -347,28 +347,28 @@ module CommSpec {
   )
   {
     var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
-      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+                        else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
     stdoutResult.StreamWriteResult? &&
     var errors := diagnostics + (if stdoutResult.err == 0 then [] else
-      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+                                 StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
     var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
-      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+                        else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
     stderrResult.StreamWriteResult? &&
     (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
-      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+       beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
     (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
-      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+       beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
     exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
   }
 
   twostate predicate Emission(raw: Schema.CommCmdRaw, io: BenchIO.IO,
-    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
-    normalExit: int, exit: int)
+                              out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+                              normalExit: int, exit: int)
     reads io.stdoutRegion, io.stderrRegion
   {
     if Emits(raw) then
       EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                 io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
     else
       io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
       exit == normalExit
@@ -379,7 +379,7 @@ module CommSpec {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSpec(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                   old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
   ghost predicate CompleteInputPrefixRelation(data: BenchWorld.Bytes, delimiter: BenchWorld.RawByte, complete: BenchWorld.Bytes)
@@ -396,7 +396,7 @@ module CommSpec {
   }
 
   ghost function FailedReadMessage(cmd: Schema.CommCmd, first: BenchWorld.IOResult<BenchWorld.Bytes>,
-    second: BenchWorld.IOResult<BenchWorld.Bytes>, leftFault: bool): BenchWorld.Bytes
+                                                                                   second: BenchWorld.IOResult<BenchWorld.Bytes>, leftFault: bool): BenchWorld.Bytes
   {
     var result := if leftFault then first else second;
     match result
@@ -405,7 +405,7 @@ module CommSpec {
   }
 
   ghost predicate ReadRecordsRelation(result: BenchWorld.IOResult<BenchWorld.Bytes>, delimiter: BenchWorld.RawByte,
-    records: seq<BenchWorld.Bytes>)
+                                                                  records: seq<BenchWorld.Bytes>)
   {
     exists data: BenchWorld.Bytes ::
       (if result.Ok? then data == result.v else CompleteInputPrefixRelation(IOContract.ReadResultData(result), delimiter, data)) &&
@@ -413,9 +413,9 @@ module CommSpec {
   }
 
   ghost predicate FailedMergeWitness(cmd: Schema.CommCmd, left: seq<BenchWorld.Bytes>, right: seq<BenchWorld.Bytes>,
-    leftFailed: bool, rightFailed: bool, output: BenchWorld.Bytes, leftFault: bool,
-    kinds: seq<Render.MergeKind>, leftStates: seq<seq<BenchWorld.Bytes>>, rightStates: seq<seq<BenchWorld.Bytes>>,
-    fragments: seq<BenchWorld.Bytes>, cuts: seq<nat>)
+                                     leftFailed: bool, rightFailed: bool, output: BenchWorld.Bytes, leftFault: bool,
+                                     kinds: seq<Render.MergeKind>, leftStates: seq<seq<BenchWorld.Bytes>>, rightStates: seq<seq<BenchWorld.Bytes>>,
+                                     fragments: seq<BenchWorld.Bytes>, cuts: seq<nat>)
   {
     (leftFailed || rightFailed) &&
     |leftStates| == |rightStates| == |kinds| + 1 && |fragments| == |kinds| &&
@@ -423,17 +423,17 @@ module CommSpec {
     leftFault == (leftFailed && leftStates[|kinds|] == []) &&
     (leftFault || (rightFailed && rightStates[|kinds|] == [])) &&
     (forall i: nat | i < |kinds| ::
-      (!leftFailed || leftStates[i] != []) && (!rightFailed || rightStates[i] != []) &&
-      Render.MergeStepRelation(cmd, kinds[i], leftStates[i], leftStates[i + 1],
-        rightStates[i], rightStates[i + 1], fragments[i])) &&
+       (!leftFailed || leftStates[i] != []) && (!rightFailed || rightStates[i] != []) &&
+       Render.MergeStepRelation(cmd, kinds[i], leftStates[i], leftStates[i + 1],
+                                rightStates[i], rightStates[i + 1], fragments[i])) &&
     Render.FragmentsConcatenate(fragments, output, cuts)
   }
 
   // Partial read failures extend the existing byte-order model. GNU's per-file
   // disorder-warning timing remains part of the documented sortedness gap above.
   ghost predicate FailedReadOutputRelation(cmd: Schema.CommCmd,
-    first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>,
-    output: BenchWorld.Bytes, leftFault: bool)
+                                           first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>,
+                                                                                                                     output: BenchWorld.Bytes, leftFault: bool)
   {
     exists left: seq<BenchWorld.Bytes>, right: seq<BenchWorld.Bytes>, kinds: seq<Render.MergeKind>,
       leftStates: seq<seq<BenchWorld.Bytes>>, rightStates: seq<seq<BenchWorld.Bytes>>,
@@ -441,6 +441,6 @@ module CommSpec {
       ReadRecordsRelation(first, Render.RecordDelimiter(cmd.zeroTerminated), left) &&
       ReadRecordsRelation(second, Render.RecordDelimiter(cmd.zeroTerminated), right) &&
       FailedMergeWitness(cmd, left, right, first.Err?, second.Err?, output, leftFault,
-        kinds, leftStates, rightStates, fragments, cuts)
+                         kinds, leftStates, rightStates, fragments, cuts)
   }
 }

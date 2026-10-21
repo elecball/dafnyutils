@@ -40,20 +40,20 @@ module TruncateTextCore {
     ensures StatText(quoted, reason, reference) == Model.StatText(quoted, reason, reference)
   {
     StatTextPart1() + (if reference then StatTextPart2() else StatTextPart3()) + quoted + StatTextPart4() +
-      Utf8.Encode(reason) + StatTextPart5()
+    Utf8.Encode(reason) + StatTextPart5()
   }
 
   function ResizeText(quoted: W.Bytes, size: nat, reason: string): W.Bytes
     ensures ResizeText(quoted, size, reason) == Model.ResizeText(quoted, size, reason)
   {
     ResizeTextPart1() + quoted + ResizeTextPart2() + Utf8.Encode(NatText(size)) +
-      ResizeTextPart3() + Utf8.Encode(reason) + ResizeTextPart4()
+    ResizeTextPart3() + Utf8.Encode(reason) + ResizeTextPart4()
   }
 
   function BlockOverflowText(quoted: W.Bytes, delta: int, block: nat): W.Bytes
     ensures BlockOverflowText(quoted, delta, block) == Model.BlockOverflowText(quoted, delta, block)
   {
     BlockOverflowTextPart1() + Utf8.Encode(IntText(delta)) + BlockOverflowTextPart2() + Utf8.Encode(NatText(block)) +
-      BlockOverflowTextPart3() + quoted + BlockOverflowTextPart4()
+    BlockOverflowTextPart3() + quoted + BlockOverflowTextPart4()
   }
 }

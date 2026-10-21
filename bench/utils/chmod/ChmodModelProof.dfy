@@ -149,13 +149,13 @@ module ChmodModelProof {
     requires DirectNoFollowResultFields(fs, AppendPath(current, segs[i])).Ok?
     requires i + 1 < |segs| || followTerminalSymlink || requireDirectory
     requires ResolveRawSymlinkSegmentsFields(
-      fs, segs, i, current, seen, fuel, followTerminalSymlink, false,
-      requireDirectory) == Result.Ok(target)
+               fs, segs, i, current, seen, fuel, followTerminalSymlink, false,
+               requireDirectory) == Result.Ok(target)
     ensures ResolveRawSymlinkSegmentsFields(
-      fs, RawPathSegmentsFields(link) + segs[i + 1..], 0,
-      if IsAbsolutePath(link) then "/" else ParentPath(AppendPath(current, segs[i])),
-      seen + {AppendPath(current, segs[i])}, fuel - 1, followTerminalSymlink, false,
-      requireDirectory || (i + 1 == |segs| && HasTrailingSlash(link))) == Result.Ok(target)
+              fs, RawPathSegmentsFields(link) + segs[i + 1..], 0,
+              if IsAbsolutePath(link) then "/" else ParentPath(AppendPath(current, segs[i])),
+              seen + {AppendPath(current, segs[i])}, fuel - 1, followTerminalSymlink, false,
+              requireDirectory || (i + 1 == |segs| && HasTrailingSlash(link))) == Result.Ok(target)
   {
     reveal ResolveRawSymlinkSegmentsFields();
   }
@@ -312,15 +312,15 @@ module ChmodModelProof {
           var restarted := RawPathSegmentsFields(beforeLink) + remaining;
           var restartCurrent := if IsAbsolutePath(beforeLink) then "/" else ParentPath(next);
           var restartDirectory := requireDirectory ||
-            (|remaining| == 0 && HasTrailingSlash(beforeLink));
+                                  (|remaining| == 0 && HasTrailingSlash(beforeLink));
           assert (|remaining| == 0) == (i + 1 == |segs|);
           hide *;
           assert ResolveRawSymlinkSegmentsFields(
-            before, restarted, 0, restartCurrent, seen + {next}, fuel - 1,
-            followTerminalSymlink, false, restartDirectory) == Result.Ok(beforeTarget);
+              before, restarted, 0, restartCurrent, seen + {next}, fuel - 1,
+              followTerminalSymlink, false, restartDirectory) == Result.Ok(beforeTarget);
           assert ResolveRawSymlinkSegmentsFields(
-            after, restarted, 0, restartCurrent, seen + {next}, fuel - 1,
-            followTerminalSymlink, false, restartDirectory) == Result.Ok(afterTarget);
+              after, restarted, 0, restartCurrent, seen + {next}, fuel - 1,
+              followTerminalSymlink, false, restartDirectory) == Result.Ok(afterTarget);
           ResolveRawSuccessfulTargetsEqualExceptModeFieldsInternal(
             before,
             after,
@@ -417,7 +417,7 @@ module ChmodModelProof {
   lemma SplitOffset(prefix: string, suffix: string, i: nat, start: nat)
     requires start <= i <= |suffix|
     ensures SplitSegments(prefix+suffix,|prefix|+i,|prefix|+start) ==
-      SplitSegments(suffix,i,start)
+            SplitSegments(suffix,i,start)
     decreases |suffix|-i
   {
     assert (prefix+suffix)[|prefix|+start..|prefix|+i] == suffix[start..i];
@@ -465,11 +465,11 @@ module ChmodModelProof {
         }
         assert segments == [head];
         calc {
-          SplitSegments(JoinSegments(segments),0,0);
-          == SplitSegments(head,0,0);
-          == SplitSegments(head,|head|,0);
-          == [head];
-          == segments;
+           SplitSegments(JoinSegments(segments),0,0);
+        == SplitSegments(head,0,0);
+        == SplitSegments(head,|head|,0);
+        == [head];
+        == segments;
         }
       } else {
         var tail := JoinSegments(segments[1..]);
@@ -482,7 +482,7 @@ module ChmodModelProof {
         assert (head+"/"+tail)[..|head|] == head;
         assert (head+"/"+tail)[|head|] == '/';
         assert SplitSegments(head+"/"+tail,|head|,0) ==
-          [head]+SplitSegments(head+"/"+tail,|head|+1,|head|+1) by {
+               [head]+SplitSegments(head+"/"+tail,|head|+1,|head|+1) by {
           reveal SplitSegments();
         }
         assert segments == [head]+segments[1..];
@@ -511,7 +511,7 @@ module ChmodModelProof {
     ensures PathSegments(BuildPath(true,segments)) == segments
     ensures NormalizePath(BuildPath(true,segments)) == BuildPath(true,segments)
     ensures ParentPath(BuildPath(true,segments)) ==
-      BuildPath(true,if |segments| == 0 then [] else segments[..|segments|-1])
+            BuildPath(true,if |segments| == 0 then [] else segments[..|segments|-1])
   {
     JoinedSegmentsSplit(segments);
     NormalizeSimpleSegments(segments,0,[]);
@@ -526,7 +526,7 @@ module ChmodModelProof {
   }
 
   lemma LookupSegmentsSimple(inodes: map<InodeId,InodeRecord>, tree: InodeTree,
-    segments: seq<string>, found: InodeTree)
+                             segments: seq<string>, found: InodeTree)
     requires InodeTreeWellFormed(tree,inodes)
     requires InodeFsLookupTreeSegments(inodes,tree,segments) == Result.Ok(found)
     ensures SimpleSegments(segments)
@@ -569,12 +569,12 @@ module ChmodModelProof {
   lemma {:isolate_assertions} ModeChangedRecordFacts(record:InodeRecord,mode:bv32,now:int)
     requires InodeStorageConsistent(record) && InodeKindConsistent(record)
     ensures var after:=ModeChangedRecordFields(record,mode,now);
-      after.hostKey==record.hostKey && after.links==record.links && after.kind==record.kind &&
-      after.ownership==record.ownership && after.storage==record.storage &&
-      InodeStorageConsistent(after) && InodeKindConsistent(after) &&
-      InodeSameNodeKind(record.node,after.node) && NodeShapeUnchangedExceptMode(record.node,after.node)
+            after.hostKey==record.hostKey && after.links==record.links && after.kind==record.kind &&
+            after.ownership==record.ownership && after.storage==record.storage &&
+            InodeStorageConsistent(after) && InodeKindConsistent(after) &&
+            InodeSameNodeKind(record.node,after.node) && NodeShapeUnchangedExceptMode(record.node,after.node)
     ensures !record.node.Inaccessible? ==> var after:=ModeChangedRecordFields(record,mode,now);
-      NodeMode(after.node)==NormalizeMode(mode) && NodeTimes(after.node)==NodeTimes(record.node).(ctimeSec:=now,ctimeNsec:=0)
+                                           NodeMode(after.node)==NormalizeMode(mode) && NodeTimes(after.node)==NodeTimes(record.node).(ctimeSec:=now,ctimeNsec:=0)
   {
     hide *;
     reveal ModeChangedRecordFields(),InodeRecordWithNode(),WithNodeMode(),WithNodeChangeTime(),WithNodeTimes(),NodeTimes(),NodeMode();
@@ -597,17 +597,17 @@ module ChmodModelProof {
     requires CwdTargetFields(fs,context,target)
     ensures CwdTargetRecordFields(fs,context,target).hostKey in context.topology.objects
     ensures context.topology.objects[CwdTargetRecordFields(fs,context,target).hostKey] ==
-      CwdTargetRecordFields(fs,context,target)
+            CwdTargetRecordFields(fs,context,target)
   {
     reveal CwdContextFields(), CwdTargetFields(), CwdTargetRecordFields();
     reveal LiveDirectoryTopologyFields(), LiveObjectRecordsFields();
     match target
     case CwdNamedTarget(path) =>
       reveal ValidInodeFileSystemData(),InodeNamespaceWellFormed();
-      reveal FsContainsPath(),InodeFsContainsPath(),InodeFsLookupId();
-      var tree := InodeFsLookupTreeSegments(fs.inodes,fs.namespace,PathSegments(path)).v;
-      LookupProof.InodeLookupTreeWellFormed(fs.inodes,fs.namespace,PathSegments(path),tree);
-      reveal InodeTreeWellFormed(),FsIdAt();
+             reveal FsContainsPath(),InodeFsContainsPath(),InodeFsLookupId();
+                    var tree := InodeFsLookupTreeSegments(fs.inodes,fs.namespace,PathSegments(path)).v;
+                    LookupProof.InodeLookupTreeWellFormed(fs.inodes,fs.namespace,PathSegments(path),tree);
+                    reveal InodeTreeWellFormed(),FsIdAt();
     case CwdDirectoryTarget(position) =>
     case CwdEntryTarget(parent,name) =>
   }

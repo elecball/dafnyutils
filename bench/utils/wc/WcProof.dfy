@@ -150,8 +150,8 @@ module WcProof {
   )
     requires i < |cmd.inputs|
     ensures Spec.ReadResultRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
-              Core.ReadResultCore(cmd, preFs, preStdin, i, preStreams),
-              preStreams
+                                    Core.ReadResultCore(cmd, preFs, preStdin, i, preStreams),
+                                    preStreams
             )
   {
     reveal Spec.ReadResultRelation();
@@ -174,10 +174,10 @@ module WcProof {
   lemma InputStepWitnessRefines(
     input: Schema.Input,
     result: BW.IOResult<BW.Bytes>,
-                      entries: seq<Core.Entry>,
-                      errorOutput: BW.Bytes,
-                      failed: bool,
-                      countWitnesses: seq<Core.CountWitness>
+                        entries: seq<Core.Entry>,
+                        errorOutput: BW.Bytes,
+                        failed: bool,
+                        countWitnesses: seq<Core.CountWitness>
   )
     requires Core.InputStepWitnessRelation(
                input,
@@ -220,13 +220,13 @@ module WcProof {
               entries == [Core.Entry(input.displayName, counts, true)];
             CountWitnessImpliesRelation(IOContract.ReadResultData(result), counts, countTrace);
             assert Core.ToSpecEntries(entries) ==
-              [Spec.Entry(input.displayName, Core.ToSpecCounts(counts), true)];
+                   [Spec.Entry(input.displayName, Core.ToSpecCounts(counts), true)];
             assert Spec.CountRelation(IOContract.ReadResultData(result), Core.ToSpecCounts(counts));
             assert exists observedCounts: Spec.Counts ::
-              observedCounts == Core.ToSpecCounts(counts) &&
-              Spec.CountRelation(IOContract.ReadResultData(result), observedCounts) &&
-              Core.ToSpecEntries(entries) == [Spec.Entry(input.displayName, observedCounts, true)] &&
-              errorOutput == Spec.StdinReadErrorMessage(input.displayName, error) && failed;
+                observedCounts == Core.ToSpecCounts(counts) &&
+                Spec.CountRelation(IOContract.ReadResultData(result), observedCounts) &&
+                Core.ToSpecEntries(entries) == [Spec.Entry(input.displayName, observedCounts, true)] &&
+                errorOutput == Spec.StdinReadErrorMessage(input.displayName, error) && failed;
         }
       case File(_) =>
         match result {
@@ -269,8 +269,8 @@ module WcProof {
                preStreams
              )
     ensures Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
-              ToSpecObservation(observation),
-              preStreams
+                                          ToSpecObservation(observation),
+                                          preStreams
             )
   {
     reveal Core.InputObservationRelation();
@@ -747,7 +747,7 @@ module WcProof {
         Core.RenderCountsLine(cmd, counts, name, width) ==
         output +
         (if name == "" then [] else
-          [' '] + (if '\n' in name then SE.SpecQuoteFBytes(Utf8.Encode(name)) else Utf8.Encode(name))) +
+         [' '] + (if '\n' in name then SE.SpecQuoteFBytes(Utf8.Encode(name)) else Utf8.Encode(name))) +
         ['\n'] by {
       assert valuesOutput ==
              Core.RenderValues(Core.SelectedValues(cmd, counts), width, 0);
@@ -1204,13 +1204,13 @@ module WcProof {
     assert |ToSpecObservations(observations)| == |cmd.inputs|;
     assert forall i: nat | i < |ToSpecObservations(observations)| ::
         Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
-          ToSpecObservations(observations)[i],
-          preStreams
+                                      ToSpecObservations(observations)[i],
+                                      preStreams
         ) by {
       forall i: nat | i < |ToSpecObservations(observations)|
         ensures Spec.InputObservationRelation(cmd, preFs, Core.PrefixStdinCore(cmd, preStdin, i, preStreams), i,
-                  ToSpecObservations(observations)[i],
-                  preStreams
+                                              ToSpecObservations(observations)[i],
+                                              preStreams
                 )
       {
         InputObservationRefines(
@@ -1350,9 +1350,9 @@ module WcProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        out, diagnostics) &&
+                           out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      out, diagnostics);
+                                       out, diagnostics);
   }
 }

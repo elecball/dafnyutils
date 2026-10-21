@@ -141,33 +141,33 @@ module TruncateSpec {
       parsed.modifier == (if PrefixModifier(text, a) != S.Absolute then PrefixModifier(text, a)
                           else if parsed.signed then S.Relative else S.Absolute) &&
       parsed.value == (if b < |text| && text[b] == '-' then -1 else 1) *
-                      (if c < end then Decimal(text[c..end]) else 1) * Scale(text[end..]) &&
+      (if c < end then Decimal(text[c..end]) else 1) * Scale(text[end..]) &&
       parsed.error ==
-        (if PrefixModifier(text, a) != S.Absolute && parsed.signed then MultipleModifiers()
-         else if Scale(text[end..]) == 0 || (c == end && (parsed.signed || text[end..] == "")) then
-           InvalidNumber(text[b..], false)
-         else if parsed.value < MinSize || MaxSize < parsed.value then
-           InvalidNumber(text[b..], true)
-         else [])
+      (if PrefixModifier(text, a) != S.Absolute && parsed.signed then MultipleModifiers()
+       else if Scale(text[end..]) == 0 || (c == end && (parsed.signed || text[end..] == "")) then
+         InvalidNumber(text[b..], false)
+       else if parsed.value < MinSize || MaxSize < parsed.value then
+         InvalidNumber(text[b..], true)
+       else [])
   }
   predicate ModeAt(parsed: seq<S.ParsedSize>, limit: nat, mode: S.Modifier)
     requires limit <= |parsed|
   {
     (mode == S.Absolute && forall i :: 0 <= i < limit ==> parsed[i].modifier == S.Absolute) ||
     (exists i: nat :: i < limit && parsed[i].modifier != S.Absolute &&
-      mode == parsed[i].modifier &&
-      forall j :: i < j < limit ==> parsed[j].modifier == S.Absolute)
+                      mode == parsed[i].modifier &&
+                      forall j :: i < j < limit ==> parsed[j].modifier == S.Absolute)
   }
   ghost predicate ErrorAt(parsed: seq<S.ParsedSize>, index: nat, error: W.Bytes)
     requires index < |parsed|
   {
     exists mode: S.Modifier {:trigger ModeAt(parsed, index + 1, mode)} :: ModeAt(parsed, index + 1, mode) &&
-      error == (if parsed[index].signed &&
-                   (exists j: nat :: j < index && parsed[j].modifier != S.Absolute)
-                 then MultipleModifiers()
-                else if parsed[index].error != [] then parsed[index].error
-                else if mode in {S.RoundDown, S.RoundUp} && parsed[index].value == 0
-                  then DivisionByZero() else [])
+                                                                          error == (if parsed[index].signed &&
+                                                                                       (exists j: nat :: j < index && parsed[j].modifier != S.Absolute)
+                                                                                    then MultipleModifiers()
+                                                                                    else if parsed[index].error != [] then parsed[index].error
+                                                                                    else if mode in {S.RoundDown, S.RoundUp} && parsed[index].value == 0
+                                                                                    then DivisionByZero() else [])
   }
   opaque ghost predicate Resolved(raw: S.TruncateCmdRaw, mode: S.Modifier, value: int, error: W.Bytes)
   {
@@ -178,7 +178,7 @@ module TruncateSpec {
       value == (if |parsed| == 0 then 0 else parsed[|parsed| - 1].value) &&
       ((error == [] && forall i :: 0 <= i < |parsed| ==> ErrorAt(parsed, i, [])) ||
        (exists i: nat :: i < |parsed| && error != [] && ErrorAt(parsed, i, error) &&
-         forall j :: 0 <= j < i ==> ErrorAt(parsed, j, [])))
+                         forall j :: 0 <= j < i ==> ErrorAt(parsed, j, [])))
   }
   function ConfigurationError(raw: S.TruncateCmdRaw, mode: S.Modifier): W.Bytes {
     if !raw.hasReference && |raw.sizes| == 0 then MissingSize()
@@ -246,7 +246,7 @@ module TruncateSpec {
   ghost function StatText(quoted: W.Bytes, reason: string, reference: bool): W.Bytes
   {
     StatTextPart1() + (if reference then StatTextPart2() else StatTextPart3()) + quoted + StatTextPart4() +
-      Utf8.Encode(reason) + StatTextPart5()
+    Utf8.Encode(reason) + StatTextPart5()
   }
   function ResizeTextPart1(): W.Bytes
   {
@@ -271,7 +271,7 @@ module TruncateSpec {
   ghost function ResizeText(quoted: W.Bytes, size: nat, reason: string): W.Bytes
   {
     ResizeTextPart1() + quoted + ResizeTextPart2() + Utf8.Encode(NatText(size)) +
-      ResizeTextPart3() + Utf8.Encode(reason) + ResizeTextPart4()
+    ResizeTextPart3() + Utf8.Encode(reason) + ResizeTextPart4()
   }
   function BlockOverflowTextPart1(): W.Bytes
   {
@@ -296,7 +296,7 @@ module TruncateSpec {
   ghost function BlockOverflowText(quoted: W.Bytes, delta: int, block: nat): W.Bytes
   {
     BlockOverflowTextPart1() + Utf8.Encode(IntText(delta)) + BlockOverflowTextPart2() + Utf8.Encode(NatText(block)) +
-      BlockOverflowTextPart3() + quoted + BlockOverflowTextPart4()
+    BlockOverflowTextPart3() + quoted + BlockOverflowTextPart4()
   }
   function ExtendOverflowText(quoted: W.Bytes): W.Bytes {
     "truncate: overflow extending size of file " + quoted + "\n"
@@ -319,7 +319,7 @@ module TruncateSpec {
   ghost function CannotOpen(path: string, err: int): W.Bytes
   {
     CannotOpenPart1() + C.QuoteafPathResult(path) + CannotOpenPart2() +
-      Utf8.Encode(C.CLocaleErrnoTextResult(err)) + CannotOpenPart3()
+    Utf8.Encode(C.CLocaleErrnoTextResult(err)) + CannotOpenPart3()
   }
   function CannotStatPart1(): W.Bytes
   {
@@ -349,7 +349,7 @@ module TruncateSpec {
   ghost function CannotStat(path: string, err: int, reference: bool): W.Bytes
   {
     CannotStatPart1() + (if reference then CannotStatPart2() else CannotStatPart3()) + C.QuoteafPathResult(path) + CannotStatPart4() +
-      Utf8.Encode(C.CLocaleErrnoTextResult(err)) + CannotStatPart5()
+    Utf8.Encode(C.CLocaleErrnoTextResult(err)) + CannotStatPart5()
   }
   function TruncateErrorPart1(): W.Bytes
   {
@@ -374,7 +374,7 @@ module TruncateSpec {
   ghost function TruncateError(path: string, size: nat, err: int): W.Bytes
   {
     TruncateErrorPart1() + C.QuoteafPathResult(path) + TruncateErrorPart2() +
-      Utf8.Encode(NatText(size)) + TruncateErrorPart3() + Utf8.Encode(C.CLocaleErrnoTextResult(err)) + TruncateErrorPart4()
+    Utf8.Encode(NatText(size)) + TruncateErrorPart3() + Utf8.Encode(C.CLocaleErrnoTextResult(err)) + TruncateErrorPart4()
   }
   function BlockOverflowPart1(): W.Bytes
   {
@@ -399,7 +399,7 @@ module TruncateSpec {
   ghost function BlockOverflow(path: string, delta: int, block: nat): W.Bytes
   {
     BlockOverflowPart1() + Utf8.Encode(IntText(delta)) + BlockOverflowPart2() + Utf8.Encode(NatText(block)) +
-      BlockOverflowPart3() + C.QuoteafPathResult(path) + BlockOverflowPart4()
+    BlockOverflowPart3() + C.QuoteafPathResult(path) + BlockOverflowPart4()
   }
   ghost function ExtendOverflow(path: string): W.Bytes {
     "truncate: overflow extending size of file " + C.QuoteafPathResult(path) + "\n"
@@ -435,7 +435,7 @@ module TruncateSpec {
     else C.CreateFileSpec(before, now, observations, after, path, isOpen, err)
   }
   datatype StatusObservations = StatusObservations(times: W.StatusTimeObservations,
-    failures: (W.NativeFailureRequest) -> int)
+                                                   failures: (W.NativeFailureRequest) -> int)
 
   opaque ghost predicate StatusRelation(
     observations: StatusObservations, cursor: nat, cursor2: nat, fs: W.FileSystem,
@@ -462,18 +462,18 @@ module TruncateSpec {
     status: W.FileStatus, statOk: bool, statErr: int
   )
   {
-      (if blocks || (mode != S.Absolute && reference < 0) then
-        StatusRelation(statusTimes, cursor, cursor2, before, path, statOk, status, statErr)
-       else cursor2 == cursor && statOk && status == W.DEFAULT_FILE_STATUS && statErr == 0) &&
-      (if !statOk then after == before && error == CannotStat(path, statErr, false)
-       else
-         var scaled := delta * (if blocks then BlockSize(status) else 1);
-         var base := if reference >= 0 then reference as nat else status.storage.size;
-         var requested := AdjustedSize(mode, base, scaled);
-         if scaled < MinSize || MaxSize < scaled then
-           after == before && error == BlockOverflow(path, delta, BlockSize(status))
-         else if requested > MaxSize then after == before && error == ExtendOverflow(path)
-         else Truncation(observations, now, path, Clamped(requested), before, after, error))
+    (if blocks || (mode != S.Absolute && reference < 0) then
+       StatusRelation(statusTimes, cursor, cursor2, before, path, statOk, status, statErr)
+     else cursor2 == cursor && statOk && status == W.DEFAULT_FILE_STATUS && statErr == 0) &&
+    (if !statOk then after == before && error == CannotStat(path, statErr, false)
+     else
+       var scaled := delta * (if blocks then BlockSize(status) else 1);
+       var base := if reference >= 0 then reference as nat else status.storage.size;
+       var requested := AdjustedSize(mode, base, scaled);
+       if scaled < MinSize || MaxSize < scaled then
+         after == before && error == BlockOverflow(path, delta, BlockSize(status))
+       else if requested > MaxSize then after == before && error == ExtendOverflow(path)
+       else Truncation(observations, now, path, Clamped(requested), before, after, error))
   }
   opaque ghost predicate ResizeRelation(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
@@ -485,7 +485,7 @@ module TruncateSpec {
   {
     exists status: W.FileStatus, statOk: bool, statErr: int ::
       ResizeOutcome(observations, statusTimes, now, path, mode, delta, blocks, reference,
-        before, cursor, after, cursor2, error, status, statOk, statErr)
+                    before, cursor, after, cursor2, error, status, statOk, statErr)
   }
   opaque ghost predicate FileStep(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
@@ -497,9 +497,9 @@ module TruncateSpec {
     exists openedFs: W.FileSystem, isOpen: bool, openErr: int ::
       OpenRelation(observations, now, path, noCreate, before, openedFs, isOpen, openErr) &&
       (if !isOpen then after == openedFs && cursor2 == cursor &&
-         error == (if openErr == 0 then [] else CannotOpen(path, openErr))
+                       error == (if openErr == 0 then [] else CannotOpen(path, openErr))
        else ResizeRelation(observations, statusTimes, now, path, mode, delta, blocks, reference,
-              openedFs, cursor, after, cursor2, error))
+                           openedFs, cursor, after, cursor2, error))
   }
   opaque ghost predicate FileRelation(
     observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult,
@@ -510,7 +510,7 @@ module TruncateSpec {
   {
     exists error: W.Bytes ::
       FileStep(observations, statusTimes, now, path, noCreate, mode, delta, blocks, reference,
-        before.fs, before.cursor, after.fs, after.cursor, error) &&
+               before.fs, before.cursor, after.fs, after.cursor, error) &&
       after.errors == before.errors + error && after.failed == (before.failed || error != [])
   }
   opaque ghost predicate FilesRelation(
@@ -522,12 +522,12 @@ module TruncateSpec {
   )
   {
     exists states: seq<FileState> :: |states| == |raw.files| + 1 &&
-      states[0] == FileState(before, cursor, [], false) &&
-      states[|raw.files|].fs == after && states[|raw.files|].cursor == cursor2 &&
-      states[|raw.files|].errors == errors && exit == (if states[|raw.files|].failed then 1 else 0) &&
-      forall i :: 0 <= i < |raw.files| ==>
-        FileRelation(observations, statusTimes, now, raw.files[i], raw.noCreate,
-          mode, delta, raw.blocks, reference, states[i], states[i + 1])
+                                     states[0] == FileState(before, cursor, [], false) &&
+                                     states[|raw.files|].fs == after && states[|raw.files|].cursor == cursor2 &&
+                                     states[|raw.files|].errors == errors && exit == (if states[|raw.files|].failed then 1 else 0) &&
+                                     forall i :: 0 <= i < |raw.files| ==>
+                                                   FileRelation(observations, statusTimes, now, raw.files[i], raw.noCreate,
+                                                                mode, delta, raw.blocks, reference, states[i], states[i + 1])
   }
   opaque ghost predicate RunRelation(
     raw: S.TruncateCmdRaw, mode: S.Modifier, value: int,
@@ -541,12 +541,12 @@ module TruncateSpec {
       exists ok: bool, status: W.FileStatus, err: int, next: nat ::
         StatusRelation(statusTimes, cursor, next, before, raw.reference, ok, status, err) &&
         (if !ok then after == before && cursor2 == next && exit == 1 &&
-          errors == CannotStat(raw.reference, err, true)
+                     errors == CannotStat(raw.reference, err, true)
          else FilesRelation(raw, mode, if |raw.sizes| == 0 then status.storage.size else value,
-           if |raw.sizes| == 0 then -1 else status.storage.size,
-           observations, statusTimes, now, before, next, after, cursor2, errors, exit))
+                            if |raw.sizes| == 0 then -1 else status.storage.size,
+                            observations, statusTimes, now, before, next, after, cursor2, errors, exit))
     else FilesRelation(raw, mode, value, -1,
-           observations, statusTimes, now, before, cursor, after, cursor2, errors, exit)
+                       observations, statusTimes, now, before, cursor, after, cursor2, errors, exit)
   }
   opaque ghost predicate DiagnosticResult(
     before: W.Bytes, after: W.Bytes,
@@ -576,7 +576,7 @@ module TruncateSpec {
     var diagnosticObservation := observations(W.StreamWriteStderr(beforeErr, diagnostic));
     (if diagnostic == [] then afterErr == beforeErr
      else diagnosticObservation.StreamWriteResult? &&
-       DiagnosticResult(beforeErr, afterErr, observations, diagnostic, diagnosticObservation.err)) &&
+          DiagnosticResult(beforeErr, afterErr, observations, diagnostic, diagnosticObservation.err)) &&
     exit == (if observed.err == 0 then 0 else 1)
   }
 
@@ -586,33 +586,33 @@ module TruncateSpec {
     reads io.fsRegion, io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion,
           io.nowRegion, io.trustedFilesystemRegion, io.trustedNativeFailuresRegion, io.trustedStreamsRegion
   {
-      if error != [] then
-        io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
-        io.stdout() == old(io.stdout()) && exit == 1 &&
-        (exists err: int :: DiagnosticResult(old(io.stderr()), io.stderr(),
-          old(io.trustedStreams()), error, err))
-      else if raw.mode != S.Run then
-        io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
-        HelpResult(raw.mode, old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-          old(io.trustedStreams()), exit)
-      else if raw.parseError != [] then
-        io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
-        io.stdout() == old(io.stdout()) && exit == 1 &&
-        (exists err: int :: DiagnosticResult(old(io.stderr()), io.stderr(),
-          old(io.trustedStreams()), raw.parseError, err))
-      else if ConfigurationError(raw, mode) != [] then
-        io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
+    if error != [] then
+      io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
+      io.stdout() == old(io.stdout()) && exit == 1 &&
+      (exists err: int :: DiagnosticResult(old(io.stderr()), io.stderr(),
+                                           old(io.trustedStreams()), error, err))
+    else if raw.mode != S.Run then
+      io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
+      HelpResult(raw.mode, old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
+                 old(io.trustedStreams()), exit)
+    else if raw.parseError != [] then
+      io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
+      io.stdout() == old(io.stdout()) && exit == 1 &&
+      (exists err: int :: DiagnosticResult(old(io.stderr()), io.stderr(),
+                                           old(io.trustedStreams()), raw.parseError, err))
+    else if ConfigurationError(raw, mode) != [] then
+      io.fs() == old(io.fs()) && io.statusCursor() == old(io.statusCursor()) &&
+      io.stdout() == old(io.stdout()) &&
+      exit == 1 &&
+      (exists err: int :: DiagnosticResult(old(io.stderr()), io.stderr(),
+                                           old(io.trustedStreams()), ConfigurationError(raw, mode), err))
+    else
+      exists errors: W.Bytes, normalExit: int, diagnosticErr: int ::
         io.stdout() == old(io.stdout()) &&
-        exit == 1 &&
-        (exists err: int :: DiagnosticResult(old(io.stderr()), io.stderr(),
-          old(io.trustedStreams()), ConfigurationError(raw, mode), err))
-      else
-        exists errors: W.Bytes, normalExit: int, diagnosticErr: int ::
-          io.stdout() == old(io.stdout()) &&
-          DiagnosticResult(old(io.stderr()), io.stderr(), old(io.trustedStreams()), errors, diagnosticErr) &&
-          exit == (if diagnosticErr == 0 then normalExit else 1) &&
-          RunRelation(raw, mode, value, old(io.trustedFilesystem()), StatusObservations(io.statusObservations(),io.trustedNativeFailures()), old(io.now()),
-            old(io.fs()), old(io.statusCursor()), io.fs(), io.statusCursor(), errors, normalExit)
+        DiagnosticResult(old(io.stderr()), io.stderr(), old(io.trustedStreams()), errors, diagnosticErr) &&
+        exit == (if diagnosticErr == 0 then normalExit else 1) &&
+        RunRelation(raw, mode, value, old(io.trustedFilesystem()), StatusObservations(io.statusObservations(),io.trustedNativeFailures()), old(io.now()),
+                    old(io.fs()), old(io.statusCursor()), io.fs(), io.statusCursor(), errors, normalExit)
   }
   twostate predicate Spec(raw: S.TruncateCmdRaw, io: BenchIO.IO, exit: int)
     reads io.fsRegion, io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion,
@@ -637,7 +637,7 @@ module TruncateSpec {
   ghost predicate UnknownShortRelation(text: string, character: char) {
     (character == '?' && forall i :: 0 <= i < |text| ==> text[i] in {'c', 'o'}) ||
     (exists index: nat :: index < |text| && text[index] !in {'c', 'o'} &&
-      character == text[index] && forall i :: 0 <= i < index ==> text[i] in {'c', 'o'})
+                          character == text[index] && forall i :: 0 <= i < index ==> text[i] in {'c', 'o'})
   }
   function ParseErrorTextPart1(): W.Bytes
   {

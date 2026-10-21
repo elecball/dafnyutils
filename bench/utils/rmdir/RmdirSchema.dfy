@@ -10,12 +10,12 @@ module RmdirSchema {
 
   method Schema() returns (schema: CliTypes.CliSchema) {
     schema := CliTypes.CliSchema([
-      CliTypes.OptionDecl("rmdir.parents", ['p'], ["parents"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rmdir.ignore", [], ["ignore-fail-on-non-empty"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rmdir.verbose", ['v'], ["verbose"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rmdir.help", [], ["help"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rmdir.version", [], ["version"], CliTypes.NoArg)
-    ], true);
+                                   CliTypes.OptionDecl("rmdir.parents", ['p'], ["parents"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rmdir.ignore", [], ["ignore-fail-on-non-empty"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rmdir.verbose", ['v'], ["verbose"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rmdir.help", [], ["help"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rmdir.version", [], ["version"], CliTypes.NoArg)
+                                 ], true);
   }
 
   method ParserConfig() returns (cfg: CliTypes.ParseConfig) {

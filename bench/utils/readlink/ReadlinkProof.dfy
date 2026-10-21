@@ -25,10 +25,10 @@ module ReadlinkProof {
   )
     requires Core.ReadOneSummaryFields(cmd, path, fs, cwd, hadError, out, errOut)
     ensures Spec.ReadObservationRelation(cmd,
-              fs,
-              cwd,
-              path,
-              Core.ReadlinkResultFields(cmd, fs, cwd, path)
+                                         fs,
+                                         cwd,
+                                         path,
+                                         Core.ReadlinkResultFields(cmd, fs, cwd, path)
             )
     ensures Spec.ReadFragmentRelation(
               cmd,
@@ -110,9 +110,9 @@ module ReadlinkProof {
     errOut: BenchWorld.Bytes
   )
     requires Spec.RunFilesWitnessRelation(
-      cmd, files, fs, cwd, observations, stdoutFragments, stderrFragments,
-      stdoutCuts, stderrCuts, hadError, out, errOut
-    )
+               cmd, files, fs, cwd, observations, stdoutFragments, stderrFragments,
+               stdoutCuts, stderrCuts, hadError, out, errOut
+             )
     ensures Spec.RunFilesRelation(cmd, files, fs, cwd, hadError, out, errOut)
   {
   }
@@ -221,13 +221,13 @@ module ReadlinkProof {
           prefixErrOut
         );
       assert |observations| == |files| - 1 &&
-        |stdoutFragments| == |files| - 1 && |stderrFragments| == |files| - 1;
+             |stdoutFragments| == |files| - 1 && |stderrFragments| == |files| - 1;
       assert forall i: nat | i < |observations| ::
-        Spec.ReadObservationRelation(Schema.WithNativeReadOffset(cmd,files[..i]), fs, cwd, files[i], observations[i]) &&
-        Spec.ReadFragmentRelation(Schema.WithNativeReadOffset(cmd,files[..i]), files[i], observations[i], stdoutFragments[i], stderrFragments[i]) by {
+          Spec.ReadObservationRelation(Schema.WithNativeReadOffset(cmd,files[..i]), fs, cwd, files[i], observations[i]) &&
+          Spec.ReadFragmentRelation(Schema.WithNativeReadOffset(cmd,files[..i]), files[i], observations[i], stdoutFragments[i], stderrFragments[i]) by {
         forall i: nat | i < |observations|
           ensures Spec.ReadObservationRelation(Schema.WithNativeReadOffset(cmd,files[..i]),fs,cwd,files[i],observations[i]) &&
-            Spec.ReadFragmentRelation(Schema.WithNativeReadOffset(cmd,files[..i]),files[i],observations[i],stdoutFragments[i],stderrFragments[i])
+                  Spec.ReadFragmentRelation(Schema.WithNativeReadOffset(cmd,files[..i]),files[i],observations[i],stdoutFragments[i],stderrFragments[i])
         {
           assert files[..|files|-1][..i] == files[..i];
           assert files[..|files|-1][i] == files[i];
@@ -245,20 +245,20 @@ module ReadlinkProof {
       OutputFragmentCutsSnoc(stdoutFragments, prefixOut, stdoutCuts, stepOut);
       OutputFragmentCutsSnoc(stderrFragments, prefixErrOut, stderrCuts, stepErrOut);
       assert forall i: nat | i < |files| ::
-        Spec.ReadObservationRelation(Schema.WithNativeReadOffset(cmd,files[..i]), fs, cwd, files[i], (observations + [observation])[i]) &&
-        Spec.ReadFragmentRelation(Schema.WithNativeReadOffset(cmd,files[..i]), files[i], (observations + [observation])[i],
-          (stdoutFragments + [stepOut])[i], (stderrFragments + [stepErrOut])[i]) by {
+          Spec.ReadObservationRelation(Schema.WithNativeReadOffset(cmd,files[..i]), fs, cwd, files[i], (observations + [observation])[i]) &&
+          Spec.ReadFragmentRelation(Schema.WithNativeReadOffset(cmd,files[..i]), files[i], (observations + [observation])[i],
+                                    (stdoutFragments + [stepOut])[i], (stderrFragments + [stepErrOut])[i]) by {
         forall i: nat | i < |files|
           ensures Spec.ReadObservationRelation(Schema.WithNativeReadOffset(cmd,files[..i]), fs, cwd, files[i], (observations + [observation])[i]) &&
-            Spec.ReadFragmentRelation(Schema.WithNativeReadOffset(cmd,files[..i]), files[i], (observations + [observation])[i],
-              (stdoutFragments + [stepOut])[i], (stderrFragments + [stepErrOut])[i])
+                  Spec.ReadFragmentRelation(Schema.WithNativeReadOffset(cmd,files[..i]), files[i], (observations + [observation])[i],
+                                            (stdoutFragments + [stepOut])[i], (stderrFragments + [stepErrOut])[i])
         {
           hide *;
           if i < |files| - 1 {
             assert files[i] == files[..|files| - 1][i];
             assert Spec.ReadObservationRelation(Schema.WithNativeReadOffset(cmd,files[..i]), fs, cwd, files[i], observations[i]);
             assert Spec.ReadFragmentRelation(Schema.WithNativeReadOffset(cmd,files[..i]), files[i], observations[i],
-              stdoutFragments[i], stderrFragments[i]);
+                                             stdoutFragments[i], stderrFragments[i]);
           } else {
             assert i == |files| - 1;
           }
@@ -367,6 +367,6 @@ module ReadlinkProof {
       Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
                           io.trustedStreams(), output, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      output, diagnostics);
+                                       output, diagnostics);
   }
 }

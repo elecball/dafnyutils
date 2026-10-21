@@ -35,7 +35,7 @@ module MkdirCore {
     returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-      io.trustedStreams(), output, diagnostics, creationExit, exit)
+                               io.trustedStreams(), output, diagnostics, creationExit, exit)
   {
     ghost var observations := io.trustedStreams();
     ghost var beforeOut := io.stdout();
@@ -50,7 +50,7 @@ module MkdirCore {
       finalDiagnostic := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostic == diagnostics + (if outObservation.err == 0 then []
-      else Spec.WriteErrorText(C.CLocaleErrnoTextResult(outObservation.err)));
+                                             else Spec.WriteErrorText(C.CLocaleErrnoTextResult(outObservation.err)));
     var errResult := io.WriteStderr(finalDiagnostic);
     ghost var errObservation := observations(BW.StreamWriteStderr(beforeErr, finalDiagnostic));
     assert errObservation.StreamWriteResult? && errObservation.err == C.ResultErrno(errResult);
@@ -97,9 +97,9 @@ module MkdirCore {
       ghost var nextOutCuts := outCuts + [|output| + |addedOut|];
       ghost var nextErrCuts := errCuts + [|diagnostics| + |addedErr|];
       Proof.ExtendCreations(paths[..i], states, successes, errors,
-        io.now(), io.umask(), io.trustedFilesystem(), paths[i], io.fs(), ok, err);
+                            io.now(), io.umask(), io.trustedFilesystem(), paths[i], io.fs(), ok, err);
       Proof.ExtendPieces(paths[..i], raw.verbose, successes, errors, output, diagnostics,
-        outCuts, errCuts, paths[i], ok, err, addedOut, addedErr);
+                         outCuts, errCuts, paths[i], ok, err, addedOut, addedErr);
       Proof.AllSuccessSnoc(successes, ok);
       states, successes, errors, outCuts, errCuts :=
         nextStates, nextSuccesses, nextErrors, nextOutCuts, nextErrCuts;
@@ -112,20 +112,20 @@ module MkdirCore {
     }
     assert paths[..i] == paths;
     assert Spec.CreationResults(paths, states, successes, errors,
-      io.now(), io.umask(), io.trustedFilesystem());
+                                io.now(), io.umask(), io.trustedFilesystem());
     assert Spec.OrderedPieces(paths, raw.verbose, successes, errors,
-      output, diagnostics, outCuts, errCuts);
+                              output, diagnostics, outCuts, errCuts);
     // The loop already established every component; aggregate their proved facts.
     hide *;
     Proof.AssembleRun(raw, old(io.fs()), io.fs(), io.now(), io.umask(), io.trustedFilesystem(),
-      output, diagnostics, exit, states, successes, errors, outCuts, errCuts);
+                      output, diagnostics, exit, states, successes, errors, outCuts, errCuts);
     ghost var creationExit := exit;
     exit := Flush(output, diagnostics, exit, io);
     // AssembleRun and Flush have proved both complete component relations;
     // Complete separately proves their conjunction implies the principal Spec.
     hide *;
     assert Spec.RunRelation(raw, old(io.fs()), io.fs(), io.now(), io.umask(),
-      io.trustedFilesystem(), output, diagnostics, creationExit);
+                            io.trustedFilesystem(), output, diagnostics, creationExit);
     Proof.Complete(raw, io, output, diagnostics, creationExit, exit);
   }
 }

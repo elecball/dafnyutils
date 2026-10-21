@@ -13,19 +13,19 @@ module MkdirProof {
     path: string, after: BW.FileSystem, ok: bool, err: int)
     requires Spec.CreationResults(paths, states, successes, errors, now, mask, observations)
     requires C.CreateDirectorySpec(states[|paths|], now, observations, mask, after,
-      path, 511 as bv32, ok, err)
+                                   path, 511 as bv32, ok, err)
     ensures Spec.CreationResults(paths + [path], states + [after],
-      successes + [ok], errors + [err], now, mask, observations)
+                                 successes + [ok], errors + [err], now, mask, observations)
   {
     hide C.CreateDirectorySpec();
     forall j | 0 <= j < |paths| + 1
       ensures C.CreateDirectorySpec((states + [after])[j], now, observations, mask,
-        (states + [after])[j + 1], (paths + [path])[j], 511 as bv32,
-        (successes + [ok])[j], (errors + [err])[j])
+                                    (states + [after])[j + 1], (paths + [path])[j], 511 as bv32,
+                                    (successes + [ok])[j], (errors + [err])[j])
     {
       if j < |paths| {
         assert C.CreateDirectorySpec(states[j], now, observations, mask,
-          states[j + 1], paths[j], 511 as bv32, successes[j], errors[j]);
+                                     states[j + 1], paths[j], 511 as bv32, successes[j], errors[j]);
       }
     }
   }
@@ -35,12 +35,12 @@ module MkdirProof {
     output: BW.Bytes, diagnostics: BW.Bytes, outCuts: seq<nat>, errCuts: seq<nat>,
     path: string, ok: bool, err: int, addedOut: BW.Bytes, addedErr: BW.Bytes)
     requires Spec.OrderedPieces(paths, verbose, successes, errors,
-      output, diagnostics, outCuts, errCuts)
+                                output, diagnostics, outCuts, errCuts)
     requires addedOut == Spec.OutputPiece(verbose, path, ok)
     requires addedErr == Spec.ErrorPiece(path, ok, err)
     ensures Spec.OrderedPieces(paths + [path], verbose, successes + [ok], errors + [err],
-      output + addedOut, diagnostics + addedErr,
-      outCuts + [|output| + |addedOut|], errCuts + [|diagnostics| + |addedErr|])
+                               output + addedOut, diagnostics + addedErr,
+                               outCuts + [|output| + |addedOut|], errCuts + [|diagnostics| + |addedErr|])
   {
     // Formatting is proved separately; this lemma only preserves piece positions.
     hide Spec.OutputPiece();
@@ -53,17 +53,17 @@ module MkdirProof {
       ensures nextOutCuts[j] <= nextOutCuts[j + 1] <= |nextOut|
       ensures nextErrCuts[j] <= nextErrCuts[j + 1] <= |nextErr|
       ensures nextOut[nextOutCuts[j]..nextOutCuts[j + 1]] ==
-        Spec.OutputPiece(verbose, (paths + [path])[j], (successes + [ok])[j])
+              Spec.OutputPiece(verbose, (paths + [path])[j], (successes + [ok])[j])
       ensures nextErr[nextErrCuts[j]..nextErrCuts[j + 1]] ==
-        Spec.ErrorPiece((paths + [path])[j], (successes + [ok])[j], (errors + [err])[j])
+              Spec.ErrorPiece((paths + [path])[j], (successes + [ok])[j], (errors + [err])[j])
     {
       if j < |paths| {
         assert outCuts[j] <= outCuts[j + 1] <= |output|;
         assert errCuts[j] <= errCuts[j + 1] <= |diagnostics|;
         assert output[outCuts[j]..outCuts[j + 1]] ==
-          Spec.OutputPiece(verbose, paths[j], successes[j]);
+               Spec.OutputPiece(verbose, paths[j], successes[j]);
         assert diagnostics[errCuts[j]..errCuts[j + 1]] ==
-          Spec.ErrorPiece(paths[j], successes[j], errors[j]);
+               Spec.ErrorPiece(paths[j], successes[j], errors[j]);
         assert nextOutCuts[j] == outCuts[j] && nextOutCuts[j + 1] == outCuts[j + 1];
         assert nextErrCuts[j] == errCuts[j] && nextErrCuts[j + 1] == errCuts[j + 1];
         assert nextOut[..|output|] == output && nextErr[..|diagnostics|] == diagnostics;
@@ -81,7 +81,7 @@ module MkdirProof {
 
   lemma AllSuccessSnoc(successes: seq<bool>, ok: bool)
     ensures (forall j | 0 <= j < |successes + [ok]| :: (successes + [ok])[j]) <==>
-      ((forall j | 0 <= j < |successes| :: successes[j]) && ok)
+            ((forall j | 0 <= j < |successes| :: successes[j]) && ok)
   {
     if (forall j | 0 <= j < |successes| :: successes[j]) && ok {
       forall j | 0 <= j < |successes + [ok]|
@@ -109,42 +109,42 @@ module MkdirProof {
     states: seq<BW.FileSystem>, successes: seq<bool>, errors: seq<int>,
     outCuts: seq<nat>, errCuts: seq<nat>)
     requires Spec.CreationResults(Schema.Operands(raw), states, successes, errors,
-      now, mask, observations)
+                                  now, mask, observations)
     requires states[0] == before && states[|Schema.Operands(raw)|] == after
     requires Spec.OrderedPieces(Schema.Operands(raw), raw.verbose, successes, errors,
-      output, diagnostics, outCuts, errCuts)
+                                output, diagnostics, outCuts, errCuts)
     requires exit == (if forall j | 0 <= j < |Schema.Operands(raw)| :: successes[j] then 0 else 1)
     ensures Spec.RunRelation(raw, before, after, now, mask, observations,
-      output, diagnostics, exit)
+                             output, diagnostics, exit)
   {
     hide C.CreateDirectorySpec();
     assert exists chosenStates: seq<BW.FileSystem>, chosenSuccesses: seq<bool>, chosenErrors: seq<int>,
-                  chosenOutCuts: seq<nat>, chosenErrCuts: seq<nat> ::
-      chosenStates == states && chosenSuccesses == successes && chosenErrors == errors &&
-      chosenOutCuts == outCuts && chosenErrCuts == errCuts &&
-      Spec.CreationResults(Schema.Operands(raw), chosenStates, chosenSuccesses, chosenErrors,
-        now, mask, observations) &&
-      chosenStates[0] == before && chosenStates[|Schema.Operands(raw)|] == after &&
-      Spec.OrderedPieces(Schema.Operands(raw), raw.verbose, chosenSuccesses, chosenErrors,
-        output, diagnostics, chosenOutCuts, chosenErrCuts) &&
-      exit == (if forall j | 0 <= j < |Schema.Operands(raw)| :: chosenSuccesses[j] then 0 else 1);
+        chosenOutCuts: seq<nat>, chosenErrCuts: seq<nat> ::
+        chosenStates == states && chosenSuccesses == successes && chosenErrors == errors &&
+        chosenOutCuts == outCuts && chosenErrCuts == errCuts &&
+        Spec.CreationResults(Schema.Operands(raw), chosenStates, chosenSuccesses, chosenErrors,
+                             now, mask, observations) &&
+        chosenStates[0] == before && chosenStates[|Schema.Operands(raw)|] == after &&
+        Spec.OrderedPieces(Schema.Operands(raw), raw.verbose, chosenSuccesses, chosenErrors,
+                           output, diagnostics, chosenOutCuts, chosenErrCuts) &&
+        exit == (if forall j | 0 <= j < |Schema.Operands(raw)| :: chosenSuccesses[j] then 0 else 1);
   }
 
   twostate lemma Complete(
     raw: Schema.MkdirCmdRaw, io: BenchIO.IO,
     output: BW.Bytes, diagnostics: BW.Bytes, creationExit: int, exit: int)
     requires Spec.RunRelation(raw, old(io.fs()), io.fs(), io.now(), io.umask(),
-      io.trustedFilesystem(), output, diagnostics, creationExit)
+                              io.trustedFilesystem(), output, diagnostics, creationExit)
     requires Spec.StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-      io.trustedStreams(), output, diagnostics, creationExit, exit)
+                                io.trustedStreams(), output, diagnostics, creationExit, exit)
     ensures Spec.Spec(raw, io, exit)
   {
     // Supply the concrete witnesses to the unchanged existential specification.
     assert exists chosenOutput: BW.Bytes, chosenDiagnostics: BW.Bytes, chosenExit: int ::
-      chosenOutput == output && chosenDiagnostics == diagnostics && chosenExit == creationExit &&
-      Spec.RunRelation(raw, old(io.fs()), io.fs(), io.now(), io.umask(),
-        io.trustedFilesystem(), chosenOutput, chosenDiagnostics, chosenExit) &&
-      Spec.StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-        io.trustedStreams(), chosenOutput, chosenDiagnostics, chosenExit, exit);
+        chosenOutput == output && chosenDiagnostics == diagnostics && chosenExit == creationExit &&
+        Spec.RunRelation(raw, old(io.fs()), io.fs(), io.now(), io.umask(),
+                         io.trustedFilesystem(), chosenOutput, chosenDiagnostics, chosenExit) &&
+        Spec.StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
+                           io.trustedStreams(), chosenOutput, chosenDiagnostics, chosenExit, exit);
   }
 }

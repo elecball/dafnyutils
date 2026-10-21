@@ -195,8 +195,8 @@ module ReadlinkSpec {
     cmd: Schema.ReadlinkCmd,
     path: BenchWorld.Path,
     result: BenchWorld.IOResult<BenchWorld.Path>,
-                              stdoutFragment: BenchWorld.Bytes,
-                              stderrFragment: BenchWorld.Bytes
+                                stdoutFragment: BenchWorld.Bytes,
+                                stderrFragment: BenchWorld.Bytes
   )
   {
     match result
@@ -314,7 +314,7 @@ module ReadlinkSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)

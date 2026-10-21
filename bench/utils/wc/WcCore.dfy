@@ -278,10 +278,10 @@ module WcCore {
   ghost predicate InputStepWitnessRelation(
     input: WcSchema.Input,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-                              entries: seq<Entry>,
-                              errorOutput: BenchWorld.Bytes,
-                              failed: bool,
-                              countWitnesses: seq<CountWitness>
+                                entries: seq<Entry>,
+                                errorOutput: BenchWorld.Bytes,
+                                failed: bool,
+                                countWitnesses: seq<CountWitness>
   )
   {
     EntriesNonnegative(entries) &&
@@ -680,12 +680,12 @@ module WcCore {
   {
     RenderValues(SelectedValues(cmd, counts), width, 0) +
     (if name == "" then [] else
-      [' '] + (if '\n' in name then SE.SpecQuoteFBytes(Utf8.Encode(name)) else Utf8.Encode(name))) +
+     [' '] + (if '\n' in name then SE.SpecQuoteFBytes(Utf8.Encode(name)) else Utf8.Encode(name))) +
     ['\n']
   } by method {
     return RenderValues(SelectedValues(cmd, counts), width, 0) +
       (if name == "" then [] else
-        [' '] + (if '\n' in name then SE.SpecQuoteFBytes(Utf8.Encode(name)) else Utf8.Encode(name))) +
+       [' '] + (if '\n' in name then SE.SpecQuoteFBytes(Utf8.Encode(name)) else Utf8.Encode(name))) +
       ['\n'];
   }
 
@@ -793,16 +793,16 @@ module WcCore {
   }
 
   lemma PrefixStdinRelation(cmd: WcSchema.WcCmd, preStdin: BenchWorld.Bytes,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
+                            preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
     ensures Spec.StdinTraceRelation(cmd, preStdin,
-      PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams), preStreams,
-      seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => PrefixStdinCore(cmd, preStdin, i, preStreams)))
+                                    PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams), preStreams,
+                                    seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => PrefixStdinCore(cmd, preStdin, i, preStreams)))
   {
     forall i: nat | i < |cmd.inputs|
       ensures PrefixStdinCore(cmd, preStdin, i + 1, preStreams) ==
-        (if cmd.inputs[i].Stdin? then IOContract.ObservedReadStdinRemainingFields(
-          PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
-         else PrefixStdinCore(cmd, preStdin, i, preStreams))
+              (if cmd.inputs[i].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+                                              PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
+               else PrefixStdinCore(cmd, preStdin, i, preStreams))
     {
       PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
     }
@@ -1657,15 +1657,15 @@ module WcCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit,
-        out, diagnostics) &&
+                      out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var outErr := 0;
     if out != [] {
@@ -1678,13 +1678,13 @@ module WcCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
       errErr := StreamContract.ResultErrno(diagnosed);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }

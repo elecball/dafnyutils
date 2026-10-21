@@ -11,14 +11,14 @@ module TruncateProof {
     requires index < |parsed|
     requires Spec.ModeAt(parsed, index, before)
     ensures Spec.ModeAt(parsed, index + 1,
-      if parsed[index].modifier == S.Absolute then before else parsed[index].modifier)
+                        if parsed[index].modifier == S.Absolute then before else parsed[index].modifier)
   {
     if parsed[index].modifier != S.Absolute {
       assert forall j :: index < j < index + 1 ==> parsed[j].modifier == S.Absolute;
     } else if before != S.Absolute {
       var last: nat :| last < index && parsed[last].modifier != S.Absolute &&
-        before == parsed[last].modifier &&
-        forall j :: last < j < index ==> parsed[j].modifier == S.Absolute;
+                       before == parsed[last].modifier &&
+                       forall j :: last < j < index ==> parsed[j].modifier == S.Absolute;
       assert forall j :: last < j < index + 1 ==> parsed[j].modifier == S.Absolute;
     }
   }
@@ -30,9 +30,9 @@ module TruncateProof {
     status: W.FileStatus, statOk: bool, statErr: int
   )
     requires Spec.ResizeOutcome(observations, statusTimes, now, path, mode, delta, blocks,
-      reference, before, cursor, after, cursor2, error, status, statOk, statErr)
+                                reference, before, cursor, after, cursor2, error, status, statOk, statErr)
     ensures Spec.ResizeRelation(observations, statusTimes, now, path, mode, delta, blocks,
-      reference, before, cursor, after, cursor2, error)
+                                reference, before, cursor, after, cursor2, error)
   { reveal Spec.ResizeRelation(); }
 
   lemma FileWitness(
@@ -44,11 +44,11 @@ module TruncateProof {
   )
     requires Spec.OpenRelation(observations, now, path, noCreate, before, openedFs, isOpen, err)
     requires if !isOpen then after == openedFs && cursor2 == cursor &&
-      error == (if err == 0 then [] else Spec.CannotOpen(path, err))
-      else Spec.ResizeRelation(observations, statusTimes, now, path, mode, delta, blocks, reference,
-        openedFs, cursor, after, cursor2, error)
+                             error == (if err == 0 then [] else Spec.CannotOpen(path, err))
+             else Spec.ResizeRelation(observations, statusTimes, now, path, mode, delta, blocks, reference,
+                                      openedFs, cursor, after, cursor2, error)
     ensures Spec.FileStep(observations, statusTimes, now, path, noCreate, mode, delta, blocks,
-      reference, before, cursor, after, cursor2, error)
+                          reference, before, cursor, after, cursor2, error)
   { reveal Spec.FileStep(); }
 
   lemma FileStepImpliesRelation(
@@ -58,11 +58,11 @@ module TruncateProof {
     before: Spec.FileState, after: Spec.FileState, error: W.Bytes
   )
     requires Spec.FileStep(observations, statusTimes, now, path, noCreate, mode, delta, blocks,
-      reference, before.fs, before.cursor, after.fs, after.cursor, error)
+                           reference, before.fs, before.cursor, after.fs, after.cursor, error)
     requires after.errors == before.errors + error
     requires after.failed == (before.failed || error != [])
     ensures Spec.FileRelation(observations, statusTimes, now, path, noCreate, mode, delta, blocks,
-      reference, before, after)
+                              reference, before, after)
   { reveal Spec.FileRelation(); }
 
   lemma FilesWitness(
@@ -78,10 +78,10 @@ module TruncateProof {
     requires states[|raw.files|].errors == errors
     requires exit == (if states[|raw.files|].failed then 1 else 0)
     requires forall i :: 0 <= i < |raw.files| ==>
-      Spec.FileRelation(observations, statusTimes, now, raw.files[i], raw.noCreate,
-        mode, delta, raw.blocks, reference, states[i], states[i + 1])
+                           Spec.FileRelation(observations, statusTimes, now, raw.files[i], raw.noCreate,
+                                             mode, delta, raw.blocks, reference, states[i], states[i + 1])
     ensures Spec.FilesRelation(raw, mode, delta, reference, observations, statusTimes, now,
-      before, cursor, after, cursor2, errors, exit)
+                               before, cursor, after, cursor2, errors, exit)
   { reveal Spec.FilesRelation(); }
 
   lemma ReferenceRunWitness(
@@ -94,25 +94,25 @@ module TruncateProof {
     requires raw.hasReference
     requires Spec.StatusRelation(statusTimes, cursor, next, before, raw.reference, ok, status, err)
     requires if !ok then after == before && cursor2 == next && exit == 1 &&
-      errors == Spec.CannotStat(raw.reference, err, true)
-      else Spec.FilesRelation(raw, mode, if |raw.sizes| == 0 then status.storage.size else value,
-        if |raw.sizes| == 0 then -1 else status.storage.size,
-        observations, statusTimes, now, before, next, after, cursor2, errors, exit)
+                         errors == Spec.CannotStat(raw.reference, err, true)
+             else Spec.FilesRelation(raw, mode, if |raw.sizes| == 0 then status.storage.size else value,
+                                     if |raw.sizes| == 0 then -1 else status.storage.size,
+                                     observations, statusTimes, now, before, next, after, cursor2, errors, exit)
     ensures Spec.RunRelation(raw, mode, value, observations, statusTimes, now,
-      before, cursor, after, cursor2, errors, exit)
+                             before, cursor, after, cursor2, errors, exit)
   {
     hide Spec.StatusRelation();
     hide Spec.FilesRelation();
     reveal Spec.RunRelation();
     assert exists chosenOk: bool, chosenStatus: W.FileStatus, chosenErr: int, chosenNext: nat ::
-      chosenOk == ok && chosenStatus == status && chosenErr == err && chosenNext == next &&
-      Spec.StatusRelation(statusTimes, cursor, chosenNext, before, raw.reference,
-        chosenOk, chosenStatus, chosenErr) &&
-      (if !chosenOk then after == before && cursor2 == chosenNext && exit == 1 &&
-         errors == Spec.CannotStat(raw.reference, chosenErr, true)
-       else Spec.FilesRelation(raw, mode, if |raw.sizes| == 0 then chosenStatus.storage.size else value,
-         if |raw.sizes| == 0 then -1 else chosenStatus.storage.size,
-         observations, statusTimes, now, before, chosenNext, after, cursor2, errors, exit));
+        chosenOk == ok && chosenStatus == status && chosenErr == err && chosenNext == next &&
+        Spec.StatusRelation(statusTimes, cursor, chosenNext, before, raw.reference,
+                            chosenOk, chosenStatus, chosenErr) &&
+        (if !chosenOk then after == before && cursor2 == chosenNext && exit == 1 &&
+                           errors == Spec.CannotStat(raw.reference, chosenErr, true)
+         else Spec.FilesRelation(raw, mode, if |raw.sizes| == 0 then chosenStatus.storage.size else value,
+                                 if |raw.sizes| == 0 then -1 else chosenStatus.storage.size,
+                                 observations, statusTimes, now, before, chosenNext, after, cursor2, errors, exit));
   }
 
   lemma NoReferenceRunWitness(
@@ -124,9 +124,9 @@ module TruncateProof {
   )
     requires !raw.hasReference
     requires Spec.FilesRelation(raw, mode, value, -1, observations, statusTimes, now,
-      before, cursor, after, cursor2, errors, exit)
+                                before, cursor, after, cursor2, errors, exit)
     ensures Spec.RunRelation(raw, mode, value, observations, statusTimes, now,
-      before, cursor, after, cursor2, errors, exit)
+                             before, cursor, after, cursor2, errors, exit)
   {
     hide Spec.FilesRelation();
     reveal Spec.RunRelation();
@@ -146,9 +146,9 @@ module TruncateProof {
     exit: int, committed: nat, err: int, diagnosticErr: int
   )
     requires C.WriteStdoutSpec(before, observations, after,
-      if mode == S.Help then Spec.HelpText() else Spec.VersionText(), committed, err)
+                               if mode == S.Help then Spec.HelpText() else Spec.VersionText(), committed, err)
     requires Spec.DiagnosticResult(beforeError, afterError, observations,
-      if err == 0 then [] else Spec.WriteError(err), diagnosticErr)
+                                   if err == 0 then [] else Spec.WriteError(err), diagnosticErr)
     requires exit == (if err == 0 then 0 else 1)
     ensures Spec.HelpResult(mode, before, after, beforeError, afterError, observations, exit)
   {

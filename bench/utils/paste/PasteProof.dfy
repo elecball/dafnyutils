@@ -262,7 +262,7 @@ module PasteProof {
 
   lemma EntryRefines(
     result: BW.IOResult<BW.Bytes>,
-                      recordDelimiter: BW.RawByte
+                        recordDelimiter: BW.RawByte
   )
     ensures Spec.EntryRelation(
               result,
@@ -281,13 +281,13 @@ module PasteProof {
     states: seq<BW.Bytes>
   )
     requires states == seq(|cmd.inputs| + 1,
-      j requires 0 <= j <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStreams, preStdin, j))
+                       j requires 0 <= j <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStreams, preStdin, j))
     ensures Spec.StdinStatesRelation(cmd, preStreams, preStdin,
-      Core.PrefixStdinCore(cmd, preStreams, preStdin, |cmd.inputs|), states)
+                                     Core.PrefixStdinCore(cmd, preStreams, preStdin, |cmd.inputs|), states)
   {
     forall i: nat | i < |cmd.inputs|
       ensures states[i + 1] == (if cmd.inputs[i].Stdin?
-        then C.ObservedReadStdinRemainingFields(states[i], preStreams) else states[i])
+                                then C.ObservedReadStdinRemainingFields(states[i], preStreams) else states[i])
     {
       Core.PrefixStdinCoreStep(cmd, preStreams, preStdin, i);
     }
@@ -820,10 +820,10 @@ module PasteProof {
     ensures |cuts| == i + 1 && cuts[0] == 0
     ensures cuts[i] == |Core.StdinDataPrefixCore(cmd, streams, input, i)|
     ensures forall j: nat {:trigger cuts[j]} | j < i ::
-      cuts[j] <= cuts[j + 1] <= cuts[i] &&
-      Core.StdinDataPrefixCore(cmd, streams, input, i)[cuts[j]..cuts[j + 1]] ==
-        (if cmd.inputs[j].Stdin? then
-          C.ReadResultData(ObservationAt(cmd, fs, streams, input, j).result) else [])
+              cuts[j] <= cuts[j + 1] <= cuts[i] &&
+              Core.StdinDataPrefixCore(cmd, streams, input, i)[cuts[j]..cuts[j + 1]] ==
+              (if cmd.inputs[j].Stdin? then
+                 C.ReadResultData(ObservationAt(cmd, fs, streams, input, j).result) else [])
     decreases i
   {
     if i == 0 {
@@ -837,9 +837,9 @@ module PasteProof {
       cuts := previous + [|prefix + piece|];
       forall j: nat {:trigger cuts[j]} | j < i
         ensures cuts[j] <= cuts[j + 1] <= cuts[i] &&
-          Core.StdinDataPrefixCore(cmd, streams, input, i)[cuts[j]..cuts[j + 1]] ==
-            (if cmd.inputs[j].Stdin? then
-              C.ReadResultData(ObservationAt(cmd, fs, streams, input, j).result) else [])
+                Core.StdinDataPrefixCore(cmd, streams, input, i)[cuts[j]..cuts[j + 1]] ==
+                (if cmd.inputs[j].Stdin? then
+                   C.ReadResultData(ObservationAt(cmd, fs, streams, input, j).result) else [])
       {
         hide *;
         if j < i - 1 {
@@ -853,7 +853,7 @@ module PasteProof {
   }
 
   lemma NoStdinData(cmd: Schema.PasteCmd,
-    streams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult, input: BW.Bytes, i: nat)
+                    streams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult, input: BW.Bytes, i: nat)
     requires i <= |cmd.inputs|
     requires Schema.Stdin !in cmd.inputs[..i]
     ensures Core.StdinDataPrefixCore(cmd, streams, input, i) == []
@@ -877,7 +877,7 @@ module PasteProof {
     requires Spec.StdinStatesRelation(cmd, streams, before, after, states)
     requires Spec.StdinDataRelation(cmd, observations, data, cuts)
     requires forall i: nat | i < |observations| ::
-      Spec.InputObservationRelation(cmd, fs, streams, states[i], i, observations[i])
+               Spec.InputObservationRelation(cmd, fs, streams, states[i], i, observations[i])
     requires Spec.EntriesForOutputRelation(cmd, data, Spec.ObservationEntries(observations), entries)
     requires Spec.VisibleErrorRelation(cmd.serial, observations, errors)
     requires failed == (exists i: nat :: i < |observations| && observations[i].failed)
@@ -909,7 +909,7 @@ module PasteProof {
   {
     var observations := Observations(cmd, preFs, preStreams, preStdin);
     var states := seq(|cmd.inputs| + 1,
-      j requires 0 <= j <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStreams, preStdin, j));
+    j requires 0 <= j <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStreams, preStdin, j));
     PrefixStdinCharacterization(cmd, preStreams, preStdin, states);
     var stdinData := Core.StdinDataForOutputCore(cmd, preStreams, preStdin);
     var cuts := BuildStdinDataCuts(cmd, preFs, preStreams, preStdin, |cmd.inputs|);
@@ -947,12 +947,12 @@ module PasteProof {
       ghost var assembly := visibleAssembly;
     }
     InputTraceWitness(cmd, preFs, preStreams, preStdin,
-      Core.PrefixStdinCore(cmd, preStreams, preStdin, |cmd.inputs|),
-      ToSpecEntries(Core.EntriesForOutputCore(cmd, preFs, preStreams, preStdin)),
-      Core.PrefixVisibleErrorOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
-      Core.PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
-      Core.PrefixHadBlockingErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
-      observations, states, stdinData, cuts);
+                      Core.PrefixStdinCore(cmd, preStreams, preStdin, |cmd.inputs|),
+                      ToSpecEntries(Core.EntriesForOutputCore(cmd, preFs, preStreams, preStdin)),
+                      Core.PrefixVisibleErrorOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
+                      Core.PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
+                      Core.PrefixHadBlockingErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|),
+                      observations, states, stdinData, cuts);
   }
 
   lemma EscapeDelimiterRefines(ch: BW.RawByte)
@@ -1329,9 +1329,9 @@ module PasteProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                           old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

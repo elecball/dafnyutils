@@ -93,7 +93,7 @@ module FoldProof {
       NatParseAccumulator(text, i + 1, acc * 10 + Core.DigitValue(text[i]));
       DecimalFrontPeel(suf);
       assert (acc * 10 + Spec.DigitValue(text[i])) * Pow10(|text| - i - 1) +
-             Spec.DecimalValue(text[i + 1..]) ==
+        Spec.DecimalValue(text[i + 1..]) ==
              acc * Pow10(|text| - i) + Spec.DecimalValue(suf);
     }
   }
@@ -255,9 +255,9 @@ module FoldProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        out, diagnostics) &&
+                           out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      out, diagnostics);
+                                       out, diagnostics);
   }
 }

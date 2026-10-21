@@ -50,7 +50,7 @@ module CommTextCore {
   }
 
   function FailedReadMessage(cmd: Schema.CommCmd, first: BenchWorld.IOResult<BenchWorld.Bytes>,
-    second: BenchWorld.IOResult<BenchWorld.Bytes>, leftFault: bool): BenchWorld.Bytes
+                                                                             second: BenchWorld.IOResult<BenchWorld.Bytes>, leftFault: bool): BenchWorld.Bytes
     ensures FailedReadMessage(cmd, first, second, leftFault) == Model.FailedReadMessage(cmd, first, second, leftFault)
   {
     var result := if leftFault then first else second;

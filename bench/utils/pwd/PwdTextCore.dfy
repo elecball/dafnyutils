@@ -16,7 +16,7 @@ module PwdTextCore {
   }
 
   function RecoveryFailureText(failure: RecoveryFailure,
-    quotedArgument: BenchWorld.Bytes, reason: string): BenchWorld.Bytes
+                               quotedArgument: BenchWorld.Bytes, reason: string): BenchWorld.Bytes
     ensures RecoveryFailureText(failure, quotedArgument, reason) == Model.RecoveryFailureText(failure, quotedArgument, reason)
   {
     var suffix := RecoveryFailureTextPart1() + Utf8.Encode(reason) + RecoveryFailureTextPart2();

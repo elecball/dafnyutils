@@ -133,7 +133,7 @@ module PwdRecoveryCore {
   }
 
   ghost predicate LogicalSelectionSummary(pwd: string,
-    observations: seq<BenchWorld.IOResult<BenchWorld.FileStatus>>, selected: bool)
+                                          observations: seq<BenchWorld.IOResult<BenchWorld.FileStatus>>, selected: bool)
   {
     if !LogicalTextValid(pwd) then |observations| == 0 && !selected
     else
@@ -142,14 +142,14 @@ module PwdRecoveryCore {
       else
         |observations| == 2 &&
         (selected <==> observations[1].Ok? &&
-          observations[0].v.hostKey == observations[1].v.hostKey)
+                       observations[0].v.hostKey == observations[1].v.hostKey)
   }
 
   method ChooseLogicalFromStatuses(pwd: string,
-    observations: seq<BenchWorld.IOResult<BenchWorld.FileStatus>>) returns (selected: bool)
+                                   observations: seq<BenchWorld.IOResult<BenchWorld.FileStatus>>) returns (selected: bool)
     requires if !LogicalTextValid(pwd) then |observations| == 0
-      else |observations| >= 1 &&
-        (if observations[0].Err? then |observations| == 1 else |observations| == 2)
+             else |observations| >= 1 &&
+                  (if observations[0].Err? then |observations| == 1 else |observations| == 2)
     ensures LogicalSelectionSummary(pwd, observations, selected)
   {
     var valid := LogicalTextValid(pwd);
@@ -166,7 +166,7 @@ module PwdRecoveryCore {
   }
 
   method ChooseEntryMatch(child: BenchWorld.FileStatus, parent: BenchWorld.FileStatus,
-    observation: Spec.EntryObservation) returns (matched: bool)
+                          observation: Spec.EntryObservation) returns (matched: bool)
     requires Spec.EntryObservationFields(child, parent, observation)
     ensures matched <==> Spec.EntryMatchFields(child, parent, observation)
   {
@@ -234,7 +234,7 @@ module PwdRecoveryCore {
   }
 
   method ReadEntryObservation(child: BenchWorld.FileStatus, parent: BenchWorld.FileStatus,
-    handle: int, io: BenchIO.IO)
+                              handle: int, io: BenchIO.IO)
     returns (observation: Spec.EntryObservation, ghost calls: seq<Spec.RuntimeObservation>)
     requires handle in io.directoryCapabilities()
     requires io.directoryCapabilities()[handle].anchorFs == io.fs()
@@ -255,10 +255,10 @@ module PwdRecoveryCore {
     ghost var before := Model.State(io);
     Model.InputsMatchModel(io);
     ghost var readRequest := BenchWorld.DirectoryRequest(BenchWorld.DirectoryReadNext,
-      before.ordinal,inputs.fs,inputs.topology,before.position,before.capabilities,
-      handle,0,"",before.statusOrdinal,before.cwdHint,inputs.occupiedLegacyHandles);
+                                                         before.ordinal,inputs.fs,inputs.topology,before.position,before.capabilities,
+                                                         handle,0,"",before.statusOrdinal,before.cwdHint,inputs.occupiedLegacyHandles);
     assert C.DirectoryOperationCapabilitiesCurrentFields(io.directoryTopology(),
-      io.directoryCapabilities(),BenchWorld.DirectoryReadNext,handle,0) by {
+                                                         io.directoryCapabilities(),BenchWorld.DirectoryReadNext,handle,0) by {
       reveal C.DirectoryOperationCapabilitiesCurrentFields();
     }
     var read := io.ReadDirectoryCapability(handle);
@@ -272,10 +272,10 @@ module PwdRecoveryCore {
     }
     NativeProof.ResponseErrnos(readRequest,readResponse);
     NativeProof.OperationCapabilities(readRequest,inputs.observations,readResponse,
-      middle.position,middle.capabilities,middle.ordinal,middle.statusOrdinal,middle.cwdHint);
+                                      middle.position,middle.capabilities,middle.ordinal,middle.statusOrdinal,middle.cwdHint);
     NativeProof.ReadName(readRequest,readResponse);
     ghost var readCall := Spec.RuntimeObservation(before,middle,
-      Spec.DirectoryAction(readRequest,readResponse));
+                                                  Spec.DirectoryAction(readRequest,readResponse));
     assert Spec.RuntimeObservationFields(inputs,readCall) by {
       reveal Spec.RuntimeObservationFields();
     }
@@ -283,10 +283,10 @@ module PwdRecoveryCore {
     calls := [readCall];
     var statuses: seq<BenchWorld.IOResult<BenchWorld.FileStatus>> := [];
     if read.Ok? && read.v.DirectoryItem? &&
-      (read.v.inode == 0 || parent.hostKey.device != child.hostKey.device) {
+       (read.v.inode == 0 || parent.hostKey.device != child.hostKey.device) {
       ghost var entryRequest := BenchWorld.DirectoryRequest(BenchWorld.DirectoryEntryLstat,
-        middle.ordinal,inputs.fs,inputs.topology,middle.position,middle.capabilities,
-        0,0,read.v.name,middle.statusOrdinal,middle.cwdHint,inputs.occupiedLegacyHandles);
+                                                            middle.ordinal,inputs.fs,inputs.topology,middle.position,middle.capabilities,
+                                                            0,0,read.v.name,middle.statusOrdinal,middle.cwdHint,inputs.occupiedLegacyHandles);
       var status := io.LstatCwdEntry(read.v.name);
       Model.InputsMatchModel(io);
       assert Model.Inputs(io) == inputs;
@@ -298,9 +298,9 @@ module PwdRecoveryCore {
       }
       NativeProof.ResponseErrnos(entryRequest,entryResponse);
       NativeProof.OperationCapabilities(entryRequest,inputs.observations,entryResponse,
-        after.position,after.capabilities,after.ordinal,after.statusOrdinal,after.cwdHint);
+                                        after.position,after.capabilities,after.ordinal,after.statusOrdinal,after.cwdHint);
       ghost var entryCall := Spec.RuntimeObservation(middle,after,
-        Spec.DirectoryAction(entryRequest,entryResponse));
+                                                     Spec.DirectoryAction(entryRequest,entryResponse));
       assert Spec.RuntimeObservationFields(inputs,entryCall) by {
         reveal Spec.RuntimeObservationFields();
       }
@@ -317,7 +317,7 @@ module PwdRecoveryCore {
   }
 
   method FindParentName(child: BenchWorld.FileStatus, parent: BenchWorld.FileStatus,
-    handle: int, io: BenchIO.IO)
+                        handle: int, io: BenchIO.IO)
     returns (name: string, readErr: int, ghost evidence: Spec.SearchWitness)
     requires handle in io.directoryCapabilities()
     requires io.directoryCapabilities()[handle].anchorFs == io.fs()
@@ -328,7 +328,7 @@ module PwdRecoveryCore {
     ensures readErr >= 0
     ensures Model.Inputs(io) == old(Model.Inputs(io))
     ensures Spec.SearchWitnessFields(old(Model.Inputs(io)),old(Model.State(io)),
-      Model.State(io),child,parent,handle,name,readErr,evidence)
+                                     Model.State(io),child,parent,handle,name,readErr,evidence)
     ensures handle in io.directoryCapabilities()
     ensures io.directoryCapabilities()[handle].anchorFs == io.fs()
     ensures !io.directoryCapabilities()[handle].includeDots
@@ -354,8 +354,8 @@ module PwdRecoveryCore {
       invariant Model.Inputs(io) == inputs
       invariant Spec.EntryWitnessFields(inputs,before,Model.State(io),child,parent,handle,evidence)
       invariant forall i: nat | i < |evidence.entries| ::
-        evidence.entries[i].read.Ok? && evidence.entries[i].read.v.DirectoryItem? &&
-        !Spec.EntryMatchFields(child,parent,evidence.entries[i])
+                  evidence.entries[i].read.Ok? && evidence.entries[i].read.v.DirectoryItem? &&
+                  !Spec.EntryMatchFields(child,parent,evidence.entries[i])
       decreases *
     {
       ghost var middle := Model.State(io);
@@ -365,10 +365,10 @@ module PwdRecoveryCore {
       }
       Trace.AppendEntry(inputs,before,middle,Model.State(io),child,parent,handle,evidence,entry,ghostCalls);
       ghost var next := Spec.SearchWitness(evidence.entries+[entry],evidence.calls+ghostCalls,
-        evidence.boundaries+[|evidence.calls+ghostCalls|]);
+                                           evidence.boundaries+[|evidence.calls+ghostCalls|]);
       assert forall i: nat | i+1 < |next.entries| ::
-        next.entries[i].read.Ok? && next.entries[i].read.v.DirectoryItem? &&
-        !Spec.EntryMatchFields(child,parent,next.entries[i]);
+          next.entries[i].read.Ok? && next.entries[i].read.v.DirectoryItem? &&
+          !Spec.EntryMatchFields(child,parent,next.entries[i]);
       if entry.read.Err? {
         readErr := C.ResultErrno(entry.read);
         Trace.FinishEntrySearch(inputs,before,Model.State(io),child,parent,handle,name,readErr,next);
@@ -393,19 +393,19 @@ module PwdRecoveryCore {
 
   method AccessParent(child: BenchWorld.FileStatus, height: nat, io: BenchIO.IO)
     returns (parent: BenchWorld.FileStatus, handle: int,
-      failure: seq<Spec.RecoveryFailure>, ghost evidence: ParentSpec.AccessEvidence)
+             failure: seq<Spec.RecoveryFailure>, ghost evidence: ParentSpec.AccessEvidence)
     requires height >= 1
     modifies io.directoryStateRegion, io.cwdRegion, io.statusObservationsRegion
     ensures Model.Inputs(io) == old(Model.Inputs(io))
     ensures ParentSpec.AccessOutcomeFields(old(Model.Inputs(io)),old(Model.State(io)),
-      Model.State(io),height,parent,handle,failure,evidence)
+                                           Model.State(io),height,parent,handle,failure,evidence)
     ensures |failure| <= 1
     ensures |failure| == 1 ==> Spec.ValidRecoveryFailure(failure[0])
     ensures |failure| == 0 ==> parent.kind == BenchWorld.DirectoryKind
     ensures |failure| == 0 ==> handle in io.directoryCapabilities() &&
-      io.directoryCapabilities()[handle].anchorFs == io.fs() &&
-      !io.directoryCapabilities()[handle].includeDots &&
-      C.DirectoryCapabilityReadCurrentFields(io.directoryTopology(),io.directoryCapabilities()[handle])
+                               io.directoryCapabilities()[handle].anchorFs == io.fs() &&
+                               !io.directoryCapabilities()[handle].includeDots &&
+                               C.DirectoryCapabilityReadCurrentFields(io.directoryTopology(),io.directoryCapabilities()[handle])
   {
     hide *;
     reveal Spec.ValidRecoveryFailure();
@@ -420,8 +420,8 @@ module PwdRecoveryCore {
     Model.InputsMatchModel(io);
     ghost var openParentBefore := Model.State(io);
     ghost var openParentRequest := BenchWorld.DirectoryRequest(BenchWorld.DirectoryOpenParent,
-      openParentBefore.ordinal,inputs.fs,inputs.topology,openParentBefore.position,
-      openParentBefore.capabilities,0,0,"",openParentBefore.statusOrdinal,openParentBefore.cwdHint,inputs.occupiedLegacyHandles);
+                                                               openParentBefore.ordinal,inputs.fs,inputs.topology,openParentBefore.position,
+                                                               openParentBefore.capabilities,0,0,"",openParentBefore.statusOrdinal,openParentBefore.cwdHint,inputs.occupiedLegacyHandles);
     var openResult := io.OpenParentDirectory();
     Model.InputsMatchModel(io);
     assert Model.Inputs(io) == inputs;
@@ -433,10 +433,10 @@ module PwdRecoveryCore {
     }
     NativeProof.ResponseErrnos(openParentRequest,openParentResponse);
     NativeProof.OperationCapabilities(openParentRequest,inputs.observations,openParentResponse,
-      openParentAfter.position,openParentAfter.capabilities,openParentAfter.ordinal,
-      openParentAfter.statusOrdinal,openParentAfter.cwdHint);
+                                      openParentAfter.position,openParentAfter.capabilities,openParentAfter.ordinal,
+                                      openParentAfter.statusOrdinal,openParentAfter.cwdHint);
     ghost var openParentCall := Spec.RuntimeObservation(openParentBefore,openParentAfter,
-      Spec.DirectoryAction(openParentRequest,openParentResponse));
+                                                        Spec.DirectoryAction(openParentRequest,openParentResponse));
     assert Spec.RuntimeObservationFields(inputs,openParentCall) by {
       reveal Spec.RuntimeObservationFields();
     }
@@ -454,7 +454,7 @@ module PwdRecoveryCore {
         reveal Spec.DirectoryActionFields();
       }
       assert ParentSpec.AccessOutcomeFields(inputs,before,Model.State(io),height,
-        parent,handle,failure,evidence) by {
+                                            parent,handle,failure,evidence) by {
         reveal ParentSpec.AccessOutcomeFields(), ParentSpec.AccessCallBindings();
         reveal ParentSpec.HandleCallFields(), ParentSpec.DescriptorCallFields();
         reveal ParentSpec.UnitCallFields(), ParentSpec.StatusCallFields();
@@ -465,8 +465,8 @@ module PwdRecoveryCore {
     handle := openResult.v;
     ghost var descriptorBefore := Model.State(io);
     ghost var descriptorRequest := BenchWorld.DirectoryRequest(BenchWorld.DirectoryGetDescriptor,
-      descriptorBefore.ordinal,inputs.fs,inputs.topology,descriptorBefore.position,
-      descriptorBefore.capabilities,handle,0,"",descriptorBefore.statusOrdinal,descriptorBefore.cwdHint,inputs.occupiedLegacyHandles);
+                                                               descriptorBefore.ordinal,inputs.fs,inputs.topology,descriptorBefore.position,
+                                                               descriptorBefore.capabilities,handle,0,"",descriptorBefore.statusOrdinal,descriptorBefore.cwdHint,inputs.occupiedLegacyHandles);
     var descriptor := io.GetDirectoryDescriptor(handle);
     Model.InputsMatchModel(io);
     assert Model.Inputs(io) == inputs;
@@ -478,10 +478,10 @@ module PwdRecoveryCore {
     }
     NativeProof.ResponseErrnos(descriptorRequest,descriptorResponse);
     NativeProof.OperationCapabilities(descriptorRequest,inputs.observations,descriptorResponse,
-      descriptorAfter.position,descriptorAfter.capabilities,descriptorAfter.ordinal,
-      descriptorAfter.statusOrdinal,descriptorAfter.cwdHint);
+                                      descriptorAfter.position,descriptorAfter.capabilities,descriptorAfter.ordinal,
+                                      descriptorAfter.statusOrdinal,descriptorAfter.cwdHint);
     ghost var descriptorCall := Spec.RuntimeObservation(descriptorBefore,descriptorAfter,
-      Spec.DirectoryAction(descriptorRequest,descriptorResponse));
+                                                        Spec.DirectoryAction(descriptorRequest,descriptorResponse));
     assert Spec.RuntimeObservationFields(inputs,descriptorCall) by {
       reveal Spec.RuntimeObservationFields();
     }
@@ -490,8 +490,8 @@ module PwdRecoveryCore {
     calls := calls+[descriptorCall];
     ghost var movementBefore := Model.State(io);
     ghost var movementRequest := BenchWorld.DirectoryRequest(if descriptor.Ok? then BenchWorld.DirectoryFchdir else BenchWorld.DirectoryChdirParent,
-      movementBefore.ordinal,inputs.fs,inputs.topology,movementBefore.position,
-      movementBefore.capabilities,0,if descriptor.Ok? then descriptor.v else 0,"",movementBefore.statusOrdinal,movementBefore.cwdHint,inputs.occupiedLegacyHandles);
+                                                             movementBefore.ordinal,inputs.fs,inputs.topology,movementBefore.position,
+                                                             movementBefore.capabilities,0,if descriptor.Ok? then descriptor.v else 0,"",movementBefore.statusOrdinal,movementBefore.cwdHint,inputs.occupiedLegacyHandles);
     var moved: BenchWorld.IOResult<BenchWorld.Unit>;
     if descriptor.Ok? {
       moved := io.FchdirDirectory(descriptor.v);
@@ -508,10 +508,10 @@ module PwdRecoveryCore {
     }
     NativeProof.ResponseErrnos(movementRequest,movementResponse);
     NativeProof.OperationCapabilities(movementRequest,inputs.observations,movementResponse,
-      movementAfter.position,movementAfter.capabilities,movementAfter.ordinal,
-      movementAfter.statusOrdinal,movementAfter.cwdHint);
+                                      movementAfter.position,movementAfter.capabilities,movementAfter.ordinal,
+                                      movementAfter.statusOrdinal,movementAfter.cwdHint);
     ghost var movementCall := Spec.RuntimeObservation(movementBefore,movementAfter,
-      Spec.DirectoryAction(movementRequest,movementResponse));
+                                                      Spec.DirectoryAction(movementRequest,movementResponse));
     assert Spec.RuntimeObservationFields(inputs,movementCall) by {
       reveal Spec.RuntimeObservationFields();
     }
@@ -522,7 +522,7 @@ module PwdRecoveryCore {
       failure := [Spec.ParentChdirFailed(height,C.ResultErrno(moved))];
       evidence := ParentSpec.AccessEvidence(openResult,[descriptor],[moved],[],calls);
       assert ParentSpec.AccessOutcomeFields(inputs,before,Model.State(io),height,
-        parent,handle,failure,evidence) by {
+                                            parent,handle,failure,evidence) by {
         reveal ParentSpec.AccessOutcomeFields(), ParentSpec.AccessCallBindings();
         reveal ParentSpec.HandleCallFields(), ParentSpec.DescriptorCallFields();
         reveal ParentSpec.UnitCallFields(), ParentSpec.StatusCallFields();
@@ -532,8 +532,8 @@ module PwdRecoveryCore {
     }
     ghost var parentStatusBefore := Model.State(io);
     ghost var parentStatusRequest := BenchWorld.DirectoryRequest(if descriptor.Ok? then BenchWorld.DirectoryFstat else BenchWorld.DirectoryCurrentStatus,
-      parentStatusBefore.ordinal,inputs.fs,inputs.topology,parentStatusBefore.position,
-      parentStatusBefore.capabilities,0,if descriptor.Ok? then descriptor.v else 0,"",parentStatusBefore.statusOrdinal,parentStatusBefore.cwdHint,inputs.occupiedLegacyHandles);
+                                                                 parentStatusBefore.ordinal,inputs.fs,inputs.topology,parentStatusBefore.position,
+                                                                 parentStatusBefore.capabilities,0,if descriptor.Ok? then descriptor.v else 0,"",parentStatusBefore.statusOrdinal,parentStatusBefore.cwdHint,inputs.occupiedLegacyHandles);
     var observed: BenchWorld.IOResult<BenchWorld.FileStatus>;
     if descriptor.Ok? {
       observed := io.FstatDirectory(descriptor.v);
@@ -550,10 +550,10 @@ module PwdRecoveryCore {
     }
     NativeProof.ResponseErrnos(parentStatusRequest,parentStatusResponse);
     NativeProof.OperationCapabilities(parentStatusRequest,inputs.observations,parentStatusResponse,
-      parentStatusAfter.position,parentStatusAfter.capabilities,parentStatusAfter.ordinal,
-      parentStatusAfter.statusOrdinal,parentStatusAfter.cwdHint);
+                                      parentStatusAfter.position,parentStatusAfter.capabilities,parentStatusAfter.ordinal,
+                                      parentStatusAfter.statusOrdinal,parentStatusAfter.cwdHint);
     ghost var parentStatusCall := Spec.RuntimeObservation(parentStatusBefore,parentStatusAfter,
-      Spec.DirectoryAction(parentStatusRequest,parentStatusResponse));
+                                                          Spec.DirectoryAction(parentStatusRequest,parentStatusResponse));
     assert Spec.RuntimeObservationFields(inputs,parentStatusCall) by {
       reveal Spec.RuntimeObservationFields();
     }
@@ -567,23 +567,23 @@ module PwdRecoveryCore {
       parent := observed.v;
     }
     evidence := ParentSpec.AccessEvidence(openResult,[descriptor],[moved],[observed],calls);
-      assert ParentSpec.AccessOutcomeFields(inputs,before,Model.State(io),height,
-        parent,handle,failure,evidence) by {
-        reveal ParentSpec.AccessOutcomeFields(), ParentSpec.AccessCallBindings();
-        reveal ParentSpec.HandleCallFields(), ParentSpec.DescriptorCallFields();
-        reveal ParentSpec.UnitCallFields(), ParentSpec.StatusCallFields();
-        reveal Spec.DirectoryActionFields(), Spec.ValidRecoveryFailure();
-      }
+    assert ParentSpec.AccessOutcomeFields(inputs,before,Model.State(io),height,
+                                          parent,handle,failure,evidence) by {
+      reveal ParentSpec.AccessOutcomeFields(), ParentSpec.AccessCallBindings();
+      reveal ParentSpec.HandleCallFields(), ParentSpec.DescriptorCallFields();
+      reveal ParentSpec.UnitCallFields(), ParentSpec.StatusCallFields();
+      reveal Spec.DirectoryActionFields(), Spec.ValidRecoveryFailure();
+    }
   }
 
   method AscendAndFind(child: BenchWorld.FileStatus, height: nat, io: BenchIO.IO)
     returns (parent: BenchWorld.FileStatus, name: string, failure: seq<Spec.RecoveryFailure>,
-      ghost evidence: ParentSpec.ParentEvidence)
+             ghost evidence: ParentSpec.ParentEvidence)
     requires height >= 1
     modifies io.directoryStateRegion, io.cwdRegion, io.statusObservationsRegion
     ensures Model.Inputs(io) == old(Model.Inputs(io))
     ensures ParentSpec.ParentAttemptFields(old(Model.Inputs(io)),old(Model.State(io)),
-      Model.State(io),child,height,parent,name,failure,evidence)
+                                           Model.State(io),child,height,parent,name,failure,evidence)
     ensures |failure| <= 1
     ensures |failure| == 1 ==> Spec.ValidRecoveryFailure(failure[0])
     ensures |failure| == 0 ==> BenchWorld.InodeChildNameValid(name)
@@ -601,7 +601,7 @@ module PwdRecoveryCore {
     if |failure| != 0 {
       evidence := ParentSpec.ParentEvidence(access,[],[],access.calls);
       assert ParentSpec.ParentAttemptFields(inputs,before,Model.State(io),child,height,
-        parent,name,failure,evidence) by {
+                                            parent,name,failure,evidence) by {
         reveal ParentSpec.ParentAttemptFields(), ParentSpec.AccessOutcomeFields();
         reveal ParentSpec.AccessCallBindings();
       }
@@ -622,8 +622,8 @@ module PwdRecoveryCore {
     Model.InputsMatchModel(io);
     ghost var closeParentBefore := Model.State(io);
     ghost var closeParentRequest := BenchWorld.DirectoryRequest(BenchWorld.DirectoryClose,
-      closeParentBefore.ordinal,inputs.fs,inputs.topology,closeParentBefore.position,
-      closeParentBefore.capabilities,handle,0,"",closeParentBefore.statusOrdinal,closeParentBefore.cwdHint,inputs.occupiedLegacyHandles);
+                                                                closeParentBefore.ordinal,inputs.fs,inputs.topology,closeParentBefore.position,
+                                                                closeParentBefore.capabilities,handle,0,"",closeParentBefore.statusOrdinal,closeParentBefore.cwdHint,inputs.occupiedLegacyHandles);
     var closed := io.CloseDirectoryCapability(handle);
     Model.InputsMatchModel(io);
     assert Model.Inputs(io) == inputs;
@@ -635,10 +635,10 @@ module PwdRecoveryCore {
     }
     NativeProof.ResponseErrnos(closeParentRequest,closeParentResponse);
     NativeProof.OperationCapabilities(closeParentRequest,inputs.observations,closeParentResponse,
-      closeParentAfter.position,closeParentAfter.capabilities,closeParentAfter.ordinal,
-      closeParentAfter.statusOrdinal,closeParentAfter.cwdHint);
+                                      closeParentAfter.position,closeParentAfter.capabilities,closeParentAfter.ordinal,
+                                      closeParentAfter.statusOrdinal,closeParentAfter.cwdHint);
     ghost var closeParentCall := Spec.RuntimeObservation(closeParentBefore,closeParentAfter,
-      Spec.DirectoryAction(closeParentRequest,closeParentResponse));
+                                                         Spec.DirectoryAction(closeParentRequest,closeParentResponse));
     assert Spec.RuntimeObservationFields(inputs,closeParentCall) by {
       reveal Spec.RuntimeObservationFields();
     }
@@ -648,7 +648,7 @@ module PwdRecoveryCore {
     failure := ChooseParentCompletion(height,readErr,C.ResultErrno(closed),name != "");
     evidence := ParentSpec.ParentEvidence(access,[search],[closed],calls);
     assert ParentSpec.ParentAttemptFields(inputs,before,Model.State(io),child,height,
-      parent,name,failure,evidence) by {
+                                          parent,name,failure,evidence) by {
       reveal ParentSpec.ParentAttemptFields(), ParentSpec.UnitCallFields();
       reveal ParentSpec.AccessOutcomeFields(), ParentSpec.AccessCallBindings();
       reveal Spec.RuntimeTraceFields(), Spec.DirectoryActionFields();
@@ -661,7 +661,7 @@ module PwdRecoveryCore {
     ensures Model.Inputs(io) == old(Model.Inputs(io))
     ensures Spec.DirectoryOutcomeFields(outcome)
     ensures exists evidence: PhysicalSpec.PhysicalEvidence ::
-      PhysicalSpec.PhysicalSelectionFields(old(Model.Inputs(io)),old(Model.State(io)),Model.State(io),outcome,evidence)
+              PhysicalSpec.PhysicalSelectionFields(old(Model.Inputs(io)),old(Model.State(io)),Model.State(io),outcome,evidence)
     decreases *
   {
     hide *;
@@ -673,8 +673,8 @@ module PwdRecoveryCore {
     Model.InputsMatchModel(io);
     ghost var directBefore := Model.State(io);
     ghost var directRequest := BenchWorld.DirectoryRequest(BenchWorld.DirectoryGetCwd,
-      directBefore.ordinal,inputs.fs,inputs.topology,directBefore.position,
-      directBefore.capabilities,0,0,"",directBefore.statusOrdinal,directBefore.cwdHint,inputs.occupiedLegacyHandles);
+                                                           directBefore.ordinal,inputs.fs,inputs.topology,directBefore.position,
+                                                           directBefore.capabilities,0,0,"",directBefore.statusOrdinal,directBefore.cwdHint,inputs.occupiedLegacyHandles);
     var direct := io.GetCwd();
     Model.InputsMatchModel(io);
     assert Model.Inputs(io) == inputs;
@@ -686,7 +686,7 @@ module PwdRecoveryCore {
     }
     NativeProof.ResponseErrnos(directRequest,directResponse);
     ghost var directCall := Spec.RuntimeObservation(directBefore,directAfter,
-      Spec.DirectoryAction(directRequest,directResponse));
+                                                    Spec.DirectoryAction(directRequest,directResponse));
     assert Spec.RuntimeObservationFields(inputs,directCall) by {
       reveal Spec.RuntimeObservationFields();
     }
@@ -720,9 +720,9 @@ module PwdRecoveryCore {
     var root := io.GetFileStatus("/",false);
     ghost var rootAfter := Model.State(io);
     NativeProof.RootStatusKind(inputs.times,inputs.failures,rootBefore.statusOrdinal,
-      rootAfter.statusOrdinal,inputs.fs,root);
+                               rootAfter.statusOrdinal,inputs.fs,root);
     ghost var rootCall := Spec.RuntimeObservation(rootBefore,rootAfter,
-      Spec.AbsoluteStatusAction("/",false,root));
+                                                  Spec.AbsoluteStatusAction("/",false,root));
     assert Spec.RuntimeObservationFields(inputs,rootCall) by {
       reveal Spec.RuntimeObservationFields(), BenchWorld.IsAbsolutePath();
     }
@@ -741,8 +741,8 @@ module PwdRecoveryCore {
     }
     ghost var currentBefore := Model.State(io);
     ghost var currentRequest := BenchWorld.DirectoryRequest(BenchWorld.DirectoryCurrentStatus,
-      currentBefore.ordinal,inputs.fs,inputs.topology,currentBefore.position,
-      currentBefore.capabilities,0,0,"",currentBefore.statusOrdinal,currentBefore.cwdHint,inputs.occupiedLegacyHandles);
+                                                            currentBefore.ordinal,inputs.fs,inputs.topology,currentBefore.position,
+                                                            currentBefore.capabilities,0,0,"",currentBefore.statusOrdinal,currentBefore.cwdHint,inputs.occupiedLegacyHandles);
     var current := io.GetCwdDirectoryIdentity();
     Model.InputsMatchModel(io);
     assert Model.Inputs(io) == inputs;
@@ -754,7 +754,7 @@ module PwdRecoveryCore {
     }
     NativeProof.ResponseErrnos(currentRequest,currentResponse);
     ghost var currentCall := Spec.RuntimeObservation(currentBefore,currentAfter,
-      Spec.DirectoryAction(currentRequest,currentResponse));
+                                                     Spec.DirectoryAction(currentRequest,currentResponse));
     assert Spec.RuntimeObservationFields(inputs,currentCall) by {
       reveal Spec.RuntimeObservationFields();
     }
@@ -800,7 +800,7 @@ module PwdRecoveryCore {
       invariant directory == "" || BenchWorld.IsAbsolutePath(directory)
       invariant PhysicalSpec.PathPartitionFields(names,directory,textBoundaries)
       invariant PhysicalSpec.StepsWitnessFields(inputs,stepsBefore,Model.State(io),
-        root.v,current.v,steps,stepCalls,boundaries)
+                                                root.v,current.v,steps,stepCalls,boundaries)
       invariant Spec.RuntimeTraceFields(inputs,before,Model.State(io),initialCalls+stepCalls)
       decreases *
     {
@@ -809,7 +809,7 @@ module PwdRecoveryCore {
       ghost var after := Model.State(io);
       ghost var step := PhysicalSpec.ParentStep(parent,name,failure,parentEvidence);
       PhysicalProof.AppendStep(inputs,stepsBefore,middle,after,root.v,current.v,
-        steps,stepCalls,boundaries,step);
+                               steps,stepCalls,boundaries,step);
       assert Spec.RuntimeTraceFields(inputs,middle,after,parentEvidence.calls) by {
         reveal ParentSpec.ParentAttemptFields();
       }
@@ -833,7 +833,7 @@ module PwdRecoveryCore {
       PhysicalProof.PathPartitionSnoc(names,directory,textBoundaries,name);
       ghost var prefixLength := |"/"+name|;
       textBoundaries := [0]+seq(|textBoundaries|,
-        i=>if 0 <= i < |textBoundaries| then prefixLength+textBoundaries[i] else 0);
+      i=>if 0 <= i < |textBoundaries| then prefixLength+textBoundaries[i] else 0);
       names := names+[name];
       directory := "/"+name+directory;
       PhysicalProof.PartitionIsAbsolute(names,directory,textBoundaries);
@@ -853,7 +853,7 @@ module PwdRecoveryCore {
     requires Spec.DirectoryOutcomeFields(outcome)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Emission.PhysicalEmissionFields(outcome,old(io.stdout()),old(io.stderr()),
-      io.stdout(),io.stderr(),io.trustedStreams(),exit)
+                                            io.stdout(),io.stderr(),io.trustedStreams(),exit)
   {
     var output: BenchWorld.Bytes := [];
     var diagnostics: BenchWorld.Bytes := [];

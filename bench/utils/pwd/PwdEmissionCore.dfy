@@ -13,7 +13,7 @@ module PwdEmissionCore {
     returns (exit: int)
     modifies io.stdoutRegion,io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()),old(io.stderr()),io.stdout(),io.stderr(),
-      io.trustedStreams(),output,diagnostics,normalExit,exit)
+                                io.trustedStreams(),output,diagnostics,normalExit,exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -28,7 +28,7 @@ module PwdEmissionCore {
       finalDiagnostics := diagnostics+Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Recovery.WriteErrorText(C.CLocaleErrnoTextResult(outErr)));
+                                              else Recovery.WriteErrorText(C.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -36,10 +36,10 @@ module PwdEmissionCore {
       errCommitted := C.WriteResultCommitted(result);
       errErr := C.ResultErrno(result);
       assert C.WriteStderrSpec(old(io.stderr()),io.trustedStreams(),io.stderr(),
-        finalDiagnostics,errCommitted,errErr);
+                               finalDiagnostics,errCommitted,errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()),old(io.stderr()),io.stdout(),io.stderr(),
-      io.trustedStreams(),output,diagnostics,normalExit,exit,committed,outErr,errCommitted,errErr);
+                                      io.trustedStreams(),output,diagnostics,normalExit,exit,committed,outErr,errCommitted,errErr);
   }
 }

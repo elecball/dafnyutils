@@ -144,14 +144,14 @@ module TrProof {
           inputCuts[i + 1] == Spec.AtomNext(text, inputCuts[i]) &&
           outputCuts[i] <= outputCuts[i + 1] <= |piece + rest| &&
           (piece + rest)[outputCuts[i]..outputCuts[i + 1]] ==
-            Spec.WarningAtSpec(text, inputCuts[i]) by {
+          Spec.WarningAtSpec(text, inputCuts[i]) by {
       forall i {:trigger inputCuts[i]} |
-        0 <= i && i + 1 < |inputCuts|
+    0 <= i && i + 1 < |inputCuts|
         ensures inputCuts[i] < inputCuts[i + 1] <= |text| &&
                 inputCuts[i + 1] == Spec.AtomNext(text, inputCuts[i]) &&
                 outputCuts[i] <= outputCuts[i + 1] <= |piece + rest| &&
                 (piece + rest)[outputCuts[i]..outputCuts[i + 1]] ==
-                  Spec.WarningAtSpec(text, inputCuts[i])
+                Spec.WarningAtSpec(text, inputCuts[i])
       {
         if i == 0 {
           ShiftIndicesIndex(tailOutputCuts, |piece|, 0);
@@ -181,7 +181,7 @@ module TrProof {
     if start == |text| {
       assert Core.WarningBytesFrom(text, start) == [];
       assert Spec.WarningPartitionFrom(
-        text, start, [], [start], [0]);
+          text, start, [], [start], [0]);
     } else {
       var next := Core.AtomAt(text, start).next;
       AtomNextEq(text, start);
@@ -195,12 +195,12 @@ module TrProof {
         Core.WarningBytesFrom(text, next),
         tailInputCuts, tailOutputCuts);
       assert Core.WarningBytesFrom(text, start) ==
-        Spec.WarningAtSpec(text, start) + Core.WarningBytesFrom(text, next);
+             Spec.WarningAtSpec(text, start) + Core.WarningBytesFrom(text, next);
       assert Spec.WarningPartitionFrom(
-        text, start, Core.WarningBytesFrom(text, start),
-        [start] + tailInputCuts,
-        [0] + ShiftIndices(tailOutputCuts,
-          |Spec.WarningAtSpec(text, start)|));
+          text, start, Core.WarningBytesFrom(text, start),
+          [start] + tailInputCuts,
+          [0] + ShiftIndices(tailOutputCuts,
+                             |Spec.WarningAtSpec(text, start)|));
     }
   }
 
@@ -217,7 +217,7 @@ module TrProof {
   // Core keeps its index recursion, so each bridge carries the suffix
   // generalisation the declarative specification needs.
   lemma {:induction false} ContainsPairFromEq(
-      text: string, i: nat, first: char, second: char)
+    text: string, i: nat, first: char, second: char)
     requires i <= |text|
     ensures Core.ContainsPairFrom(text, i, first, second) ==
             Spec.ContainsPair(text[i..], first, second)
@@ -584,13 +584,13 @@ module TrProof {
               var piece := Core.RangeChars(atom.bytes[0], end.bytes[0]);
               RangeCharsSatisfiesExpansion(atom.bytes[0], end.bytes[0]);
               reveal Spec.SetUnitRelation();
-              assert Spec.SetUnitRelation(
-                  text, start, next, piece
-                );
-              PrependSetUnitPartition(
-                text, start, next, piece, rest,
-                tailInputCuts, tailOutputCuts
-              );
+                     assert Spec.SetUnitRelation(
+                         text, start, next, piece
+                       );
+                     PrependSetUnitPartition(
+                       text, start, next, piece, rest,
+                       tailInputCuts, tailOutputCuts
+                     );
             case Err(_) =>
           }
         } else {
@@ -605,11 +605,11 @@ module TrProof {
               );
             var piece := atom.bytes;
             reveal Spec.SetUnitRelation();
-            assert Spec.SetUnitRelation(text, start, next, piece);
-            PrependSetUnitPartition(
-              text, start, next, piece, rest,
-              tailInputCuts, tailOutputCuts
-            );
+                   assert Spec.SetUnitRelation(text, start, next, piece);
+                   PrependSetUnitPartition(
+                     text, start, next, piece, rest,
+                     tailInputCuts, tailOutputCuts
+                   );
           case Err(_) =>
         }
       }
@@ -809,17 +809,17 @@ module TrProof {
       DecodedBytesMatchesCore(raw.operands[0]);
       CoreWarningSatisfiesRelation(raw.operands[0], 0);
       assert Spec.WarningBytesRelation(
-        raw.operands[0], Core.WarningBytesFrom(raw.operands[0], 0));
+          raw.operands[0], Core.WarningBytesFrom(raw.operands[0], 0));
     }
     if |raw.operands| > 1 {
       CoreDecodesIndex(raw.operands, 1);
       DecodedBytesMatchesCore(raw.operands[1]);
       CoreWarningSatisfiesRelation(raw.operands[1], 0);
       assert Spec.WarningBytesRelation(
-        raw.operands[1], Core.WarningBytesFrom(raw.operands[1], 0));
+          raw.operands[1], Core.WarningBytesFrom(raw.operands[1], 0));
     }
     assert Spec.CommandWarningsRelation(
-      raw, decoded, Core.Command(raw).warnings);
+        raw, decoded, Core.Command(raw).warnings);
     assert (exists operand ::
               Spec.FirstUnsupportedOperandRelation(
                 raw.operands, decoded, operand
@@ -1484,6 +1484,6 @@ module TrProof {
       Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
                           io.trustedStreams(), output, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + output, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + output, old(io.stderr()) + diagnostics);
   }
 }

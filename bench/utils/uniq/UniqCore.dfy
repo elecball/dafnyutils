@@ -574,10 +574,10 @@ module UniqCore {
   ) returns (
       exit: int,
       ghost witnessResult: BenchWorld.IOResult<BenchWorld.Bytes>,
-                                             ghost stdoutPart: BenchWorld.Bytes,
-                                             ghost stderrPart: BenchWorld.Bytes,
-                                             ghost hadError: bool
-    , plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+                                               ghost stdoutPart: BenchWorld.Bytes,
+                                               ghost stderrPart: BenchWorld.Bytes,
+                                               ghost hadError: bool
+                                              , plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
     modifies io.stdinRegion
     ensures PreparedSummary(
               raw, io, exit, [witnessResult], stdoutPart, stderrPart, hadError
@@ -681,15 +681,15 @@ module UniqCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit, readResults, stdoutPart, stderrPart, hadError,
-        out, diagnostics) &&
+                      out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var outErr := 0;
     if out != [] {
@@ -702,13 +702,13 @@ module UniqCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
       errErr := StreamContract.ResultErrno(diagnosed);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }
@@ -716,9 +716,9 @@ module UniqCore {
   method RunCore(raw: UniqSchema.UniqCmdRaw, io: BenchIO.IO) returns (
       exit: int,
       ghost witnessResult: BenchWorld.IOResult<BenchWorld.Bytes>,
-                                             ghost stdoutPart: BenchWorld.Bytes,
-                                             ghost stderrPart: BenchWorld.Bytes,
-                                             ghost hadError: bool
+                                               ghost stdoutPart: BenchWorld.Bytes,
+                                               ghost stderrPart: BenchWorld.Bytes,
+                                               ghost hadError: bool
     )
     modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
     ensures CoreSummary(
@@ -732,16 +732,16 @@ module UniqCore {
     normalExit, witnessResult, stdoutPart, stderrPart, hadError, out, diagnostics := Prepare(raw, io);
 
     assert PreparedSummary(
-              raw, io, normalExit, [witnessResult], stdoutPart, stderrPart, hadError
-            , out, diagnostics);
+        raw, io, normalExit, [witnessResult], stdoutPart, stderrPart, hadError
+      , out, diagnostics);
     if Spec.Emits(raw) {
       exit := Flush(io, out, diagnostics, normalExit);
     } else {
       exit := normalExit;
     }
     assert PreparedSummary(
-              raw, io, normalExit, [witnessResult], stdoutPart, stderrPart, hadError
-            , out, diagnostics);
+        raw, io, normalExit, [witnessResult], stdoutPart, stderrPart, hadError
+      , out, diagnostics);
     assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

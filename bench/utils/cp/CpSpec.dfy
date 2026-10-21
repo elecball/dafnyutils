@@ -715,7 +715,7 @@ module CpSpec {
   }
 
   datatype SameFileObservation = SameFileObservation(sourceEntry: Metadata, targetEntry: Metadata,
-                                                    sourceFollow: Metadata, targetFollow: Metadata, sameEntry: bool)
+                                                     sourceFollow: Metadata, targetFollow: Metadata, sameEntry: bool)
 
   ghost predicate SameFileDecisionFields(raw: S.CpCmdRaw, source: Metadata, target: Metadata,
                                          observed: SameFileObservation, allowed: bool, returnNow: bool) {
@@ -742,8 +742,8 @@ module CpSpec {
   }
 
   opaque ghost predicate SameFileObservationFields(raw: S.CpCmdRaw, fs: BW.FileSystem, provider: FilesystemProvider,
-                                                  source: string, target: string, sm: Metadata, tm: Metadata,
-                                                  observed: SameFileObservation) {
+                                                   source: string, target: string, sm: Metadata, tm: Metadata,
+                                                   observed: SameFileObservation) {
     var sl,tl,sf,tf,sameEntry := observed.sourceEntry,observed.targetEntry,observed.sourceFollow,observed.targetFollow,observed.sameEntry;
     var same := Identity(sm) == Identity(tm);
     var sameLink := Identity(sl) == Identity(tl);
@@ -751,8 +751,8 @@ module CpSpec {
     var backup := BackupMode(raw) != "off";
     var active := !(same && raw.policy.hard) && !(raw.policy.dereference && (!same || !tl.ok || !sl.ok));
     var askEntry := active && ((!raw.policy.dereference && bothLinks) ||
-                    (!(raw.policy.dereference && bothLinks && raw.policy.remove) &&
-                     ((backup && sameLink) || (!backup && raw.policy.remove && !tl.value.isSymlink && sameLink && tl.value.linkCount > 1))));
+                               (!(raw.policy.dereference && bothLinks && raw.policy.remove) &&
+                                ((backup && sameLink) || (!backup && raw.policy.remove && !tl.value.isSymlink && sameLink && tl.value.linkCount > 1))));
     var askFollow := active && !raw.policy.dereference && !bothLinks && !backup &&
                      !(raw.policy.remove && (tl.value.isSymlink || (sameLink && tl.value.linkCount > 1 && !sameEntry))) &&
                      !(!sl.value.isSymlink && !tl.value.isSymlink) && !(raw.policy.symbolic && tl.value.isSymlink);
@@ -1242,7 +1242,7 @@ module CpSpec {
   }
 
   datatype LiveChildObservation = LiveChildObservation(index: int, metadata: Metadata, mode: bv32, linkTarget: string,
-    modeOK: bool, modeErr: int, linkResult: BW.IOResult<string>)
+                                                       modeOK: bool, modeErr: int, linkResult: BW.IOResult<string>)
 
   opaque ghost predicate LiveChildFields(raw: S.CpCmdRaw, fs: BW.FileSystem, provider: FilesystemProvider,
                                          original: seq<SourceTree>, path: string, value: SourceTree, stopped: bool, observed: LiveChildObservation) {
@@ -1258,7 +1258,7 @@ module CpSpec {
                 (if observed.metadata.value.isSymlink && !raw.policy.hard && !raw.policy.symbolic then
                    C.ReadLinkSpec(fs,provider.failures,path,observed.linkResult) &&
                    (if observed.linkResult.Ok? then observed.linkTarget == observed.linkResult.v &&
-                     value == FileSource(path,observed.metadata,observed.mode,observed.linkTarget)
+                                                    value == FileSource(path,observed.metadata,observed.mode,observed.linkTarget)
                     else value == LinkFailureSource(path,observed.metadata,observed.mode,observed.linkResult.e))
                  else observed.linkTarget == path && value == FileSource(path,observed.metadata,observed.mode,path)))) &&
     (stopped || TreeHeight(value) <= ForestHeight(original))
@@ -1314,7 +1314,7 @@ module CpSpec {
       C.OpenDirSpec(fs, initial, provider.failures, openedHandles, path, false, openOK, handle, openErr) &&
       (if !openOK then entries == [] && err == openErr
        else exists states: seq<map<int,BW.DirHandleState>>, kinds: seq<BW.DirectoryEntryKind>,
-         readErr: int, closed: map<int,BW.DirHandleState>, closeOK: bool, closeErr: int ::
+              readErr: int, closed: map<int,BW.DirHandleState>, closeOK: bool, closeErr: int ::
               |states| == |entries| + 1 && |kinds| == |entries| && states[0] == openedHandles &&
               (forall i | 0 <= i < |entries| ::
                  C.ReadDirSpec(fs, states[i], provider.failures, states[i+1], handle, true, entries[i].name, kinds[i], 0) &&
@@ -1342,12 +1342,12 @@ module CpSpec {
     match tree
     case MissingSource(_, sm) => !sm.ok
     case ModeFailureSource(path, sm, err) => sm.ok &&
-      !(sm.value.isDir && (!raw.policy.recursive || Identity(sm) in ancestors)) &&
-      C.GetFileModeSpec(fs, provider.failures, path, raw.policy.dereference, false, 0 as bv32, err)
+                                             !(sm.value.isDir && (!raw.policy.recursive || Identity(sm) in ancestors)) &&
+                                             C.GetFileModeSpec(fs, provider.failures, path, raw.policy.dereference, false, 0 as bv32, err)
     case LinkFailureSource(path, sm, mode, err) => sm.ok && !sm.value.isDir &&
-      sm.value.isSymlink && !raw.policy.hard && !raw.policy.symbolic &&
-      C.GetFileModeSpec(fs, provider.failures, path, raw.policy.dereference, true, mode, 0) &&
-      C.ReadLinkSpec(fs, provider.failures, path, Results.Err(err))
+                                                   sm.value.isSymlink && !raw.policy.hard && !raw.policy.symbolic &&
+                                                   C.GetFileModeSpec(fs, provider.failures, path, raw.policy.dereference, true, mode, 0) &&
+                                                   C.ReadLinkSpec(fs, provider.failures, path, Results.Err(err))
     case OmittedSource(_, sm) => sm.ok && sm.value.isDir && !raw.policy.recursive
     case CyclicSource(_, sm) => sm.ok && sm.value.isDir && raw.policy.recursive && Identity(sm) in ancestors
     case FileSource(path, sm, mode, linkTarget) => sm.ok && !sm.value.isDir &&
@@ -1403,10 +1403,10 @@ module CpSpec {
   datatype FileTreeObservation = FileTreeObservation(metadata: Metadata, allowed: bool, returnNow: bool)
 
   ghost predicate FileTreeFields(raw: S.CpCmdRaw, tree: SourceTree, target: string,
-      before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
-      credentials: BW.ProcessCredentials, provider: FilesystemProvider, streams: StreamProvider,
-      out: BW.Bytes, err: BW.Bytes, ok: bool, linkState: (LinkMap,LinkMap,bool), record: CopyReceipt,
-      observed: FileTreeObservation)
+                                 before: BW.FileSystem, after: BW.FileSystem, props: map<string,string>, now: int,
+                                 credentials: BW.ProcessCredentials, provider: FilesystemProvider, streams: StreamProvider,
+                                 out: BW.Bytes, err: BW.Bytes, ok: bool, linkState: (LinkMap,LinkMap,bool), record: CopyReceipt,
+                                 observed: FileTreeObservation)
     requires tree.FileSource?
   {
     var tm, allowed, returnNow := observed.metadata, observed.allowed, observed.returnNow;
@@ -1437,7 +1437,7 @@ module CpSpec {
     case FileSource(source, sm, mode, linkTarget) =>
       exists observed: FileTreeObservation ::
         FileTreeFields(raw,tree,target,before,after,props,now,credentials,provider,streams,
-          out,err,ok,linkState,record,observed)
+                       out,err,ok,linkState,record,observed)
     case DirectorySource(source,sm,mode,children,scanErr) =>
       exists tm: Metadata :: MetadataFields(before,provider,target,raw.policy.keepDirectorySymlink,tm) &&
                              (if tm.ok && Identity(sm) == Identity(tm) then record == CopyReceipt(NoDestinationRecord,false,false) && linkState.1 == linkState.0 && after == before && out == [] && err == SameFile(Q(source),Q(target)) && !ok

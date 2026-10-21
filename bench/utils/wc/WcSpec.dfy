@@ -220,7 +220,7 @@ module WcSpec {
     preStdin: BenchWorld.Bytes,
     i: nat,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
+                                preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
   )
     requires i < |cmd.inputs|
   {
@@ -234,9 +234,9 @@ module WcSpec {
   ghost predicate InputStepRelation(
     input: WcSchema.Input,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-                              entries: seq<Entry>,
-                              errorOutput: BenchWorld.Bytes,
-                              hadError: bool
+                                entries: seq<Entry>,
+                                errorOutput: BenchWorld.Bytes,
+                                hadError: bool
   )
   {
     match input
@@ -300,7 +300,7 @@ module WcSpec {
     |states| == |cmd.inputs| + 1 && states[0] == before && states[|cmd.inputs|] == after &&
     forall i: nat | i < |cmd.inputs| ::
       states[i + 1] == (if cmd.inputs[i].Stdin? then
-        IOContract.ObservedReadStdinRemainingFields(states[i], observations) else states[i])
+                          IOContract.ObservedReadStdinRemainingFields(states[i], observations) else states[i])
   }
 
   ghost predicate InputObservationRelation(
@@ -363,28 +363,28 @@ module WcSpec {
   )
   {
     exists stdinStates: seq<BenchWorld.Bytes> ::
-    StdinTraceRelation(cmd, preStdin, postStdin, preStreams, stdinStates) &&
-    |observations| == |cmd.inputs| &&
-    (forall i: nat | i < |observations| ::
-       InputObservationRelation(
-         cmd,
-         preFs,
-         stdinStates[i],
-         i,
-         observations[i],
-         preStreams
-       )) &&
-    FragmentsConcatenate(
-      ObservationEntryFragments(observations),
-      entries,
-      entryCuts
-    ) &&
-    FragmentsConcatenate(
-      ObservationErrorFragments(observations),
-      errorOutput,
-      errorCuts
-    ) &&
-    hadError == HasFailedObservation(observations)
+      StdinTraceRelation(cmd, preStdin, postStdin, preStreams, stdinStates) &&
+      |observations| == |cmd.inputs| &&
+      (forall i: nat | i < |observations| ::
+         InputObservationRelation(
+           cmd,
+           preFs,
+           stdinStates[i],
+           i,
+           observations[i],
+           preStreams
+         )) &&
+      FragmentsConcatenate(
+        ObservationEntryFragments(observations),
+        entries,
+        entryCuts
+      ) &&
+      FragmentsConcatenate(
+        ObservationErrorFragments(observations),
+        errorOutput,
+        errorCuts
+      ) &&
+      hadError == HasFailedObservation(observations)
   }
 
   ghost predicate InputTraceRelation(
@@ -574,7 +574,7 @@ module WcSpec {
       line ==
       valuesOutput +
       (if name == "" then [] else
-        [' '] + (if '\n' in name then SE.SpecQuoteFBytes(Utf8.Encode(name)) else Utf8.Encode(name))) +
+       [' '] + (if '\n' in name then SE.SpecQuoteFBytes(Utf8.Encode(name)) else Utf8.Encode(name))) +
       ['\n']
   }
 
@@ -731,28 +731,28 @@ module WcSpec {
   )
   {
     var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
-      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+                        else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
     stdoutResult.StreamWriteResult? &&
     var errors := diagnostics + (if stdoutResult.err == 0 then [] else
-      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+                                 StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
     var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
-      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+                        else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
     stderrResult.StreamWriteResult? &&
     (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
-      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+       beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
     (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
-      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+       beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
     exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
   }
 
   twostate predicate Emission(raw: WcSchema.WcCmdRaw, io: BenchIO.IO,
-    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
-    normalExit: int, exit: int)
+                              out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+                              normalExit: int, exit: int)
     reads io.stdoutRegion, io.stderrRegion
   {
     if Emits(raw) then
       EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                 io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
     else
       io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
       exit == normalExit
@@ -763,7 +763,7 @@ module WcSpec {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSpec(raw, io, normalExit,
-        out, diagnostics) &&
+                   out, diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

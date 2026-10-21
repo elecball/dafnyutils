@@ -15,7 +15,7 @@ module PwdRuntimeModel {
     ensures inputs.occupiedLegacyHandles == io.dirHandles().Keys
   {
     Spec.RuntimeInputs(io.fs(),io.directoryTopology(),io.directoryObservations(),
-      io.statusObservations(),io.trustedNativeFailures(),io.dirHandles().Keys)
+                       io.statusObservations(),io.trustedNativeFailures(),io.dirHandles().Keys)
   }
 
   ghost function State(io: BenchIO.IO): (state: Spec.RuntimeState)
@@ -27,7 +27,7 @@ module PwdRuntimeModel {
     ensures state.cwdHint == io.cwd()
   {
     Spec.RuntimeState(io.directoryPosition(),io.directoryCapabilities(),
-      io.directoryOrdinal(),io.statusCursor(),io.cwd())
+                      io.directoryOrdinal(),io.statusCursor(),io.cwd())
   }
 
   lemma InputsMatchModel(io: BenchIO.IO)

@@ -463,7 +463,7 @@ module EchoProof {
       assert 0 < |inputCuts|;
       assert inputCuts[|inputCuts| - 1] <= |text|;
       assert !Core.RenderEscaped(text, start).stopped ==>
-        inputCuts[|inputCuts| - 1] == |text|;
+          inputCuts[|inputCuts| - 1] == |text|;
       assert Core.RenderEscaped(text, start).stopped ==> 1 < |inputCuts|;
       assert Spec.EscapedPartition(
           text,
@@ -942,9 +942,9 @@ module EchoProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                           old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

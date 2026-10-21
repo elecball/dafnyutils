@@ -109,7 +109,7 @@ module DirnameSpec {
     cuts[0] == 0 &&
     cuts[|paths|] == |out| &&
     (forall i {:trigger cuts[i + 1]} :: 0 <= i < |paths| ==>
-                                                   cuts[i] <= cuts[i + 1] <= |out|) &&
+                                          cuts[i] <= cuts[i + 1] <= |out|) &&
     (forall i {:trigger out[cuts[i]..cuts[i + 1]]} ::
        0 <= i < |paths| &&
        cuts[i] <= cuts[i + 1] <= |out| ==>
@@ -223,28 +223,28 @@ module DirnameSpec {
   )
   {
     var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
-      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+                        else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
     stdoutResult.StreamWriteResult? &&
     var errors := diagnostics + (if stdoutResult.err == 0 then [] else
-      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+                                 StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
     var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
-      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+                        else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
     stderrResult.StreamWriteResult? &&
     (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
-      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+       beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
     (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
-      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+       beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
     exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
   }
 
   twostate predicate Emission(raw: Schema.DirnameCmdRaw, io: BenchIO.IO,
-    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
-    normalExit: int, exit: int)
+                              out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+                              normalExit: int, exit: int)
     reads io.stdoutRegion, io.stderrRegion
   {
     if Emits(raw) then
       EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                 io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
     else
       io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
       exit == normalExit
@@ -255,7 +255,7 @@ module DirnameSpec {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSpec(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                   old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

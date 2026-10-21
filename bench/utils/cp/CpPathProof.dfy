@@ -16,8 +16,8 @@ module CpPathProof {
       assert Paths.SlashesOnly(path);
     } else {
       var end :| 0 < end <= |path| && trimmed == path[..end] &&
-                  path[end-1] != '/' &&
-                  forall i :: end <= i < |path| ==> path[i] == '/';
+                 path[end-1] != '/' &&
+                 forall i :: end <= i < |path| ==> path[i] == '/';
       var trailing := path[end..];
       assert Paths.PathWithoutTrailingSlashes(path,trimmed,trailing);
     }
@@ -159,7 +159,7 @@ module CpPathProof {
 
   lemma ParentOffsetsWitness(path: string, offsets: seq<nat>)
     requires forall i | 0 <= i < |offsets| ::
-       0 < offsets[i] < |path| && path[offsets[i]] == '/' && path[offsets[i]-1] != '/'
+               0 < offsets[i] < |path| && path[offsets[i]] == '/' && path[offsets[i]-1] != '/'
     requires forall i,j | 0 <= i < j < |offsets| :: offsets[i] < offsets[j]
     requires forall index | 0 < index < |path| && path[index] == '/' && path[index-1] != '/' :: index in offsets
     ensures Spec.ParentOffsets(path,offsets)

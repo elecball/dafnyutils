@@ -9,7 +9,7 @@ module PwdProof {
   import Trace = PwdRecoveryTraceProof
 
   lemma EmptySteps(inputs: Recovery.RuntimeInputs, before: Recovery.RuntimeState,
-    root: W.FileStatus, initial: W.FileStatus)
+                   root: W.FileStatus, initial: W.FileStatus)
     requires root.kind == initial.kind == W.DirectoryKind
     ensures Spec.StepsWitnessFields(inputs,before,before,root,initial,[],[],[0])
   {
@@ -18,17 +18,17 @@ module PwdProof {
   }
 
   lemma AppendStep(inputs: Recovery.RuntimeInputs, before: Recovery.RuntimeState,
-    middle: Recovery.RuntimeState, after: Recovery.RuntimeState,
-    root: W.FileStatus, initial: W.FileStatus, steps: seq<Spec.ParentStep>,
-    calls: seq<Recovery.RuntimeObservation>, boundaries: seq<nat>, step: Spec.ParentStep)
+                   middle: Recovery.RuntimeState, after: Recovery.RuntimeState,
+                   root: W.FileStatus, initial: W.FileStatus, steps: seq<Spec.ParentStep>,
+                   calls: seq<Recovery.RuntimeObservation>, boundaries: seq<nat>, step: Spec.ParentStep)
     requires Spec.StepsWitnessFields(inputs,before,middle,root,initial,steps,calls,boundaries)
     requires forall i: nat | i < |steps| :: |steps[i].failure| == 0
     requires var child := if |steps| == 0 then initial else steps[|steps|-1].parent;
-      child.hostKey != root.hostKey &&
-      Parent.ParentAttemptFields(inputs,middle,after,child,|steps|+1,
-        step.parent,step.name,step.failure,step.evidence)
+             child.hostKey != root.hostKey &&
+             Parent.ParentAttemptFields(inputs,middle,after,child,|steps|+1,
+                                        step.parent,step.name,step.failure,step.evidence)
     ensures Spec.StepsWitnessFields(inputs,before,after,root,initial,steps+[step],
-      calls+step.evidence.calls,boundaries+[|calls+step.evidence.calls|])
+                                    calls+step.evidence.calls,boundaries+[|calls+step.evidence.calls|])
   {
     hide *;
     reveal Spec.StepsWitnessFields(), Spec.StepPartitionAt();
@@ -57,11 +57,11 @@ module PwdProof {
   }
 
   lemma PathPartitionSnoc(names: seq<string>, directory: string,
-    boundaries: seq<nat>, name: string)
+                          boundaries: seq<nat>, name: string)
     requires Spec.PathPartitionFields(names,directory,boundaries)
     requires W.InodeChildNameValid(name)
     ensures Spec.PathPartitionFields(names+[name],"/"+name+directory,
-      [0]+seq(|boundaries|,i=>if 0 <= i < |boundaries| then |"/"+name|+boundaries[i] else 0))
+                                     [0]+seq(|boundaries|,i=>if 0 <= i < |boundaries| then |"/"+name|+boundaries[i] else 0))
   {
     hide *;
     reveal Spec.PathPartitionFields(), Spec.PathPartitionAt();
@@ -98,11 +98,11 @@ module PwdProof {
   }
 
   lemma SelectionWitness(inputs: Recovery.RuntimeInputs, before: Recovery.RuntimeState,
-    after: Recovery.RuntimeState, outcome: Recovery.DirectoryOutcome,
-    evidence: Spec.PhysicalEvidence)
+                         after: Recovery.RuntimeState, outcome: Recovery.DirectoryOutcome,
+                         evidence: Spec.PhysicalEvidence)
     requires Spec.PhysicalSelectionFields(inputs,before,after,outcome,evidence)
     ensures exists observed: Spec.PhysicalEvidence ::
-      Spec.PhysicalSelectionFields(inputs,before,after,outcome,observed)
+              Spec.PhysicalSelectionFields(inputs,before,after,outcome,observed)
   {
   }
 }

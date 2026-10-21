@@ -27,17 +27,17 @@ module ChmodTraversalProof {
     reveal Spec.FrameFields(), W.NodeShapeUnchangedExceptMode();
     forall position | position in first.topology.nodes
       ensures var prior := first.topology.nodes[position];
-        var next := last.topology.nodes[position];
-        next.status.hostKey == prior.status.hostKey && next.status.kind == prior.status.kind &&
-        next.parent == prior.parent && next.pathname == prior.pathname &&
-        next.selfRawInode == prior.selfRawInode && next.parentRawInode == prior.parentRawInode &&
-        next.parentMountBoundary == prior.parentMountBoundary && next.entries.Keys == prior.entries.Keys &&
-        forall name | name in prior.entries ::
-          var oldEntry := prior.entries[name];
-          var newEntry := next.entries[name];
-          newEntry.rawInode == oldEntry.rawInode && newEntry.kind == oldEntry.kind &&
-          newEntry.directory == oldEntry.directory && newEntry.mountBoundary == oldEntry.mountBoundary &&
-          newEntry.status.hostKey == oldEntry.status.hostKey && newEntry.status.kind == oldEntry.status.kind
+              var next := last.topology.nodes[position];
+              next.status.hostKey == prior.status.hostKey && next.status.kind == prior.status.kind &&
+              next.parent == prior.parent && next.pathname == prior.pathname &&
+              next.selfRawInode == prior.selfRawInode && next.parentRawInode == prior.parentRawInode &&
+              next.parentMountBoundary == prior.parentMountBoundary && next.entries.Keys == prior.entries.Keys &&
+              forall name | name in prior.entries ::
+                var oldEntry := prior.entries[name];
+                var newEntry := next.entries[name];
+                newEntry.rawInode == oldEntry.rawInode && newEntry.kind == oldEntry.kind &&
+                newEntry.directory == oldEntry.directory && newEntry.mountBoundary == oldEntry.mountBoundary &&
+                newEntry.status.hostKey == oldEntry.status.hostKey && newEntry.status.kind == oldEntry.status.kind
     {
       assert position in middle.topology.nodes;
     }
@@ -53,24 +53,24 @@ module ChmodTraversalProof {
 
   lemma {:isolate_assertions} ModeUpdate(before: W.CwdContext, key: W.HostInodeKey, mode: bv32, now: int)
     ensures Spec.FrameFields(before,
-      before.(topology := C.ModeChangedTopologyFields(before.topology, key, mode, now), ordinal := before.ordinal+1))
+                             before.(topology := C.ModeChangedTopologyFields(before.topology, key, mode, now), ordinal := before.ordinal+1))
   {
     hide *;
     reveal Spec.FrameFields(), C.ModeChangedTopologyFields(), C.ModeChangedDirectoryFields(),
-      C.ModeChangedEntryFields(), C.ModeChangedStatusFields(), C.ModeChangedRecordsFields(),
-      C.ModeChangedRecordFields(), W.InodeRecordWithNode(), W.WithNodeMode(), W.WithNodeChangeTime(),
-      W.WithNodeTimes(), W.NodeTimes(), W.NodeShapeUnchangedExceptMode();
+           C.ModeChangedEntryFields(), C.ModeChangedStatusFields(), C.ModeChangedRecordsFields(),
+           C.ModeChangedRecordFields(), W.InodeRecordWithNode(), W.WithNodeMode(), W.WithNodeChangeTime(),
+           W.WithNodeTimes(), W.NodeTimes(), W.NodeShapeUnchangedExceptMode();
   }
 
   lemma {:isolate_assertions} Mode(context: Base.ObservationContext, now: int,
-    fs: W.FileSystem, before: W.CwdContext, operand: Operand.Operand, follow: bool, mode: bv32,
-    afterFs: W.FileSystem, after: W.CwdContext, ok: bool, err: int)
+                                   fs: W.FileSystem, before: W.CwdContext, operand: Operand.Operand, follow: bool, mode: bv32,
+                                   afterFs: W.FileSystem, after: W.CwdContext, ok: bool, err: int)
     requires Operand.SetFields(context, now, fs, before, operand, follow, mode, afterFs, after, ok, err)
     ensures Spec.FrameFields(before, after)
   {
     hide *;
     reveal Operand.SetFields(), C.SetFileModeAtCwdSpec(), C.SetFileModeAtDirSpec(),
-      C.SetFileModeFromCwdTargetContractFields();
+           C.SetFileModeFromCwdTargetContractFields();
     if !ok { ReadStep(before, after); }
     else {
       reveal C.CwdResolvedModeCanSucceedFields();
@@ -92,8 +92,8 @@ module ChmodTraversalProof {
   }
 
   lemma {:isolate_assertions} Open(context: Base.ObservationContext, fs: W.FileSystem,
-    before: W.CwdContext, operand: Operand.Operand, after: W.CwdContext,
-    ok: bool, handle: int, err: int)
+                                   before: W.CwdContext, operand: Operand.Operand, after: W.CwdContext,
+                                   ok: bool, handle: int, err: int)
     requires Operand.OpenFields(context, fs, before, operand, after, ok, handle, err)
     ensures Spec.FrameFields(before, after)
   {
@@ -104,8 +104,8 @@ module ChmodTraversalProof {
   }
 
   lemma {:isolate_assertions} DirectoryOperation(fs: W.FileSystem, before: W.CwdContext,
-    observations: W.DirectoryObservations, operation: W.DirectoryOperation, handle: int,
-    cursor: nat, response: W.DirectoryResponse, after: W.CwdContext)
+                                                 observations: W.DirectoryObservations, operation: W.DirectoryOperation, handle: int,
+                                                 cursor: nat, response: W.DirectoryResponse, after: W.CwdContext)
     requires operation == W.DirectoryReadNext || operation == W.DirectoryClose
     requires C.ContextOperationSpec(fs, before, observations, operation, handle, 0, "", cursor, cursor, response, after)
     ensures Spec.FrameFields(before, after)
@@ -115,33 +115,33 @@ module ChmodTraversalProof {
   }
 
   lemma {:isolate_assertions} ReadCurrent(before: W.CwdContext, after: W.CwdContext,
-    capability: W.DirectoryCapabilityState)
+                                          capability: W.DirectoryCapabilityState)
     requires Spec.FrameFields(before, after)
     requires C.DirectoryCapabilityReadCurrentFields(before.topology, capability)
     ensures C.DirectoryCapabilityReadCurrentFields(after.topology, capability)
   {
     hide *;
     reveal Spec.FrameFields(), C.DirectoryCapabilityReadCurrentFields(), C.DirectoryCapabilityAnchorCurrentFields(),
-      C.DirectoryCapabilityNamesFields();
+           C.DirectoryCapabilityNamesFields();
   }
 
   lemma {:isolate_assertions} Anchor(beforeFs: W.FileSystem, afterFs: W.FileSystem,
-    before: W.CwdContext, after: W.CwdContext, operand: Operand.Operand)
+                                     before: W.CwdContext, after: W.CwdContext, operand: Operand.Operand)
     requires W.FileSystemTopologyUnchangedExceptMode(beforeFs, afterFs)
     requires Spec.FrameFields(before, after) && Operand.AnchorSnapshot(beforeFs, before, operand)
     requires (operand.DirectoryOperand? && operand.path != "" && !((0 as char) in operand.path) &&
-      !W.IsAbsolutePath(operand.path)) ==>
-      (operand.parent in after.capabilities <==> operand.parent in before.capabilities)
+              !W.IsAbsolutePath(operand.path)) ==>
+               (operand.parent in after.capabilities <==> operand.parent in before.capabilities)
     requires operand.DirectoryOperand? && operand.parent in before.capabilities ==>
-      operand.parent in after.capabilities &&
-      after.capabilities[operand.parent].position == before.capabilities[operand.parent].position &&
-      after.capabilities[operand.parent].anchorTopology == before.capabilities[operand.parent].anchorTopology
+               operand.parent in after.capabilities &&
+               after.capabilities[operand.parent].position == before.capabilities[operand.parent].position &&
+               after.capabilities[operand.parent].anchorTopology == before.capabilities[operand.parent].anchorTopology
     ensures Operand.AnchorSnapshot(afterFs, after, operand)
   {
     hide *;
     reveal Spec.FrameFields(), Operand.AnchorSnapshot(), C.DirectoryParentAnchorForContextRequestFields();
     if operand.DirectoryOperand? && operand.path != "" && !((0 as char) in operand.path) &&
-      !W.IsAbsolutePath(operand.path) {
+       !W.IsAbsolutePath(operand.path) {
       if operand.parent in before.capabilities {
         reveal C.DirectoryCapabilityAnchorCurrentFields();
       } else if operand.parent in before.legacyHandles {
@@ -158,8 +158,8 @@ module ChmodTraversalProof {
   }
 
   lemma {:isolate_assertions} Entry(cmd: Schema.ChmodCmd, scope: Descriptor.Scope, display: string,
-    operand: Operand.Operand, top: bool, fs: W.FileSystem, native: W.CwdContext, cursor: nat,
-    entry: Descriptor.Entry)
+                                    operand: Operand.Operand, top: bool, fs: W.FileSystem, native: W.CwdContext, cursor: nat,
+                                    entry: Descriptor.Entry)
     requires Descriptor.EntryFields(cmd, scope, display, operand, top, fs, native, cursor, entry)
     ensures Spec.FrameFields(native, entry.result.native)
   {

@@ -7,7 +7,7 @@ module LsNativeDirectoryProof {
   import Spec = LsNativeDirectorySpec
 
   lemma EntryInjective(topology: W.LiveDirectoryTopology, position: W.DirectoryPosition,
-    left: string, right: string)
+                       left: string, right: string)
     requires position in topology.nodes
     requires left in topology.nodes[position].entries.Keys + {".", ".."}
     requires right in topology.nodes[position].entries.Keys + {".", ".."}
@@ -22,7 +22,7 @@ module LsNativeDirectoryProof {
   }
 
   lemma {:isolate_assertions} Membership(topology: W.LiveDirectoryTopology, position: W.DirectoryPosition,
-    names: set<string>, entry: W.DirEntry)
+                                         names: set<string>, entry: W.DirEntry)
     requires position in topology.nodes
     requires names <= topology.nodes[position].entries.Keys + {".", ".."}
     ensures entry in Spec.EntriesForNames(topology, position, names) <==> (entry.name in names && entry == Spec.EntryForName(topology, position, entry.name))
@@ -36,7 +36,7 @@ module LsNativeDirectoryProof {
   }
 
   lemma {:isolate_assertions} NameProjection(topology: W.LiveDirectoryTopology,
-    position: W.DirectoryPosition, names: set<string>)
+                                             position: W.DirectoryPosition, names: set<string>)
     requires position in topology.nodes
     requires names <= topology.nodes[position].entries.Keys + {".", ".."}
     ensures (set entry | entry in Spec.EntriesForNames(topology, position, names) :: entry.name) == names
@@ -59,12 +59,12 @@ module LsNativeDirectoryProof {
   }
 
   lemma {:isolate_assertions} RemoveName(topology: W.LiveDirectoryTopology,
-    position: W.DirectoryPosition, names: set<string>, name: string)
+                                         position: W.DirectoryPosition, names: set<string>, name: string)
     requires position in topology.nodes
     requires names <= topology.nodes[position].entries.Keys + {".", ".."}
     requires name in topology.nodes[position].entries.Keys + {".", ".."}
     ensures Spec.EntriesForNames(topology, position, names-{name}) ==
-      Spec.EntriesForNames(topology, position, names)-{Spec.EntryForName(topology, position, name)}
+            Spec.EntriesForNames(topology, position, names)-{Spec.EntryForName(topology, position, name)}
   {
     hide *;
     var before := Spec.EntriesForNames(topology, position, names);
@@ -81,7 +81,7 @@ module LsNativeDirectoryProof {
   }
 
   lemma {:isolate_assertions} Subset(topology: W.LiveDirectoryTopology,
-    position: W.DirectoryPosition, before: set<string>, after: set<string>)
+                                     position: W.DirectoryPosition, before: set<string>, after: set<string>)
     requires position in topology.nodes
     requires before <= topology.nodes[position].entries.Keys + {".", ".."}
     requires after <= before
@@ -104,16 +104,16 @@ module LsNativeDirectoryProof {
   }
 
   lemma {:isolate_assertions} RawKindMatchesEntry(fs: W.FileSystem, topology: W.LiveDirectoryTopology,
-    position: W.DirectoryPosition, name: string, kind: W.DirectoryEntryKind)
+                                                  position: W.DirectoryPosition, name: string, kind: W.DirectoryEntryKind)
     requires C.LiveDirectoryTopologyFields(fs, topology)
     requires position in topology.nodes
     requires name == "." || name == ".." || name in topology.nodes[position].entries
     requires if name == "." || name == ".." then kind == W.DirectoryDirentKind
-      else kind == topology.nodes[position].entries[name].kind
+             else kind == topology.nodes[position].entries[name].kind
     ensures C.DirectoryEntryKindMatchesEntry(kind, Spec.EntryForName(topology, position, name))
   {
     hide *;
     reveal C.LiveDirectoryTopologyFields(), C.DirectoryEntryKindMatchesEntry(),
-      C.DirectoryEntryKindForFileKind(), Spec.EntryForName();
+           C.DirectoryEntryKindForFileKind(), Spec.EntryForName();
   }
 }

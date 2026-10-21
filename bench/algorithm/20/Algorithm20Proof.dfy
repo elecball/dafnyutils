@@ -13,7 +13,7 @@ module Algorithm20Proof {
   {
     if CliSpec.Valid(raw) {
       var result :| CliCore.AnswerSummary(raw.time, result) &&
-        CliSpec.Output(io, CliSpec.OutputText(result), exit);
+                    CliSpec.Output(io, CliSpec.OutputText(result), exit);
       AnswerSummaryImpliesAnswer(raw.time, result);
     }
   }

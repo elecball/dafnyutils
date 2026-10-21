@@ -43,11 +43,11 @@ module BasenameProof {
       assert |value| == |trimmed| || Spec.IsSlash(trimmed[|trimmed| - |value| - 1]);
       assert Spec.MaximalSlashFreeSuffix(trimmed, value);
       assert exists trimmed: string, trailing: string ::
-        path == trimmed + trailing &&
-        Spec.SlashesOnly(trailing) &&
-        0 < |trimmed| &&
-        !Spec.IsSlash(trimmed[|trimmed| - 1]) &&
-        Spec.MaximalSlashFreeSuffix(trimmed, value);
+          path == trimmed + trailing &&
+          Spec.SlashesOnly(trailing) &&
+          0 < |trimmed| &&
+          !Spec.IsSlash(trimmed[|trimmed| - 1]) &&
+          Spec.MaximalSlashFreeSuffix(trimmed, value);
     }
   }
 
@@ -260,9 +260,9 @@ module BasenameProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                           old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

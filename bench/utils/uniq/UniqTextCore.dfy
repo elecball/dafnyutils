@@ -220,7 +220,7 @@ module UniqTextCore {
   {
     if IOContract.IOErrorIsDirectory(err) then
       Model.ReadErrorMessageSpecText0 + SpecQuoteAfBytes(Utf8.Encode(path)) +
-        Model.ReadErrorMessageSpecText1 + Utf8.Encode(ErrnoText(err)) + Model.ReadErrorMessageSpecText2
+      Model.ReadErrorMessageSpecText1 + Utf8.Encode(ErrnoText(err)) + Model.ReadErrorMessageSpecText2
     else
       Model.ReadErrorMessageSpecText3 + QuoteIfNeeded(path) + Model.ReadErrorMessageSpecText4 + Utf8.Encode(ErrnoText(err)) + Model.ReadErrorMessageSpecText5
   }
@@ -229,21 +229,21 @@ module UniqTextCore {
     ensures UnsupportedOutputMessageSpec(path) == Model.UnsupportedOutputMessageSpec(path)
   {
     Utf8.Encode(Model.UnsupportedOutputMessageSpecText0 + QuoteAlways(path) +
-    Model.UnsupportedOutputMessageSpecText1)
+                Model.UnsupportedOutputMessageSpecText1)
   }
 
   function UnsupportedSkipCharsMessageSpec(operand: string): BenchWorld.Bytes
     ensures UnsupportedSkipCharsMessageSpec(operand) == Model.UnsupportedSkipCharsMessageSpec(operand)
   {
     Utf8.Encode(Model.UnsupportedSkipCharsMessageSpecText0 + operand +
-    Model.UnsupportedSkipCharsMessageSpecText1)
+                Model.UnsupportedSkipCharsMessageSpecText1)
   }
 
   function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
     ensures ExtraOperandMessageSpec(operand) == Model.ExtraOperandMessageSpec(operand)
   {
     Model.ExtraOperandMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
-      Model.ExtraOperandMessageSpecText1
+    Model.ExtraOperandMessageSpecText1
   }
 
   function StreamWriteErrorMessage(message: string): BenchWorld.Bytes

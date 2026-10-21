@@ -13,7 +13,7 @@ module Algorithm59Proof {
   {
     if CliSpec.Valid(raw) {
       var output :| CliCore.AnswerSummary(raw.n, raw.a, raw.s, output) &&
-        CliSpec.Output(io, CliSpec.OutputText(output), exit);
+                    CliSpec.Output(io, CliSpec.OutputText(output), exit);
       AnswerSummaryImpliesAnswer(raw.n, raw.a, raw.s, output);
     }
   }

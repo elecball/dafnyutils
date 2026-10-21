@@ -14,7 +14,7 @@ module RmdirProof {
   import PathProof = RmdirPathProof
 
   lemma RemovalFacts(before: FileSystem, after: FileSystem, path: string, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult, ok: bool, err: int)
+                     trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult, ok: bool, err: int)
     requires C.RemoveDirectorySpec(before, now, trusted, after, path, ok, err)
     ensures ok <==> err == 0
   {
@@ -24,21 +24,21 @@ module RmdirProof {
   }
 
   lemma NonemptyWitness(context: Spec.ObservationContext, fs: FileSystem, path: string,
-    linkOk: bool, link: bool, linkErr: int,
-    openState: map<int, DirHandleState>, afterRead: map<int, DirHandleState>,
-    handle: int, openOk: bool, openErr: int,
-    more: bool, name: string, kind: DirectoryEntryKind, readErr: int,
-    closeOk: bool, closeErr: int, nonempty: bool)
+                        linkOk: bool, link: bool, linkErr: int,
+                        openState: map<int, DirHandleState>, afterRead: map<int, DirHandleState>,
+                        handle: int, openOk: bool, openErr: int,
+                        more: bool, name: string, kind: DirectoryEntryKind, readErr: int,
+                        closeOk: bool, closeErr: int, nonempty: bool)
     requires C.IsSymlinkSpec(fs, context.failures, path, linkOk, link, linkErr)
     requires if linkOk && link then !nonempty else
-      C.OpenDirSpec(fs, context.handles, context.failures, openState,
-                    path, false, openOk, handle, openErr) &&
-      (if !openOk then !nonempty else
-        C.ReadDirSpec(fs, openState, context.failures, afterRead,
-                      handle, more, name, kind, readErr) &&
-        C.CloseDirSpec(afterRead, context.failures, context.handles,
-                       handle, closeOk, closeErr) &&
-        nonempty == (more && readErr == 0))
+             C.OpenDirSpec(fs, context.handles, context.failures, openState,
+                           path, false, openOk, handle, openErr) &&
+             (if !openOk then !nonempty else
+              C.ReadDirSpec(fs, openState, context.failures, afterRead,
+                            handle, more, name, kind, readErr) &&
+              C.CloseDirSpec(afterRead, context.failures, context.handles,
+                             handle, closeOk, closeErr) &&
+              nonempty == (more && readErr == 0))
     ensures Spec.NonemptyObservation(context, fs, path, nonempty)
   {
     hide *;
@@ -46,17 +46,17 @@ module RmdirProof {
   }
 
   lemma FailureDisplayWitness(context: Spec.ObservationContext,
-    fs: FileSystem, path: string, parent: bool, err: int, display: string, custom: bool,
-    statOk: bool, directory: bool, statErr: int, stripped: string,
-    linkOk: bool, link: bool, linkErr: int)
+                              fs: FileSystem, path: string, parent: bool, err: int, display: string, custom: bool,
+                              statOk: bool, directory: bool, statErr: int, stripped: string,
+                              linkOk: bool, link: bool, linkErr: int)
     requires if parent || err != Errno.ENOTDIR || !C.HasTrailingSlash(path) then
-      display == path && !custom
-    else C.IsDirectorySpec(fs, context.failures, path, true, statOk, directory, statErr) &&
-      (if (!statOk && statErr != Errno.ENOTDIR) || (statOk && directory) then
-        Spec.Trimmed(path, stripped) &&
-        C.IsSymlinkSpec(fs, context.failures, stripped, linkOk, link, linkErr) &&
-        custom == (linkOk && link) && display == (if custom then path else stripped)
-       else display == path && !custom)
+               display == path && !custom
+             else C.IsDirectorySpec(fs, context.failures, path, true, statOk, directory, statErr) &&
+                  (if (!statOk && statErr != Errno.ENOTDIR) || (statOk && directory) then
+                     Spec.Trimmed(path, stripped) &&
+                     C.IsSymlinkSpec(fs, context.failures, stripped, linkOk, link, linkErr) &&
+                     custom == (linkOk && link) && display == (if custom then path else stripped)
+                   else display == path && !custom)
     ensures Spec.FailureDisplay(context, fs, path, parent, err, display, custom)
   {
     hide *;
@@ -64,12 +64,12 @@ module RmdirProof {
   }
 
   lemma RemovalWitness(context: Spec.ObservationContext, raw: S.RmdirCmdRaw, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult, r: Spec.Removal)
+                       trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult, r: Spec.Removal)
     requires C.RemoveDirectorySpec(r.before, now, trusted, r.after, r.path, r.err == 0, r.err)
     requires if r.err == 0 then !r.ignored && !r.custom && r.display == r.path
-      else (Spec.IgnoredFailure(context, raw, r.after, r.path, r.err, r.ignored) &&
-        (if r.ignored then !r.custom && r.display == r.path
-         else Spec.FailureDisplay(context, r.after, r.path, r.parent, r.err, r.display, r.custom)))
+             else (Spec.IgnoredFailure(context, raw, r.after, r.path, r.err, r.ignored) &&
+                   (if r.ignored then !r.custom && r.display == r.path
+                    else Spec.FailureDisplay(context, r.after, r.path, r.parent, r.err, r.display, r.custom)))
     ensures Spec.RemovalRelation(context, raw, now, trusted, r)
   {
     hide *;
@@ -82,7 +82,7 @@ module RmdirProof {
   {
     if path != "" && !Path.SlashesOnly(path) {
       var end :| 0 < end <= |path| && trimmed == path[..end] &&
-        path[end - 1] != '/' && forall i :: end <= i < |path| ==> path[i] == '/';
+                 path[end - 1] != '/' && forall i :: end <= i < |path| ==> path[i] == '/';
       assert Path.PathWithoutTrailingSlashes(path, trimmed, path[end..]);
     }
   }
@@ -99,7 +99,7 @@ module RmdirProof {
       }
     } else {
       var end :| 0 < end <= |path| && trimmed == path[..end] &&
-        path[end - 1] != '/' && forall i :: end <= i < |path| ==> path[i] == '/';
+                 path[end - 1] != '/' && forall i :: end <= i < |path| ==> path[i] == '/';
       assert trimmed != "/";
       if Spec.HasParent(path) {
         var i, j :| 0 <= i < j < |path| && path[i] == '/' && path[j] != '/';
@@ -129,8 +129,8 @@ module RmdirProof {
       if Path.SlashesOnly(trimmed[..slash]) {
       } else {
         var end :| 0 < end <= slash && parent == trimmed[..slash][..end] &&
-          trimmed[..slash][end - 1] != '/' &&
-          forall i :: end <= i < slash ==> trimmed[..slash][i] == '/';
+                   trimmed[..slash][end - 1] != '/' &&
+                   forall i :: end <= i < slash ==> trimmed[..slash][i] == '/';
       }
     }
   }
@@ -161,13 +161,13 @@ module RmdirProof {
   }
 
   lemma {:isolate_assertions} {:fuel Spec.ChainPrefix, 0, 0} AppendChain(context: Spec.ObservationContext, raw: S.RmdirCmdRaw, path: string, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
-    rs: seq<Spec.Removal>, r: Spec.Removal)
+                                                                         trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
+                                                                         rs: seq<Spec.Removal>, r: Spec.Removal)
     requires Spec.ChainPrefix(context, raw, path, now, trusted, rs)
     requires Spec.RemovalRelation(context, raw, now, trusted, r)
     requires if |rs| == 0 then r.path == path && !r.parent
-      else (r.parent && rs[|rs| - 1].err == 0 && raw.parents &&
-        Spec.ParentRelation(rs[|rs| - 1].path, r.path) && rs[|rs| - 1].after == r.before)
+             else (r.parent && rs[|rs| - 1].err == 0 && raw.parents &&
+                   Spec.ParentRelation(rs[|rs| - 1].path, r.path) && rs[|rs| - 1].after == r.before)
     ensures Spec.ChainPrefix(context, raw, path, now, trusted, rs + [r])
   {
     assert Spec.ChainPrefix(context, raw, path, now, trusted, rs + [r]) by {
@@ -191,13 +191,13 @@ module RmdirProof {
       }
       forall i {:trigger (rs + [r])[i]} | 0 < i < |rs + [r]|
         ensures (rs + [r])[i].parent && (rs + [r])[i - 1].err == 0 && raw.parents &&
-          Spec.ParentRelation((rs + [r])[i - 1].path, (rs + [r])[i].path) &&
-          (rs + [r])[i - 1].after == (rs + [r])[i].before
+                Spec.ParentRelation((rs + [r])[i - 1].path, (rs + [r])[i].path) &&
+                (rs + [r])[i - 1].after == (rs + [r])[i].before
       {
         if i < |rs| {
           assert (rs + [r])[i] == rs[i] && (rs + [r])[i - 1] == rs[i - 1];
           assert rs[i].parent && rs[i - 1].err == 0 && raw.parents &&
-            Spec.ParentRelation(rs[i - 1].path, rs[i].path) && rs[i - 1].after == rs[i].before;
+                 Spec.ParentRelation(rs[i - 1].path, rs[i].path) && rs[i - 1].after == rs[i].before;
         } else {
           assert i == |rs|;
           assert (rs + [r])[i] == r && (rs + [r])[i - 1] == rs[|rs| - 1];
@@ -207,11 +207,11 @@ module RmdirProof {
   }
 
   lemma ChainExists(context: Spec.ObservationContext, raw: S.RmdirCmdRaw, path: string, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
-    before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool,
-    rs: seq<Spec.Removal>, outCuts: seq<nat>, errCuts: seq<nat>)
+                    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
+                    before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool,
+                    rs: seq<Spec.Removal>, outCuts: seq<nat>, errCuts: seq<nat>)
     requires Spec.ChainWitness(context, raw, path, now, trusted, before, after,
-                              out, error, good, rs, outCuts, errCuts)
+                               out, error, good, rs, outCuts, errCuts)
     ensures Spec.ChainEffect(context, raw, path, now, trusted, before, after, out, error, good)
   {
     hide *;
@@ -219,12 +219,12 @@ module RmdirProof {
   }
 
   lemma BatchExists(context: Spec.ObservationContext, raw: S.RmdirCmdRaw, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
-    before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool,
-    states: seq<FileSystem>, outputs: seq<Bytes>, errors: seq<Bytes>,
-    goods: seq<bool>, outCuts: seq<nat>, errCuts: seq<nat>)
+                    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
+                    before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool,
+                    states: seq<FileSystem>, outputs: seq<Bytes>, errors: seq<Bytes>,
+                    goods: seq<bool>, outCuts: seq<nat>, errCuts: seq<nat>)
     requires Spec.BatchWitness(context, raw, raw.operands, now, trusted, before, after,
-                              out, error, good, states, outputs, errors, goods, outCuts, errCuts)
+                               out, error, good, states, outputs, errors, goods, outCuts, errCuts)
     ensures Spec.BatchEffect(context, raw, now, trusted, before, after, out, error, good)
   {
     hide *;
@@ -232,7 +232,7 @@ module RmdirProof {
   }
   lemma AllTrueSnoc(values: seq<bool>, value: bool)
     ensures (forall i :: 0 <= i < |values + [value]| ==> (values + [value])[i]) <==>
-      ((forall i :: 0 <= i < |values| ==> values[i]) && value)
+            ((forall i :: 0 <= i < |values| ==> values[i]) && value)
   {
     if (forall i :: 0 <= i < |values| ==> values[i]) && value {
       forall i | 0 <= i < |values + [value]|
@@ -248,18 +248,18 @@ module RmdirProof {
   }
 
   lemma ExtendBatch(context: Spec.ObservationContext, raw: S.RmdirCmdRaw, paths: seq<string>, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
-    before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, allGood: bool,
-    states: seq<FileSystem>, outputs: seq<Bytes>, errors: seq<Bytes>,
-    goods: seq<bool>, outCuts: seq<nat>, errCuts: seq<nat>,
-    path: string, next: FileSystem, partOut: Bytes, partErr: Bytes, good: bool)
+                    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
+                    before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, allGood: bool,
+                    states: seq<FileSystem>, outputs: seq<Bytes>, errors: seq<Bytes>,
+                    goods: seq<bool>, outCuts: seq<nat>, errCuts: seq<nat>,
+                    path: string, next: FileSystem, partOut: Bytes, partErr: Bytes, good: bool)
     requires Spec.BatchWitness(context, raw, paths, now, trusted, before, after,
-      out, error, allGood, states, outputs, errors, goods, outCuts, errCuts)
+                               out, error, allGood, states, outputs, errors, goods, outCuts, errCuts)
     requires Spec.ChainEffect(context, raw, path, now, trusted, after, next, partOut, partErr, good)
     ensures Spec.BatchWitness(context, raw, paths + [path], now, trusted, before, next,
-      out + partOut, error + partErr, allGood && good, states + [next],
-      outputs + [partOut], errors + [partErr], goods + [good],
-      outCuts + [|out + partOut|], errCuts + [|error + partErr|])
+                              out + partOut, error + partErr, allGood && good, states + [next],
+                              outputs + [partOut], errors + [partErr], goods + [good],
+                              outCuts + [|out + partOut|], errCuts + [|error + partErr|])
   {
     hide *;
     reveal Spec.BatchWitness();
@@ -268,34 +268,34 @@ module RmdirProof {
     AllTrueSnoc(goods, good);
     forall i | 0 <= i < |paths| + 1
       ensures Spec.ChainEffect(context, raw, (paths + [path])[i], now, trusted,
-        (states + [next])[i], (states + [next])[i + 1],
-        (outputs + [partOut])[i], (errors + [partErr])[i], (goods + [good])[i])
+                               (states + [next])[i], (states + [next])[i + 1],
+                               (outputs + [partOut])[i], (errors + [partErr])[i], (goods + [good])[i])
     {
       if i < |paths| {
         assert Spec.ChainEffect(context, raw, paths[i], now, trusted, states[i], states[i + 1],
-          outputs[i], errors[i], goods[i]);
+                                outputs[i], errors[i], goods[i]);
       }
     }
   }
 
   twostate lemma Complete(raw: S.RmdirCmdRaw, io: BenchIO.IO,
-    out: Bytes, error: Bytes, good: bool, exit: int)
+                          out: Bytes, error: Bytes, good: bool, exit: int)
     requires io.dirHandles() == old(io.dirHandles())
     requires raw.mode == S.ModeRun && |raw.operands| > 0
     requires Spec.BatchEffect(old(Spec.ObservationContextFor(io)), raw, io.now(), io.trustedFilesystem(), old(io.fs()),
-      io.fs(), out, error, good)
+                              io.fs(), out, error, good)
     requires Spec.StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-      io.trustedStreams(), out, error, if good then 0 else 1, exit)
+                                io.trustedStreams(), out, error, if good then 0 else 1, exit)
     ensures Spec.Spec(raw, io, exit)
   {
     hide *;
     reveal Spec.Spec();
     assert exists chosenOut: Bytes, chosenError: Bytes, chosenGood: bool ::
-      chosenOut == out && chosenError == error && chosenGood == good &&
-      Spec.BatchEffect(old(Spec.ObservationContextFor(io)), raw, io.now(), io.trustedFilesystem(), old(io.fs()), io.fs(),
-        chosenOut, chosenError, chosenGood) &&
-      Spec.StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-        io.trustedStreams(), chosenOut, chosenError, if chosenGood then 0 else 1, exit);
+        chosenOut == out && chosenError == error && chosenGood == good &&
+        Spec.BatchEffect(old(Spec.ObservationContextFor(io)), raw, io.now(), io.trustedFilesystem(), old(io.fs()), io.fs(),
+                         chosenOut, chosenError, chosenGood) &&
+        Spec.StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
+                           io.trustedStreams(), chosenOut, chosenError, if chosenGood then 0 else 1, exit);
   }
 
 }

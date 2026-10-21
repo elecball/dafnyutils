@@ -52,7 +52,7 @@ module StatProof {
     requires Spec.CapturedStatusesStructureRelation(cmd, fs, captured)
     requires index < |captured|
     requires captured[index] == Spec.CapturedStatusOk(
-      cmd.files[index], cmd.followSymlink, status)
+                                  cmd.files[index], cmd.followSymlink, status)
     ensures IOContract.ObservedNativeStatusResultFields(
               CapturedObservationProvider(captured), CapturedFailureProvider(captured), index, fs,
               cmd.files[index], cmd.followSymlink
@@ -66,7 +66,7 @@ module StatProof {
     assert expected.Ok?;
     assert status.(times := expected.v.times) == expected.v;
     assert CapturedObservationProvider(captured)(
-      index, fs, cmd.files[index], cmd.followSymlink) == status.times;
+        index, fs, cmd.files[index], cmd.followSymlink) == status.times;
     assert expected.v.(times := status.times) == status;
   }
 
@@ -81,11 +81,11 @@ module StatProof {
     requires Spec.CapturedStatusesStructureRelation(cmd, fs, captured)
     requires index < |captured|
     requires captured[index] == Spec.CapturedStatusErr(
-      cmd.files[index], cmd.followSymlink, errno)
+                                  cmd.files[index], cmd.followSymlink, errno)
     ensures var result := IOContract.ObservedNativeStatusResultFields(
-                           CapturedObservationProvider(captured), CapturedFailureProvider(captured), index, fs,
-                           cmd.files[index], cmd.followSymlink
-                         );
+                            CapturedObservationProvider(captured), CapturedFailureProvider(captured), index, fs,
+                            cmd.files[index], cmd.followSymlink
+                          );
             result.Err? && IOContract.IOErrorErrno(result.e) == errno
   {
     hide *;
@@ -94,7 +94,7 @@ module StatProof {
     assert index < |cmd.files|;
     assert errno > 0;
     assert CapturedFailureProvider(captured)(
-      BenchWorld.StatusRequest(index, fs, cmd.files[index], cmd.followSymlink)) == errno by {
+        BenchWorld.StatusRequest(index, fs, cmd.files[index], cmd.followSymlink)) == errno by {
       reveal CapturedFailureProvider();
     }
     reveal IOContract.ObservedNativeStatusResultFields(), IOContract.IOErrorErrno();
@@ -107,11 +107,11 @@ module StatProof {
     requires Spec.CapturedStatusesStructureRelation(cmd, fs, captured)
     requires index < |captured| && index < |cmd.files|
     ensures var observedCmd := Schema.WithStatusObservations(
-      cmd, CapturedObservationProvider(captured), 0, CapturedFailureProvider(captured));
-      var result := Spec.StatusResultSpec(observedCmd, fs, index, cmd.files[index]);
-      match captured[index]
-      case CapturedStatusOk(_, _, status) => result == Result.Ok(status)
-      case CapturedStatusErr(_, _, errno) => result.Err? && IOContract.IOErrorErrno(result.e) == errno
+                                 cmd, CapturedObservationProvider(captured), 0, CapturedFailureProvider(captured));
+            var result := Spec.StatusResultSpec(observedCmd, fs, index, cmd.files[index]);
+            match captured[index]
+            case CapturedStatusOk(_, _, status) => result == Result.Ok(status)
+            case CapturedStatusErr(_, _, errno) => result.Err? && IOContract.IOErrorErrno(result.e) == errno
   {
     reveal Spec.CapturedStatusesStructureRelation();
     match captured[index]
@@ -119,29 +119,29 @@ module StatProof {
       CapturedStatusSuccessMatchesObserved(cmd, fs, captured, index, status);
     case CapturedStatusErr(path, followSymlink, errno) =>
       CapturedStatusFailureMatchesObserved(cmd, fs, captured, index, errno);
-    assert Spec.StatusResultSpec(Schema.WithStatusObservations(
-      cmd, CapturedObservationProvider(captured), 0, CapturedFailureProvider(captured)),
-      fs, index, cmd.files[index]) == IOContract.ObservedNativeStatusResultFields(
-        CapturedObservationProvider(captured), CapturedFailureProvider(captured), index,
-        fs, cmd.files[index], cmd.followSymlink) by {
-      hide *;
-      reveal Spec.StatusResultSpec(), Schema.WithStatusObservations();
-    }
+      assert Spec.StatusResultSpec(Schema.WithStatusObservations(
+                                     cmd, CapturedObservationProvider(captured), 0, CapturedFailureProvider(captured)),
+                                   fs, index, cmd.files[index]) == IOContract.ObservedNativeStatusResultFields(
+                                               CapturedObservationProvider(captured), CapturedFailureProvider(captured), index,
+                                               fs, cmd.files[index], cmd.followSymlink) by {
+        hide *;
+        reveal Spec.StatusResultSpec(), Schema.WithStatusObservations();
+      }
   }
 
   lemma CapturedOutputFragments(cmd: Schema.StatCmd,
-    captured: seq<Spec.CapturedStatus>, hadError: bool, out: BenchWorld.Bytes, errOut: BenchWorld.Bytes)
+                                captured: seq<Spec.CapturedStatus>, hadError: bool, out: BenchWorld.Bytes, errOut: BenchWorld.Bytes)
     returns (stdoutFragments: seq<BenchWorld.Bytes>, stderrFragments: seq<BenchWorld.Bytes>)
     requires |captured| <= |cmd.files|
     requires Spec.RunCapturedFilesRelation(cmd, captured, hadError, out, errOut)
     ensures |stdoutFragments| == |captured| && |stderrFragments| == |captured|
     ensures forall i: nat | i < |captured| ::
-      match captured[i]
-      case CapturedStatusOk(_, _, status) =>
-        exists rendered: BenchWorld.Bytes :: Spec.FormatRenderingRelation(cmd.format, status, rendered) &&
-          stdoutFragments[i] == rendered + "\n" && stderrFragments[i] == ""
-      case CapturedStatusErr(_, _, errno) =>
-        stdoutFragments[i] == "" && stderrFragments[i] == Spec.ErrorMessageSpec(cmd.files[i], errno)
+              match captured[i]
+              case CapturedStatusOk(_, _, status) =>
+                exists rendered: BenchWorld.Bytes :: Spec.FormatRenderingRelation(cmd.format, status, rendered) &&
+                                                     stdoutFragments[i] == rendered + "\n" && stderrFragments[i] == ""
+              case CapturedStatusErr(_, _, errno) =>
+                stdoutFragments[i] == "" && stderrFragments[i] == Spec.ErrorMessageSpec(cmd.files[i], errno)
     ensures hadError == (exists i: nat :: i < |captured| && captured[i].CapturedStatusErr?)
     ensures out == Spec.ConcatPiecesSpec(stdoutFragments) && errOut == Spec.ConcatPiecesSpec(stderrFragments)
   {
@@ -150,28 +150,28 @@ module StatProof {
     stdoutFragments, stderrFragments :|
       |stdoutFragments| == |captured| && |stderrFragments| == |captured| &&
       (forall i: nat | i < |captured| ::
-        match captured[i]
-        case CapturedStatusOk(_, _, status) =>
-          exists rendered: BenchWorld.Bytes :: Spec.FormatRenderingRelation(cmd.format, status, rendered) &&
-            stdoutFragments[i] == rendered + "\n" && stderrFragments[i] == ""
-        case CapturedStatusErr(_, _, errno) =>
-          stdoutFragments[i] == "" && stderrFragments[i] == Spec.ErrorMessageSpec(cmd.files[i], errno)) &&
+         match captured[i]
+         case CapturedStatusOk(_, _, status) =>
+           exists rendered: BenchWorld.Bytes :: Spec.FormatRenderingRelation(cmd.format, status, rendered) &&
+                                                stdoutFragments[i] == rendered + "\n" && stderrFragments[i] == ""
+         case CapturedStatusErr(_, _, errno) =>
+           stdoutFragments[i] == "" && stderrFragments[i] == Spec.ErrorMessageSpec(cmd.files[i], errno)) &&
       hadError == (exists i: nat :: i < |captured| && captured[i].CapturedStatusErr?) &&
       out == Spec.ConcatPiecesSpec(stdoutFragments) && errOut == Spec.ConcatPiecesSpec(stderrFragments);
   }
 
   lemma CapturedFragmentMatches(format: string, path: BenchWorld.Path,
-    captured: Spec.CapturedStatus, result: BenchWorld.IOResult<BenchWorld.FileStatus>,
-    output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes)
+                                captured: Spec.CapturedStatus, result: BenchWorld.IOResult<BenchWorld.FileStatus>,
+                                                                                           output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes)
     requires match captured
-      case CapturedStatusOk(_, _, status) => result == Result.Ok(status)
-      case CapturedStatusErr(_, _, errno) => result.Err? && IOContract.IOErrorErrno(result.e) == errno
+             case CapturedStatusOk(_, _, status) => result == Result.Ok(status)
+             case CapturedStatusErr(_, _, errno) => result.Err? && IOContract.IOErrorErrno(result.e) == errno
     requires match captured
-      case CapturedStatusOk(_, _, status) =>
-        exists rendered: BenchWorld.Bytes :: Spec.FormatRenderingRelation(format, status, rendered) &&
-          output == rendered + "\n" && diagnostics == ""
-      case CapturedStatusErr(_, _, errno) =>
-        output == "" && diagnostics == Spec.ErrorMessageSpec(path, errno)
+             case CapturedStatusOk(_, _, status) =>
+               exists rendered: BenchWorld.Bytes :: Spec.FormatRenderingRelation(format, status, rendered) &&
+                                                    output == rendered + "\n" && diagnostics == ""
+             case CapturedStatusErr(_, _, errno) =>
+               output == "" && diagnostics == Spec.ErrorMessageSpec(path, errno)
     ensures Spec.FileFragmentRelation(format, path, result, output, diagnostics)
   {
     hide *;
@@ -192,11 +192,11 @@ module StatProof {
     exit: int
   )
     requires Spec.ObservedResultsSpec(
-      raw, fs, captured, beforeStdout, afterStdout,
-      beforeStderr, afterStderr, exit)
+               raw, fs, captured, beforeStdout, afterStdout,
+               beforeStderr, afterStderr, exit)
     ensures Spec.ObservedSpec(
-      raw, fs, CapturedObservationProvider(captured), CapturedFailureProvider(captured), 0, |captured|,
-      beforeStdout, afterStdout, beforeStderr, afterStderr, exit)
+              raw, fs, CapturedObservationProvider(captured), CapturedFailureProvider(captured), 0, |captured|,
+              beforeStdout, afterStdout, beforeStderr, afterStderr, exit)
   {
     hide *;
     reveal Schema.Command();
@@ -219,22 +219,22 @@ module StatProof {
       assert |captured| == |cmd.files|;
       assert observedCmd.format == cmd.format by { reveal Schema.WithStatusObservations(); }
       assert forall i: nat | i < |cmd.files| ::
-        Spec.FileFragmentRelation(observedCmd.format, cmd.files[i],
-          Spec.StatusResultSpec(observedCmd, fs, i, cmd.files[i]),
-          stdoutFragments[i], stderrFragments[i]) by {
+          Spec.FileFragmentRelation(observedCmd.format, cmd.files[i],
+                                    Spec.StatusResultSpec(observedCmd, fs, i, cmd.files[i]),
+                                    stdoutFragments[i], stderrFragments[i]) by {
         forall i: nat | i < |cmd.files|
           ensures Spec.FileFragmentRelation(observedCmd.format, cmd.files[i],
-            Spec.StatusResultSpec(observedCmd, fs, i, cmd.files[i]),
-            stdoutFragments[i], stderrFragments[i])
+                                            Spec.StatusResultSpec(observedCmd, fs, i, cmd.files[i]),
+                                            stdoutFragments[i], stderrFragments[i])
         {
           CapturedStatusMatchesResultSpec(cmd, fs, captured, i);
           CapturedFragmentMatches(observedCmd.format, cmd.files[i], captured[i],
-            Spec.StatusResultSpec(observedCmd, fs, i, cmd.files[i]), stdoutFragments[i], stderrFragments[i]);
+                                  Spec.StatusResultSpec(observedCmd, fs, i, cmd.files[i]), stdoutFragments[i], stderrFragments[i]);
         }
       }
       assert forall i: nat | i < |cmd.files| ::
-        Spec.StatusResultSpec(observedCmd, fs, i, cmd.files[i]).Err? ==
-        captured[i].CapturedStatusErr? by {
+          Spec.StatusResultSpec(observedCmd, fs, i, cmd.files[i]).Err? ==
+          captured[i].CapturedStatusErr? by {
         forall i: nat | i < |cmd.files|
           ensures Spec.StatusResultSpec(observedCmd, fs, i, cmd.files[i]).Err? ==
                   captured[i].CapturedStatusErr?
@@ -243,23 +243,23 @@ module StatProof {
         }
       }
       assert ((exists i: nat :: i < |cmd.files| && Spec.StatusResultSpec(observedCmd, fs, i, cmd.files[i]).Err?) <==>
-        (exists i: nat :: i < |captured| && captured[i].CapturedStatusErr?)) by { hide *; }
+              (exists i: nat :: i < |captured| && captured[i].CapturedStatusErr?)) by { hide *; }
       assert Spec.RunFilesRelation(
-        observedCmd, cmd.files, fs, hadError, out, errOut) by {
+          observedCmd, cmd.files, fs, hadError, out, errOut) by {
         hide *;
         reveal Spec.RunFilesRelation();
       }
       assert Spec.ObservedSpec(
-        raw, fs, CapturedObservationProvider(captured), CapturedFailureProvider(captured), 0, |captured|,
-        beforeStdout, afterStdout, beforeStderr, afterStderr, exit) by {
+          raw, fs, CapturedObservationProvider(captured), CapturedFailureProvider(captured), 0, |captured|,
+          beforeStdout, afterStdout, beforeStderr, afterStderr, exit) by {
         hide *;
         reveal Spec.ObservedSpec(), Spec.CapturedOutputSpec(), Spec.ObservedResultsSpec();
         reveal Schema.WithStatusObservations(), Schema.Command();
       }
     } else {
       assert Spec.ObservedSpec(
-        raw, fs, CapturedObservationProvider(captured), CapturedFailureProvider(captured), 0, |captured|,
-        beforeStdout, afterStdout, beforeStderr, afterStderr, exit) by {
+          raw, fs, CapturedObservationProvider(captured), CapturedFailureProvider(captured), 0, |captured|,
+          beforeStdout, afterStdout, beforeStderr, afterStderr, exit) by {
         hide *;
         reveal Spec.ObservedSpec(), Spec.CapturedOutputSpec(), Spec.ObservedResultsSpec();
         reveal Schema.WithStatusObservations(), Schema.Command();
@@ -277,8 +277,8 @@ module StatProof {
     errOut: BenchWorld.Bytes
   )
     requires Core.FileStepSummaryFields(
-      cmd, index, path, fs, hadError, out, errOut
-    )
+               cmd, index, path, fs, hadError, out, errOut
+             )
     ensures Spec.FileFragmentRelation(
               cmd.format,
               path,
@@ -467,8 +467,8 @@ module StatProof {
   )
     requires Spec.RunFilesRelation(cmd, prefix, fs, prefixError, prefixOut, prefixErrOut)
     requires Core.FileStepSummaryFields(
-      cmd, |prefix|, path, fs, stepError, stepOut, stepErrOut
-    )
+               cmd, |prefix|, path, fs, stepError, stepOut, stepErrOut
+             )
     ensures Spec.RunFilesRelation(
               cmd,
               prefix + [path],
@@ -513,9 +513,9 @@ module StatProof {
       stepErrOut
     );
     assert Spec.RunFilesRelation(
-      cmd, prefix + [path], fs, prefixError || stepError,
-      prefixOut + stepOut, prefixErrOut + stepErrOut
-    ) by {
+        cmd, prefix + [path], fs, prefixError || stepError,
+        prefixOut + stepOut, prefixErrOut + stepErrOut
+      ) by {
       assert |stdoutFragments + [stepOut]| == |prefix + [path]|;
       assert |stderrFragments + [stepErrOut]| == |prefix + [path]|;
     }
@@ -603,6 +603,6 @@ module StatProof {
       Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
                           io.trustedStreams(), output, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      output, diagnostics);
+                                       output, diagnostics);
   }
 }

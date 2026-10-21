@@ -24,10 +24,10 @@ module ChmodChangeRuntime {
   import FrameSpec = ChmodTraversalSpec
 
   lemma {:isolate_assertions} BridgeSuccessOutput(cmd:Schema.ChmodCmd,plan:Base.CoreModePlan,path:string,
-    before:bv32,requested:bv32,isDir:bool,fs:W.FileSystem,postOk:bool,postMode:bv32,postErr:int)
+                                                  before:bv32,requested:bv32,isDir:bool,fs:W.FileSystem,postOk:bool,postMode:bv32,postErr:int)
     ensures BaseSpec.SuccessOutputRelation(cmd,BaseProof.SpecModePlanOfCore(plan),path,before,requested,isDir,fs,
-      postOk,postMode,postErr,BaseProof.SpecPathResultOfCore(Base.SuccessfulChangeResultForPost(cmd,plan,path,
-        before,requested,isDir,fs,postOk,postMode,postErr)))
+                                           postOk,postMode,postErr,BaseProof.SpecPathResultOfCore(Base.SuccessfulChangeResultForPost(cmd,plan,path,
+                                                                                                                                     before,requested,isDir,fs,postOk,postMode,postErr)))
   {
     BaseProof.BridgeNaiveMode(plan,before,isDir);
     BaseProof.BridgePostChangeLookupNeeded(cmd,requested);
@@ -41,20 +41,20 @@ module ChmodChangeRuntime {
       BaseProof.BridgeSurpriseModeMessage(path,postMode,Base.CoreNaiveMode(plan,before,isDir));
     }
     assert Base.GettingNewAttributesMessageCore(path,C.CLocaleErrnoTextResult(postErr))==
-      BaseSpec.GettingNewAttributesMessageSpec(path,C.CLocaleErrnoTextResult(postErr));
+           BaseSpec.GettingNewAttributesMessageSpec(path,C.CLocaleErrnoTextResult(postErr));
     assert BaseSpec.SuccessOutputRelation(cmd,BaseProof.SpecModePlanOfCore(plan),path,before,requested,isDir,fs,
-      postOk,postMode,postErr,BaseProof.SpecPathResultOfCore(Base.SuccessfulChangeResultForPost(cmd,plan,path,
-        before,requested,isDir,fs,postOk,postMode,postErr))) by {
+                                          postOk,postMode,postErr,BaseProof.SpecPathResultOfCore(Base.SuccessfulChangeResultForPost(cmd,plan,path,
+                                                                                                                                    before,requested,isDir,fs,postOk,postMode,postErr))) by {
       hide *;
       reveal BaseSpec.SuccessOutputRelation(),Base.SuccessfulChangeResultForPost(),
-        BaseProof.SpecPathResultOfCore(),BaseProof.SpecPathStatusOfCore();
+             BaseProof.SpecPathResultOfCore(),BaseProof.SpecPathStatusOfCore();
       assert BaseSpec.SpecNaiveModeRelation(BaseProof.SpecModePlanOfCore(plan),before,isDir,Base.CoreNaiveMode(plan,before,isDir));
     }
   }
 
   method {:isolate_assertions} Finish(cmd: Schema.ChmodCmd, plan: Base.CoreModePlan, scope: Spec.Scope,
-    native: Spec.RuntimeIdentity, ghost entry: Spec.Entry, before: bv32, requested: bv32,
-    io: BenchIO.IO, output: Base.Output) returns (ok: bool, ghost result: Base.CorePathResult)
+                                      native: Spec.RuntimeIdentity, ghost entry: Spec.Entry, before: bv32, requested: bv32,
+                                      io: BenchIO.IO, output: Base.Output) returns (ok: bool, ghost result: Base.CorePathResult)
     requires Entry.ScopeFields(io, scope)
     requires entry.identity == native
     requires Operand.AnchorFields(io, native.operand)
@@ -64,8 +64,8 @@ module ChmodChangeRuntime {
     ensures io.dirHandles() == old(io.dirHandles()) && io.directoryOrigins() == old(io.directoryOrigins())
     ensures io.directoryObservations() == old(io.directoryObservations())
     ensures Spec.SuccessFields(cmd, BaseProof.SpecModePlanOfCore(plan), scope, entry,
-      old(io.fs()), old(io.cwdContext()), old(io.statusCursor()), before, requested,
-      io.statusCursor(), io.cwdContext(), BaseProof.SpecPathResultOfCore(result))
+                               old(io.fs()), old(io.cwdContext()), old(io.statusCursor()), before, requested,
+                               io.statusCursor(), io.cwdContext(), BaseProof.SpecPathResultOfCore(result))
     ensures result.fs == io.fs() && result.ok == ok
     ensures output.stdout == old(output.stdout)+result.stdoutChunk && output.stderr == old(output.stderr)+result.stderrChunk
     ensures io.statusCursor() == old(io.statusCursor())+(if Base.CorePostChangeLookupNeeded(cmd, requested) then 1 else 0)
@@ -94,18 +94,18 @@ module ChmodChangeRuntime {
     }
     Frame.Offset(native0, if Base.CorePostChangeLookupNeeded(cmd, requested) then 1 else 0);
     ok := Base.AppendSuccessfulChangeOutputCore(cmd, plan, native.displayPath, before, requested, native.isDirectory,
-      postOk, postMode, postErr, io, output);
+                                                postOk, postMode, postErr, io, output);
     ghost var post := Operand.StatusAt(context, fs0, native0, native.operand, 0, true);
     ghost var actualResult := Base.SuccessfulChangeResultForPost(cmd, plan, native.displayPath, before, requested,
-      native.isDirectory, fs0, postOk, postMode, postErr);
+                                                                 native.isDirectory, fs0, postOk, postMode, postErr);
     result := Base.SuccessfulChangeResultForPost(cmd, plan, native.displayPath, before, requested, native.isDirectory,
-      fs0, post.Ok?, C.ResultValue(post, W.DEFAULT_FILE_STATUS).mode, C.ResultErrno(post));
+                                                 fs0, post.Ok?, C.ResultValue(post, W.DEFAULT_FILE_STATUS).mode, C.ResultErrno(post));
     assert result == actualResult by { reveal Base.SuccessfulChangeResultForPost(); }
     BridgeSuccessOutput(cmd, plan, native.displayPath, before, requested, native.isDirectory, fs0,
-      post.Ok?, C.ResultValue(post, W.DEFAULT_FILE_STATUS).mode, C.ResultErrno(post));
+                        post.Ok?, C.ResultValue(post, W.DEFAULT_FILE_STATUS).mode, C.ResultErrno(post));
     BaseProof.BridgePostChangeLookupNeeded(cmd, requested);
     assert Spec.SuccessFields(cmd, BaseProof.SpecModePlanOfCore(plan), scope, entry, fs0, native0, cursor0,
-      before, requested, io.statusCursor(), io.cwdContext(), BaseProof.SpecPathResultOfCore(result)) by {
+                              before, requested, io.statusCursor(), io.cwdContext(), BaseProof.SpecPathResultOfCore(result)) by {
       reveal Spec.SuccessFields();
     }
     assert result.fs == fs0 by { reveal Base.SuccessfulChangeResultForPost(); }
@@ -113,7 +113,7 @@ module ChmodChangeRuntime {
   }
 
   method {:isolate_assertions} Apply(cmd: Schema.ChmodCmd, plan: Base.CoreModePlan, scope: Spec.Scope,
-    native: Spec.RuntimeIdentity, ghost entry: Spec.Entry, io: BenchIO.IO, output: Base.Output)
+                                     native: Spec.RuntimeIdentity, ghost entry: Spec.Entry, io: BenchIO.IO, output: Base.Output)
     returns (ok: bool, ghost change: Spec.Change)
     requires Entry.ScopeFields(io, scope)
     requires entry.identity == native
@@ -128,9 +128,9 @@ module ChmodChangeRuntime {
     ensures W.FileSystemTopologyUnchangedExceptMode(old(io.fs()), io.fs())
     ensures Operand.AnchorFields(io, native.operand)
     ensures Spec.ChangeFields(cmd, BaseProof.SpecModePlanOfCore(plan), scope, entry,
-      old(io.fs()), old(io.cwdContext()), old(io.statusCursor()), change)
+                              old(io.fs()), old(io.cwdContext()), old(io.statusCursor()), change)
     ensures change.result.fs == io.fs() && change.result.native == io.cwdContext() &&
-      change.result.cursor == io.statusCursor() && change.result.ok == ok
+            change.result.cursor == io.statusCursor() && change.result.ok == ok
     ensures output.stdout == old(output.stdout)+change.result.output && output.stderr == old(output.stderr)+change.result.diagnostics
   {
     hide *;
@@ -153,7 +153,7 @@ module ChmodChangeRuntime {
       var errChunk := RecursiveText.NativeAccessText(cmd, native.displayPath, kind, Base.NativeErrnoTextCore(err, io));
       output.stdout := output.stdout+outChunk; output.stderr := output.stderr+errChunk; ok := false;
       change := Spec.Change(Spec.State(fs0, io.statusCursor(), io.cwdContext(), outChunk, errChunk, ok),
-        fs0, io.cwdContext(), 0, 0 as bv32);
+                            fs0, io.cwdContext(), 0, 0 as bv32);
       assert Spec.ChangeFields(cmd, BaseProof.SpecModePlanOfCore(plan), scope, entry, fs0, native0, cursor0, change) by {
         reveal Spec.ChangeFields();
       }
@@ -168,11 +168,11 @@ module ChmodChangeRuntime {
     ghost var afterNative := io.cwdContext();
     var setErr := C.ResultErrno(changed);
     assert Operand.SetFields(BaseSpec.AtCursor(context, cursor0+1), scope.now, fs0, Operand.AtOffset(native0, 1),
-      native.operand, Spec.ModeFollow(cmd, native.top), desired, afterSet, afterNative, changed.Ok?, setErr) by {
+                             native.operand, Spec.ModeFollow(cmd, native.top), desired, afterSet, afterNative, changed.Ok?, setErr) by {
       reveal BaseSpec.Context(), BaseSpec.AtCursor(), Entry.ScopeFields();
     }
     Frame.Mode(BaseSpec.AtCursor(context, cursor0+1), scope.now, fs0, readNative, native.operand,
-      Spec.ModeFollow(cmd, native.top), desired, afterSet, afterNative, changed.Ok?, setErr);
+               Spec.ModeFollow(cmd, native.top), desired, afterSet, afterNative, changed.Ok?, setErr);
     Frame.Transitive(native0, readNative, afterNative);
     if changed.Err? {
       var outChunk: W.Bytes;
@@ -186,7 +186,7 @@ module ChmodChangeRuntime {
       }
       output.stdout := output.stdout+outChunk; output.stderr := output.stderr+errChunk;
       change := Spec.Change(Spec.State(afterSet, io.statusCursor(), afterNative, outChunk, errChunk, ok),
-        afterSet, afterNative, setErr, desired);
+                            afterSet, afterNative, setErr, desired);
       assert Spec.ChangeFields(cmd, BaseProof.SpecModePlanOfCore(plan), scope, entry, fs0, native0, cursor0, change) by {
         reveal Spec.ChangeFields();
       }
@@ -198,7 +198,7 @@ module ChmodChangeRuntime {
     Frame.Transitive(native0, afterNative, io.cwdContext());
     ok := finished;
     change := Spec.Change(Spec.State(afterSet, io.statusCursor(), io.cwdContext(), result.stdoutChunk, result.stderrChunk, ok),
-      afterSet, afterNative, setErr, desired);
+                          afterSet, afterNative, setErr, desired);
     assert Spec.ChangeFields(cmd, BaseProof.SpecModePlanOfCore(plan), scope, entry, fs0, native0, cursor0, change) by {
       reveal Spec.ChangeFields(), BaseProof.SpecPathResultOfCore();
     }

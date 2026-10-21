@@ -7,7 +7,7 @@ module ChmodEntryProof {
   import Proof = ChmodOperandProof
 
   lemma {:isolate_assertions} SameTopologyTarget(fs: W.FileSystem, before: W.CwdContext,
-    after: W.CwdContext, target: W.CwdTarget)
+                                                 after: W.CwdContext, target: W.CwdTarget)
     requires before.topology == after.topology
     requires C.CwdTargetFields(fs, before, target)
     ensures C.CwdTargetFields(fs, after, target)
@@ -19,34 +19,34 @@ module ChmodEntryProof {
   }
 
   lemma {:isolate_assertions} OffsetTarget(fs: W.FileSystem, native: W.CwdContext,
-    target: W.CwdTarget, offset: nat)
+                                           target: W.CwdTarget, offset: nat)
     requires C.CwdTargetFields(fs, native, target)
     ensures C.CwdTargetFields(fs, Operand.AtOffset(native, offset), target)
     ensures C.CwdTargetRecordFields(fs, Operand.AtOffset(native, offset), target) ==
-      C.CwdTargetRecordFields(fs, native, target)
+            C.CwdTargetRecordFields(fs, native, target)
     ensures C.CwdTargetNamedPathFields(Operand.AtOffset(native, offset), target) ==
-      C.CwdTargetNamedPathFields(native, target)
+            C.CwdTargetNamedPathFields(native, target)
   {
     hide *;
     reveal C.CwdTargetFields(), C.CwdTargetRecordFields(), C.CwdTargetNamedPathFields(),
-      Operand.AtOffset();
+           Operand.AtOffset();
   }
 
   // Preserve the original namespace guarantees whenever the live target has a
   // pathname, while retaining the full authenticated object for detached ones.
   lemma {:isolate_assertions} NamedTargetRecord(fs: W.FileSystem, native: W.CwdContext,
-    target: W.CwdTarget)
+                                                target: W.CwdTarget)
     requires C.CwdContextFields(fs, native)
     requires C.CwdTargetFields(fs, native, target)
     ensures |C.CwdTargetNamedPathFields(native, target)| <= 1
     ensures var paths := C.CwdTargetNamedPathFields(native, target);
-      |paths| == 1 ==> (W.FsContainsPath(fs, paths[0]) && C.CwdTargetRecordFields(fs, native, target) == fs.inodes[W.FsIdAt(fs, paths[0])])
+            |paths| == 1 ==> (W.FsContainsPath(fs, paths[0]) && C.CwdTargetRecordFields(fs, native, target) == fs.inodes[W.FsIdAt(fs, paths[0])])
     ensures var paths := C.CwdTargetNamedPathFields(native, target);
-      |paths| == 1 ==> W.FsNodeAt(fs, paths[0]) == C.CwdTargetRecordFields(fs, native, target).node
+            |paths| == 1 ==> W.FsNodeAt(fs, paths[0]) == C.CwdTargetRecordFields(fs, native, target).node
   {
     hide *;
     reveal C.CwdContextFields(), C.CwdTargetFields(), C.CwdTargetRecordFields(),
-      C.CwdTargetNamedPathFields(), C.LiveDirectoryTopologyFields(), C.LiveObjectRecordsFields();
+           C.CwdTargetNamedPathFields(), C.LiveDirectoryTopologyFields(), C.LiveObjectRecordsFields();
     match target
     case CwdNamedTarget(path) =>
       Proof.PathRecord(fs, path);

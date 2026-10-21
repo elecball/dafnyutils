@@ -40,7 +40,7 @@ module PwdCore {
     ensures Model.Inputs(io) == old(Model.Inputs(io))
     ensures Recovery.DirectoryOutcomeFields(outcome)
     ensures Spec.DirectorySelectionFields(raw,old(io.env()),old(Model.Inputs(io)),
-      old(Model.State(io)),Model.State(io),outcome,evidence)
+                                          old(Model.State(io)),Model.State(io),outcome,evidence)
     decreases *
   {
     ghost var inputs := Model.Inputs(io);
@@ -81,7 +81,7 @@ module PwdCore {
       var written := io.WriteStderr(Text.IgnoredOperandsWarningSpec());
       warningErr := C.ResultErrno(written);
       assert C.WriteStderrSpec(old(io.stderr()),io.trustedStreams(),io.stderr(),
-        Text.IgnoredOperandsWarningSpec(),C.WriteResultCommitted(written),warningErr);
+                               Text.IgnoredOperandsWarningSpec(),C.WriteResultCommitted(written),warningErr);
     }
   }
 
@@ -109,7 +109,7 @@ module PwdCore {
       hide *;
     }
     assert Spec.RunFields(raw,io.env(),inputs,before,Model.State(io),
-      beforeOut,beforeErr,io.stdout(),io.stderr(),io.trustedStreams(),exit) by {
+                          beforeOut,beforeErr,io.stdout(),io.stderr(),io.trustedStreams(),exit) by {
       hide *;
       reveal Spec.RunFields();
     }

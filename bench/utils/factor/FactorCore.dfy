@@ -510,10 +510,10 @@ module FactorCore {
       var tokens := if |raw.operands| > 0 then raw.operands else SplitWords(input);
       var run := RunTokens(tokens, raw.seenExponents, |raw.operands| > 0);
       io.stdin() == (if |raw.operands| > 0 then old(io.stdin())
-        else IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams()))) &&
+                     else IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams()))) &&
       plannedStdout == old(io.stdout()) + run.stdout &&
       plannedStderr == old(io.stderr()) + run.stderr +
-        (if |raw.operands| > 0 || read.Ok? then [] else Spec.ReadError(IOContract.ResultErrno(read))) &&
+      (if |raw.operands| > 0 || read.Ok? then [] else Spec.ReadError(IOContract.ResultErrno(read))) &&
       exit == (if run.hadError || (|raw.operands| == 0 && read.Err?) then 1 else 0)
   }
 
@@ -583,7 +583,7 @@ module FactorCore {
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -598,7 +598,7 @@ module FactorCore {
       finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -606,11 +606,11 @@ module FactorCore {
       errCommitted := StreamContract.WriteResultCommitted(result);
       errErr := StreamContract.ResultErrno(result);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                            finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
   method RunCore(raw: Schema.FactorCmdRaw, io: BenchIO.IO) returns (exit: int)

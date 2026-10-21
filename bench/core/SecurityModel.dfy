@@ -133,7 +133,7 @@ module SecurityModel {
     }
     assert InodeUniqueHostKeys(viewed) by {
       forall left, right | left in viewed.inodes && right in viewed.inodes &&
-        viewed.inodes[left].hostKey == viewed.inodes[right].hostKey
+                           viewed.inodes[left].hostKey == viewed.inodes[right].hostKey
         ensures left == right
       {
         assert fs.inodes[left].hostKey == fs.inodes[right].hostKey;
@@ -142,8 +142,8 @@ module SecurityModel {
     assert InodeValidLinkObservations(viewed) by {
       forall id | id in viewed.inodes
         ensures viewed.inodes[id].links.LinkCountKnown? &&
-          0 < viewed.inodes[id].links.count &&
-          InodeNamespaceRefCount(viewed.namespace, id) <= viewed.inodes[id].links.count
+                0 < viewed.inodes[id].links.count &&
+                InodeNamespaceRefCount(viewed.namespace, id) <= viewed.inodes[id].links.count
       {
         assert fs.inodes[id].links.LinkCountKnown?;
         assert 0 < fs.inodes[id].links.count;

@@ -18,14 +18,14 @@ module TeeTextCore {
     ensures ReadErrorMessageSpec(path, err) == Model.ReadErrorMessageSpec(path, err)
   {
     Model.ReadErrorMessageSpecText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-      Model.ReadErrorMessageSpecText1 + Utf8.Encode(ReadErrnoTextSpec(err)) + Model.ReadErrorMessageSpecText2
+    Model.ReadErrorMessageSpecText1 + Utf8.Encode(ReadErrnoTextSpec(err)) + Model.ReadErrorMessageSpecText2
   }
 
   function WriteErrorMessageText(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
     ensures WriteErrorMessageText(path, reason) == Model.WriteErrorMessageText(path, reason)
   {
     Model.WriteErrorMessageTextText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-      Model.WriteErrorMessageTextText1 + Utf8.Encode(reason) + Model.WriteErrorMessageTextText2
+    Model.WriteErrorMessageTextText1 + Utf8.Encode(reason) + Model.WriteErrorMessageTextText2
   }
 
   function StdinReadErrorText(reason: string): BenchWorld.Bytes

@@ -246,8 +246,8 @@ module TeeProof {
       );
       forall i | 0 <= i < |outputs| - 1
         ensures Spec.WriteStepRelation(
-          append, outputs[i], input, preProps, preNow, preCredentials, preTrustedFilesystem, prefixStates[i], prefixStates[i + 1]
-        )
+                  append, outputs[i], input, preProps, preNow, preCredentials, preTrustedFilesystem, prefixStates[i], prefixStates[i + 1]
+                )
       {
         assert outputs[..|outputs| - 1][i] == outputs[i];
       }
@@ -271,7 +271,7 @@ module TeeProof {
         io.stdin() == IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) &&
         plannedStdout == old(io.stdout()) + input &&
         plannedStderr == old(io.stderr()) + errOut +
-          (if read.Ok? then [] else Spec.StdinReadError(IOContract.ResultErrno(read))) &&
+        (if read.Ok? then [] else Spec.StdinReadError(IOContract.ResultErrno(read))) &&
         exit == (if read.Ok? then writeExit else 1);
       var states := WriteOutputsSummaryFieldsImpliesSpec(cmd.append, cmd.outputs, input, old(io.fs()), old(io.props()), old(io.now()), old(io.credentials()), old(io.trustedFilesystem()), io.fs(), errOut, writeExit);
     }
@@ -287,6 +287,6 @@ module TeeProof {
       Spec.EmissionFields(raw, old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
                           io.trustedStreams(), output, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + output, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + output, old(io.stderr()) + diagnostics);
   }
 }

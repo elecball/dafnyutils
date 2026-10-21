@@ -487,7 +487,7 @@ module FoldSpec {
   }
 
   ghost predicate InputPieceRelation(cmd: Schema.FoldCmd, input: Schema.Input,
-    result: BenchWorld.IOResult<BenchWorld.Bytes>, out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes)
+                                     result: BenchWorld.IOResult<BenchWorld.Bytes>, out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes)
   {
     match result
     case Ok(data) => DataFoldRelation(cmd.width, cmd.byteMode, cmd.spaceMode, data, out) && diagnostics == []
@@ -498,16 +498,16 @@ module FoldSpec {
   }
 
   ghost predicate InputStateTraceRelation(cmd: Schema.FoldCmd, before: BenchWorld.Bytes,
-    count: nat, after: BenchWorld.Bytes, results: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
-    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
-    states: seq<BenchWorld.Bytes>, preFs: BenchWorld.FileSystem)
+                                          count: nat, after: BenchWorld.Bytes, results: seq<BenchWorld.IOResult<BenchWorld.Bytes>>,
+                                          observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+                                          states: seq<BenchWorld.Bytes>, preFs: BenchWorld.FileSystem)
   {
     count <= |cmd.inputs| && |results| == count && |states| == count + 1 &&
     states[0] == before && states[count] == after &&
     forall i: nat | i < count ::
       results[i] == ReadResultAt(cmd, preFs, states[i], i, observations) &&
       states[i + 1] == (if cmd.inputs[i].Stdin? then
-        IOContract.ObservedReadStdinRemainingFields(states[i], observations) else states[i])
+                          IOContract.ObservedReadStdinRemainingFields(states[i], observations) else states[i])
   }
 
   ghost predicate InputPrefixTraceRelation(
@@ -526,9 +526,9 @@ module FoldSpec {
     count <= |cmd.inputs| &&
     |results| == |stdoutFragments| == |stderrFragments| == count &&
     (exists states: seq<BenchWorld.Bytes> ::
-      InputStateTraceRelation(cmd, preStdin, count, postStdin, results, preStreams, states, preFs)) &&
+       InputStateTraceRelation(cmd, preStdin, count, postStdin, results, preStreams, states, preFs)) &&
     (forall i: nat | i < count ::
-      InputPieceRelation(cmd, cmd.inputs[i], results[i], stdoutFragments[i], stderrFragments[i])) &&
+       InputPieceRelation(cmd, cmd.inputs[i], results[i], stdoutFragments[i], stderrFragments[i])) &&
     hadError == (exists i: nat :: i < count && results[i].Err?)
   }
 
@@ -596,28 +596,28 @@ module FoldSpec {
   )
   {
     var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
-      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+                        else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
     stdoutResult.StreamWriteResult? &&
     var errors := diagnostics + (if stdoutResult.err == 0 then [] else
-      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+                                 StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
     var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
-      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+                        else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
     stderrResult.StreamWriteResult? &&
     (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
-      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+       beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
     (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
-      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+       beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
     exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
   }
 
   twostate predicate Emission(raw: Schema.FoldCmdRaw, io: BenchIO.IO,
-    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
-    normalExit: int, exit: int)
+                              out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+                              normalExit: int, exit: int)
     reads io.stdoutRegion, io.stderrRegion
   {
     if Emits(raw) then
       EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                 io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
     else
       io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
       exit == normalExit
@@ -628,7 +628,7 @@ module FoldSpec {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSpec(raw, io, normalExit,
-        out, diagnostics) &&
+                   out, diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

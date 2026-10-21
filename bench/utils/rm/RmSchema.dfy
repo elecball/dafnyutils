@@ -7,28 +7,28 @@ module RmSchema {
   import opened CliExtern
 
   datatype RmMode = ModeRun | ModeHelp | ModeVersion | ModeInteractive |
-    ModeInvalidInteractive(value: string) | ModeInvalidPreserve(value: string) |
-    ModeAbbreviatedNoPreserve
+                    ModeInvalidInteractive(value: string) | ModeInvalidPreserve(value: string) |
+                    ModeAbbreviatedNoPreserve
   datatype RmCmdRaw = RmCmdRaw(mode: RmMode, operands: seq<string>,
-    force: bool, verbose: bool, recursive: bool, directory: bool,
-    oneFileSystem: bool, preserveRoot: bool, preserveAll: bool)
+                               force: bool, verbose: bool, recursive: bool, directory: bool,
+                               oneFileSystem: bool, preserveRoot: bool, preserveAll: bool)
 
   method Schema() returns (schema: CliTypes.CliSchema) {
     schema := CliTypes.CliSchema([
-      CliTypes.OptionDecl("rm.force", ['f'], ["force"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rm.interactive", ['i'], [], CliTypes.NoArg),
-      CliTypes.OptionDecl("rm.once", ['I'], [], CliTypes.NoArg),
-      CliTypes.OptionDecl("rm.interactive_long", [], ["interactive"], CliTypes.OptArg),
-      CliTypes.OptionDecl("rm.recursive", ['r', 'R'], ["recursive"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rm.directory", ['d'], ["dir"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rm.verbose", ['v'], ["verbose"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rm.one_file_system", [], ["one-file-system"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rm.no_preserve_root", [], ["no-preserve-root"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rm.preserve_root", [], ["preserve-root"], CliTypes.OptArg),
-      CliTypes.OptionDecl("rm.tty", [], ["-presume-input-tty"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rm.help", [], ["help"], CliTypes.NoArg),
-      CliTypes.OptionDecl("rm.version", [], ["version"], CliTypes.NoArg)
-    ], true);
+                                   CliTypes.OptionDecl("rm.force", ['f'], ["force"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rm.interactive", ['i'], [], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rm.once", ['I'], [], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rm.interactive_long", [], ["interactive"], CliTypes.OptArg),
+                                   CliTypes.OptionDecl("rm.recursive", ['r', 'R'], ["recursive"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rm.directory", ['d'], ["dir"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rm.verbose", ['v'], ["verbose"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rm.one_file_system", [], ["one-file-system"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rm.no_preserve_root", [], ["no-preserve-root"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rm.preserve_root", [], ["preserve-root"], CliTypes.OptArg),
+                                   CliTypes.OptionDecl("rm.tty", [], ["-presume-input-tty"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rm.help", [], ["help"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("rm.version", [], ["version"], CliTypes.NoArg)
+                                 ], true);
   }
 
   method ParserConfig() returns (cfg: CliTypes.ParseConfig) {
@@ -50,8 +50,8 @@ module RmSchema {
       var token := argv[i];
       if token == "--" { options := false; }
       else if options && |token| > 2 && CliModel.HasPrefix(token,"--") &&
-        CliModel.FindChar(token,'=') < 0 &&
-        (CliModel.HasPrefix("interactive",token[2..]) || CliModel.HasPrefix("preserve-root",token[2..]))
+              CliModel.FindChar(token,'=') < 0 &&
+              (CliModel.HasPrefix("interactive",token[2..]) || CliModel.HasPrefix("preserve-root",token[2..]))
       {
         normalized := normalized[i := token + "="];
         bare := bare + {i};
@@ -98,7 +98,7 @@ module RmSchema {
 
   method Decode(parsed: CliTypes.ParsedArgs) returns (raw: RmCmdRaw) {
     raw := RmCmdRaw(ModeRun, parsed.positionals, false, false, false, false,
-      false, true, false);
+                    false, true, false);
     var interactive := -1;
     var presumedTty := false;
     var i := 0;
@@ -116,10 +116,10 @@ module RmSchema {
       if option.key == "rm.interactive_long" {
         var value := if option.value.Some? then option.value.value else "always";
         if value != "" && (CliModel.HasPrefix("never", value) ||
-            CliModel.HasPrefix("no", value) || CliModel.HasPrefix("none", value)) {
+                           CliModel.HasPrefix("no", value) || CliModel.HasPrefix("none", value)) {
           interactive := 0;
         } else if value != "" && (CliModel.HasPrefix("once", value) ||
-            CliModel.HasPrefix("always", value) || CliModel.HasPrefix("yes", value)) {
+                                  CliModel.HasPrefix("always", value) || CliModel.HasPrefix("yes", value)) {
           raw := raw.(force := false);
           interactive := if CliModel.HasPrefix("once",value) then 1 else 2;
         } else {
@@ -148,7 +148,7 @@ module RmSchema {
       i := i + 1;
     }
     if |raw.operands| > 0 &&
-      (interactive == 2 || (interactive == 1 && (raw.recursive || |raw.operands| > 3)) ||
+       (interactive == 2 || (interactive == 1 && (raw.recursive || |raw.operands| > 3)) ||
         (presumedTty && interactive != 0)) {
       raw := raw.(mode := ModeInteractive);
     }

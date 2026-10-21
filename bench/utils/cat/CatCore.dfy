@@ -350,8 +350,8 @@ module CatCore {
     decreases count
   {
     if count == 0 then preStdin else
-      var previous := ExpectedStdinAt(cmd, preStdin, count - 1, preStreams);
-      if cmd.inputs[count - 1].Stdin? then IOContract.ObservedReadStdinRemainingFields(previous, preStreams) else previous
+    var previous := ExpectedStdinAt(cmd, preStdin, count - 1, preStreams);
+    if cmd.inputs[count - 1].Stdin? then IOContract.ObservedReadStdinRemainingFields(previous, preStreams) else previous
   }
 
 
@@ -643,9 +643,9 @@ module CatCore {
   , preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
     requires count < |cmd.inputs|
     ensures ExpectedStdinAt(cmd, preStdin, count + 1, preStreams) ==
-      (if cmd.inputs[count].Stdin? then IOContract.ObservedReadStdinRemainingFields(
-        ExpectedStdinAt(cmd, preStdin, count, preStreams), preStreams)
-       else ExpectedStdinAt(cmd, preStdin, count, preStreams))
+            (if cmd.inputs[count].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+                                                ExpectedStdinAt(cmd, preStdin, count, preStreams), preStreams)
+             else ExpectedStdinAt(cmd, preStdin, count, preStreams))
   {
   }
 
@@ -847,7 +847,7 @@ module CatCore {
           assert i == |observations|;
           assert errorCuts[i] == |errors|;
           assert (errors + InputErrorPiece(observation))[|errors|..] ==
-            InputErrorPiece(observation);
+                 InputErrorPiece(observation);
         } else {
           assert errorCuts[i + 1] <= |errors|;
           PrefixSliceUnchanged(errors, InputErrorPiece(observation), errorCuts[i], errorCuts[i + 1]);
@@ -1190,7 +1190,7 @@ module CatCore {
       assert InputErrorPiece(observation) == diagnostic;
       assert InputFailed(observation) == read.Err?;
       ExtendInputTraceWitness(cmd, preFs, preStreams, preStdin, i, beforeStdin,
-        observations, combined, dataCuts, err, errorCuts, hadError, observation, io.stdin());
+                              observations, combined, dataCuts, err, errorCuts, hadError, observation, io.stdin());
       combined := combined + data;
       err := err + diagnostic;
       hadError := hadError || read.Err?;
@@ -1198,7 +1198,7 @@ module CatCore {
       dataCuts := dataCuts + [|combined|];
       errorCuts := errorCuts + [|err|];
       assert InputTraceWitnessRelation(cmd, preFs, preStreams, preStdin, i + 1, io.stdin(),
-        observations, combined, dataCuts, err, errorCuts, hadError) by { hide *; }
+                                       observations, combined, dataCuts, err, errorCuts, hadError) by { hide *; }
       i := i + 1;
     }
 
@@ -1246,15 +1246,15 @@ module CatCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit,
-        out, diagnostics) &&
+                      out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var outErr := 0;
     if out != [] {
@@ -1267,13 +1267,13 @@ module CatCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
       errErr := StreamContract.ResultErrno(diagnosed);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }

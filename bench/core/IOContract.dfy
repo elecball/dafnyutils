@@ -125,7 +125,7 @@ module IOContract {
     parent: int, path: Path)
   {
     path == "" || (0 as char) in path || IsAbsolutePath(path) || parent !in handles ||
-      DirectoryParentAnchorCurrentFields(fs, handles, origins, parent)
+    DirectoryParentAnchorCurrentFields(fs, handles, origins, parent)
   }
 
   ghost function ResolvePathAtDirForMetadataFields(
@@ -140,8 +140,8 @@ module IOContract {
     else if parent !in handles then
       Result.Err(NativeFailure(Errno.EINVAL, CLocaleErrnoTextResult(Errno.EINVAL)))
     else ResolveRawSymlinkSegmentsFields(
-      fs, RawPathSegmentsFields(path), 0, handles[parent].path,
-      {}, SYMLINK_MAX_DEPTH, follow, false, HasTrailingSlash(path))
+           fs, RawPathSegmentsFields(path), 0, handles[parent].path,
+           {}, SYMLINK_MAX_DEPTH, follow, false, HasTrailingSlash(path))
   }
 
   ghost function GetFileStatusAtDirResultFields(
@@ -166,9 +166,9 @@ module IOContract {
   {
     0 <= err && (ok <==> err == 0) &&
     (ok ==>
-      match GetFileStatusAtDirResultFields(fs, handles, parent, path, follow)
-      case Err(_) => false
-      case Ok(expected) => status.(times := expected.times) == expected)
+       match GetFileStatusAtDirResultFields(fs, handles, parent, path, follow)
+       case Err(_) => false
+       case Ok(expected) => status.(times := expected.times) == expected)
   }
 
   ghost function OpenDirAtDirFailureErrFields(
@@ -203,15 +203,15 @@ module IOContract {
     FileSystemTopologyUnchangedExceptMode(fs, after) &&
     0 <= err && (ok <==> err == 0) &&
     (if !ok then after == fs else
-      match ResolvePathAtDirForMetadataFields(fs, handles, parent, path, follow)
-      case Err(_) => false
-      case Ok(target) =>
-        FsContainsPath(after, target) &&
-        SetModeTargetOk(FsNodeAt(fs, target), FsNodeAt(after, target), mode,
-          !follow && FsNodeAt(fs, target).Symlink?) &&
-        (if !follow && FsNodeAt(fs, target).Symlink? then after == fs
-         else after == FsSetPath(fs, target,
-           WithNodeChangeTime(WithNodeMode(FsNodeAt(fs, target), mode), now, 0))))
+     match ResolvePathAtDirForMetadataFields(fs, handles, parent, path, follow)
+     case Err(_) => false
+     case Ok(target) =>
+       FsContainsPath(after, target) &&
+       SetModeTargetOk(FsNodeAt(fs, target), FsNodeAt(after, target), mode,
+                       !follow && FsNodeAt(fs, target).Symlink?) &&
+       (if !follow && FsNodeAt(fs, target).Symlink? then after == fs
+        else after == FsSetPath(fs, target,
+                                WithNodeChangeTime(WithNodeMode(FsNodeAt(fs, target), mode), now, 0))))
   }
 
   ghost predicate OpenDirAtDirTargetContractFields(
@@ -220,14 +220,14 @@ module IOContract {
   {
     0 <= err && (ok <==> err == 0) &&
     (if !ok then after == handles else
-      handle !in handles &&
-      match ResolvePathAtDirForMetadataFields(fs, handles, parent, path, true)
-      case Err(_) => false
-      case Ok(target) =>
-        FsNodeAt(fs, target).Directory? &&
-        after == handles[handle :=
-          if dots then DotDirHandleState(target, DirectoryEntriesIncludingDotsForPathFields(fs, target))
-          else DirHandleState(target, DirectoryEntriesForPathFields(fs, target))])
+     handle !in handles &&
+     match ResolvePathAtDirForMetadataFields(fs, handles, parent, path, true)
+     case Err(_) => false
+     case Ok(target) =>
+       FsNodeAt(fs, target).Directory? &&
+       after == handles[handle :=
+       if dots then DotDirHandleState(target, DirectoryEntriesIncludingDotsForPathFields(fs, target))
+       else DirHandleState(target, DirectoryEntriesForPathFields(fs, target))])
   }
 
   ghost predicate SetModeCanSucceedFields(fs: FileSystem, path: Path, follow: bool)
@@ -270,39 +270,39 @@ module IOContract {
       else if !IsAbsolutePath(path) && handle !in context.capabilities && handle !in context.legacyHandles then
         {UnknownDirectoryParentErrnoFields(handle)}
       else AtDirContextLookupFailureErrnosFields(fs,context,handle,path,follow) +
-        NativeMutationFaultErrnos + {Errno.EOPNOTSUPP}
+           NativeMutationFaultErrnos + {Errno.EOPNOTSUPP}
     case OpenDirectoryAtDirRequest(fs, context, handle, path, _) =>
       if path == "" then {Errno.ENOENT}
       else if !IsAbsolutePath(path) && handle !in context.capabilities && handle !in context.legacyHandles then
         {UnknownDirectoryParentErrnoFields(handle)}
       else AtDirContextLookupFailureErrnosFields(fs,context,handle,path,true) +
-        {Errno.ENFILE,Errno.EMFILE} +
-        (if CwdResolvedOpenFailureErrFields(fs,context,
-              ResolvePathAtDirContextForMetadataFields(fs,context,handle,path,true)) == 0 then {}
-         else {CwdResolvedOpenFailureErrFields(fs,context,
-              ResolvePathAtDirContextForMetadataFields(fs,context,handle,path,true))})
+           {Errno.ENFILE,Errno.EMFILE} +
+           (if CwdResolvedOpenFailureErrFields(fs,context,
+                                               ResolvePathAtDirContextForMetadataFields(fs,context,handle,path,true)) == 0 then {}
+            else {CwdResolvedOpenFailureErrFields(fs,context,
+                                                  ResolvePathAtDirContextForMetadataFields(fs,context,handle,path,true))})
     case StatusAtCwdRequest(_, fs, context, path, follow) =>
       CwdLookupFailureErrnosFields(fs,context,path,follow)
     case ReadLinkAtCwdRequest(fs, context, path) =>
       if path == "" then {Errno.ENOENT}
       else CwdLookupFailureErrnosFields(fs,context,path,false) +
-        (if ReadLinkFromCwdContextResultFields(fs,context,path).Ok? then {} else {Errno.EINVAL})
+           (if ReadLinkFromCwdContextResultFields(fs,context,path).Ok? then {} else {Errno.EINVAL})
     case SetModeAtCwdRequest(fs, context, _, path, follow, _) =>
       if path == "" then {Errno.ENOENT}
       else CwdLookupFailureErrnosFields(fs,context,path,follow) + NativeMutationFaultErrnos + {Errno.EOPNOTSUPP}
     case OpenDirectoryAtCwdRequest(fs, context, path, _) =>
       if path == "" then {Errno.ENOENT}
       else CwdLookupFailureErrnosFields(fs,context,path,true) + {Errno.ENFILE,Errno.EMFILE} +
-        (if CwdResolvedOpenFailureErrFields(fs,context,
-              ResolvePathAtCwdForMetadataFields(fs,context,path,true)) == 0 then {}
-         else {CwdResolvedOpenFailureErrFields(fs,context,
-              ResolvePathAtCwdForMetadataFields(fs,context,path,true))})
+           (if CwdResolvedOpenFailureErrFields(fs,context,
+                                               ResolvePathAtCwdForMetadataFields(fs,context,path,true)) == 0 then {}
+            else {CwdResolvedOpenFailureErrFields(fs,context,
+                                                  ResolvePathAtCwdForMetadataFields(fs,context,path,true))})
     case CapabilityStatusRequest(_, fs, context, handle) =>
       if handle !in context.capabilities then {Errno.EBADF}
       else NativeLookupFaultErrnos + {Errno.EBADF,Errno.EINTR,Errno.EOVERFLOW,Errno.ENOSYS} +
-        (match GetOpenDirectoryCapabilityResultFields(fs,context,handle)
-         case Err(error) => {IOErrorErrno(error)}
-         case Ok(_) => {})
+           (match GetOpenDirectoryCapabilityResultFields(fs,context,handle)
+            case Err(error) => {IOErrorErrno(error)}
+            case Ok(_) => {})
     case StatusRequest(_, fs, path, follow) => NativeStatusFailureErrnosFields(fs, path, follow)
     case MetadataQueryRequest(fs, path, follow, _) => MetadataFailureErrnosFields(fs, path, follow)
     case ReadLinkRequest(fs, path) =>
@@ -341,19 +341,19 @@ module IOContract {
       GetFileStatusAtDirContextResultFields(fs,context,handle,path,follow).Ok?
     case SetModeAtDirRequest(fs, _, context, handle, path, follow, _) =>
       CwdResolvedModeCanSucceedFields(fs,context,
-        ResolvePathAtDirContextForMetadataFields(fs,context,handle,path,follow))
+                                      ResolvePathAtDirContextForMetadataFields(fs,context,handle,path,follow))
     case OpenDirectoryAtDirRequest(fs, context, handle, path, _) =>
       CwdResolvedOpenFailureErrFields(fs,context,
-        ResolvePathAtDirContextForMetadataFields(fs,context,handle,path,true)) == 0
+                                      ResolvePathAtDirContextForMetadataFields(fs,context,handle,path,true)) == 0
     case StatusAtCwdRequest(_, fs, context, path, follow) =>
       GetFileStatusFromCwdContextResultFields(fs,context,path,follow).Ok?
     case ReadLinkAtCwdRequest(fs, context, path) => ReadLinkFromCwdContextResultFields(fs,context,path).Ok?
     case SetModeAtCwdRequest(fs, context, _, path, follow, _) =>
       CwdResolvedModeCanSucceedFields(fs,context,
-        ResolvePathAtCwdForMetadataFields(fs,context,path,follow))
+                                      ResolvePathAtCwdForMetadataFields(fs,context,path,follow))
     case OpenDirectoryAtCwdRequest(fs, context, path, _) =>
       CwdResolvedOpenFailureErrFields(fs,context,
-        ResolvePathAtCwdForMetadataFields(fs,context,path,true)) == 0
+                                      ResolvePathAtCwdForMetadataFields(fs,context,path,true)) == 0
     case CapabilityStatusRequest(_, fs, context, handle) =>
       GetOpenDirectoryCapabilityResultFields(fs,context,handle).Ok?
     case StatusRequest(_, fs, path, follow) => GetFileStatusResultFields(fs, path, follow).Ok?
@@ -361,7 +361,7 @@ module IOContract {
     case ReadLinkRequest(fs, path) => ReadLinkResultFields(fs, path).Ok?
     case ResolveIdentityRequest(fs, cwd, path) =>
       path != "" && ResolvePathForMetadataFields(fs,
-        if IsAbsolutePath(path) then path else AppendPath(BuildPath(true, PathSegments(cwd)), path), true).Ok?
+                                                 if IsAbsolutePath(path) then path else AppendPath(BuildPath(true, PathSegments(cwd)), path), true).Ok?
     case CreateSymlinkRequest(fs, _, path, target) =>
       !HasTrailingSlash(path) && !HasRawTerminalSpecialFields(path) && CreateSymlinkFailureErrFields(fs, path, target) == 0
     case DeletePathRequest(fs, path) => !HasTrailingSlash(path) && DeletePathFailureErrFields(fs, path) == 0
@@ -392,7 +392,7 @@ module IOContract {
 
   lemma NativeFailureDomainContainsError(request: NativeFailureRequest)
     ensures Errno.EIO in NativeFailureErrnosFields(request) || Errno.EINVAL in NativeFailureErrnosFields(request) ||
-      Errno.ENOENT in NativeFailureErrnosFields(request) || Errno.EBADF in NativeFailureErrnosFields(request)
+            Errno.ENOENT in NativeFailureErrnosFields(request) || Errno.EBADF in NativeFailureErrnosFields(request)
   {
     hide *;
     reveal NativeFailureErrnosFields(), NativeRequestHasInvalidAbiPath(), MetadataFailureErrnosFields(), NativeStatusFailureErrnosFields();
@@ -435,7 +435,7 @@ module IOContract {
   }
 
   type ValidNativeFailureObservations = observations: ((NativeFailureRequest) -> int) |
-    (forall request :: ValidNativeFailureObservation(request, observations(request)))
+      (forall request :: ValidNativeFailureObservation(request, observations(request)))
     ghost witness (request: NativeFailureRequest) => NativeFailureWitness(request)
 
   ghost function ObservedNativeStatusResultFields(
@@ -459,8 +459,8 @@ module IOContract {
     var err := failures(StatusAtCwdRequest(ordinal,fs,context,path,follow));
     if err != 0 then Result.Err(NativeFailure(err,CLocaleErrnoTextResult(err)))
     else match GetFileStatusFromCwdContextResultFields(fs,context,path,follow)
-      case Err(error) => Result.Err(error)
-      case Ok(status) => Result.Ok(status.(times := observations(ordinal,fs,CwdStatusObservationPathFields(context,path),follow)))
+         case Err(error) => Result.Err(error)
+         case Ok(status) => Result.Ok(status.(times := observations(ordinal,fs,CwdStatusObservationPathFields(context,path),follow)))
   }
 
   ghost predicate ObservedNativeFileStatusAtCwdContractFields(
@@ -482,8 +482,8 @@ module IOContract {
     var err := failures(StatusAtDirRequest(ordinal,fs,context,parent,path,follow));
     if err != 0 then Result.Err(NativeFailure(err,CLocaleErrnoTextResult(err)))
     else match GetFileStatusAtDirContextResultFields(fs,context,parent,path,follow)
-      case Err(error) => Result.Err(error)
-      case Ok(status) => Result.Ok(status.(times := observations(ordinal,fs,AtDirContextStatusObservationPathFields(context,parent,path),follow)))
+         case Err(error) => Result.Err(error)
+         case Ok(status) => Result.Ok(status.(times := observations(ordinal,fs,AtDirContextStatusObservationPathFields(context,parent,path),follow)))
   }
 
   ghost predicate ObservedNativeFileStatusAtDirContractFields(
@@ -1027,13 +1027,13 @@ module IOContract {
     requires DirectNoFollowResultFields(fs, AppendPath(current, segs[i])).Ok?
     requires i + 1 < |segs| || followTerminalSymlink || requireDirectory
     requires ResolveRawSymlinkSegmentsFields(
-      fs, segs, i, current, seen, fuel, followTerminalSymlink, false,
-      requireDirectory) == Result.Ok(target)
+               fs, segs, i, current, seen, fuel, followTerminalSymlink, false,
+               requireDirectory) == Result.Ok(target)
     ensures ResolveRawSymlinkSegmentsFields(
-      fs, RawPathSegmentsFields(link) + segs[i + 1..], 0,
-      if IsAbsolutePath(link) then "/" else ParentPath(AppendPath(current, segs[i])),
-      seen + {AppendPath(current, segs[i])}, fuel - 1, followTerminalSymlink, false,
-      requireDirectory || (i + 1 == |segs| && HasTrailingSlash(link))) == Result.Ok(target)
+              fs, RawPathSegmentsFields(link) + segs[i + 1..], 0,
+              if IsAbsolutePath(link) then "/" else ParentPath(AppendPath(current, segs[i])),
+              seen + {AppendPath(current, segs[i])}, fuel - 1, followTerminalSymlink, false,
+              requireDirectory || (i + 1 == |segs| && HasTrailingSlash(link))) == Result.Ok(target)
   {
     reveal ResolveRawSymlinkSegmentsFields();
   }
@@ -1190,15 +1190,15 @@ module IOContract {
           var restarted := RawPathSegmentsFields(beforeLink) + remaining;
           var restartCurrent := if IsAbsolutePath(beforeLink) then "/" else ParentPath(next);
           var restartDirectory := requireDirectory ||
-            (|remaining| == 0 && HasTrailingSlash(beforeLink));
+                                  (|remaining| == 0 && HasTrailingSlash(beforeLink));
           assert (|remaining| == 0) == (i + 1 == |segs|);
           hide *;
           assert ResolveRawSymlinkSegmentsFields(
-            before, restarted, 0, restartCurrent, seen + {next}, fuel - 1,
-            followTerminalSymlink, false, restartDirectory) == Result.Ok(beforeTarget);
+              before, restarted, 0, restartCurrent, seen + {next}, fuel - 1,
+              followTerminalSymlink, false, restartDirectory) == Result.Ok(beforeTarget);
           assert ResolveRawSymlinkSegmentsFields(
-            after, restarted, 0, restartCurrent, seen + {next}, fuel - 1,
-            followTerminalSymlink, false, restartDirectory) == Result.Ok(afterTarget);
+              after, restarted, 0, restartCurrent, seen + {next}, fuel - 1,
+              followTerminalSymlink, false, restartDirectory) == Result.Ok(afterTarget);
           ResolveRawSuccessfulTargetsEqualExceptModeFieldsInternal(
             before,
             after,
@@ -1614,9 +1614,9 @@ module IOContract {
       data == [] && 0 <= err && (err == 0 <==> stage == ReadSucceeded) &&
       stage in {ReadSucceeded, OpenFailed, CloseFailed} &&
       (stage != OpenFailed ==>
-        match ResolvePathForMetadataFields(fs, path, true)
-        case Err(_) => false
-        case Ok(target) => FsContainsPath(fs, target) && !FsNodeAt(fs, target).Inaccessible?)
+         match ResolvePathForMetadataFields(fs, path, true)
+         case Err(_) => false
+         case Ok(target) => FsContainsPath(fs, target) && !FsNodeAt(fs, target).Inaccessible?)
     case _ => false
   }
 
@@ -1937,9 +1937,9 @@ module IOContract {
     0 <= err && (ok <==> err == 0) &&
     (!ok ==> err in NativeStatusFailureErrnosFields(fs, path, followSymlink)) &&
     (ok ==>
-      match GetFileStatusResultFields(fs, path, followSymlink)
-      case Ok(expected) => status.(times := expected.times) == expected
-      case Err(_) => false)
+       match GetFileStatusResultFields(fs, path, followSymlink)
+       case Ok(expected) => status.(times := expected.times) == expected
+       case Err(_) => false)
   }
 
   lemma ObservedFileStatusImpliesStructure(
@@ -3070,12 +3070,12 @@ module IOContract {
   )  {
     0 <= err && (ok <==> err == 0) &&
     (!ok ==> after == before &&
-      err in NativeFailureErrnosFields(StdoutTimesRequest(before, now, atime, mtime))) &&
+             err in NativeFailureErrnosFields(StdoutTimesRequest(before, now, atime, mtime))) &&
     (ok ==> before.StdoutTimestampAvailable? &&
-      TimestampUpdateValidFields(atime) && TimestampUpdateValidFields(mtime) &&
-      exists afterTimes: AccessModificationTimes ::
-        after == StdoutTimestampAvailable(afterTimes) &&
-        StdoutTimestampUpdateFields(before.times, afterTimes, atime, mtime, now))
+            TimestampUpdateValidFields(atime) && TimestampUpdateValidFields(mtime) &&
+            exists afterTimes: AccessModificationTimes ::
+              after == StdoutTimestampAvailable(afterTimes) &&
+              StdoutTimestampUpdateFields(before.times, afterTimes, atime, mtime, now))
   }
 
   ghost predicate ValidLeafName(name: string)
@@ -3142,12 +3142,12 @@ module IOContract {
   ghost predicate OpenDirOutcomeFields(fs: FileSystem, path: Path, ok: bool, err: int)
   {
     (if (0 as char) in path then !ok && err == Errno.EINVAL
-    else if ok then
-      err == 0 && OpenDirFailureErrFields(fs,path) == 0
-    else
-      err > 0 &&
-      (err == OpenDirFailureErrFields(fs,path) ||
-       err in NativeLookupFaultErrnos + {Errno.ENFILE, Errno.EMFILE}))
+     else if ok then
+       err == 0 && OpenDirFailureErrFields(fs,path) == 0
+     else
+       err > 0 &&
+       (err == OpenDirFailureErrFields(fs,path) ||
+        err in NativeLookupFaultErrnos + {Errno.ENFILE, Errno.EMFILE}))
   }
 
   ghost predicate OpenDirContractFields(
@@ -3193,15 +3193,15 @@ module IOContract {
   )
   {
     var absolutePath := if IsAbsolutePath(path) then path
-      else AppendPath(BuildPath(true, PathSegments(cwd)), path);
+                        else AppendPath(BuildPath(true, PathSegments(cwd)), path);
     0 <= err && (ok <==> err == 0) &&
     (!ok ==> resolvedPath == "" && err in MetadataFailureErrnosFields(fs, absolutePath, true)) &&
     (ok ==>
-      match ResolvePathForMetadataFields(fs, absolutePath, true)
-      case Err(_) => false
-      case Ok(resolved) =>
-        resolvedPath == resolved && FsContainsPath(fs, resolved) &&
-        NormalizePath(resolved) == resolved && IsAbsolutePath(resolved))
+       match ResolvePathForMetadataFields(fs, absolutePath, true)
+       case Err(_) => false
+       case Ok(resolved) =>
+         resolvedPath == resolved && FsContainsPath(fs, resolved) &&
+         NormalizePath(resolved) == resolved && IsAbsolutePath(resolved))
   }
 
   function DirectoryEntryKindForFileKind(kind: FileKind): DirectoryEntryKind
@@ -3265,37 +3265,37 @@ module IOContract {
   {
     0 <= err &&
     (if !(handle in dirHandles) then
-      !hasMore && name == "" && kind == UnknownDirentKind &&
-      err != 0 && dirHandles2 == dirHandles
-    else
-      var state := dirHandles[handle];
-      if err != 0 then
-        !hasMore && name == "" && kind == UnknownDirentKind &&
-        dirHandles2 == dirHandles
-      else if |state.remaining| == 0 then
-        !hasMore && name == "" && kind == UnknownDirentKind &&
-        dirHandles2 == dirHandles
-      else
-        exists entry ::
-          entry in state.remaining &&
-          hasMore && err == 0 && name == entry.name &&
-          (if state.DotDirHandleState? && (name == "." || name == "..") then
-             entry == DirEntry(name, true, false) &&
-             kind == DirectoryDirentKind &&
-             DirectoryDotEntryMatchesFilesystemFields(fs, state.path, name)
+       !hasMore && name == "" && kind == UnknownDirentKind &&
+       err != 0 && dirHandles2 == dirHandles
+     else
+       var state := dirHandles[handle];
+       if err != 0 then
+         !hasMore && name == "" && kind == UnknownDirentKind &&
+         dirHandles2 == dirHandles
+       else if |state.remaining| == 0 then
+         !hasMore && name == "" && kind == UnknownDirentKind &&
+         dirHandles2 == dirHandles
+       else
+         exists entry ::
+           entry in state.remaining &&
+           hasMore && err == 0 && name == entry.name &&
+           (if state.DotDirHandleState? && (name == "." || name == "..") then
+              entry == DirEntry(name, true, false) &&
+              kind == DirectoryDirentKind &&
+              DirectoryDotEntryMatchesFilesystemFields(fs, state.path, name)
+            else
+              DirectoryEntryKindMatchesEntry(kind, entry) &&
+              DirectoryEntryKindMatchesFilesystemFields(
+                fs, state.path, name, kind)) &&
+           dirHandles2 == dirHandles[handle :=
+           if state.DotDirHandleState? then
+             DotDirHandleState(state.path, state.remaining - {entry})
            else
-             DirectoryEntryKindMatchesEntry(kind, entry) &&
-             DirectoryEntryKindMatchesFilesystemFields(
-               fs, state.path, name, kind)) &&
-          dirHandles2 == dirHandles[handle :=
-          if state.DotDirHandleState? then
-            DotDirHandleState(state.path, state.remaining - {entry})
-          else
-            DirHandleState(state.path, state.remaining - {entry})])
+             DirHandleState(state.path, state.remaining - {entry})])
   }
 
   ghost predicate ReadDirInodeFields(fs: FileSystem, handles: map<int,DirHandleState>,
-    handle: int, name: string, hasMore: bool, inode: int)
+                                     handle: int, name: string, hasMore: bool, inode: int)
   {
     hasMore && handle in handles && name != "." && name != ".." ==>
       var path := AppendPath(handles[handle].path,name);
@@ -3340,8 +3340,8 @@ module IOContract {
     dirHandles2 == (if handle in dirHandles then dirHandles - {handle} else dirHandles) &&
     0 <= err && (ok <==> err == 0) &&
     (if handle in dirHandles then
-      !ok ==> err in {Errno.EBADF, Errno.EINTR, Errno.EIO}
-    else !ok && err == Errno.EINVAL)
+       !ok ==> err in {Errno.EBADF, Errno.EINTR, Errno.EIO}
+     else !ok && err == Errno.EINVAL)
   }
 
   function HasPathPrefix(root: Path, path: Path): bool { path == root || (root != "" && root != "/" && |root| < |path| && path[..|root|] == root && path[|root|] == '/') }
@@ -3569,25 +3569,25 @@ module IOContract {
     0 <= err && (ok <==> err == 0) &&
     (!ok ==> fs2 == fs && err in RenameFailureErrnosFields(fs, source, target)) &&
     (ok ==>
-      (0 as char) !in source && (0 as char) !in target &&
-      IsNonRootRawEntryPathFields(source) && IsNonRootRawEntryPathFields(target) &&
-      match ResolvePathForRenameNoFollowTerminalFields(fs, source)
-      case Err(_) => false
-      case Ok(resolvedSource) =>
-        match ResolvePathForRenameDestinationFields(fs, target)
-        case Err(_) => false
-        case Ok(resolvedTarget) =>
-          FsContainsPath(fs, resolvedSource) &&
-          if InodeSameObject(fs, resolvedSource, resolvedTarget) then fs2 == fs
-          else
-            resolvedSource != resolvedTarget &&
-            !HasPathPrefix(resolvedSource, resolvedTarget) &&
-            RenameKindCompatible(fs, resolvedSource, resolvedTarget) &&
-            exists transitionNow: int, sourceParentStorage: StorageInfo, targetParentStorage: StorageInfo ::
-              DirectoryStorageObservationFields(sourceParentStorage) &&
-              DirectoryStorageObservationFields(targetParentStorage) &&
-              fs2 == RenameFsWithMetadataFields(fs, resolvedSource, resolvedTarget,
-                transitionNow, sourceParentStorage, targetParentStorage))
+       (0 as char) !in source && (0 as char) !in target &&
+       IsNonRootRawEntryPathFields(source) && IsNonRootRawEntryPathFields(target) &&
+       match ResolvePathForRenameNoFollowTerminalFields(fs, source)
+       case Err(_) => false
+       case Ok(resolvedSource) =>
+         match ResolvePathForRenameDestinationFields(fs, target)
+         case Err(_) => false
+         case Ok(resolvedTarget) =>
+           FsContainsPath(fs, resolvedSource) &&
+           if InodeSameObject(fs, resolvedSource, resolvedTarget) then fs2 == fs
+           else
+             resolvedSource != resolvedTarget &&
+             !HasPathPrefix(resolvedSource, resolvedTarget) &&
+             RenameKindCompatible(fs, resolvedSource, resolvedTarget) &&
+             exists transitionNow: int, sourceParentStorage: StorageInfo, targetParentStorage: StorageInfo ::
+               DirectoryStorageObservationFields(sourceParentStorage) &&
+               DirectoryStorageObservationFields(targetParentStorage) &&
+               fs2 == RenameFsWithMetadataFields(fs, resolvedSource, resolvedTarget,
+                                                 transitionNow, sourceParentStorage, targetParentStorage))
   }
 
   ghost predicate RenamePathWithChangeTimeContractFields(
@@ -3995,7 +3995,7 @@ module IOContract {
       var times := NodeTimes(before.node);
       var observed := NodeTimes(after.node);
       after == before.(node := WithNodeTimes(before.node,
-        times.(atimeSec := observed.atimeSec, atimeNsec := observed.atimeNsec)))
+                                             times.(atimeSec := observed.atimeSec, atimeNsec := observed.atimeNsec)))
     else after == before
   }
 
@@ -4031,22 +4031,22 @@ module IOContract {
       after.inodes.Keys == (if InodeNamespaceRefCount(before.namespace, id) == 1
                             then before.inodes.Keys - {id} else before.inodes.Keys) &&
       (forall oldId | oldId in after.inodes ::
-        if oldId == parentId then
-          ParentDirectoryEffectFields(before.inodes[oldId], after.inodes[oldId])
-        else if oldId == id then
-          var prior := before.inodes[oldId];
-          var observed := after.inodes[oldId];
-          var times := NodeTimes(prior.node);
-          var observedTimes := NodeTimes(observed.node);
-          observed == prior.(
-            links := (match prior.links
-                      case LinkCountUnknown => LinkCountUnknown
-                      case LinkCountKnown(count) => LinkCountKnown(if count == 0 then 0 else count - 1)),
-            node := WithNodeTimes(prior.node,
-              times.(ctimeSec := observedTimes.ctimeSec, ctimeNsec := observedTimes.ctimeNsec,
-                atimeSec := (if prior.node.Symlink? then observedTimes.atimeSec else times.atimeSec),
-                atimeNsec := (if prior.node.Symlink? then observedTimes.atimeNsec else times.atimeNsec))))
-        else TraversalRecordEffectFields(before.inodes[oldId], after.inodes[oldId]))
+         if oldId == parentId then
+           ParentDirectoryEffectFields(before.inodes[oldId], after.inodes[oldId])
+         else if oldId == id then
+           var prior := before.inodes[oldId];
+           var observed := after.inodes[oldId];
+           var times := NodeTimes(prior.node);
+           var observedTimes := NodeTimes(observed.node);
+           observed == prior.(
+           links := (match prior.links
+                               case LinkCountUnknown => LinkCountUnknown
+                               case LinkCountKnown(count) => LinkCountKnown(if count == 0 then 0 else count - 1)),
+           node := WithNodeTimes(prior.node,
+                                 times.(ctimeSec := observedTimes.ctimeSec, ctimeNsec := observedTimes.ctimeNsec,
+                                 atimeSec := (if prior.node.Symlink? then observedTimes.atimeSec else times.atimeSec),
+                                 atimeNsec := (if prior.node.Symlink? then observedTimes.atimeNsec else times.atimeNsec))))
+         else TraversalRecordEffectFields(before.inodes[oldId], after.inodes[oldId]))
   }
 
   // link/linkat add a namespace alias to the selected existing inode.
@@ -4067,28 +4067,28 @@ module IOContract {
         after.namespace == InodeTreeSetSubtreeSegments(before.namespace,PathSegments(destination),InodeTreeNode(id,map[])) &&
         after.inodes.Keys == before.inodes.Keys &&
         (forall oldId | oldId in before.inodes ::
-          if oldId == id then
-            var prior := before.inodes[id];
-            var observed := after.inodes[id];
-            var times := NodeTimes(prior.node);
-            var observedTimes := NodeTimes(observed.node);
-            observed == prior.(
-              links := (match prior.links
-                        case LinkCountUnknown => LinkCountUnknown
-                        case LinkCountKnown(count) => LinkCountKnown(count + 1)),
-              node := WithNodeTimes(prior.node,
-                times.(ctimeSec := observedTimes.ctimeSec,ctimeNsec := observedTimes.ctimeNsec,
-                  atimeSec := (if prior.node.Symlink? then observedTimes.atimeSec else times.atimeSec),
-                  atimeNsec := (if prior.node.Symlink? then observedTimes.atimeNsec else times.atimeNsec))))
-          else if oldId == parentId then ParentDirectoryEffectFields(before.inodes[oldId],after.inodes[oldId])
-          else TraversalRecordEffectFields(before.inodes[oldId],after.inodes[oldId]))
+           if oldId == id then
+             var prior := before.inodes[id];
+             var observed := after.inodes[id];
+             var times := NodeTimes(prior.node);
+             var observedTimes := NodeTimes(observed.node);
+             observed == prior.(
+             links := (match prior.links
+                                 case LinkCountUnknown => LinkCountUnknown
+                                 case LinkCountKnown(count) => LinkCountKnown(count + 1)),
+             node := WithNodeTimes(prior.node,
+                                   times.(ctimeSec := observedTimes.ctimeSec,ctimeNsec := observedTimes.ctimeNsec,
+                                   atimeSec := (if prior.node.Symlink? then observedTimes.atimeSec else times.atimeSec),
+                                   atimeNsec := (if prior.node.Symlink? then observedTimes.atimeNsec else times.atimeNsec))))
+           else if oldId == parentId then ParentDirectoryEffectFields(before.inodes[oldId],after.inodes[oldId])
+           else TraversalRecordEffectFields(before.inodes[oldId],after.inodes[oldId]))
   }
 
   ghost predicate TruncatedContentsFields(before: Bytes, size: nat, after: Bytes)
   {
     |after| == size &&
     (forall i :: 0 <= i < size ==>
-      after[i] == (if i < |before| then before[i] else (0 as char)))
+                   after[i] == (if i < |before| then before[i] else (0 as char)))
   }
 
   // Truncation changes the existing inode, so every hard-link alias sees the
@@ -4115,7 +4115,7 @@ module IOContract {
       observed.node.times.atimeSec == prior.node.times.atimeSec &&
       observed.node.times.atimeNsec == prior.node.times.atimeNsec &&
       (forall other | other in before.inodes && other != id ::
-        TraversalRecordEffectFields(before.inodes[other], after.inodes[other]))
+         TraversalRecordEffectFields(before.inodes[other], after.inodes[other]))
   }
 
   // Lookup may fail because of storage, allocation, access-control or name-limit
@@ -4289,7 +4289,7 @@ module IOContract {
 
   // Metadata observations may refresh times, but cannot invent an identity or kind.
   ghost predicate FilesystemQueryShapeFields(request: TrustedFilesystemRequest,
-                                            result: TrustedFilesystemResult)
+                                             result: TrustedFilesystemResult)
   {
     request.FilesystemQuery? && result.ok ==>
       match ResolvePathForMetadataFields(request.preFs, request.path, request.followSymlink)
@@ -4338,9 +4338,9 @@ module IOContract {
                                      result.writeStage != WriteOpenFailed, result.postFs) &&
        (if request.FilesystemWrite? then
           CreatedRegularRequestedModeFields(request.preFs, request.props, request.path,
-            result.writeStage != WriteOpenFailed, result.postFs, request.requestedCreateMode)
+                                            result.writeStage != WriteOpenFailed, result.postFs, request.requestedCreateMode)
         else CreatedRegularModeFields(request.preFs, request.props, request.path,
-            result.writeStage != WriteOpenFailed, result.postFs)))
+                                      result.writeStage != WriteOpenFailed, result.postFs)))
   }
 
   // Construct an admissible failure for the subtype witness. This ghost choice
@@ -4667,7 +4667,7 @@ module IOContract {
   )
   {
     NativeFailureContractFields(beforeNativeFailures,
-      MetadataQueryRequest(beforeFs, path, followSymlink, ModeQuery), err) &&
+                                MetadataQueryRequest(beforeFs, path, followSymlink, ModeQuery), err) &&
     GetFileModeContractFields(beforeFs, path, followSymlink, ok, mode, err)
   }
 
@@ -4678,7 +4678,7 @@ module IOContract {
   {
     afterCursor == beforeCursor+1 &&
     ObservedNativeFileStatusAtDirContractFields(observations,failures,beforeCursor,
-      beforeFs,beforeContext,parent,path,followSymlink,ok,status,err) &&
+                                                beforeFs,beforeContext,parent,path,followSymlink,ok,status,err) &&
     GetFileStatusAtDirContextStructureContractFields(
       beforeFs,beforeContext,parent,path,followSymlink,ok,status,err)
   }
@@ -4690,7 +4690,7 @@ module IOContract {
   {
     NativeFailureContractFields(failures,SetModeAtDirRequest(beforeFs,beforeNow,beforeContext,parent,path,followSymlink,mode),err) &&
     SetFileModeFromCwdTargetContractFields(beforeFs,beforeContext,beforeNow,afterFs,afterContext,
-      ResolvePathAtDirContextForMetadataFields(beforeFs,beforeContext,parent,path,followSymlink),mode,ok,err)
+                                           ResolvePathAtDirContextForMetadataFields(beforeFs,beforeContext,parent,path,followSymlink),mode,ok,err)
   }
 
   ghost predicate OpenDirAtDirSpec(
@@ -4699,7 +4699,7 @@ module IOContract {
   {
     NativeFailureContractFields(failures,OpenDirectoryAtDirRequest(beforeFs,beforeContext,parent,path,includeDots),err) &&
     OpenDirFromCwdTargetContractFields(beforeFs,beforeContext,afterContext,
-      ResolvePathAtDirContextForMetadataFields(beforeFs,beforeContext,parent,path,true),includeDots,ok,handle,err)
+                                       ResolvePathAtDirContextForMetadataFields(beforeFs,beforeContext,parent,path,true),includeDots,ok,handle,err)
   }
 
   ghost predicate GetFileStatusAtCwdSpec(
@@ -4709,7 +4709,7 @@ module IOContract {
   {
     afterCursor == beforeCursor+1 &&
     ObservedNativeFileStatusAtCwdContractFields(observations,failures,beforeCursor,
-      beforeFs,beforeContext,path,followSymlink,ok,status,err) &&
+                                                beforeFs,beforeContext,path,followSymlink,ok,status,err) &&
     GetFileStatusAtCwdStructureContractFields(
       beforeFs,beforeContext,path,followSymlink,ok,status,err)
   }
@@ -4721,7 +4721,7 @@ module IOContract {
   {
     NativeFailureContractFields(failures,SetModeAtCwdRequest(beforeFs,beforeContext,beforeNow,path,followSymlink,mode),err) &&
     SetFileModeFromCwdTargetContractFields(beforeFs,beforeContext,beforeNow,afterFs,afterContext,
-      ResolvePathAtCwdForMetadataFields(beforeFs,beforeContext,path,followSymlink),mode,ok,err)
+                                           ResolvePathAtCwdForMetadataFields(beforeFs,beforeContext,path,followSymlink),mode,ok,err)
   }
 
   ghost predicate OpenDirAtCwdSpec(
@@ -4730,31 +4730,31 @@ module IOContract {
   {
     NativeFailureContractFields(failures,OpenDirectoryAtCwdRequest(beforeFs,beforeContext,path,includeDots),err) &&
     OpenDirFromCwdTargetContractFields(beforeFs,beforeContext,afterContext,
-      ResolvePathAtCwdForMetadataFields(beforeFs,beforeContext,path,true),includeDots,ok,handle,err)
+                                       ResolvePathAtCwdForMetadataFields(beforeFs,beforeContext,path,true),includeDots,ok,handle,err)
   }
 
   ghost function CapabilityStatusObservationPathFields(context: CwdContext, handle: int): Path
   {
     if handle in context.capabilities && context.capabilities[handle].position in context.topology.nodes &&
-        |context.topology.nodes[context.capabilities[handle].position].pathname| == 1
+       |context.topology.nodes[context.capabilities[handle].position].pathname| == 1
     then context.topology.nodes[context.capabilities[handle].position].pathname[0] else ""
   }
 
   ghost function ObservedOpenDirectoryCapabilityResultFields(observations: StatusTimeObservations,
-    failures: (NativeFailureRequest) -> int, ordinal: nat, fs: FileSystem, context: CwdContext,
-    handle: int): IOResult<FileStatus>
+                                                             failures: (NativeFailureRequest) -> int, ordinal: nat, fs: FileSystem, context: CwdContext,
+                                                             handle: int): IOResult<FileStatus>
   {
     var err := failures(CapabilityStatusRequest(ordinal,fs,context,handle));
     if err != 0 then Result.Err(NativeFailure(err,CLocaleErrnoTextResult(err)))
     else match GetOpenDirectoryCapabilityResultFields(fs,context,handle)
-      case Err(error) => Result.Err(error)
-      case Ok(status) => Result.Ok(status.(times :=
-        observations(ordinal,fs,CapabilityStatusObservationPathFields(context,handle),true)))
+         case Err(error) => Result.Err(error)
+         case Ok(status) => Result.Ok(status.(times :=
+                                      observations(ordinal,fs,CapabilityStatusObservationPathFields(context,handle),true)))
   }
 
   ghost predicate GetOpenDirectoryCapabilityStatusSpec(observations: StatusTimeObservations,
-    failures: (NativeFailureRequest) -> int, beforeCursor: nat, afterCursor: nat,
-    fs: FileSystem, context: CwdContext, handle: int, ok: bool, status: FileStatus, err: int)
+                                                       failures: (NativeFailureRequest) -> int, beforeCursor: nat, afterCursor: nat,
+                                                       fs: FileSystem, context: CwdContext, handle: int, ok: bool, status: FileStatus, err: int)
   {
     0 <= err && (ok <==> err == 0) && afterCursor == beforeCursor+1 &&
     NativeFailureContractFields(failures,CapabilityStatusRequest(beforeCursor,fs,context,handle),err) &&
@@ -4874,7 +4874,7 @@ module IOContract {
   )
   {
     NativeFailureContractFields(failures,
-      OpenDirectoryStatusRequest(beforeCursor, beforeFs, beforeDirHandles, handle), err) &&
+                                OpenDirectoryStatusRequest(beforeCursor, beforeFs, beforeDirHandles, handle), err) &&
     GetOpenDirectoryStatusContractFields(
       observations, beforeCursor, afterCursor, beforeFs,
       beforeDirHandles, handle, ok, status, err)
@@ -4958,10 +4958,10 @@ module IOContract {
   ghost predicate LiveObjectRecordsFields(fs: FileSystem, objects: map<HostInodeKey, InodeRecord>)
   {
     (forall key | key in objects ::
-      objects[key].hostKey == key && objects[key].links.LinkCountKnown? &&
-      InodeStorageConsistent(objects[key]) && InodeKindConsistent(objects[key])) &&
+       objects[key].hostKey == key && objects[key].links.LinkCountKnown? &&
+       InodeStorageConsistent(objects[key]) && InodeKindConsistent(objects[key])) &&
     (forall id | id in fs.inodes ::
-      fs.inodes[id].hostKey in objects && objects[fs.inodes[id].hostKey] == fs.inodes[id])
+       fs.inodes[id].hostKey in objects && objects[fs.inodes[id].hostKey] == fs.inodes[id])
   }
 
   ghost predicate LiveRecordStatusFields(objects: map<HostInodeKey, InodeRecord>, status: FileStatus)
@@ -4977,51 +4977,51 @@ module IOContract {
     topology.nodes[topology.root].parent == topology.root &&
     topology.nodes[topology.root].pathname == ["/"] &&
     (forall position | position in topology.nodes ::
-      var node := topology.nodes[position];
-      node.status.kind == DirectoryKind && node.parent in topology.nodes &&
-      (node.selfRawInode != 0 ==> node.selfRawInode == node.status.hostKey.inode) &&
-      (!node.parentMountBoundary && node.parentRawInode != 0 &&
+       var node := topology.nodes[position];
+       node.status.kind == DirectoryKind && node.parent in topology.nodes &&
+       (node.selfRawInode != 0 ==> node.selfRawInode == node.status.hostKey.inode) &&
+       (!node.parentMountBoundary && node.parentRawInode != 0 &&
         node.status.hostKey.device == topology.nodes[node.parent].status.hostKey.device ==>
-        node.parentRawInode == topology.nodes[node.parent].status.hostKey.inode) &&
-      LiveRecordStatusFields(topology.objects, node.status) &&
-      topology.objects[node.status.hostKey].node.Directory? &&
-      |node.pathname| <= 1 &&
-      (forall name | name in node.entries ::
-        InodeChildNameValid(name) && node.entries[name].rawInode >= 0 &&
-        LiveRecordStatusFields(topology.objects, node.entries[name].status) &&
-        |node.entries[name].directory| <= 1 &&
-        (node.pathname == [] && node.entries[name].status.kind == DirectoryKind ==>
-          |node.entries[name].directory| == 1) &&
-        (node.entries[name].kind == UnknownDirentKind ||
-          node.entries[name].kind == DirectoryEntryKindForFileKind(node.entries[name].status.kind)) &&
-        (!node.entries[name].mountBoundary &&
-          node.status.hostKey.device == node.entries[name].status.hostKey.device &&
-          node.entries[name].rawInode != 0 ==>
-          node.entries[name].rawInode == node.entries[name].status.hostKey.inode) &&
-        (|node.entries[name].directory| == 1 ==>
-          node.entries[name].directory[0] in topology.nodes &&
-          node.entries[name].status.kind == DirectoryKind &&
-          topology.nodes[node.entries[name].directory[0]].status.hostKey == node.entries[name].status.hostKey &&
-          topology.nodes[node.entries[name].directory[0]].parent == position)) &&
-      (|node.pathname| == 1 ==>
-        var path := node.pathname[0];
-        IsAbsolutePath(path) && NormalizePath(path) == path &&
-        FsContainsPath(fs,path) && FsNodeAt(fs,path).Directory? &&
-        node.status.hostKey == fs.inodes[FsIdAt(fs,path)].hostKey &&
-        DirectoryStatusSameStructure(FileStatusForRecord(fs.inodes[FsIdAt(fs,path)]), node.status) &&
-        (position == topology.root || topology.nodes[node.parent].pathname == [ParentPath(path)]) &&
-        node.entries.Keys == (set entry | entry in DirectoryEntriesForPathFields(fs,path) :: entry.name) &&
-        (forall name | name in node.entries ::
-          FsContainsPath(fs,AppendPath(path,name)) &&
-          node.entries[name].status.hostKey == fs.inodes[FsIdAt(fs,AppendPath(path,name))].hostKey &&
-          DirectoryStatusSameStructure(FileStatusForRecord(fs.inodes[FsIdAt(fs,AppendPath(path,name))]),
-            node.entries[name].status) &&
+          node.parentRawInode == topology.nodes[node.parent].status.hostKey.inode) &&
+       LiveRecordStatusFields(topology.objects, node.status) &&
+       topology.objects[node.status.hostKey].node.Directory? &&
+       |node.pathname| <= 1 &&
+       (forall name | name in node.entries ::
+          InodeChildNameValid(name) && node.entries[name].rawInode >= 0 &&
+          LiveRecordStatusFields(topology.objects, node.entries[name].status) &&
+          |node.entries[name].directory| <= 1 &&
+          (node.pathname == [] && node.entries[name].status.kind == DirectoryKind ==>
+             |node.entries[name].directory| == 1) &&
+          (node.entries[name].kind == UnknownDirentKind ||
+           node.entries[name].kind == DirectoryEntryKindForFileKind(node.entries[name].status.kind)) &&
+          (!node.entries[name].mountBoundary &&
+           node.status.hostKey.device == node.entries[name].status.hostKey.device &&
+           node.entries[name].rawInode != 0 ==>
+             node.entries[name].rawInode == node.entries[name].status.hostKey.inode) &&
           (|node.entries[name].directory| == 1 ==>
-            topology.nodes[node.entries[name].directory[0]].pathname == [AppendPath(path,name)]))))
+             node.entries[name].directory[0] in topology.nodes &&
+             node.entries[name].status.kind == DirectoryKind &&
+             topology.nodes[node.entries[name].directory[0]].status.hostKey == node.entries[name].status.hostKey &&
+             topology.nodes[node.entries[name].directory[0]].parent == position)) &&
+       (|node.pathname| == 1 ==>
+          var path := node.pathname[0];
+          IsAbsolutePath(path) && NormalizePath(path) == path &&
+          FsContainsPath(fs,path) && FsNodeAt(fs,path).Directory? &&
+          node.status.hostKey == fs.inodes[FsIdAt(fs,path)].hostKey &&
+          DirectoryStatusSameStructure(FileStatusForRecord(fs.inodes[FsIdAt(fs,path)]), node.status) &&
+          (position == topology.root || topology.nodes[node.parent].pathname == [ParentPath(path)]) &&
+          node.entries.Keys == (set entry | entry in DirectoryEntriesForPathFields(fs,path) :: entry.name) &&
+          (forall name | name in node.entries ::
+             FsContainsPath(fs,AppendPath(path,name)) &&
+             node.entries[name].status.hostKey == fs.inodes[FsIdAt(fs,AppendPath(path,name))].hostKey &&
+             DirectoryStatusSameStructure(FileStatusForRecord(fs.inodes[FsIdAt(fs,AppendPath(path,name))]),
+                                          node.entries[name].status) &&
+             (|node.entries[name].directory| == 1 ==>
+                topology.nodes[node.entries[name].directory[0]].pathname == [AppendPath(path,name)]))))
   }
 
   ghost function DirectoryCapabilityNamesFields(topology: LiveDirectoryTopology,
-    position: DirectoryPosition, includeDots: bool): set<string>
+                                                position: DirectoryPosition, includeDots: bool): set<string>
     requires position in topology.nodes
   {
     topology.nodes[position].entries.Keys + (if includeDots then {".",".."} else {})
@@ -5033,7 +5033,7 @@ module IOContract {
     capability.position in topology.nodes &&
     capability.position in capability.anchorTopology.nodes &&
     topology.nodes[capability.position].status.hostKey ==
-      capability.anchorTopology.nodes[capability.position].status.hostKey
+    capability.anchorTopology.nodes[capability.position].status.hostKey
   }
 
   ghost predicate DirectoryCapabilityReadCurrentFields(
@@ -5041,7 +5041,7 @@ module IOContract {
   {
     DirectoryCapabilityAnchorCurrentFields(topology,capability) &&
     capability.remaining <= DirectoryCapabilityNamesFields(topology,
-      capability.position,capability.includeDots)
+                                                           capability.position,capability.includeDots)
   }
 
   ghost predicate DirectoryOperationCapabilitiesCurrentFields(
@@ -5049,25 +5049,25 @@ module IOContract {
     operation: DirectoryOperation, handle: int, fd: int)
   {
     (operation == DirectoryReadNext && handle in capabilities ==>
-      DirectoryCapabilityReadCurrentFields(topology,capabilities[handle])) &&
+       DirectoryCapabilityReadCurrentFields(topology,capabilities[handle])) &&
     ((operation == DirectoryFchdir || operation == DirectoryFstat) ==>
-      forall item | item in capabilities && capabilities[item].descriptor == [fd] ::
-        DirectoryCapabilityAnchorCurrentFields(topology,capabilities[item]))
+       forall item | item in capabilities && capabilities[item].descriptor == [fd] ::
+         DirectoryCapabilityAnchorCurrentFields(topology,capabilities[item]))
   }
 
   ghost predicate LiveDirectoryCapabilitiesFields(topology: LiveDirectoryTopology,
-    capabilities: map<int, DirectoryCapabilityState>)
+                                                  capabilities: map<int, DirectoryCapabilityState>)
   {
     (forall handle | handle in capabilities ::
-      var state := capabilities[handle];
-      LiveDirectoryTopologyFields(state.anchorFs,state.anchorTopology) &&
-      state.anchorTopology.nodes.Keys <= topology.nodes.Keys &&
-      state.position in topology.nodes && state.position in state.anchorTopology.nodes &&
-      state.remaining <= DirectoryCapabilityNamesFields(state.anchorTopology,state.position,state.includeDots) &&
-      |state.descriptor| <= 1 && (|state.descriptor| == 1 ==> state.descriptor[0] >= 0)
+       var state := capabilities[handle];
+       LiveDirectoryTopologyFields(state.anchorFs,state.anchorTopology) &&
+       state.anchorTopology.nodes.Keys <= topology.nodes.Keys &&
+       state.position in topology.nodes && state.position in state.anchorTopology.nodes &&
+       state.remaining <= DirectoryCapabilityNamesFields(state.anchorTopology,state.position,state.includeDots) &&
+       |state.descriptor| <= 1 && (|state.descriptor| == 1 ==> state.descriptor[0] >= 0)
     ) &&
     (forall left, right | left in capabilities && right in capabilities ::
-      |capabilities[left].descriptor| == 1 && capabilities[left].descriptor == capabilities[right].descriptor ==> left == right)
+       |capabilities[left].descriptor| == 1 && capabilities[left].descriptor == capabilities[right].descriptor ==> left == right)
   }
 
   ghost function DirectoryOperationErrnos(operation: DirectoryOperation): set<int>
@@ -5075,7 +5075,7 @@ module IOContract {
     match operation
     case DirectoryGetCwd =>
       NativeLookupFaultErrnos + {Errno.ENOENT,Errno.ENOTDIR,Errno.ERANGE,
-        Errno.EMFILE,Errno.ENFILE,Errno.EINTR,Errno.EOVERFLOW,Errno.ELOOP}
+                                 Errno.EMFILE,Errno.ENFILE,Errno.EINTR,Errno.EOVERFLOW,Errno.ELOOP}
     case DirectoryCurrentStatus => NativeLookupFaultErrnos + {Errno.EOVERFLOW,Errno.EINTR,Errno.ENOTDIR}
     case DirectoryOpenParent => NativeLookupFaultErrnos + {Errno.ENFILE,Errno.EMFILE,Errno.ENOTDIR}
     case DirectoryGetDescriptor => {Errno.EBADF,Errno.EOPNOTSUPP}
@@ -5095,7 +5095,7 @@ module IOContract {
     request.occupiedLegacyHandles !! request.capabilities.Keys &&
     (request.operation == DirectoryEntryLstat ==> InodeChildNameValid(request.name)) &&
     DirectoryOperationCapabilitiesCurrentFields(request.topology,request.capabilities,
-      request.operation,request.handle,request.fd)
+                                                request.operation,request.handle,request.fd)
   }
 
   ghost predicate DirectoryStatusSameStructure(expected: FileStatus, observed: FileStatus)
@@ -5110,7 +5110,7 @@ module IOContract {
     (if response.err != 0 then
        response.err in DirectoryOperationErrnos(request.operation) &&
        (request.operation == DirectoryReadNext && request.handle in request.capabilities ==>
-         response.remainingAfterReadError <= request.capabilities[request.handle].remaining)
+          response.remainingAfterReadError <= request.capabilities[request.handle].remaining)
      else
        match request.operation
        case DirectoryGetCwd =>
@@ -5118,11 +5118,11 @@ module IOContract {
        case DirectoryCurrentStatus =>
          DirectoryStatusSameStructure(request.topology.nodes[request.position].status,response.status)
        case DirectoryOpenParent => response.handle !in request.capabilities &&
-         response.handle !in request.occupiedLegacyHandles
+                                   response.handle !in request.occupiedLegacyHandles
        case DirectoryGetDescriptor =>
          request.handle in request.capabilities && response.fd >= 0 &&
          (forall other | other in request.capabilities && other != request.handle ::
-           request.capabilities[other].descriptor != [response.fd])
+            request.capabilities[other].descriptor != [response.fd])
        case DirectoryFchdir =>
          exists handle | handle in request.capabilities ::
            request.capabilities[handle].descriptor == [request.fd]
@@ -5137,70 +5137,70 @@ module IOContract {
          var capability := request.capabilities[request.handle];
          if |capability.remaining| == 0 then response.read.DirectoryEnd?
          else response.read.DirectoryItem? && response.read.name in capability.remaining &&
-           var node := request.topology.nodes[capability.position];
-           if response.read.name == "." then
-             capability.includeDots && response.read.kind == DirectoryDirentKind &&
-             response.read.inode == node.selfRawInode
-           else if response.read.name == ".." then
-             capability.includeDots && response.read.kind == DirectoryDirentKind &&
-             response.read.inode == node.parentRawInode
-           else response.read.name in node.entries &&
-             var entry := node.entries[response.read.name];
-             response.read.kind == entry.kind && response.read.inode == entry.rawInode
+              var node := request.topology.nodes[capability.position];
+              if response.read.name == "." then
+                capability.includeDots && response.read.kind == DirectoryDirentKind &&
+                response.read.inode == node.selfRawInode
+              else if response.read.name == ".." then
+                capability.includeDots && response.read.kind == DirectoryDirentKind &&
+                response.read.inode == node.parentRawInode
+              else response.read.name in node.entries &&
+                   var entry := node.entries[response.read.name];
+                   response.read.kind == entry.kind && response.read.inode == entry.rawInode
        case DirectoryEntryLstat =>
          request.name in request.topology.nodes[request.position].entries &&
          DirectoryStatusSameStructure(request.topology.nodes[request.position].entries[request.name].status,response.status) &&
          (|request.topology.nodes[request.position].pathname| == 1 ==>
-           GetFileStatusResultFields(request.fs,
-             AppendPath(request.topology.nodes[request.position].pathname[0],request.name),false).Ok?)
+            GetFileStatusResultFields(request.fs,
+                                      AppendPath(request.topology.nodes[request.position].pathname[0],request.name),false).Ok?)
        case DirectoryClose => request.handle in request.capabilities) &&
     (request.operation == DirectoryGetDescriptor && request.handle in request.capabilities &&
-      |request.capabilities[request.handle].descriptor| == 1 && response.err == 0 ==>
-      request.capabilities[request.handle].descriptor == [response.fd])
+     |request.capabilities[request.handle].descriptor| == 1 && response.err == 0 ==>
+       request.capabilities[request.handle].descriptor == [response.fd])
   }
 
   ghost predicate DirectoryOperationSpec(request: DirectoryRequest,
-    observations: DirectoryObservations, response: DirectoryResponse,
-    afterPosition: DirectoryPosition, afterCapabilities: map<int,DirectoryCapabilityState>,
-    afterOrdinal: nat, afterStatusOrdinal: nat, afterCwdHint: Path)
+                                         observations: DirectoryObservations, response: DirectoryResponse,
+                                         afterPosition: DirectoryPosition, afterCapabilities: map<int,DirectoryCapabilityState>,
+                                         afterOrdinal: nat, afterStatusOrdinal: nat, afterCwdHint: Path)
   {
     response == observations(request) && DirectoryResponseFields(request,response) &&
     afterOrdinal == request.ordinal + 1 &&
     afterStatusOrdinal == request.statusOrdinal +
-      (if request.operation == DirectoryCurrentStatus || request.operation == DirectoryFstat ||
-          request.operation == DirectoryEntryLstat then 1 else 0) &&
+    (if request.operation == DirectoryCurrentStatus || request.operation == DirectoryFstat ||
+        request.operation == DirectoryEntryLstat then 1 else 0) &&
     afterPosition ==
-      (if response.err != 0 then request.position
-       else if request.operation == DirectoryChdirParent then request.topology.nodes[request.position].parent
-       else if request.operation == DirectoryFchdir then
-         var handles := set handle | handle in request.capabilities &&
-           request.capabilities[handle].descriptor == [request.fd];
-         (var handle :| handle in handles; request.capabilities[handle].position)
-       else request.position) &&
+    (if response.err != 0 then request.position
+     else if request.operation == DirectoryChdirParent then request.topology.nodes[request.position].parent
+     else if request.operation == DirectoryFchdir then
+       var handles := set handle | handle in request.capabilities &&
+                                   request.capabilities[handle].descriptor == [request.fd];
+       (var handle :| handle in handles; request.capabilities[handle].position)
+     else request.position) &&
     afterCwdHint ==
-      (if response.err == 0 &&
-          (request.operation == DirectoryFchdir || request.operation == DirectoryChdirParent) &&
-          |request.topology.nodes[afterPosition].pathname| == 1
-       then request.topology.nodes[afterPosition].pathname[0]
-       else request.cwdHint) &&
+    (if response.err == 0 &&
+        (request.operation == DirectoryFchdir || request.operation == DirectoryChdirParent) &&
+        |request.topology.nodes[afterPosition].pathname| == 1
+     then request.topology.nodes[afterPosition].pathname[0]
+     else request.cwdHint) &&
     (if request.operation == DirectoryClose then
        afterCapabilities == request.capabilities - {request.handle}
      else if request.operation == DirectoryReadNext && response.err != 0 &&
-         request.handle in request.capabilities then
+             request.handle in request.capabilities then
        afterCapabilities == request.capabilities[request.handle :=
-         request.capabilities[request.handle].(remaining := response.remainingAfterReadError)]
+       request.capabilities[request.handle].(remaining := response.remainingAfterReadError)]
      else if response.err != 0 then afterCapabilities == request.capabilities
      else if request.operation == DirectoryOpenParent then
        var parent := request.topology.nodes[request.position].parent;
        afterCapabilities == request.capabilities[response.handle :=
-         DirectoryCapabilityState(parent,request.topology.nodes[parent].entries.Keys,[],request.fs,request.topology)]
+       DirectoryCapabilityState(parent,request.topology.nodes[parent].entries.Keys,[],request.fs,request.topology)]
      else if request.operation == DirectoryGetDescriptor then
        afterCapabilities == request.capabilities[request.handle :=
-         request.capabilities[request.handle].(descriptor := [response.fd])]
+       request.capabilities[request.handle].(descriptor := [response.fd])]
      else if request.operation == DirectoryReadNext && response.read.DirectoryItem? then
        afterCapabilities == request.capabilities[request.handle :=
-         request.capabilities[request.handle].(remaining :=
-           request.capabilities[request.handle].remaining - {response.read.name})]
+       request.capabilities[request.handle].(remaining :=
+       request.capabilities[request.handle].remaining - {response.read.name})]
      else afterCapabilities == request.capabilities)
   }
 
@@ -5243,26 +5243,26 @@ module IOContract {
   ghost predicate DirectoryModelFields(model: DirectoryModel)
   {
     (forall fs: FileSystem ::
-      LiveDirectoryTopologyFields(fs,model.views(fs)) &&
-      model.views(fs).nodes.Keys == model.positions) &&
+       LiveDirectoryTopologyFields(fs,model.views(fs)) &&
+       model.views(fs).nodes.Keys == model.positions) &&
     (forall request: DirectoryRequest :: DirectoryRequestFields(request) ==>
-      DirectoryResponseFields(request,model.observations(request)))
+                                           DirectoryResponseFields(request,model.observations(request)))
   }
 
   ghost predicate DirectoryStateFields(state: DirectoryState)
   {
     DirectoryModelFields(state.model) && state.position in state.model.positions &&
     (forall handle | handle in state.capabilities ::
-      var capability := state.capabilities[handle];
-      LiveDirectoryTopologyFields(capability.anchorFs,capability.anchorTopology) &&
-      capability.anchorTopology.nodes.Keys <= state.model.positions &&
-      capability.position in state.model.positions && capability.position in capability.anchorTopology.nodes &&
-      capability.remaining <= DirectoryCapabilityNamesFields(capability.anchorTopology,capability.position,capability.includeDots) &&
-      |capability.descriptor| <= 1 &&
-      (|capability.descriptor| == 1 ==> capability.descriptor[0] >= 0)) &&
+       var capability := state.capabilities[handle];
+       LiveDirectoryTopologyFields(capability.anchorFs,capability.anchorTopology) &&
+       capability.anchorTopology.nodes.Keys <= state.model.positions &&
+       capability.position in state.model.positions && capability.position in capability.anchorTopology.nodes &&
+       capability.remaining <= DirectoryCapabilityNamesFields(capability.anchorTopology,capability.position,capability.includeDots) &&
+       |capability.descriptor| <= 1 &&
+       (|capability.descriptor| == 1 ==> capability.descriptor[0] >= 0)) &&
     (forall left, right | left in state.capabilities && right in state.capabilities ::
-      (|state.capabilities[left].descriptor| == 1 &&
-       state.capabilities[left].descriptor == state.capabilities[right].descriptor) ==> left == right)
+       (|state.capabilities[left].descriptor| == 1 &&
+        state.capabilities[left].descriptor == state.capabilities[right].descriptor) ==> left == right)
   }
 
   lemma RootDirectorySnapshotFields(fs: FileSystem)
@@ -5277,7 +5277,7 @@ module IOContract {
     ensures GetFileStatusResultFields(fs,"/",false).Ok?
     ensures GetFileStatusResultFields(fs,"/",false).v.kind == DirectoryKind
     ensures forall entry | entry in DirectoryEntriesForPathFields(fs,"/") ::
-      InodeChildNameValid(entry.name)
+              InodeChildNameValid(entry.name)
   {
     reveal ValidInodeFileSystemData(), InodeNamespaceWellFormed();
     reveal FsContainsPath(), InodeFsContainsPath(), InodeFsLookupId();
@@ -5300,7 +5300,7 @@ module IOContract {
       ensures InodeChildNameValid(entry.name)
     {
       var name :| name in fs.namespace.children && ValidLeafName(name) &&
-        entry == EntryForNode(name,InodeTreeChildNodeFields(fs,fs.namespace,name));
+                  entry == EntryForNode(name,InodeTreeChildNodeFields(fs,fs.namespace,name));
       reveal InodeTreeWellFormed(), EntryForNode(), LeafName();
       assert InodeChildNameValid(name);
       assert LeafName(name) == name;
@@ -5322,7 +5322,7 @@ module IOContract {
     reveal DirectoryEntriesForPathFields(), DirectoryEntriesForTreeFields();
     var entry :| entry in DirectoryEntriesForPathFields(fs,"/") && entry.name == name;
     var original :| original in fs.namespace.children && ValidLeafName(original) &&
-      entry == EntryForNode(original,InodeTreeChildNodeFields(fs,fs.namespace,original));
+                    entry == EntryForNode(original,InodeTreeChildNodeFields(fs,fs.namespace,original));
     reveal EntryForNode(), LeafName(), ValidLeafName();
     assert LeafName(original) == original;
     assert original == name;
@@ -5350,7 +5350,7 @@ module IOContract {
       RootDirectoryNamedEntryFields(fs,name);
     }
     var entries := map name | name in names ::
-      LiveDirectoryEntry(0,UnknownDirentKind,FileStatusForRecord(fs.inodes[fs.namespace.children[name].id]),[]);
+                     LiveDirectoryEntry(0,UnknownDirentKind,FileStatusForRecord(fs.inodes[fs.namespace.children[name].id]),[]);
     var position := DirectoryPosition(0);
     var node := LiveDirectoryNode(FileStatusForRecord(fs.inodes[fs.namespace.id]),position,entries,["/"]);
     var topology := LiveDirectoryTopology(position,map[position := node],objects);
@@ -5378,17 +5378,17 @@ module IOContract {
     ensures DirectoryResponseFields(request,response)
   {
     DirectoryResponse(if request.operation == DirectoryGetDescriptor then Errno.EBADF else Errno.EIO,
-      "",DEFAULT_FILE_STATUS,0,0,DirectoryEnd,{})
+                      "",DEFAULT_FILE_STATUS,0,0,DirectoryEnd,{})
   }
 
   ghost function DefaultDirectoryState(): (state: DirectoryState)
     ensures DirectoryStateFields(state)
   {
     var observations := (request: DirectoryRequest) =>
-      if DirectoryRequestFields(request) then DefaultDirectoryResponse(request)
-      else DirectoryResponse(Errno.EIO,"",DEFAULT_FILE_STATUS,0,0,DirectoryEnd,{});
+                          if DirectoryRequestFields(request) then DefaultDirectoryResponse(request)
+                          else DirectoryResponse(Errno.EIO,"",DEFAULT_FILE_STATUS,0,0,DirectoryEnd,{});
     var model := DirectoryModel({DirectoryPosition(0)},
-      (fs: FileSystem) => DefaultLiveDirectoryTopology(fs),observations);
+                                (fs: FileSystem) => DefaultLiveDirectoryTopology(fs),observations);
     DirectoryState(model,DirectoryPosition(0),map[],0)
   }
 
@@ -5421,7 +5421,7 @@ module IOContract {
     ghost witness DirectoryResourcesFromLegacy(map[])
 
   ghost function DirectoryResourcesReplaceLegacy(resources: ValidDirectoryResources,
-    handles: map<int, DirHandleState>, origins: map<int, FileSystem>):
+                                                 handles: map<int, DirHandleState>, origins: map<int, FileSystem>):
     (after: DirectoryResources)
     requires origins.Keys <= handles.Keys
     requires handles.Keys !! resources.live.capabilities.Keys
@@ -5433,7 +5433,7 @@ module IOContract {
   }
 
   ghost function DirectoryResourcesReplaceLive(resources: ValidDirectoryResources,
-    state: ValidDirectoryState): (after: DirectoryResources)
+                                               state: ValidDirectoryState): (after: DirectoryResources)
     requires resources.legacy.Keys !! state.capabilities.Keys
     ensures DirectoryResourcesFields(after)
     ensures after.legacy == resources.legacy && after.origins == resources.origins
@@ -5451,20 +5451,20 @@ module IOContract {
   }
 
   lemma DirectoryStateAdmitsRequest(state: ValidDirectoryState, fs: FileSystem,
-    operation: DirectoryOperation, handle: int, fd: int, name: string,
-    statusOrdinal: nat, cwdHint: Path, occupiedLegacyHandles: set<int> := {})
+                                    operation: DirectoryOperation, handle: int, fd: int, name: string,
+                                    statusOrdinal: nat, cwdHint: Path, occupiedLegacyHandles: set<int> := {})
     requires occupiedLegacyHandles !! state.capabilities.Keys
     requires operation == DirectoryEntryLstat ==> InodeChildNameValid(name)
     requires DirectoryOperationCapabilitiesCurrentFields(state.model.views(fs),
-      state.capabilities,operation,handle,fd)
+                                                         state.capabilities,operation,handle,fd)
     ensures DirectoryRequestFields(DirectoryRequest(operation,state.ordinal,fs,
-      state.model.views(fs),state.position,state.capabilities,handle,fd,name,statusOrdinal,cwdHint,occupiedLegacyHandles))
+                                                    state.model.views(fs),state.position,state.capabilities,handle,fd,name,statusOrdinal,cwdHint,occupiedLegacyHandles))
   {
     reveal DirectoryStateFields(), DirectoryModelFields();
     reveal DirectoryRequestFields(), LiveDirectoryCapabilitiesFields();
     forall item | item in state.capabilities
       ensures LiveDirectoryTopologyFields(state.capabilities[item].anchorFs,
-        state.capabilities[item].anchorTopology)
+                                          state.capabilities[item].anchorTopology)
       ensures state.capabilities[item].anchorTopology.nodes.Keys <= state.model.views(fs).nodes.Keys
     {
       assert state.capabilities[item].anchorTopology.nodes.Keys <= state.model.positions;
@@ -5485,21 +5485,21 @@ module IOContract {
     else if request.operation == DirectoryChdirParent then request.topology.nodes[request.position].parent
     else if request.operation == DirectoryFchdir then
       var handles := set handle | handle in request.capabilities &&
-        request.capabilities[handle].descriptor == [request.fd];
+                                  request.capabilities[handle].descriptor == [request.fd];
       var handle :| handle in handles;
       request.capabilities[handle].position
     else request.position
   }
 
   ghost function DirectoryNextCapabilitiesFields(request: DirectoryRequest,
-    response: DirectoryResponse): map<int,DirectoryCapabilityState>
+                                                 response: DirectoryResponse): map<int,DirectoryCapabilityState>
     requires DirectoryResponseFields(request,response)
   {
     if request.operation == DirectoryClose then request.capabilities - {request.handle}
     else if request.operation == DirectoryReadNext && response.err != 0 &&
-        request.handle in request.capabilities then
+            request.handle in request.capabilities then
       request.capabilities[request.handle :=
-        request.capabilities[request.handle].(remaining := response.remainingAfterReadError)]
+      request.capabilities[request.handle].(remaining := response.remainingAfterReadError)]
     else if response.err != 0 then request.capabilities
     else if request.operation == DirectoryOpenParent then
       var parent := request.topology.nodes[request.position].parent;
@@ -5507,21 +5507,21 @@ module IOContract {
         parent,request.topology.nodes[parent].entries.Keys,[],request.fs,request.topology)]
     else if request.operation == DirectoryGetDescriptor then
       request.capabilities[request.handle :=
-        request.capabilities[request.handle].(descriptor := [response.fd])]
+      request.capabilities[request.handle].(descriptor := [response.fd])]
     else if request.operation == DirectoryReadNext && response.read.DirectoryItem? then
       request.capabilities[request.handle :=
-        request.capabilities[request.handle].(remaining :=
-          request.capabilities[request.handle].remaining - {response.read.name})]
+      request.capabilities[request.handle].(remaining :=
+      request.capabilities[request.handle].remaining - {response.read.name})]
     else request.capabilities
   }
 
   lemma DirectoryTransitionStateFields(state: ValidDirectoryState,
-    request: DirectoryRequest, response: DirectoryResponse)
+                                       request: DirectoryRequest, response: DirectoryResponse)
     requires DirectoryStateRequestFields(state,request)
     requires DirectoryResponseFields(request,response)
     ensures DirectoryStateFields(DirectoryState(state.model,
-      DirectoryNextPositionFields(request,response),
-      DirectoryNextCapabilitiesFields(request,response),state.ordinal + 1))
+                                                DirectoryNextPositionFields(request,response),
+                                                DirectoryNextCapabilitiesFields(request,response),state.ordinal + 1))
   {
     hide *;
     reveal DirectoryStateRequestFields(), DirectoryStateFields(), DirectoryModelFields();
@@ -5534,12 +5534,12 @@ module IOContract {
     }
     forall handle | handle in afterCapabilities
       ensures var capability := afterCapabilities[handle];
-        LiveDirectoryTopologyFields(capability.anchorFs,capability.anchorTopology) &&
-        capability.anchorTopology.nodes.Keys <= state.model.positions &&
-        capability.position in state.model.positions && capability.position in capability.anchorTopology.nodes &&
-        capability.remaining <= DirectoryCapabilityNamesFields(capability.anchorTopology,capability.position,capability.includeDots) &&
-        |capability.descriptor| <= 1 &&
-        (|capability.descriptor| == 1 ==> capability.descriptor[0] >= 0)
+              LiveDirectoryTopologyFields(capability.anchorFs,capability.anchorTopology) &&
+              capability.anchorTopology.nodes.Keys <= state.model.positions &&
+              capability.position in state.model.positions && capability.position in capability.anchorTopology.nodes &&
+              capability.remaining <= DirectoryCapabilityNamesFields(capability.anchorTopology,capability.position,capability.includeDots) &&
+              |capability.descriptor| <= 1 &&
+              (|capability.descriptor| == 1 ==> capability.descriptor[0] >= 0)
     {
       if response.err == 0 && request.operation == DirectoryOpenParent && handle == response.handle {
         reveal LiveDirectoryTopologyFields(), DirectoryCapabilityNamesFields();
@@ -5551,7 +5551,7 @@ module IOContract {
         assert !openedCapability.includeDots;
         assert openedCapability.remaining == request.topology.nodes[parent].entries.Keys;
         assert openedCapability.remaining <= DirectoryCapabilityNamesFields(
-          openedCapability.anchorTopology,openedCapability.position,openedCapability.includeDots);
+                                               openedCapability.anchorTopology,openedCapability.position,openedCapability.includeDots);
       } else {
         assert handle in state.capabilities;
         var prior := state.capabilities[handle];
@@ -5566,12 +5566,12 @@ module IOContract {
       }
     }
     forall left, right | left in afterCapabilities && right in afterCapabilities &&
-      |afterCapabilities[left].descriptor| == 1 &&
-      afterCapabilities[left].descriptor == afterCapabilities[right].descriptor
+                         |afterCapabilities[left].descriptor| == 1 &&
+                         afterCapabilities[left].descriptor == afterCapabilities[right].descriptor
       ensures left == right
     {
       if response.err == 0 && request.operation == DirectoryGetDescriptor &&
-          (left == request.handle || right == request.handle) {
+         (left == request.handle || right == request.handle) {
         if left != right {
           var other := if left == request.handle then right else left;
           assert other in request.capabilities && other != request.handle;
@@ -5586,16 +5586,16 @@ module IOContract {
   }
 
   ghost function DirectoryNextStateFields(state: ValidDirectoryState,
-    request: DirectoryRequest, response: DirectoryResponse): (next: ValidDirectoryState)
+                                          request: DirectoryRequest, response: DirectoryResponse): (next: ValidDirectoryState)
     requires DirectoryStateRequestFields(state,request)
     requires DirectoryResponseFields(request,response)
     ensures next == DirectoryState(state.model,DirectoryNextPositionFields(request,response),
-      DirectoryNextCapabilitiesFields(request,response),state.ordinal + 1)
+                                   DirectoryNextCapabilitiesFields(request,response),state.ordinal + 1)
   {
     hide *;
     DirectoryTransitionStateFields(state,request,response);
     DirectoryState(state.model,DirectoryNextPositionFields(request,response),
-      DirectoryNextCapabilitiesFields(request,response),state.ordinal + 1)
+                   DirectoryNextCapabilitiesFields(request,response),state.ordinal + 1)
   }
 
 
@@ -5618,7 +5618,7 @@ module IOContract {
   }
 
   ghost function DirectoryResourcesNextStateFields(resources: ValidDirectoryResources,
-    request: DirectoryRequest, response: DirectoryResponse): (after: ValidDirectoryResources)
+                                                   request: DirectoryRequest, response: DirectoryResponse): (after: ValidDirectoryResources)
     requires DirectoryStateRequestFields(resources.live,request)
     requires request.occupiedLegacyHandles == resources.legacy.Keys
     requires DirectoryResponseFields(request,response)
@@ -5634,7 +5634,7 @@ module IOContract {
   // filesystem stays equal. Captured descriptor anchors remain authenticated
   // snapshots, independent of the current model view at that same FS value.
   ghost function DirectoryStateAtSnapshotFields(state: ValidDirectoryState,
-    fs: FileSystem, topology: LiveDirectoryTopology): (after: ValidDirectoryState)
+                                                fs: FileSystem, topology: LiveDirectoryTopology): (after: ValidDirectoryState)
     requires LiveDirectoryTopologyFields(fs,topology)
     requires topology.nodes.Keys == state.model.positions
     ensures after.position == state.position && after.capabilities == state.capabilities
@@ -5648,7 +5648,7 @@ module IOContract {
     var views := (other: FileSystem) => if other == fs then topology else state.model.views(other);
     var model := DirectoryModel(state.model.positions,views,state.model.observations);
     assert forall other: FileSystem :: LiveDirectoryTopologyFields(other,views(other)) &&
-      views(other).nodes.Keys == model.positions;
+                                       views(other).nodes.Keys == model.positions;
     assert DirectoryModelFields(model);
     DirectoryState(model,state.position,state.capabilities,state.ordinal)
   }
@@ -5661,7 +5661,7 @@ module IOContract {
   lemma SplitOffset(prefix: string, suffix: string, i: nat, start: nat)
     requires start <= i <= |suffix|
     ensures SplitSegments(prefix+suffix,|prefix|+i,|prefix|+start) ==
-      SplitSegments(suffix,i,start)
+            SplitSegments(suffix,i,start)
     decreases |suffix|-i
   {
     assert (prefix+suffix)[|prefix|+start..|prefix|+i] == suffix[start..i];
@@ -5709,11 +5709,11 @@ module IOContract {
         }
         assert segments == [head];
         calc {
-          SplitSegments(JoinSegments(segments),0,0);
-          == SplitSegments(head,0,0);
-          == SplitSegments(head,|head|,0);
-          == [head];
-          == segments;
+           SplitSegments(JoinSegments(segments),0,0);
+        == SplitSegments(head,0,0);
+        == SplitSegments(head,|head|,0);
+        == [head];
+        == segments;
         }
       } else {
         var tail := JoinSegments(segments[1..]);
@@ -5726,7 +5726,7 @@ module IOContract {
         assert (head+"/"+tail)[..|head|] == head;
         assert (head+"/"+tail)[|head|] == '/';
         assert SplitSegments(head+"/"+tail,|head|,0) ==
-          [head]+SplitSegments(head+"/"+tail,|head|+1,|head|+1) by {
+               [head]+SplitSegments(head+"/"+tail,|head|+1,|head|+1) by {
           reveal SplitSegments();
         }
         assert segments == [head]+segments[1..];
@@ -5755,7 +5755,7 @@ module IOContract {
     ensures PathSegments(BuildPath(true,segments)) == segments
     ensures NormalizePath(BuildPath(true,segments)) == BuildPath(true,segments)
     ensures ParentPath(BuildPath(true,segments)) ==
-      BuildPath(true,if |segments| == 0 then [] else segments[..|segments|-1])
+            BuildPath(true,if |segments| == 0 then [] else segments[..|segments|-1])
   {
     JoinedSegmentsSplit(segments);
     NormalizeSimpleSegments(segments,0,[]);
@@ -5777,7 +5777,7 @@ module IOContract {
   }
 
   lemma LookupSegmentsSimple(inodes: map<InodeId,InodeRecord>, tree: InodeTree,
-    segments: seq<string>, found: InodeTree)
+                             segments: seq<string>, found: InodeTree)
     requires InodeTreeWellFormed(tree,inodes)
     requires InodeFsLookupTreeSegments(inodes,tree,segments) == Result.Ok(found)
     ensures SimpleSegments(segments)
@@ -5797,14 +5797,14 @@ module IOContract {
   }
 
   lemma LookupPrefix(inodes: map<InodeId,InodeRecord>, tree: InodeTree,
-    segments: seq<string>, found: InodeTree, n: nat)
+                     segments: seq<string>, found: InodeTree, n: nat)
     requires InodeTreeWellFormed(tree,inodes)
     requires InodeFsLookupTreeSegments(inodes,tree,segments) == Result.Ok(found)
     requires n <= |segments|
     ensures InodeFsLookupTreeSegments(inodes,tree,segments[..n]).Ok?
     ensures InodeTreeWellFormed(InodeFsLookupTreeSegments(inodes,tree,segments[..n]).v,inodes)
     ensures n < |segments| ==>
-      inodes[InodeFsLookupTreeSegments(inodes,tree,segments[..n]).v.id].node.Directory?
+              inodes[InodeFsLookupTreeSegments(inodes,tree,segments[..n]).v.id].node.Directory?
     decreases n
   {
     if n == 0 {
@@ -5835,7 +5835,7 @@ module IOContract {
 
   lemma JoinSegmentsSnoc(segments: seq<string>, name: string)
     ensures JoinSegments(segments+[name]) ==
-      (if |segments| == 0 then name else JoinSegments(segments)+"/"+name)
+            (if |segments| == 0 then name else JoinSegments(segments)+"/"+name)
     decreases |segments|
   {
     if |segments| > 1 {
@@ -5858,7 +5858,7 @@ module IOContract {
   }
 
   lemma LookupAppend(inodes: map<InodeId,InodeRecord>, tree: InodeTree,
-    segments: seq<string>, parent: InodeTree, name: string)
+                     segments: seq<string>, parent: InodeTree, name: string)
     requires InodeTreeWellFormed(tree,inodes)
     requires InodeFsLookupTreeSegments(inodes,tree,segments) == Result.Ok(parent)
     requires inodes[parent.id].node.Directory?
@@ -5906,7 +5906,7 @@ module IOContract {
     ensures FsContainsPath(fs,AppendPath(path,name))
     ensures FsIdAt(fs,AppendPath(path,name)) in fs.inodes
     ensures FsIdAt(fs,AppendPath(path,name)) ==
-      InodeFsLookupTreeSegments(fs.inodes,fs.namespace,PathSegments(path)).v.children[name].id
+            InodeFsLookupTreeSegments(fs.inodes,fs.namespace,PathSegments(path)).v.children[name].id
   {
     NamedDirectorySnapshotFields(fs,path);
     var tree := InodeFsLookupTreeSegments(fs.inodes,fs.namespace,PathSegments(path)).v;
@@ -5918,7 +5918,7 @@ module IOContract {
   }
 
   ghost function NamedDirectoryEntriesFields(fs: FileSystem,
-    objects: map<HostInodeKey,InodeRecord>, path: Path): (entries: map<string,LiveDirectoryEntry>)
+                                             objects: map<HostInodeKey,InodeRecord>, path: Path): (entries: map<string,LiveDirectoryEntry>)
     requires LiveObjectRecordsFields(fs,objects)
     requires IsAbsolutePath(path)
     requires NormalizePath(path) == path
@@ -5926,11 +5926,11 @@ module IOContract {
     requires FsNodeAt(fs,path).Directory?
     ensures entries.Keys == (set entry | entry in DirectoryEntriesForPathFields(fs,path) :: entry.name)
     ensures forall name | name in entries ::
-      InodeChildNameValid(name) && entries[name].rawInode == 0 &&
-      entries[name].kind == UnknownDirentKind && entries[name].directory == [] &&
-      LiveRecordStatusFields(objects,entries[name].status) &&
-      FsContainsPath(fs,AppendPath(path,name)) && FsIdAt(fs,AppendPath(path,name)) in fs.inodes &&
-      entries[name].status == FileStatusForRecord(fs.inodes[FsIdAt(fs,AppendPath(path,name))])
+              InodeChildNameValid(name) && entries[name].rawInode == 0 &&
+              entries[name].kind == UnknownDirentKind && entries[name].directory == [] &&
+              LiveRecordStatusFields(objects,entries[name].status) &&
+              FsContainsPath(fs,AppendPath(path,name)) && FsIdAt(fs,AppendPath(path,name)) in fs.inodes &&
+              entries[name].status == FileStatusForRecord(fs.inodes[FsIdAt(fs,AppendPath(path,name))])
   {
     NamedDirectorySnapshotFields(fs,path);
     var tree := InodeFsLookupTreeSegments(fs.inodes,fs.namespace,PathSegments(path)).v;
@@ -5945,14 +5945,14 @@ module IOContract {
       LeafNameFields(name);
     }
     var entries := map name | name in tree.children ::
-      LiveDirectoryEntry(0,UnknownDirentKind,FileStatusForRecord(fs.inodes[tree.children[name].id]),[]);
+                     LiveDirectoryEntry(0,UnknownDirentKind,FileStatusForRecord(fs.inodes[tree.children[name].id]),[]);
     reveal DirectoryEntriesForPathFields(), DirectoryEntriesForTreeFields(), EntryForNode();
     assert entries.Keys == (set entry | entry in DirectoryEntriesForPathFields(fs,path) :: entry.name) by {
       forall entry | entry in DirectoryEntriesForPathFields(fs,path)
         ensures entry.name in entries
       {
         var name :| name in tree.children && ValidLeafName(name) &&
-          entry == EntryForNode(name,InodeTreeChildNodeFields(fs,tree,name));
+                    entry == EntryForNode(name,InodeTreeChildNodeFields(fs,tree,name));
         assert entry.name == name;
       }
       forall name | name in entries
@@ -5987,7 +5987,7 @@ module IOContract {
   }
 
   ghost function AddNamedDirectoryFields(fs: FileSystem,
-    before: LiveDirectoryTopology, path: Path, parent: DirectoryPosition): (after: LiveDirectoryTopology)
+                                         before: LiveDirectoryTopology, path: Path, parent: DirectoryPosition): (after: LiveDirectoryTopology)
     requires LiveDirectoryTopologyFields(fs,before)
     requires IsAbsolutePath(path)
     requires NormalizePath(path) == path
@@ -6002,8 +6002,8 @@ module IOContract {
     var nextPosition := FreshPosition(before.nodes.Keys);
     var status := FileStatusForRecord(fs.inodes[FsIdAt(fs,path)]);
     var node := before.nodes[before.root].(status := status,parent := parent,
-      entries := entries,pathname := [path],selfRawInode := 0,parentRawInode := 0,
-      parentMountBoundary := false);
+                entries := entries,pathname := [path],selfRawInode := 0,parentRawInode := 0,
+                parentMountBoundary := false);
     var after := before.(nodes := before.nodes[nextPosition := node]);
     reveal LiveDirectoryTopologyFields(), LiveRecordStatusFields(), LiveObjectRecordsFields();
     reveal DirectoryStatusSameStructure(), FileStatusForRecord();
@@ -6022,7 +6022,7 @@ module IOContract {
   }
 
   ghost function ExtendNamedDirectoryTopologyFields(fs: FileSystem,
-    before: LiveDirectoryTopology, path: Path): (after: LiveDirectoryTopology)
+                                                    before: LiveDirectoryTopology, path: Path): (after: LiveDirectoryTopology)
     requires LiveDirectoryTopologyFields(fs,before)
     requires IsAbsolutePath(path)
     requires NormalizePath(path) == path
@@ -6067,7 +6067,7 @@ module IOContract {
   }
 
   ghost function ExtendTopologyDomainFields(fs: FileSystem,
-    before: LiveDirectoryTopology, positions: set<DirectoryPosition>): (after: LiveDirectoryTopology)
+                                            before: LiveDirectoryTopology, positions: set<DirectoryPosition>): (after: LiveDirectoryTopology)
     requires LiveDirectoryTopologyFields(fs,before)
     requires before.nodes.Keys <= positions
     ensures LiveDirectoryTopologyFields(fs,after)
@@ -6075,9 +6075,9 @@ module IOContract {
     ensures after.nodes.Keys == positions
   {
     var empty := before.nodes[before.root].(parent := before.root,pathname := [],
-      entries := map[],selfRawInode := 0,parentRawInode := 0,parentMountBoundary := false);
+                 entries := map[],selfRawInode := 0,parentRawInode := 0,parentMountBoundary := false);
     var nodes := map position | position in positions ::
-      if position in before.nodes then before.nodes[position] else empty;
+                   if position in before.nodes then before.nodes[position] else empty;
     var after := before.(nodes := nodes);
     reveal LiveDirectoryTopologyFields();
     forall position | position in before.nodes
@@ -6090,7 +6090,7 @@ module IOContract {
   }
 
   ghost function ExtendDirectoryModelFields(model: DirectoryModel,
-    fs: FileSystem, topology: LiveDirectoryTopology): (after: DirectoryModel)
+                                            fs: FileSystem, topology: LiveDirectoryTopology): (after: DirectoryModel)
     requires DirectoryModelFields(model)
     requires LiveDirectoryTopologyFields(fs,topology)
     requires model.positions <= topology.nodes.Keys
@@ -6101,19 +6101,19 @@ module IOContract {
   {
     var positions := topology.nodes.Keys;
     var views := (other: FileSystem) =>
-      if other == fs then topology
-      else ExtendTopologyDomainFields(other,model.views(other),positions);
+                   if other == fs then topology
+                   else ExtendTopologyDomainFields(other,model.views(other),positions);
     var after := DirectoryModel(positions,views,model.observations);
     reveal DirectoryModelFields();
     assert after.views(fs) == topology;
     assert forall other: FileSystem ::
-      LiveDirectoryTopologyFields(other,after.views(other)) &&
-      after.views(other).nodes.Keys == after.positions;
+        LiveDirectoryTopologyFields(other,after.views(other)) &&
+        after.views(other).nodes.Keys == after.positions;
     after
   }
 
   ghost function DirectoryStateAtExpandedSnapshotFields(state: ValidDirectoryState,
-    fs: FileSystem, topology: LiveDirectoryTopology): (after: ValidDirectoryState)
+                                                        fs: FileSystem, topology: LiveDirectoryTopology): (after: ValidDirectoryState)
     requires LiveDirectoryTopologyFields(fs,topology)
     requires state.model.positions <= topology.nodes.Keys
     ensures after.position == state.position && after.capabilities == state.capabilities
@@ -6173,24 +6173,24 @@ module IOContract {
   ghost function ModeChangedDirectoryFields(node:LiveDirectoryNode,key:HostInodeKey,mode:bv32,now:int):LiveDirectoryNode
   {
     node.(status:=ModeChangedStatusFields(node.status,key,mode,now),
-      entries:=map name | name in node.entries :: ModeChangedEntryFields(node.entries[name],key,mode,now))
+    entries:=map name | name in node.entries :: ModeChangedEntryFields(node.entries[name],key,mode,now))
   }
 
   ghost function ModeChangedTopologyFields(topology:LiveDirectoryTopology,key:HostInodeKey,mode:bv32,now:int):LiveDirectoryTopology
   {
     topology.(objects:=ModeChangedRecordsFields(topology.objects,key,mode,now),
-      nodes:=map position | position in topology.nodes :: ModeChangedDirectoryFields(topology.nodes[position],key,mode,now))
+    nodes:=map position | position in topology.nodes :: ModeChangedDirectoryFields(topology.nodes[position],key,mode,now))
   }
 
   lemma {:isolate_assertions} ModeChangedRecordFacts(record:InodeRecord,mode:bv32,now:int)
     requires InodeStorageConsistent(record) && InodeKindConsistent(record)
     ensures var after:=ModeChangedRecordFields(record,mode,now);
-      after.hostKey==record.hostKey && after.links==record.links && after.kind==record.kind &&
-      after.ownership==record.ownership && after.storage==record.storage &&
-      InodeStorageConsistent(after) && InodeKindConsistent(after) &&
-      InodeSameNodeKind(record.node,after.node) && NodeShapeUnchangedExceptMode(record.node,after.node)
+            after.hostKey==record.hostKey && after.links==record.links && after.kind==record.kind &&
+            after.ownership==record.ownership && after.storage==record.storage &&
+            InodeStorageConsistent(after) && InodeKindConsistent(after) &&
+            InodeSameNodeKind(record.node,after.node) && NodeShapeUnchangedExceptMode(record.node,after.node)
     ensures !record.node.Inaccessible? ==> var after:=ModeChangedRecordFields(record,mode,now);
-      NodeMode(after.node)==NormalizeMode(mode) && NodeTimes(after.node)==NodeTimes(record.node).(ctimeSec:=now,ctimeNsec:=0)
+                                           NodeMode(after.node)==NormalizeMode(mode) && NodeTimes(after.node)==NodeTimes(record.node).(ctimeSec:=now,ctimeNsec:=0)
   {
     hide *;
     reveal ModeChangedRecordFields(),InodeRecordWithNode(),WithNodeMode(),WithNodeChangeTime(),WithNodeTimes(),NodeTimes(),NodeMode();
@@ -6217,9 +6217,9 @@ module IOContract {
 
   lemma {:isolate_assertions} ModeChangedFilesystemValid(fs:FileSystem,key:HostInodeKey,mode:bv32,now:int)
     ensures var after:=fs.(inodes:=ModeChangedRecordsFields(fs.inodes,key,mode,now));
-      ValidInodeFileSystemData(after)
+            ValidInodeFileSystemData(after)
     ensures var after:=fs.(inodes:=ModeChangedRecordsFields(fs.inodes,key,mode,now));
-      FileSystemTopologyUnchangedExceptMode(fs,after)
+            FileSystemTopologyUnchangedExceptMode(fs,after)
   {
     hide *;
     reveal ModeChangedRecordsFields();
@@ -6229,7 +6229,7 @@ module IOContract {
     var after:=fs.(inodes:=records);
     forall id | id in fs.inodes
       ensures records[id].hostKey==fs.inodes[id].hostKey && records[id].links==fs.inodes[id].links &&
-        records[id].ownership==fs.inodes[id].ownership && records[id].storage==fs.inodes[id].storage && records[id].kind==fs.inodes[id].kind
+              records[id].ownership==fs.inodes[id].ownership && records[id].storage==fs.inodes[id].storage && records[id].kind==fs.inodes[id].kind
       ensures InodeStorageConsistent(records[id]) && InodeKindConsistent(records[id])
       ensures InodeSameNodeKind(fs.inodes[id].node,records[id].node) && NodeShapeUnchangedExceptMode(fs.inodes[id].node,records[id].node)
     {
@@ -6276,7 +6276,7 @@ module IOContract {
   }
 
   lemma {:isolate_assertions} ModeChangedRecordStatus(fs:FileSystem,objects:map<HostInodeKey,InodeRecord>,key:HostInodeKey,
-    mode:bv32,now:int,status:FileStatus)
+                                                      mode:bv32,now:int,status:FileStatus)
     requires LiveObjectRecordsFields(fs,objects)
     requires key in objects && !objects[key].node.Inaccessible?
     requires LiveRecordStatusFields(objects,status)
@@ -6317,9 +6317,9 @@ module IOContract {
   lemma {:isolate_assertions} ModeChangedPath(fs:FileSystem,key:HostInodeKey,mode:bv32,now:int,path:Path)
     requires FsContainsPath(fs,path)
     ensures var after:=ModeChangedFilesystemFields(fs,key,mode,now);
-      FsContainsPath(after,path) && FsIdAt(after,path)==FsIdAt(fs,path)
+            FsContainsPath(after,path) && FsIdAt(after,path)==FsIdAt(fs,path)
     ensures var after:=ModeChangedFilesystemFields(fs,key,mode,now);
-      NodeShapeUnchangedExceptMode(FsNodeAt(fs,path),FsNodeAt(after,path))
+            NodeShapeUnchangedExceptMode(FsNodeAt(fs,path),FsNodeAt(after,path))
   {
     hide *;
     var after:=ModeChangedFilesystemFields(fs,key,mode,now);
@@ -6386,46 +6386,46 @@ module IOContract {
     assert after.root==topology.root && after.nodes.Keys==topology.nodes.Keys;
     forall position | position in after.nodes
       ensures var node := after.nodes[position];
-        node.status.kind == DirectoryKind && node.parent in after.nodes &&
-        (node.selfRawInode != 0 ==> node.selfRawInode == node.status.hostKey.inode) &&
-        (!node.parentMountBoundary && node.parentRawInode != 0 &&
-          node.status.hostKey.device == after.nodes[node.parent].status.hostKey.device ==>
-          node.parentRawInode == after.nodes[node.parent].status.hostKey.inode) &&
-        LiveRecordStatusFields(after.objects, node.status) &&
-        after.objects[node.status.hostKey].node.Directory? &&
-        |node.pathname| <= 1 &&
-        (forall name | name in node.entries ::
-        InodeChildNameValid(name) && node.entries[name].rawInode >= 0 &&
-        LiveRecordStatusFields(after.objects, node.entries[name].status) &&
-        |node.entries[name].directory| <= 1 &&
-        (node.pathname == [] && node.entries[name].status.kind == DirectoryKind ==>
-        |node.entries[name].directory| == 1) &&
-        (node.entries[name].kind == UnknownDirentKind ||
-        node.entries[name].kind == DirectoryEntryKindForFileKind(node.entries[name].status.kind)) &&
-        (!node.entries[name].mountBoundary &&
-          node.status.hostKey.device == node.entries[name].status.hostKey.device &&
-          node.entries[name].rawInode != 0 ==>
-          node.entries[name].rawInode == node.entries[name].status.hostKey.inode) &&
-        (|node.entries[name].directory| == 1 ==>
-        node.entries[name].directory[0] in after.nodes &&
-        node.entries[name].status.kind == DirectoryKind &&
-        after.nodes[node.entries[name].directory[0]].status.hostKey == node.entries[name].status.hostKey &&
-        after.nodes[node.entries[name].directory[0]].parent == position)) &&
-        (|node.pathname| == 1 ==>
-        var path := node.pathname[0];
-        IsAbsolutePath(path) && NormalizePath(path) == path &&
-        FsContainsPath(afterFs,path) && FsNodeAt(afterFs,path).Directory? &&
-        node.status.hostKey == afterFs.inodes[FsIdAt(afterFs,path)].hostKey &&
-        DirectoryStatusSameStructure(FileStatusForRecord(afterFs.inodes[FsIdAt(afterFs,path)]), node.status) &&
-        (position == after.root || after.nodes[node.parent].pathname == [ParentPath(path)]) &&
-        node.entries.Keys == (set entry | entry in DirectoryEntriesForPathFields(afterFs,path) :: entry.name) &&
-        (forall name | name in node.entries ::
-        FsContainsPath(afterFs,AppendPath(path,name)) &&
-        node.entries[name].status.hostKey == afterFs.inodes[FsIdAt(afterFs,AppendPath(path,name))].hostKey &&
-        DirectoryStatusSameStructure(FileStatusForRecord(afterFs.inodes[FsIdAt(afterFs,AppendPath(path,name))]),
-        node.entries[name].status) &&
-        (|node.entries[name].directory| == 1 ==>
-        after.nodes[node.entries[name].directory[0]].pathname == [AppendPath(path,name)])))
+              node.status.kind == DirectoryKind && node.parent in after.nodes &&
+              (node.selfRawInode != 0 ==> node.selfRawInode == node.status.hostKey.inode) &&
+              (!node.parentMountBoundary && node.parentRawInode != 0 &&
+               node.status.hostKey.device == after.nodes[node.parent].status.hostKey.device ==>
+                 node.parentRawInode == after.nodes[node.parent].status.hostKey.inode) &&
+              LiveRecordStatusFields(after.objects, node.status) &&
+              after.objects[node.status.hostKey].node.Directory? &&
+              |node.pathname| <= 1 &&
+              (forall name | name in node.entries ::
+                 InodeChildNameValid(name) && node.entries[name].rawInode >= 0 &&
+                 LiveRecordStatusFields(after.objects, node.entries[name].status) &&
+                 |node.entries[name].directory| <= 1 &&
+                 (node.pathname == [] && node.entries[name].status.kind == DirectoryKind ==>
+                    |node.entries[name].directory| == 1) &&
+                 (node.entries[name].kind == UnknownDirentKind ||
+                  node.entries[name].kind == DirectoryEntryKindForFileKind(node.entries[name].status.kind)) &&
+                 (!node.entries[name].mountBoundary &&
+                  node.status.hostKey.device == node.entries[name].status.hostKey.device &&
+                  node.entries[name].rawInode != 0 ==>
+                    node.entries[name].rawInode == node.entries[name].status.hostKey.inode) &&
+                 (|node.entries[name].directory| == 1 ==>
+                    node.entries[name].directory[0] in after.nodes &&
+                    node.entries[name].status.kind == DirectoryKind &&
+                    after.nodes[node.entries[name].directory[0]].status.hostKey == node.entries[name].status.hostKey &&
+                    after.nodes[node.entries[name].directory[0]].parent == position)) &&
+              (|node.pathname| == 1 ==>
+                 var path := node.pathname[0];
+                 IsAbsolutePath(path) && NormalizePath(path) == path &&
+                 FsContainsPath(afterFs,path) && FsNodeAt(afterFs,path).Directory? &&
+                 node.status.hostKey == afterFs.inodes[FsIdAt(afterFs,path)].hostKey &&
+                 DirectoryStatusSameStructure(FileStatusForRecord(afterFs.inodes[FsIdAt(afterFs,path)]), node.status) &&
+                 (position == after.root || after.nodes[node.parent].pathname == [ParentPath(path)]) &&
+                 node.entries.Keys == (set entry | entry in DirectoryEntriesForPathFields(afterFs,path) :: entry.name) &&
+                 (forall name | name in node.entries ::
+                    FsContainsPath(afterFs,AppendPath(path,name)) &&
+                    node.entries[name].status.hostKey == afterFs.inodes[FsIdAt(afterFs,AppendPath(path,name))].hostKey &&
+                    DirectoryStatusSameStructure(FileStatusForRecord(afterFs.inodes[FsIdAt(afterFs,AppendPath(path,name))]),
+                                                 node.entries[name].status) &&
+                    (|node.entries[name].directory| == 1 ==>
+                       after.nodes[node.entries[name].directory[0]].pathname == [AppendPath(path,name)])))
     {
       var priorNode:=topology.nodes[position];
       var node:=after.nodes[position];
@@ -6498,14 +6498,14 @@ module IOContract {
       if !DirectoryCapabilityAnchorCurrentFields(context.topology,context.capabilities[parent]) then
         Result.Err(InvalidPath)
       else ResolveLiveDirectorySegmentsFields(fs,context,context.capabilities[parent].position,
-        RawPathSegmentsFields(path),0,SYMLINK_MAX_DEPTH,follow,HasTrailingSlash(path))
+                                              RawPathSegmentsFields(path),0,SYMLINK_MAX_DEPTH,follow,HasTrailingSlash(path))
     else if parent in context.legacyHandles then
       if !DirectoryParentAnchorCurrentFields(fs,context.legacyHandles,context.legacyOrigins,parent) then
         Result.Err(InvalidPath)
       else CwdNamedResultFields(fs,context,
-        ResolvePathAtDirForMetadataFields(fs,context.legacyHandles,parent,path,follow))
+                                ResolvePathAtDirForMetadataFields(fs,context.legacyHandles,parent,path,follow))
     else Result.Err(NativeFailure(UnknownDirectoryParentErrnoFields(parent),
-      CLocaleErrnoTextResult(UnknownDirectoryParentErrnoFields(parent))))
+                                  CLocaleErrnoTextResult(UnknownDirectoryParentErrnoFields(parent))))
   }
 
   ghost function GetFileStatusAtDirContextResultFields(
@@ -6519,7 +6519,7 @@ module IOContract {
   ghost function CwdStatusObservationPathFields(context: CwdContext, path: Path): Path
   {
     if path == "" || IsAbsolutePath(path) || context.position !in context.topology.nodes ||
-        |context.topology.nodes[context.position].pathname| == 0 then path
+       |context.topology.nodes[context.position].pathname| == 0 then path
     else AtCwdPathFields(context.topology.nodes[context.position].pathname[0],path)
   }
 
@@ -6527,8 +6527,8 @@ module IOContract {
   {
     if path == "" || IsAbsolutePath(path) then path
     else if parent in context.capabilities &&
-        context.capabilities[parent].position in context.topology.nodes &&
-        |context.topology.nodes[context.capabilities[parent].position].pathname| == 1 then
+            context.capabilities[parent].position in context.topology.nodes &&
+            |context.topology.nodes[context.capabilities[parent].position].pathname| == 1 then
       AtCwdPathFields(context.topology.nodes[context.capabilities[parent].position].pathname[0],path)
     else if parent in context.legacyHandles then AtDirPathFields(context.legacyHandles,parent,path)
     else path
@@ -6540,9 +6540,9 @@ module IOContract {
     if (0 as char) in path then {Errno.EINVAL}
     else if path == "" then {Errno.ENOENT}
     else NativeLookupFaultErrnos + {Errno.EINTR,Errno.EOVERFLOW} +
-      (match ResolvePathAtCwdForMetadataFields(fs,context,path,follow)
-       case Err(error) => {IOErrorErrno(error)}
-       case Ok(_) => {})
+         (match ResolvePathAtCwdForMetadataFields(fs,context,path,follow)
+          case Err(error) => {IOErrorErrno(error)}
+          case Ok(_) => {})
   }
 
   ghost function AtDirContextLookupFailureErrnosFields(
@@ -6553,13 +6553,13 @@ module IOContract {
     else if !IsAbsolutePath(path) && parent !in context.capabilities && parent !in context.legacyHandles then
       {UnknownDirectoryParentErrnoFields(parent)}
     else NativeLookupFaultErrnos + {Errno.EBADF,Errno.EINTR,Errno.EOVERFLOW} +
-      (match ResolvePathAtDirContextForMetadataFields(fs,context,parent,path,follow)
-       case Err(error) => {IOErrorErrno(error)}
-       case Ok(_) => {})
+         (match ResolvePathAtDirContextForMetadataFields(fs,context,parent,path,follow)
+          case Err(error) => {IOErrorErrno(error)}
+          case Ok(_) => {})
   }
 
   ghost predicate CwdResolvedModeCanSucceedFields(fs: FileSystem, context: CwdContext,
-    resolved: IOResult<CwdTarget>)
+                                                  resolved: IOResult<CwdTarget>)
   {
     resolved.Ok? && CwdTargetFields(fs,context,resolved.v) &&
     !CwdTargetRecordFields(fs,context,resolved.v).node.Inaccessible? &&
@@ -6567,7 +6567,7 @@ module IOContract {
   }
 
   ghost function CwdResolvedOpenFailureErrFields(fs: FileSystem, context: CwdContext,
-    resolved: IOResult<CwdTarget>): int
+                                                 resolved: IOResult<CwdTarget>): int
   {
     match resolved
     case Err(error) => IOErrorErrno(error)
@@ -6577,19 +6577,19 @@ module IOContract {
   }
 
   ghost predicate GetFileStatusAtCwdStructureContractFields(fs: FileSystem, context: CwdContext,
-    path: Path, follow: bool, ok: bool, status: FileStatus, err: int)
+                                                            path: Path, follow: bool, ok: bool, status: FileStatus, err: int)
   {
     0 <= err && (ok <==> err == 0) &&
     (ok ==> GetFileStatusFromCwdContextResultFields(fs,context,path,follow).Ok? &&
-      DirectoryStatusSameStructure(GetFileStatusFromCwdContextResultFields(fs,context,path,follow).v,status))
+            DirectoryStatusSameStructure(GetFileStatusFromCwdContextResultFields(fs,context,path,follow).v,status))
   }
 
   ghost predicate GetFileStatusAtDirContextStructureContractFields(fs: FileSystem, context: CwdContext,
-    parent: int, path: Path, follow: bool, ok: bool, status: FileStatus, err: int)
+                                                                   parent: int, path: Path, follow: bool, ok: bool, status: FileStatus, err: int)
   {
     0 <= err && (ok <==> err == 0) &&
     (ok ==> GetFileStatusAtDirContextResultFields(fs,context,parent,path,follow).Ok? &&
-      DirectoryStatusSameStructure(GetFileStatusAtDirContextResultFields(fs,context,parent,path,follow).v,status))
+            DirectoryStatusSameStructure(GetFileStatusAtDirContextResultFields(fs,context,parent,path,follow).v,status))
   }
 
   ghost predicate SetFileModeFromCwdTargetContractFields(
@@ -6600,35 +6600,35 @@ module IOContract {
     0 <= err && (ok <==> err == 0) &&
     (if !ok then afterFs == fs && CwdContextReadStepFields(before,after)
      else CwdResolvedModeCanSucceedFields(fs,before,resolved) &&
-       var key := CwdTargetRecordFields(fs,before,resolved.v).hostKey;
-       afterFs == ModeChangedFilesystemFields(fs,key,mode,now) &&
-       after == before.(topology := ModeChangedTopologyFields(before.topology,key,mode,now),
-         ordinal := before.ordinal+1))
+          var key := CwdTargetRecordFields(fs,before,resolved.v).hostKey;
+          afterFs == ModeChangedFilesystemFields(fs,key,mode,now) &&
+          after == before.(topology := ModeChangedTopologyFields(before.topology,key,mode,now),
+          ordinal := before.ordinal+1))
   }
 
   ghost function CwdOpenedTopologyFields(fs: FileSystem, context: CwdContext,
-    target: CwdTarget): (topology: LiveDirectoryTopology)
+                                         target: CwdTarget): (topology: LiveDirectoryTopology)
     requires CwdContextFields(fs,context) && CwdTargetFields(fs,context,target)
     requires CwdTargetRecordFields(fs,context,target).node.Directory?
     ensures LiveDirectoryTopologyFields(fs,topology)
     ensures Extends(context.topology,topology)
     ensures target.CwdNamedTarget? ==>
-      exists position | position in topology.nodes :: topology.nodes[position].pathname == [target.path]
+              exists position | position in topology.nodes :: topology.nodes[position].pathname == [target.path]
   {
     if target.CwdNamedTarget? then ExtendNamedDirectoryTopologyFields(fs,context.topology,target.path)
     else context.topology
   }
 
   ghost function CwdOpenedPositionFields(fs: FileSystem, context: CwdContext,
-    target: CwdTarget): (position: DirectoryPosition)
+                                         target: CwdTarget): (position: DirectoryPosition)
     requires CwdContextFields(fs,context) && CwdTargetFields(fs,context,target)
     requires CwdTargetRecordFields(fs,context,target).node.Directory?
     ensures position in CwdOpenedTopologyFields(fs,context,target).nodes
     ensures CwdOpenedTopologyFields(fs,context,target).nodes[position].status.hostKey ==
-      CwdTargetRecordFields(fs,context,target).hostKey
+            CwdTargetRecordFields(fs,context,target).hostKey
     ensures target.CwdDirectoryTarget? ==> position == target.position
     ensures target.CwdNamedTarget? ==>
-      CwdOpenedTopologyFields(fs,context,target).nodes[position].pathname == [target.path]
+              CwdOpenedTopologyFields(fs,context,target).nodes[position].pathname == [target.path]
   {
     var topology := CwdOpenedTopologyFields(fs,context,target);
     if target.CwdNamedTarget? then
@@ -6641,49 +6641,49 @@ module IOContract {
   }
 
   ghost predicate OpenDirFromCwdTargetContractFields(fs: FileSystem, before: CwdContext,
-    after: CwdContext, resolved: IOResult<CwdTarget>, dots: bool, ok: bool, handle: int, err: int)
+                                                     after: CwdContext, resolved: IOResult<CwdTarget>, dots: bool, ok: bool, handle: int, err: int)
   {
     CwdContextFields(fs,before) && CwdContextFields(fs,after) &&
     0 <= err && (ok <==> err == 0) &&
     (if !ok then CwdContextReadStepFields(before,after)
      else resolved.Ok? && CwdTargetFields(fs,before,resolved.v) &&
-       CwdTargetRecordFields(fs,before,resolved.v).node.Directory? &&
-       handle !in before.capabilities && handle !in before.legacyHandles &&
-       var topology := CwdOpenedTopologyFields(fs,before,resolved.v);
-       var position := CwdOpenedPositionFields(fs,before,resolved.v);
-       after == before.(topology := topology,ordinal := before.ordinal+1,
-         capabilities := before.capabilities[handle :=
-           DirectoryCapabilityState(position,DirectoryCapabilityNamesFields(topology,position,dots),
-             [],fs,topology,dots)]))
+          CwdTargetRecordFields(fs,before,resolved.v).node.Directory? &&
+          handle !in before.capabilities && handle !in before.legacyHandles &&
+          var topology := CwdOpenedTopologyFields(fs,before,resolved.v);
+          var position := CwdOpenedPositionFields(fs,before,resolved.v);
+          after == before.(topology := topology,ordinal := before.ordinal+1,
+          capabilities := before.capabilities[handle :=
+          DirectoryCapabilityState(position,DirectoryCapabilityNamesFields(topology,position,dots),
+                                   [],fs,topology,dots)]))
   }
 
   ghost function GetOpenDirectoryCapabilityResultFields(fs: FileSystem, context: CwdContext,
-    handle: int): IOResult<FileStatus>
+                                                        handle: int): IOResult<FileStatus>
   {
     if !CwdContextFields(fs,context) then Result.Err(InvalidPath)
     else if handle !in context.capabilities then Result.Err(NativeFailure(Errno.EBADF,
-      CLocaleErrnoTextResult(Errno.EBADF)))
+                                                                          CLocaleErrnoTextResult(Errno.EBADF)))
     else if !DirectoryCapabilityAnchorCurrentFields(context.topology,context.capabilities[handle]) then
       Result.Err(InvalidPath)
     else Result.Ok(FileStatusForRecord(context.topology.objects[
-      context.topology.nodes[context.capabilities[handle].position].status.hostKey]))
+                                       context.topology.nodes[context.capabilities[handle].position].status.hostKey]))
   }
 
   ghost function DirectoryRequestForContextFields(fs: FileSystem, context: CwdContext,
-    operation: DirectoryOperation, handle: int, fd: int, name: string,
-    statusOrdinal: nat): DirectoryRequest
+                                                  operation: DirectoryOperation, handle: int, fd: int, name: string,
+                                                  statusOrdinal: nat): DirectoryRequest
   {
     DirectoryRequest(operation,context.ordinal,fs,context.topology,context.position,
-      context.capabilities,handle,fd,name,statusOrdinal,context.hint,context.legacyHandles.Keys)
+                     context.capabilities,handle,fd,name,statusOrdinal,context.hint,context.legacyHandles.Keys)
   }
 
   ghost predicate ContextOperationSpec(fs: FileSystem, before: CwdContext,
-    observations: DirectoryObservations, operation: DirectoryOperation,
-    handle: int, fd: int, name: string, beforeStatus: nat, afterStatus: nat,
-    response: DirectoryResponse, after: CwdContext)
+                                       observations: DirectoryObservations, operation: DirectoryOperation,
+                                       handle: int, fd: int, name: string, beforeStatus: nat, afterStatus: nat,
+                                       response: DirectoryResponse, after: CwdContext)
   {
     DirectoryOperationSpec(DirectoryRequestForContextFields(fs,before,operation,handle,fd,name,beforeStatus),
-      observations,response,after.position,after.capabilities,after.ordinal,afterStatus,after.hint) &&
+                           observations,response,after.position,after.capabilities,after.ordinal,afterStatus,after.hint) &&
     after.topology == before.topology && after.legacyHandles == before.legacyHandles &&
     after.legacyOrigins == before.legacyOrigins
   }
@@ -6693,36 +6693,36 @@ module IOContract {
     requires CwdTargetFields(fs,context,target)
     ensures CwdTargetRecordFields(fs,context,target).hostKey in context.topology.objects
     ensures context.topology.objects[CwdTargetRecordFields(fs,context,target).hostKey] ==
-      CwdTargetRecordFields(fs,context,target)
+            CwdTargetRecordFields(fs,context,target)
   {
     reveal CwdContextFields(), CwdTargetFields(), CwdTargetRecordFields();
     reveal LiveDirectoryTopologyFields(), LiveObjectRecordsFields();
     match target
     case CwdNamedTarget(path) =>
       reveal ValidInodeFileSystemData(),InodeNamespaceWellFormed();
-      reveal FsContainsPath(),InodeFsContainsPath(),InodeFsLookupId();
-      var tree := InodeFsLookupTreeSegments(fs.inodes,fs.namespace,PathSegments(path)).v;
-      LookupProof.InodeLookupTreeWellFormed(fs.inodes,fs.namespace,PathSegments(path),tree);
-      reveal InodeTreeWellFormed(),FsIdAt();
+             reveal FsContainsPath(),InodeFsContainsPath(),InodeFsLookupId();
+                    var tree := InodeFsLookupTreeSegments(fs.inodes,fs.namespace,PathSegments(path)).v;
+                    LookupProof.InodeLookupTreeWellFormed(fs.inodes,fs.namespace,PathSegments(path),tree);
+                    reveal InodeTreeWellFormed(),FsIdAt();
     case CwdDirectoryTarget(position) =>
     case CwdEntryTarget(parent,name) =>
   }
 
   lemma CwdModeContextValidityFields(fs: FileSystem,context: CwdContext,target: CwdTarget,
-    mode: bv32,now: int)
+                                     mode: bv32,now: int)
     requires CwdContextFields(fs,context)
     requires CwdTargetFields(fs,context,target)
     requires !CwdTargetRecordFields(fs,context,target).node.Inaccessible?
     requires !CwdTargetRecordFields(fs,context,target).node.Symlink?
     ensures var key := CwdTargetRecordFields(fs,context,target).hostKey;
-      CwdContextFields(ModeChangedFilesystemFields(fs,key,mode,now),
-        context.(topology := ModeChangedTopologyFields(context.topology,key,mode,now),
-          ordinal := context.ordinal+1))
+            CwdContextFields(ModeChangedFilesystemFields(fs,key,mode,now),
+                             context.(topology := ModeChangedTopologyFields(context.topology,key,mode,now),
+                             ordinal := context.ordinal+1))
     ensures var key := CwdTargetRecordFields(fs,context,target).hostKey;
-      SetFileModeFromCwdTargetContractFields(fs,context,now,
-        ModeChangedFilesystemFields(fs,key,mode,now),
-        context.(topology := ModeChangedTopologyFields(context.topology,key,mode,now),
-          ordinal := context.ordinal+1),Result.Ok(target),mode,true,0)
+            SetFileModeFromCwdTargetContractFields(fs,context,now,
+                                                   ModeChangedFilesystemFields(fs,key,mode,now),
+                                                   context.(topology := ModeChangedTopologyFields(context.topology,key,mode,now),
+                                                   ordinal := context.ordinal+1),Result.Ok(target),mode,true,0)
   {
     hide *;
     CwdTargetRecordIsObservedFields(fs,context,target);
@@ -6733,7 +6733,7 @@ module IOContract {
     ModeChangedTopologyValid(fs,context.topology,key,mode,now);
     var afterFs := ModeChangedFilesystemFields(fs,key,mode,now);
     var after := context.(topology := ModeChangedTopologyFields(context.topology,key,mode,now),
-      ordinal := context.ordinal+1);
+    ordinal := context.ordinal+1);
     assert after.topology.nodes.Keys == context.topology.nodes.Keys by {
       reveal ModeChangedTopologyFields();
     }
@@ -6750,17 +6750,17 @@ module IOContract {
   }
 
   ghost function DirectoryResourcesContextViewFields(fs: FileSystem,
-    resources: ValidDirectoryResources, hint: Path): (context: CwdContext)
+                                                     resources: ValidDirectoryResources, hint: Path): (context: CwdContext)
     ensures CwdContextFields(fs,context)
     ensures context == CwdContext(hint,resources.live.model.views(fs),resources.live.position,
-      resources.live.ordinal,resources.live.capabilities,resources.legacy,resources.origins)
+                                  resources.live.ordinal,resources.live.capabilities,resources.legacy,resources.origins)
   {
     hide *;
     reveal DirectoryResourcesFields(), DirectoryOperationCapabilitiesCurrentFields();
     DirectoryStateAdmitsRequest(resources.live,fs,DirectoryGetCwd,0,0,"",0,hint,resources.legacy.Keys);
     reveal DirectoryRequestFields(), CwdContextFields();
     CwdContext(hint,resources.live.model.views(fs),resources.live.position,
-      resources.live.ordinal,resources.live.capabilities,resources.legacy,resources.origins)
+               resources.live.ordinal,resources.live.capabilities,resources.legacy,resources.origins)
   }
 
   ghost function DirectoryResourcesAdvanceFields(resources: ValidDirectoryResources):
@@ -6774,7 +6774,7 @@ module IOContract {
   }
 
   ghost function DirectoryResourcesOpenedFields(fs: FileSystem,
-    resources: ValidDirectoryResources, hint: Path, target: CwdTarget, handle: int, dots: bool):
+                                                resources: ValidDirectoryResources, hint: Path, target: CwdTarget, handle: int, dots: bool):
     (after: ValidDirectoryResources)
     requires CwdTargetFields(fs,DirectoryResourcesContextViewFields(fs,resources,hint),target)
     requires CwdTargetRecordFields(fs,DirectoryResourcesContextViewFields(fs,resources,hint),target).node.Directory?
@@ -6782,7 +6782,7 @@ module IOContract {
     ensures after.legacy == resources.legacy && after.origins == resources.origins
     ensures after.live.model.observations == resources.live.model.observations
     ensures OpenDirFromCwdTargetContractFields(fs,DirectoryResourcesContextViewFields(fs,resources,hint),
-      DirectoryResourcesContextViewFields(fs,after,hint),Result.Ok(target),dots,true,handle,0)
+                                               DirectoryResourcesContextViewFields(fs,after,hint),Result.Ok(target),dots,true,handle,0)
   {
     hide *;
     reveal DirectoryStateFields(), DirectoryModelFields(), DirectoryResourcesFields(), Extends();
@@ -6791,7 +6791,7 @@ module IOContract {
     var position := CwdOpenedPositionFields(fs,before,target);
     var model := ExtendDirectoryModelFields(resources.live.model,fs,topology);
     var capability := DirectoryCapabilityState(position,DirectoryCapabilityNamesFields(topology,position,dots),
-      [],fs,topology,dots);
+                                               [],fs,topology,dots);
     var capabilities := resources.live.capabilities[handle := capability];
     var state := DirectoryState(model,resources.live.position,capabilities,resources.live.ordinal+1);
     reveal DirectoryStateFields(), DirectoryModelFields(), DirectoryResourcesFields();
@@ -6799,11 +6799,11 @@ module IOContract {
     assert resources.live.model.positions == before.topology.nodes.Keys;
     forall item | item in capabilities
       ensures var cap := capabilities[item];
-        LiveDirectoryTopologyFields(cap.anchorFs,cap.anchorTopology) &&
-        cap.anchorTopology.nodes.Keys <= model.positions &&
-        cap.position in model.positions && cap.position in cap.anchorTopology.nodes &&
-        cap.remaining <= DirectoryCapabilityNamesFields(cap.anchorTopology,cap.position,cap.includeDots) &&
-        |cap.descriptor| <= 1 && (|cap.descriptor| == 1 ==> cap.descriptor[0] >= 0)
+              LiveDirectoryTopologyFields(cap.anchorFs,cap.anchorTopology) &&
+              cap.anchorTopology.nodes.Keys <= model.positions &&
+              cap.position in model.positions && cap.position in cap.anchorTopology.nodes &&
+              cap.remaining <= DirectoryCapabilityNamesFields(cap.anchorTopology,cap.position,cap.includeDots) &&
+              |cap.descriptor| <= 1 && (|cap.descriptor| == 1 ==> cap.descriptor[0] >= 0)
     {
       if item == handle {
         assert capabilities[item] == capability;
@@ -6813,7 +6813,7 @@ module IOContract {
       }
     }
     forall left,right | left in capabilities && right in capabilities &&
-      |capabilities[left].descriptor| == 1 && capabilities[left].descriptor == capabilities[right].descriptor
+                        |capabilities[left].descriptor| == 1 && capabilities[left].descriptor == capabilities[right].descriptor
       ensures left == right
     {
       assert left != handle && right != handle;
@@ -6823,13 +6823,13 @@ module IOContract {
     var after := DirectoryResourcesReplaceLive(resources,state);
     var afterContext := DirectoryResourcesContextViewFields(fs,after,hint);
     assert afterContext == before.(topology := topology,ordinal := before.ordinal+1,
-      capabilities := before.capabilities[handle := capability]);
+                           capabilities := before.capabilities[handle := capability]);
     reveal OpenDirFromCwdTargetContractFields();
     after
   }
 
   ghost function DirectoryResourcesModeFields(fs: FileSystem,
-    resources: ValidDirectoryResources, hint: Path, target: CwdTarget, mode: bv32, now: int):
+                                              resources: ValidDirectoryResources, hint: Path, target: CwdTarget, mode: bv32, now: int):
     (after: ValidDirectoryResources)
     requires CwdTargetFields(fs,DirectoryResourcesContextViewFields(fs,resources,hint),target)
     requires !CwdTargetRecordFields(fs,DirectoryResourcesContextViewFields(fs,resources,hint),target).node.Inaccessible?
@@ -6837,10 +6837,10 @@ module IOContract {
     ensures after.legacy == resources.legacy && after.origins == resources.origins
     ensures after.live.model.observations == resources.live.model.observations
     ensures var before := DirectoryResourcesContextViewFields(fs,resources,hint);
-      var key := CwdTargetRecordFields(fs,before,target).hostKey;
-      var afterFs := ModeChangedFilesystemFields(fs,key,mode,now);
-      SetFileModeFromCwdTargetContractFields(fs,before,now,afterFs,
-        DirectoryResourcesContextViewFields(afterFs,after,hint),Result.Ok(target),mode,true,0)
+            var key := CwdTargetRecordFields(fs,before,target).hostKey;
+            var afterFs := ModeChangedFilesystemFields(fs,key,mode,now);
+            SetFileModeFromCwdTargetContractFields(fs,before,now,afterFs,
+                                                   DirectoryResourcesContextViewFields(afterFs,after,hint),Result.Ok(target),mode,true,0)
   {
     hide *;
     var before := DirectoryResourcesContextViewFields(fs,resources,hint);
@@ -6876,7 +6876,7 @@ module IOContract {
   {
     match target
     case CwdNamedTarget(path) => IsAbsolutePath(path) && NormalizePath(path) == path &&
-      FsContainsPath(fs,path) && !FsNodeAt(fs,path).Inaccessible?
+                                 FsContainsPath(fs,path) && !FsNodeAt(fs,path).Inaccessible?
     case CwdDirectoryTarget(position) =>
       position in context.topology.nodes &&
       context.topology.nodes[position].status.hostKey in context.topology.objects &&
@@ -6932,15 +6932,15 @@ module IOContract {
     var node := context.topology.nodes[position];
     if |node.pathname| == 1 then
       CwdNamedResultFields(fs,context,
-        ResolveRawSymlinkSegmentsFields(fs,segments,index,node.pathname[0],{},fuel,follow,false,requireDirectory))
+                           ResolveRawSymlinkSegmentsFields(fs,segments,index,node.pathname[0],{},fuel,follow,false,requireDirectory))
     else if index == |segments| then
       Result.Ok(CwdDirectoryTarget(position))
     else if !FixtureOwnerCanSearch(context.topology.objects[node.status.hostKey].node) then
       Result.Err(PermissionDenied)
     else if segments[index] == "." || segments[index] == ".." then
       ResolveLiveDirectorySegmentsFields(fs,context,
-        if segments[index] == ".." then node.parent else position,
-        segments,index+1,fuel,follow,requireDirectory)
+                                         if segments[index] == ".." then node.parent else position,
+                                         segments,index+1,fuel,follow,requireDirectory)
     else if segments[index] !in node.entries then Result.Err(NoSuchFile)
     else
       var name := segments[index];
@@ -6963,7 +6963,7 @@ module IOContract {
           var directoryRequired := requireDirectory || (|tail| == 0 && HasTrailingSlash(target));
           if IsAbsolutePath(target) then
             CwdNamedResultFields(fs,context,
-              ResolveRawSymlinkSegmentsFields(fs,substituted,0,"/",{},fuel-1,follow,false,directoryRequired))
+                                 ResolveRawSymlinkSegmentsFields(fs,substituted,0,"/",{},fuel-1,follow,false,directoryRequired))
           else ResolveLiveDirectorySegmentsFields(fs,context,position,substituted,0,fuel-1,follow,directoryRequired)
   }
 
@@ -6978,7 +6978,7 @@ module IOContract {
     else if IsAbsolutePath(path) then
       CwdNamedResultFields(fs,context,ResolvePathForMetadataFields(fs,path,follow))
     else ResolveLiveDirectorySegmentsFields(fs,context,context.position,
-      RawPathSegmentsFields(path),0,SYMLINK_MAX_DEPTH,follow,HasTrailingSlash(path))
+                                            RawPathSegmentsFields(path),0,SYMLINK_MAX_DEPTH,follow,HasTrailingSlash(path))
   }
 
   ghost function GetFileStatusFromCwdContextResultFields(
@@ -7006,7 +7006,7 @@ module IOContract {
   // This intrinsic bridge is required to type the directory-entry model.
   // The generic lookup proof and its other consequences remain private.
   lemma KernelLookupTreeWellFormed(inodes: map<InodeId, InodeRecord>, tree: InodeTree,
-    segments: seq<string>, found: InodeTree)
+                                   segments: seq<string>, found: InodeTree)
     requires InodeTreeWellFormed(tree, inodes)
     requires InodeFsLookupTreeSegments(inodes, tree, segments) == Result.Ok(found)
     ensures InodeTreeWellFormed(found, inodes)
@@ -7937,8 +7937,8 @@ module IOContract {
 
         assert InodeUniqueHostKeys(fs);
         assert forall liveId :: liveId in result.inodes ==>
-          liveId in fs.inodes &&
-          result.inodes[liveId].hostKey == fs.inodes[liveId].hostKey by {
+                                  liveId in fs.inodes &&
+                                  result.inodes[liveId].hostKey == fs.inodes[liveId].hostKey by {
           forall liveId | liveId in result.inodes
             ensures liveId in fs.inodes &&
                     result.inodes[liveId].hostKey == fs.inodes[liveId].hostKey
@@ -8328,9 +8328,9 @@ module IOContract {
             InodeNamespaceIdPaths(subtree, id)
           );
           assert InodeNamespaceIdPaths(
-            InodeTreeSetSubtreeSegments(tree.children[segs[0]], segs[1..], subtree), id
-          ) == InodeNamespaceIdPaths(tree.children[segs[0]], id) +
-               InodePrefixPaths(segs[1..], InodeNamespaceIdPaths(subtree, id));
+              InodeTreeSetSubtreeSegments(tree.children[segs[0]], segs[1..], subtree), id
+            ) == InodeNamespaceIdPaths(tree.children[segs[0]], id) +
+                      InodePrefixPaths(segs[1..], InodeNamespaceIdPaths(subtree, id));
         }
       }
     }
@@ -8551,7 +8551,7 @@ module IOContract {
             ensures result.inodes[liveId].links.LinkCountKnown? &&
                     0 < result.inodes[liveId].links.count &&
                     InodeNamespaceRefCount(result.namespace, liveId) <=
-                      result.inodes[liveId].links.count
+                    result.inodes[liveId].links.count
           {
             assert result.inodes[liveId] == withoutTarget.inodes[liveId];
             assert InodeNamespaceRefCount(result.namespace, liveId) ==

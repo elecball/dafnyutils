@@ -31,30 +31,30 @@ module CsplitSpec {
 
   ghost function Context(io: BenchIO.IO): (observations: ObservationContext)
     reads io.propsRegion, io.nowRegion, io.credentialsRegion,
-      io.trustedFilesystemRegion, io.trustedNativeFailuresRegion
+          io.trustedFilesystemRegion, io.trustedNativeFailuresRegion
     ensures observations == ObservationContext(io.props(), io.now(), io.credentials(),
-      io.trustedFilesystem(), io.trustedNativeFailures())
+                                               io.trustedFilesystem(), io.trustedNativeFailures())
   {
     ObservationContext(io.props(), io.now(), io.credentials(),
-      io.trustedFilesystem(), io.trustedNativeFailures())
+                       io.trustedFilesystem(), io.trustedNativeFailures())
   }
 
   ghost predicate WriteObservation(observations: ObservationContext,
-    beforeFs: BenchWorld.FileSystem, now: int, path: BenchWorld.Path,
-    data: BenchWorld.Bytes, ok: bool, err: int, afterFs: BenchWorld.FileSystem)
+                                   beforeFs: BenchWorld.FileSystem, now: int, path: BenchWorld.Path,
+                                   data: BenchWorld.Bytes, ok: bool, err: int, afterFs: BenchWorld.FileSystem)
   {
     exists committed: nat, stage: BenchWorld.FileWriteStage ::
       IOContract.WriteFileSpec(beforeFs, observations.props, now,
-        observations.credentials, observations.filesystem, afterFs,
-        path, data, ok, err, committed, stage)
+                               observations.credentials, observations.filesystem, afterFs,
+                               path, data, ok, err, committed, stage)
   }
 
   ghost predicate DeleteObservation(observations: ObservationContext,
-    beforeFs: BenchWorld.FileSystem, path: BenchWorld.Path,
-    ok: bool, err: int, afterFs: BenchWorld.FileSystem)
+                                    beforeFs: BenchWorld.FileSystem, path: BenchWorld.Path,
+                                    ok: bool, err: int, afterFs: BenchWorld.FileSystem)
   {
     IOContract.DeletePathSpec(beforeFs, observations.now, observations.failures,
-      afterFs, path, ok, err)
+                              afterFs, path, ok, err)
   }
 
 
@@ -423,9 +423,9 @@ module CsplitSpec {
   }
 
   ghost function DeferredReadResultFields(raw: Schema.CsplitCmdRaw,
-    preFs: BenchWorld.FileSystem,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
-    preStdin: BenchWorld.Bytes): BenchWorld.IOResult<BenchWorld.Bytes>
+                                          preFs: BenchWorld.FileSystem,
+                                          preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+                                          preStdin: BenchWorld.Bytes): BenchWorld.IOResult<BenchWorld.Bytes>
   {
     if raw.input.Stdin? && !ValidNumberPrefix(raw.lineNumbers, |raw.lineNumbers|) then
       Result.Ok(preStdin)
@@ -434,28 +434,28 @@ module CsplitSpec {
 
   // A failed open preserves its entry; a failed write/close removes the opened output.
   ghost predicate FailedWriteCleanupRelation(observations: ObservationContext,
-    preFs: BenchWorld.FileSystem, now: int, path: BenchWorld.Path, data: BenchWorld.Bytes,
-    err: int, afterWriteFs: BenchWorld.FileSystem, afterCleanupFs: BenchWorld.FileSystem
+                                             preFs: BenchWorld.FileSystem, now: int, path: BenchWorld.Path, data: BenchWorld.Bytes,
+                                             err: int, afterWriteFs: BenchWorld.FileSystem, afterCleanupFs: BenchWorld.FileSystem
   )
   {
     exists committed: nat, stage: BenchWorld.FileWriteStage ::
       IOContract.WriteFileSpec(preFs, observations.props, now,
-        observations.credentials, observations.filesystem, afterWriteFs,
-        path, data, false, err, committed, stage) &&
+                               observations.credentials, observations.filesystem, afterWriteFs,
+                               path, data, false, err, committed, stage) &&
       (if stage == BenchWorld.WriteOpenFailed then afterCleanupFs == afterWriteFs
        else exists deleteOk: bool, deleteErr: int ::
-         DeleteObservation(observations, afterWriteFs, path, deleteOk, deleteErr, afterCleanupFs))
+              DeleteObservation(observations, afterWriteFs, path, deleteOk, deleteErr, afterCleanupFs))
   }
 
   ghost predicate WriteAttemptsRelation(observations: ObservationContext,
-    pieces: seq<BenchWorld.Bytes>,
-    index: nat,
-    count: nat,
-    preFs: BenchWorld.FileSystem,
-    preNow: int,
-    states: seq<BenchWorld.FileSystem>,
-    oks: seq<bool>,
-    errs: seq<int>
+                                        pieces: seq<BenchWorld.Bytes>,
+                                        index: nat,
+                                        count: nat,
+                                        preFs: BenchWorld.FileSystem,
+                                        preNow: int,
+                                        states: seq<BenchWorld.FileSystem>,
+                                        oks: seq<bool>,
+                                        errs: seq<int>
   )
   {
     count <= |pieces| &&
@@ -465,24 +465,24 @@ module CsplitSpec {
     states[0] == preFs &&
     forall i :: 0 <= i < count ==>
                   WriteObservation(observations,
-                    states[i],
-                    preNow,
-                    OutputName(index + i),
-                    pieces[i],
-                    oks[i],
-                    errs[i],
-                    states[i + 1]
+                                   states[i],
+                                   preNow,
+                                   OutputName(index + i),
+                                   pieces[i],
+                                   oks[i],
+                                   errs[i],
+                                   states[i + 1]
                   )
   }
 
   ghost predicate CleanupWitnessRelation(observations: ObservationContext,
-    index: nat,
-    count: nat,
-    preFs: BenchWorld.FileSystem,
-    fs2: BenchWorld.FileSystem,
-    states: seq<BenchWorld.FileSystem>,
-    oks: seq<bool>,
-    errs: seq<int>
+                                         index: nat,
+                                         count: nat,
+                                         preFs: BenchWorld.FileSystem,
+                                         fs2: BenchWorld.FileSystem,
+                                         states: seq<BenchWorld.FileSystem>,
+                                         oks: seq<bool>,
+                                         errs: seq<int>
   )
   {
     |states| == count + 1 &&
@@ -492,25 +492,25 @@ module CsplitSpec {
     |errs| == count &&
     forall i :: 0 <= i < count ==>
                   DeleteObservation(observations,
-                    states[i],
-                    OutputName(index + count - 1 - i),
-                    oks[i],
-                    errs[i],
-                    states[i + 1]
+                                    states[i],
+                                    OutputName(index + count - 1 - i),
+                                    oks[i],
+                                    errs[i],
+                                    states[i + 1]
                   )
   }
 
   ghost predicate CleanupRelation(observations: ObservationContext,
-    index: nat,
-    count: nat,
-    preFs: BenchWorld.FileSystem,
-    fs2: BenchWorld.FileSystem,
-    states: seq<BenchWorld.FileSystem>
+                                  index: nat,
+                                  count: nat,
+                                  preFs: BenchWorld.FileSystem,
+                                  fs2: BenchWorld.FileSystem,
+                                  states: seq<BenchWorld.FileSystem>
   )
   {
     exists oks: seq<bool>, errs: seq<int> ::
       CleanupWitnessRelation(observations,
-        index, count, preFs, fs2, states, oks, errs
+                             index, count, preFs, fs2, states, oks, errs
       )
   }
 
@@ -529,34 +529,34 @@ module CsplitSpec {
   }
 
   ghost predicate WriteTraceWitnessRelation(observations: ObservationContext,
-    pieces: seq<BenchWorld.Bytes>,
-    index: nat,
-    terminalError: BenchWorld.Bytes,
-    hasTerminalError: bool,
-    preFs: BenchWorld.FileSystem,
-    preNow: int,
-    fs2: BenchWorld.FileSystem,
-    stdout: BenchWorld.Bytes,
-    stderr: BenchWorld.Bytes,
-    exit: int,
-    attempted: nat,
-    writeStates: seq<BenchWorld.FileSystem>,
-    writeOk: seq<bool>,
-    writeErr: seq<int>,
-    cleanupStates: seq<BenchWorld.FileSystem>
+                                            pieces: seq<BenchWorld.Bytes>,
+                                            index: nat,
+                                            terminalError: BenchWorld.Bytes,
+                                            hasTerminalError: bool,
+                                            preFs: BenchWorld.FileSystem,
+                                            preNow: int,
+                                            fs2: BenchWorld.FileSystem,
+                                            stdout: BenchWorld.Bytes,
+                                            stderr: BenchWorld.Bytes,
+                                            exit: int,
+                                            attempted: nat,
+                                            writeStates: seq<BenchWorld.FileSystem>,
+                                            writeOk: seq<bool>,
+                                            writeErr: seq<int>,
+                                            cleanupStates: seq<BenchWorld.FileSystem>
   )
   {
     attempted <= |pieces| &&
     WriteAttemptsRelation(observations,
-      pieces, index, attempted, preFs, preNow, writeStates, writeOk, writeErr
+                          pieces, index, attempted, preFs, preNow, writeStates, writeOk, writeErr
     ) &&
     (forall i :: 0 <= i && i + 1 < attempted ==> writeOk[i]) &&
     if attempted > 0 && !writeOk[attempted - 1] then
       CountOutputRelation(pieces, attempted - 1, stdout) &&
       |cleanupStates| > 0 &&
       FailedWriteCleanupRelation(observations, writeStates[attempted - 1], preNow,
-        OutputName(index + attempted - 1), pieces[attempted - 1], writeErr[attempted - 1],
-        writeStates[attempted], cleanupStates[0]) &&
+                                 OutputName(index + attempted - 1), pieces[attempted - 1], writeErr[attempted - 1],
+                                 writeStates[attempted], cleanupStates[0]) &&
       CleanupRelation(observations, index, attempted - 1, cleanupStates[0], fs2, cleanupStates) &&
       stderr == WriteErrorMessage(
         OutputName(index + attempted - 1),
@@ -569,7 +569,7 @@ module CsplitSpec {
       CountOutputRelation(pieces, attempted, stdout) &&
       if hasTerminalError then
         CleanupRelation(observations,
-          index, attempted, writeStates[attempted], fs2, cleanupStates
+                        index, attempted, writeStates[attempted], fs2, cleanupStates
         ) &&
         stderr == terminalError &&
         exit == 1
@@ -580,16 +580,16 @@ module CsplitSpec {
   }
 
   ghost predicate WriteTraceRelation(observations: ObservationContext,
-    pieces: seq<BenchWorld.Bytes>,
-    index: nat,
-    terminalError: BenchWorld.Bytes,
-    hasTerminalError: bool,
-    preFs: BenchWorld.FileSystem,
-    preNow: int,
-    fs2: BenchWorld.FileSystem,
-    stdout: BenchWorld.Bytes,
-    stderr: BenchWorld.Bytes,
-    exit: int
+                                     pieces: seq<BenchWorld.Bytes>,
+                                     index: nat,
+                                     terminalError: BenchWorld.Bytes,
+                                     hasTerminalError: bool,
+                                     preFs: BenchWorld.FileSystem,
+                                     preNow: int,
+                                     fs2: BenchWorld.FileSystem,
+                                     stdout: BenchWorld.Bytes,
+                                     stderr: BenchWorld.Bytes,
+                                     exit: int
   )
   {
     exists attempted: nat,
@@ -598,62 +598,62 @@ module CsplitSpec {
       writeErr: seq<int>,
       cleanupStates: seq<BenchWorld.FileSystem> ::
       WriteTraceWitnessRelation(observations,
-        pieces,
-        index,
-        terminalError,
-        hasTerminalError,
-        preFs,
-        preNow,
-        fs2,
-        stdout,
-        stderr,
-        exit,
-        attempted,
-        writeStates,
-        writeOk,
-        writeErr,
-        cleanupStates
+                                pieces,
+                                index,
+                                terminalError,
+                                hasTerminalError,
+                                preFs,
+                                preNow,
+                                fs2,
+                                stdout,
+                                stderr,
+                                exit,
+                                attempted,
+                                writeStates,
+                                writeOk,
+                                writeErr,
+                                cleanupStates
       )
   }
 
   ghost predicate WritePiecesSummaryFields(observations: ObservationContext,
-    pieces: seq<BenchWorld.Bytes>,
-    index: nat,
-    preFs: BenchWorld.FileSystem,
-    preNow: int,
-    fs2: BenchWorld.FileSystem,
-    stdout: BenchWorld.Bytes,
-    stderr: BenchWorld.Bytes,
-    exit: int
+                                           pieces: seq<BenchWorld.Bytes>,
+                                           index: nat,
+                                           preFs: BenchWorld.FileSystem,
+                                           preNow: int,
+                                           fs2: BenchWorld.FileSystem,
+                                           stdout: BenchWorld.Bytes,
+                                           stderr: BenchWorld.Bytes,
+                                           exit: int
   )
   {
     WriteTraceRelation(observations,
-      pieces, index, [], false, preFs, preNow, fs2, stdout, stderr, exit
+                       pieces, index, [], false, preFs, preNow, fs2, stdout, stderr, exit
     )
   }
 
   ghost predicate WritePiecesThenErrorSummaryFields(observations: ObservationContext,
-    pieces: seq<BenchWorld.Bytes>,
-    index: nat,
-    line: nat,
-    preFs: BenchWorld.FileSystem,
-    preNow: int,
-    fs2: BenchWorld.FileSystem,
-    stdout: BenchWorld.Bytes,
-    stderr: BenchWorld.Bytes,
-    exit: int
+                                                    pieces: seq<BenchWorld.Bytes>,
+                                                    index: nat,
+                                                    line: nat,
+                                                    preFs: BenchWorld.FileSystem,
+                                                    preNow: int,
+                                                    fs2: BenchWorld.FileSystem,
+                                                    stdout: BenchWorld.Bytes,
+                                                    stderr: BenchWorld.Bytes,
+                                                    exit: int
   ) {
     WriteTraceRelation(observations,
-      pieces,
-      index,
-      OutOfRangeMessage(line),
-      true,
-      preFs,
-      preNow,
-      fs2,
-      stdout,
-      stderr,
-      exit
+                       pieces,
+                       index,
+                       OutOfRangeMessage(line),
+                       true,
+                       preFs,
+                       preNow,
+                       fs2,
+                       stdout,
+                       stderr,
+                       exit
     )
   }
 
@@ -712,15 +712,15 @@ module CsplitSpec {
                 exists writeFs: BenchWorld.FileSystem, writeOut: BenchWorld.Bytes,
                   writeErr: BenchWorld.Bytes, writeExit: int ::
                   WritePiecesThenErrorSummaryFields(old(Context(io)),
-                    pieces,
-                    0,
-                    line,
-                    old(io.fs()),
-                    old(io.now()),
-                    writeFs,
-                    writeOut,
-                    writeErr,
-                    writeExit
+                                                    pieces,
+                                                    0,
+                                                    line,
+                                                    old(io.fs()),
+                                                    old(io.now()),
+                                                    writeFs,
+                                                    writeOut,
+                                                    writeErr,
+                                                    writeExit
                   ) &&
                   io.fs() == writeFs &&
                   plannedStdout == writeOut &&
@@ -730,14 +730,14 @@ module CsplitSpec {
                 exists writeFs: BenchWorld.FileSystem, writeOut: BenchWorld.Bytes,
                   writeErr: BenchWorld.Bytes, writeExit: int ::
                   WritePiecesSummaryFields(old(Context(io)),
-                    pieces,
-                    0,
-                    old(io.fs()),
-                    old(io.now()),
-                    writeFs,
-                    writeOut,
-                    writeErr,
-                    writeExit
+                                           pieces,
+                                           0,
+                                           old(io.fs()),
+                                           old(io.now()),
+                                           writeFs,
+                                           writeOut,
+                                           writeErr,
+                                           writeExit
                   ) &&
                   io.fs() == writeFs &&
                   plannedStdout == writeOut &&
@@ -774,28 +774,28 @@ module CsplitSpec {
   )
   {
     var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
-      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+                        else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
     stdoutResult.StreamWriteResult? &&
     var errors := diagnostics + (if stdoutResult.err == 0 then [] else
-      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+                                 StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
     var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
-      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+                        else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
     stderrResult.StreamWriteResult? &&
     (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
-      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+       beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
     (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
-      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+       beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
     exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
   }
 
   twostate predicate Emission(raw: Schema.CsplitCmdRaw, io: BenchIO.IO,
-    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
-    normalExit: int, exit: int)
+                              out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+                              normalExit: int, exit: int)
     reads io.stdoutRegion, io.stderrRegion
   {
     if Emits(raw) then
       EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                 io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
     else
       io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
       exit == normalExit
@@ -806,7 +806,7 @@ module CsplitSpec {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSpec(raw, io, normalExit,
-        out, diagnostics) &&
+                   out, diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
@@ -818,7 +818,7 @@ module CsplitSpec {
   }
 
   ghost predicate ReadFailurePiecesRelation(data: BenchWorld.Bytes, lines: seq<nat>,
-    pieces: seq<BenchWorld.Bytes>)
+                                            pieces: seq<BenchWorld.Bytes>)
   {
     exists complete: BenchWorld.Bytes, plan: SplitPlan ::
       CompleteInputPrefixRelation(data, complete) && SplitPlanRelation(complete, lines, plan) &&
@@ -828,14 +828,14 @@ module CsplitSpec {
   }
 
   ghost predicate PartialStdinFailureFields(observations: ObservationContext, raw: Schema.CsplitCmdRaw, error: BenchWorld.IOError,
-    beforeFs: BenchWorld.FileSystem, beforeNow: int, afterFs: BenchWorld.FileSystem,
-    output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, exit: int)
+                                            beforeFs: BenchWorld.FileSystem, beforeNow: int, afterFs: BenchWorld.FileSystem,
+                                            output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, exit: int)
   {
     exists pieces: seq<BenchWorld.Bytes>, warnings: BenchWorld.Bytes, writeDiagnostics: BenchWorld.Bytes ::
       DuplicateWarningsRelation(raw.lineNumbers, warnings) &&
       ReadFailurePiecesRelation(IOContract.ReadResultData(Result.Err(error)), raw.lineNumbers, pieces) &&
       WriteTraceRelation(observations, pieces, 0, ReadErrorMessage(raw.input, error), true,
-        beforeFs, beforeNow, afterFs, output, writeDiagnostics, exit) &&
+                         beforeFs, beforeNow, afterFs, output, writeDiagnostics, exit) &&
       diagnostics == warnings + writeDiagnostics && exit == 1
   }
 }

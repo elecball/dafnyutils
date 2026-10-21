@@ -12,12 +12,12 @@ module LsNativeObservationCore {
   import Spec = LsNativeObservationSpec
 
   method Render(displayName: string, path: W.Path, follow: bool, showTarget: bool,
-    status: W.FileStatus, io: BenchIO.IO)
+                status: W.FileStatus, io: BenchIO.IO)
     returns (name: string, linkErr: int, ghost calls: seq<Native.Call>)
     modifies io.directoryStateRegion
     ensures IO.Inputs(io) == old(IO.Inputs(io))
     ensures Spec.RenderFields(old(IO.Inputs(io)),old(IO.State(io)),IO.State(io),
-      displayName,path,follow,showTarget,status,name,linkErr,calls)
+                              displayName,path,follow,showTarget,status,name,linkErr,calls)
   {
     hide *;
     ghost var inputs := IO.Inputs(io);
@@ -34,18 +34,18 @@ module LsNativeObservationCore {
       case Err(error) => linkErr := C.IOErrorErrno(error);
     }
     assert Spec.RenderFields(inputs,before,IO.State(io),displayName,path,follow,showTarget,
-      status,name,linkErr,calls) by {
+                             status,name,linkErr,calls) by {
       reveal Spec.RenderFields(), Native.TraceFields();
     }
   }
 
   method Observe(displayName: string, path: W.Path, follow: bool, showTarget: bool, io: BenchIO.IO)
     returns (ok: bool, status: W.FileStatus, err: int, name: string, linkErr: int,
-      ghost calls: seq<Native.Call>)
+             ghost calls: seq<Native.Call>)
     modifies io.directoryStateRegion,io.statusObservationsRegion
     ensures IO.Inputs(io) == old(IO.Inputs(io))
     ensures Spec.PathFields(old(IO.Inputs(io)),old(IO.State(io)),IO.State(io),
-      displayName,path,follow,showTarget,ok,status,err,name,linkErr,calls)
+                            displayName,path,follow,showTarget,ok,status,err,name,linkErr,calls)
   {
     hide *;
     ghost var inputs := IO.Inputs(io);
@@ -69,7 +69,7 @@ module LsNativeObservationCore {
       calls := calls+renderCalls;
     }
     assert Spec.PathFields(inputs,before,IO.State(io),displayName,path,follow,showTarget,
-      ok,status,err,name,linkErr,calls) by {
+                           ok,status,err,name,linkErr,calls) by {
       reveal Spec.PathFields(), Spec.StatusFields(), Native.TraceFields();
     }
   }
@@ -79,7 +79,7 @@ module LsNativeObservationCore {
     modifies io.directoryStateRegion,io.statusObservationsRegion
     ensures IO.Inputs(io) == old(IO.Inputs(io))
     ensures Spec.OperandFields(old(IO.Inputs(io)),old(IO.State(io)),IO.State(io),path,
-      implicitDirectoryFollow,explicitFollow,ok,status,err,calls)
+                               implicitDirectoryFollow,explicitFollow,ok,status,err,calls)
   {
     hide *;
     ghost var inputs := IO.Inputs(io);
@@ -101,7 +101,7 @@ module LsNativeObservationCore {
       err := C.ResultErrno(fallback);
     }
     assert Spec.OperandFields(inputs,before,IO.State(io),path,implicitDirectoryFollow,
-      explicitFollow,ok,status,err,calls) by {
+                              explicitFollow,ok,status,err,calls) by {
       reveal Spec.OperandFields(), Spec.StatusFields();
       reveal C.ResultValue();
     }

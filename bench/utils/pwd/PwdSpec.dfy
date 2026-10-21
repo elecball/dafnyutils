@@ -21,15 +21,15 @@ module PwdSpec {
     ghost logical: Logical.SelectionEvidence, ghost physical: seq<Physical.PhysicalEvidence>)
 
   ghost predicate DirectorySelectionFields(raw: Schema.PwdCmdRaw, env: map<string,string>,
-    inputs: Recovery.RuntimeInputs, before: Recovery.RuntimeState, after: Recovery.RuntimeState,
-    outcome: Recovery.DirectoryOutcome, evidence: DirectoryEvidence)
+                                           inputs: Recovery.RuntimeInputs, before: Recovery.RuntimeState, after: Recovery.RuntimeState,
+                                           outcome: Recovery.DirectoryOutcome, evidence: DirectoryEvidence)
   {
     Recovery.DirectoryOutcomeFields(outcome) &&
     (if Text.UseLogicalFields(raw,env) && "PWD" in env then
-      Logical.NativeSelectionFields(inputs,before,evidence.logicalAfter,env["PWD"],
-        evidence.logicalSelected,evidence.logical)
+       Logical.NativeSelectionFields(inputs,before,evidence.logicalAfter,env["PWD"],
+                                     evidence.logicalSelected,evidence.logical)
      else !evidence.logicalSelected && evidence.logicalAfter == before &&
-       evidence.logical.statuses == [] && evidence.logical.calls == []) &&
+          evidence.logical.statuses == [] && evidence.logical.calls == []) &&
     if evidence.logicalSelected then
       "PWD" in env && outcome == Recovery.DirectoryRecovered(env["PWD"]) &&
       after == evidence.logicalAfter && evidence.physical == []
@@ -39,18 +39,18 @@ module PwdSpec {
   }
 
   ghost predicate WarningFields(raw: Schema.PwdCmdRaw,
-    beforeErr: W.Bytes, afterErr: W.Bytes,
-    streams: (W.TrustedStreamRequest)->W.TrustedStreamResult, warningErr: int)
+                                beforeErr: W.Bytes, afterErr: W.Bytes,
+                                streams: (W.TrustedStreamRequest)->W.TrustedStreamResult, warningErr: int)
   {
     if |raw.operands| == 0 then beforeErr == afterErr && warningErr == 0
     else exists committed: nat ::
-      C.WriteStderrSpec(beforeErr,streams,afterErr,Text.IgnoredOperandsWarningSpec(),committed,warningErr)
+           C.WriteStderrSpec(beforeErr,streams,afterErr,Text.IgnoredOperandsWarningSpec(),committed,warningErr)
   }
 
   ghost predicate RunFields(raw: Schema.PwdCmdRaw, env: map<string,string>,
-    inputs: Recovery.RuntimeInputs, before: Recovery.RuntimeState, after: Recovery.RuntimeState,
-    beforeOut: W.Bytes, beforeErr: W.Bytes, afterOut: W.Bytes, afterErr: W.Bytes,
-    streams: (W.TrustedStreamRequest)->W.TrustedStreamResult, exit: int)
+                            inputs: Recovery.RuntimeInputs, before: Recovery.RuntimeState, after: Recovery.RuntimeState,
+                            beforeOut: W.Bytes, beforeErr: W.Bytes, afterOut: W.Bytes, afterErr: W.Bytes,
+                            streams: (W.TrustedStreamRequest)->W.TrustedStreamResult, exit: int)
   {
     if Text.HelpSelected(raw) then
       before == after &&
@@ -69,10 +69,10 @@ module PwdSpec {
 
   twostate predicate Spec(raw: Schema.PwdCmdRaw, io: BenchIO.IO, exit: int)
     reads io.fsRegion,io.directoryStateRegion,io.dirHandlesRegion,io.cwdRegion,io.statusObservationsRegion,
-      io.envRegion,io.stdoutRegion,io.stderrRegion,io.trustedStreamsRegion,io.trustedNativeFailuresRegion
+          io.envRegion,io.stdoutRegion,io.stderrRegion,io.trustedStreamsRegion,io.trustedNativeFailuresRegion
   {
     Model.Inputs(io) == old(Model.Inputs(io)) &&
     RunFields(raw,old(io.env()),old(Model.Inputs(io)),old(Model.State(io)),Model.State(io),
-      old(io.stdout()),old(io.stderr()),io.stdout(),io.stderr(),io.trustedStreams(),exit)
+              old(io.stdout()),old(io.stderr()),io.stdout(),io.stderr(),io.trustedStreams(),exit)
   }
 }

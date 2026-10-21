@@ -311,7 +311,7 @@ module FactorProof {
             assert |prefixText| == 1;
             forall j | 1 <= j <= |prefixText|
               ensures prefixes[j] == prefixes[j - 1] * 10 +
-                (prefixText[j - 1] as int - '0' as int)
+                                     (prefixText[j - 1] as int - '0' as int)
             {
               reveal Spec.DecimalTrace();
               assert 0 <= j - 1 < |prefixText|;
@@ -624,7 +624,7 @@ module FactorProof {
           var left := Spec.Product(factors[..i]);
           var right := Spec.Product(factors[i + 1..]);
           calc {
-            value;
+             value;
           == left * (factors[i] * right);
           == (left * factors[i]) * right;
           == (factors[i] * left) * right;
@@ -1170,24 +1170,24 @@ module FactorProof {
   )
     requires fromArgv || token is BW.Bytes
     ensures Spec.TokenRelation(token, exponents, fromArgv, output, errorOutput, hadError) <==>
-      (exists trimmed: string ::
-        Spec.TrimmedTokenRelation(token, trimmed) &&
-        if |trimmed| == 0 || trimmed[0] == '-' then
-          output == [] &&
-          errorOutput == (if fromArgv then Spec.InvalidArgvTokenMessage(token) else Spec.InvalidTokenMessage(token)) &&
-          hadError
-        else
-          var start: nat := if trimmed[0] == '+' then 1 else 0;
-          if !Spec.DigitsFrom(trimmed, start) then
-            output == [] &&
-            errorOutput == (if fromArgv then Spec.InvalidArgvTokenMessage(token) else Spec.InvalidTokenMessage(token)) &&
-            hadError
-          else
-            exists value: int ::
-              Spec.DecimalRelation(trimmed, start, value) &&
-              Spec.ValueOutputRelation(value, exponents, output) &&
-              errorOutput == [] &&
-              !hadError)
+            (exists trimmed: string ::
+               Spec.TrimmedTokenRelation(token, trimmed) &&
+               if |trimmed| == 0 || trimmed[0] == '-' then
+                 output == [] &&
+                 errorOutput == (if fromArgv then Spec.InvalidArgvTokenMessage(token) else Spec.InvalidTokenMessage(token)) &&
+                 hadError
+               else
+                 var start: nat := if trimmed[0] == '+' then 1 else 0;
+                 if !Spec.DigitsFrom(trimmed, start) then
+                   output == [] &&
+                   errorOutput == (if fromArgv then Spec.InvalidArgvTokenMessage(token) else Spec.InvalidTokenMessage(token)) &&
+                   hadError
+                 else
+                   exists value: int ::
+                     Spec.DecimalRelation(trimmed, start, value) &&
+                     Spec.ValueOutputRelation(value, exponents, output) &&
+                     errorOutput == [] &&
+                     !hadError)
   {
     reveal Spec.TokenRelation();
   }
@@ -1232,19 +1232,19 @@ module FactorProof {
     requires fromArgv || forall i :: 0 <= i < |tokens| ==> tokens[i] is BW.Bytes
     requires |tokens| > 0
     ensures Core.RunTokens(tokens, exponents, fromArgv) ==
-      match Core.ProcessToken(tokens[0], exponents, fromArgv)
-      case TokenOk(out) =>
-        Core.RunResult(
-          out + Core.RunTokens(tokens[1..], exponents, fromArgv).stdout,
-          Core.RunTokens(tokens[1..], exponents, fromArgv).stderr,
-          Core.RunTokens(tokens[1..], exponents, fromArgv).hadError
-        )
-      case TokenErr(err) =>
-        Core.RunResult(
-          Core.RunTokens(tokens[1..], exponents, fromArgv).stdout,
-          err + Core.RunTokens(tokens[1..], exponents, fromArgv).stderr,
-          true
-        )
+            match Core.ProcessToken(tokens[0], exponents, fromArgv)
+            case TokenOk(out) =>
+              Core.RunResult(
+                out + Core.RunTokens(tokens[1..], exponents, fromArgv).stdout,
+                Core.RunTokens(tokens[1..], exponents, fromArgv).stderr,
+                Core.RunTokens(tokens[1..], exponents, fromArgv).hadError
+              )
+            case TokenErr(err) =>
+              Core.RunResult(
+                Core.RunTokens(tokens[1..], exponents, fromArgv).stdout,
+                err + Core.RunTokens(tokens[1..], exponents, fromArgv).stderr,
+                true
+              )
   {
     reveal Core.RunTokens();
   }
@@ -1284,13 +1284,13 @@ module FactorProof {
         headHadError := true;
       }
       assert Spec.TokenRelation(
-        tokens[0], exponents, fromArgv,
-        headOutput, headError, headHadError
-      );
+          tokens[0], exponents, fromArgv,
+          headOutput, headError, headHadError
+        );
       assert Spec.RunRelation(
-        tokens[1..], exponents, fromArgv,
-        tail.stdout, tail.stderr, tail.hadError
-      );
+          tokens[1..], exponents, fromArgv,
+          tail.stdout, tail.stderr, tail.hadError
+        );
       assert Core.RunTokens(tokens, exponents, fromArgv).stdout ==
              headOutput + tail.stdout;
       assert Core.RunTokens(tokens, exponents, fromArgv).stderr ==
@@ -1298,11 +1298,11 @@ module FactorProof {
       assert Core.RunTokens(tokens, exponents, fromArgv).hadError ==
              (headHadError || tail.hadError);
       assert Spec.RunRelation(
-        tokens, exponents, fromArgv,
-        Core.RunTokens(tokens, exponents, fromArgv).stdout,
-        Core.RunTokens(tokens, exponents, fromArgv).stderr,
-        Core.RunTokens(tokens, exponents, fromArgv).hadError
-      ) by {
+          tokens, exponents, fromArgv,
+          Core.RunTokens(tokens, exponents, fromArgv).stdout,
+          Core.RunTokens(tokens, exponents, fromArgv).stderr,
+          Core.RunTokens(tokens, exponents, fromArgv).hadError
+        ) by {
         reveal Spec.RunRelation();
       }
     }
@@ -1659,7 +1659,7 @@ module FactorProof {
           ) &&
           plannedStdout == old(io.stdout()) + output &&
           plannedStderr == old(io.stderr()) + errorOutput +
-            (if fromArgv || read.Ok? then [] else Spec.ReadError(IOContract.ResultErrno(read))) &&
+          (if fromArgv || read.Ok? then [] else Spec.ReadError(IOContract.ResultErrno(read))) &&
           exit == (if hadError || (!fromArgv && read.Err?) then 1 else 0);
     }
   }
@@ -1673,6 +1673,6 @@ module FactorProof {
       Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
                           io.trustedStreams(), output, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + output, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + output, old(io.stderr()) + diagnostics);
   }
 }

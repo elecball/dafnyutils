@@ -539,7 +539,7 @@ module ExpandCore {
     stdinBefore: BenchWorld.Bytes,
     stdinAfter: BenchWorld.Bytes,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
+                                preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
   )
   {
     match input
@@ -554,11 +554,11 @@ module ExpandCore {
   ghost predicate InputPieceSummary(
     cmd: Schema.ExpandCmd,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-                              column: nat,
-                              leading: bool,
-                              output: BenchWorld.Bytes,
-                              nextColumn: nat,
-                              nextLeading: bool
+                                column: nat,
+                                leading: bool,
+                                output: BenchWorld.Bytes,
+                                nextColumn: nat,
+                                nextLeading: bool
   )
   {
     match result
@@ -571,20 +571,20 @@ module ExpandCore {
         )
     case Err(error) =>
       if error.StreamFailure? then
-      exists pieces: seq<BenchWorld.Bytes>,
-        columns: seq<nat>, leadings: seq<bool> ::
-        DataExpansionWitnessSummary(
-          cmd.tabs, cmd.initialOnly, error.partial, column, leading,
-          output, nextColumn, nextLeading, pieces, columns, leadings
-        )
+        exists pieces: seq<BenchWorld.Bytes>,
+          columns: seq<nat>, leadings: seq<bool> ::
+          DataExpansionWitnessSummary(
+            cmd.tabs, cmd.initialOnly, error.partial, column, leading,
+            output, nextColumn, nextLeading, pieces, columns, leadings
+          )
       else output == [] && nextColumn == column && nextLeading == leading
   }
 
   ghost predicate ErrorPieceSummary(
     input: Schema.Input,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-                              output: BenchWorld.Bytes,
-                              hadError: bool
+                                output: BenchWorld.Bytes,
+                                hadError: bool
   )
   {
     match input
@@ -704,13 +704,13 @@ module ExpandCore {
     leadings: seq<bool>,
     stdinStates: seq<BenchWorld.Bytes>,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-                              outputPiece: BenchWorld.Bytes,
-                              errorPiece: BenchWorld.Bytes,
-                              errorFlag: bool,
-                              nextColumn: nat,
-                              nextLeading: bool,
-                              nextStdin: BenchWorld.Bytes,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
+                                outputPiece: BenchWorld.Bytes,
+                                errorPiece: BenchWorld.Bytes,
+                                errorFlag: bool,
+                                nextColumn: nat,
+                                nextLeading: bool,
+                                nextStdin: BenchWorld.Bytes,
+                                preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
   )
     requires InputTracePrefixSummary(
                cmd, preFs, preStdin, count, currentStdin,
@@ -852,10 +852,10 @@ module ExpandCore {
       invariant columns[i] == nextColumn
       invariant leadings[i] == nextLeading
       invariant forall j: nat :: j < i ==>
-        ByteExpansionSummary(
-          tabs, initialOnly, data[j], columns[j], leadings[j],
-          pieces[j], columns[j + 1], leadings[j + 1]
-        )
+                                   ByteExpansionSummary(
+                                     tabs, initialOnly, data[j], columns[j], leadings[j],
+                                     pieces[j], columns[j + 1], leadings[j + 1]
+                                   )
       invariant out == JoinPieces(pieces)
       decreases |data| - i
     {
@@ -891,9 +891,9 @@ module ExpandCore {
         stepLeading := LeadingAfterByte(byte, nextLeading);
       }
       assert ByteExpansionSummary(
-        tabs, initialOnly, byte, nextColumn, nextLeading,
-        piece, stepColumn, stepLeading
-      );
+          tabs, initialOnly, byte, nextColumn, nextLeading,
+          piece, stepColumn, stepLeading
+        );
 
       ghost var priorPieces := pieces;
       ghost var priorColumns := columns;
@@ -906,15 +906,15 @@ module ExpandCore {
       nextColumn := stepColumn;
       nextLeading := stepLeading;
       assert forall j: nat :: j < i + 1 ==>
-        ByteExpansionSummary(
-          tabs, initialOnly, data[j], columns[j], leadings[j],
-          pieces[j], columns[j + 1], leadings[j + 1]
-        ) by {
+                                ByteExpansionSummary(
+                                  tabs, initialOnly, data[j], columns[j], leadings[j],
+                                  pieces[j], columns[j + 1], leadings[j + 1]
+                                ) by {
         forall j: nat | j < i + 1
           ensures ByteExpansionSummary(
-            tabs, initialOnly, data[j], columns[j], leadings[j],
-            pieces[j], columns[j + 1], leadings[j + 1]
-          )
+                    tabs, initialOnly, data[j], columns[j], leadings[j],
+                    pieces[j], columns[j + 1], leadings[j + 1]
+                  )
         {
           if j < i {
             assert pieces[j] == priorPieces[j];
@@ -940,8 +940,8 @@ module ExpandCore {
   method ProcessInputPieceMethod(
     cmd: Schema.ExpandCmd,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-                              column: nat,
-                              leading: bool
+                                column: nat,
+                                leading: bool
   )
     returns (
       out: BenchWorld.Bytes,
@@ -963,13 +963,13 @@ module ExpandCore {
         );
     case Err(error) =>
       if error.StreamFailure? {
-      ghost var pieces: seq<BenchWorld.Bytes>;
-      ghost var columns: seq<nat>;
-      ghost var leadings: seq<bool>;
-      out, nextColumn, nextLeading, pieces, columns, leadings :=
-        ExpandDataFromMethod(
-          cmd.tabs, cmd.initialOnly, error.partial, column, leading
-        );
+        ghost var pieces: seq<BenchWorld.Bytes>;
+        ghost var columns: seq<nat>;
+        ghost var leadings: seq<bool>;
+        out, nextColumn, nextLeading, pieces, columns, leadings :=
+          ExpandDataFromMethod(
+            cmd.tabs, cmd.initialOnly, error.partial, column, leading
+          );
       } else {
         out := [];
         nextColumn := column;
@@ -1160,15 +1160,15 @@ module ExpandCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit,
-        out, diagnostics) &&
+                      out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var outErr := 0;
     if out != [] {
@@ -1181,13 +1181,13 @@ module ExpandCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
       errErr := StreamContract.ResultErrno(diagnosed);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }

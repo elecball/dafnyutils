@@ -35,11 +35,11 @@ module LnProof {
     success: bool
   )
     requires Core.CoreStepSummary(
-      beforeFs, afterFs, now, trustedFilesystem, source,
-      destination, symbolic, diagnostic, success)
+               beforeFs, afterFs, now, trustedFilesystem, source,
+               destination, symbolic, diagnostic, success)
     ensures Spec.LinkStepRelation(
-      beforeFs, afterFs, now, trustedFilesystem, source,
-      destination, symbolic, diagnostic, success)
+              beforeFs, afterFs, now, trustedFilesystem, source,
+              destination, symbolic, diagnostic, success)
   {
     reveal Core.CoreStepSummary();
     reveal Spec.LinkStepRelation();
@@ -70,21 +70,21 @@ module LnProof {
     requires diagnostics[0] == [] && diagnostics[|sources|] == diagnostic
     requires results[0] && results[|sources|] == success
     requires forall i: nat :: i < |sources| ==>
-      Spec.LinkStepRelation(
-        states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
-        sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
-        pieces[i], stepResults[i]) &&
-      diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
-      results[i + 1] == (results[i] && stepResults[i])
+                                Spec.LinkStepRelation(
+                                  states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
+                                  sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
+                                  pieces[i], stepResults[i]) &&
+                                diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
+                                results[i + 1] == (results[i] && stepResults[i])
     ensures Spec.LinkBatchRelation(
-      beforeFs, afterFs, now, trustedFilesystem, sources,
-      directory, symbolic, diagnostic, success)
+              beforeFs, afterFs, now, trustedFilesystem, sources,
+              directory, symbolic, diagnostic, success)
   {
     hide *;
     reveal Spec.LinkBatchRelation();
     assert Spec.LinkBatchRelation(
-      beforeFs, afterFs, now, trustedFilesystem, sources,
-      directory, symbolic, diagnostic, success);
+        beforeFs, afterFs, now, trustedFilesystem, sources,
+        directory, symbolic, diagnostic, success);
   }
 
   lemma {:isolate_assertions} BatchStepTraceImpliesSpec(
@@ -105,28 +105,28 @@ module LnProof {
     requires |pieces| == |sources|
     requires |stepResults| == |sources|
     requires forall i: nat :: i < |sources| ==>
-      Core.CoreStepSummary(
-        states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
-        sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
-        pieces[i], stepResults[i]) &&
-      diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
-      results[i + 1] == (results[i] && stepResults[i])
+                                Core.CoreStepSummary(
+                                  states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
+                                  sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
+                                  pieces[i], stepResults[i]) &&
+                                diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
+                                results[i + 1] == (results[i] && stepResults[i])
     ensures forall i: nat :: i < |sources| ==>
-      Spec.LinkStepRelation(
-        states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
-        sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
-        pieces[i], stepResults[i]) &&
-      diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
-      results[i + 1] == (results[i] && stepResults[i])
+                               Spec.LinkStepRelation(
+                                 states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
+                                 sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
+                                 pieces[i], stepResults[i]) &&
+                               diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
+                               results[i + 1] == (results[i] && stepResults[i])
   {
     hide Core.CoreStepSummary;
     forall i: nat | i < |sources|
       ensures Spec.LinkStepRelation(
-        states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
-        sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
-        pieces[i], stepResults[i]) &&
-        diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
-        results[i + 1] == (results[i] && stepResults[i])
+                states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
+                sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
+                pieces[i], stepResults[i]) &&
+              diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
+              results[i + 1] == (results[i] && stepResults[i])
     {
       StepSummaryImpliesSpec(
         states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
@@ -147,11 +147,11 @@ module LnProof {
     success: bool
   )
     requires Core.CoreBatchSummary(
-      beforeFs, afterFs, now, trustedFilesystem, sources,
-      directory, symbolic, diagnostic, success)
+               beforeFs, afterFs, now, trustedFilesystem, sources,
+               directory, symbolic, diagnostic, success)
     ensures Spec.LinkBatchRelation(
-      beforeFs, afterFs, now, trustedFilesystem, sources,
-      directory, symbolic, diagnostic, success)
+              beforeFs, afterFs, now, trustedFilesystem, sources,
+              directory, symbolic, diagnostic, success)
   {
     hide Core.CoreStepSummary;
     reveal Core.CoreBatchSummary();
@@ -172,12 +172,12 @@ module LnProof {
       results[0] &&
       results[|sources|] == success &&
       (forall i: nat :: i < |sources| ==>
-        Core.CoreStepSummary(
-          states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
-          sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
-          pieces[i], stepResults[i]) &&
-        diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
-        results[i + 1] == (results[i] && stepResults[i]));
+                          Core.CoreStepSummary(
+                            states[i], states[i + 1], now, Spec.AtCursor(trustedFilesystem, trustedFilesystem.cursor + (if symbolic then 0 else i)),
+                            sources[i], Spec.InDirectory(directory, sources[i]), symbolic,
+                            pieces[i], stepResults[i]) &&
+                          diagnostics[i + 1] == diagnostics[i] + pieces[i] &&
+                          results[i + 1] == (results[i] && stepResults[i]));
     hide Core.CoreBatchSummary;
     BatchStepTraceImpliesSpec(
       now, trustedFilesystem, sources, directory, symbolic,
@@ -221,12 +221,12 @@ module LnProof {
         (if !(targetOk && targetIsDir) then
            io.fs() == old(io.fs()) &&
            plannedStderr == [] +
-             Spec.TargetDirectoryErrorMessageSpec(target, if targetOk then 20 else targetErr) &&
+           Spec.TargetDirectoryErrorMessageSpec(target, if targetOk then 20 else targetErr) &&
            exit == 1
          else
            exists diagnostic: BenchWorld.Bytes, success: bool
              {:trigger Core.CoreBatchSummary(old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + 1), cmd.operands[..|cmd.operands| - 1],
-               target, cmd.symbolic, diagnostic, success)} ::
+                                             target, cmd.symbolic, diagnostic, success)} ::
              Core.CoreBatchSummary(
                old(io.fs()), io.fs(), old(io.now()), Spec.AtCursor(old(Spec.Context(io)), old(io.statusCursor()) + 1),
                cmd.operands[..|cmd.operands| - 1], target, cmd.symbolic,
@@ -260,6 +260,6 @@ module LnProof {
       Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
                           io.trustedStreams(), output, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      output, diagnostics);
+                                       output, diagnostics);
   }
 }

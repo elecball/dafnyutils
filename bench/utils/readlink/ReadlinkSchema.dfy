@@ -26,7 +26,7 @@ module ReadlinkSchema {
   datatype NativeReadContext =
     | UnboundNativeReads
     | BoundNativeReads(failures: (BenchWorld.NativeFailureRequest) -> int,
-        context: BenchWorld.CwdContext)
+                       context: BenchWorld.CwdContext)
 
   datatype ReadlinkCmd = ReadlinkCmd(
     mode: ReadlinkMode,
@@ -77,10 +77,10 @@ module ReadlinkSchema {
   function WithNativeReadOffset(cmd: ReadlinkCmd, ghost preceding: seq<BenchWorld.Path>): ReadlinkCmd
   {
     cmd.(nativeReads :=
-      match cmd.nativeReads
-      case UnboundNativeReads => UnboundNativeReads
-      case BoundNativeReads(failures,context) =>
-        BoundNativeReads(failures,context.(ordinal := context.ordinal+NativeReadCount(preceding))))
+    match cmd.nativeReads
+    case UnboundNativeReads => UnboundNativeReads
+    case BoundNativeReads(failures,context) =>
+      BoundNativeReads(failures,context.(ordinal := context.ordinal+NativeReadCount(preceding))))
   }
 
   ghost function FinalNativeContext(cmd: ReadlinkCmd, initial: BenchWorld.CwdContext): BenchWorld.CwdContext

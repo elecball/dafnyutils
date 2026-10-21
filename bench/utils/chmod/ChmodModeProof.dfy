@@ -8,10 +8,10 @@ module ChmodModeProof {
   import Paths = ChmodOperandProof
 
   lemma {:isolate_assertions} ModeChangedNamedPath(fs: W.FileSystem, path: W.Path,
-    mode: bv32, now: int)
+                                                   mode: bv32, now: int)
     requires W.FsContainsPath(fs, path)
     ensures C.ModeChangedFilesystemFields(fs, fs.inodes[W.FsIdAt(fs, path)].hostKey, mode, now) ==
-      W.FsSetPath(fs, path, W.WithNodeChangeTime(W.WithNodeMode(W.FsNodeAt(fs, path), mode), now, 0))
+            W.FsSetPath(fs, path, W.WithNodeChangeTime(W.WithNodeMode(W.FsNodeAt(fs, path), mode), now, 0))
   {
     hide *;
     Paths.PathRecord(fs, path);

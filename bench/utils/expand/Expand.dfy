@@ -151,36 +151,36 @@ module Expand {
   } by method {
     return
       if i == |text| then
-      ""
-    else if FixedIsSeparator(text[i]) then
-      FixedSyntaxDiagnosticsFrom(text, i + 1, false, 0, 0)
-    else if FixedIsMarker(text[i]) then
-      var rest := FixedSyntaxDiagnosticsFrom(
-                    text, i + 1, haveValue, numberStart, value
-                  );
-      if haveValue then
-        FixedCombineDiagnostics(
-          ProtocolMarkerNotAtStartMessage(FixedMarkerOf(text[i]), text[i..]),
+        ""
+      else if FixedIsSeparator(text[i]) then
+        FixedSyntaxDiagnosticsFrom(text, i + 1, false, 0, 0)
+      else if FixedIsMarker(text[i]) then
+        var rest := FixedSyntaxDiagnosticsFrom(
+                      text, i + 1, haveValue, numberStart, value
+                    );
+        if haveValue then
+          FixedCombineDiagnostics(
+            ProtocolMarkerNotAtStartMessage(FixedMarkerOf(text[i]), text[i..]),
+            rest
+          )
+        else
           rest
-        )
+      else if FixedIsDigit(text[i]) then
+        var start := if haveValue then numberStart else i;
+        var accumulated := if haveValue then value else 0;
+        var digit := FixedDigitValue(text[i]);
+        if accumulated > (FixedMaxColumn() - digit) / 10 then
+          var end := FixedFindDigitsEnd(text, i);
+          FixedCombineDiagnostics(
+            ProtocolTooLargeMessage(text[start..end]),
+            FixedSyntaxDiagnosticsFrom(text, end, true, start, accumulated)
+          )
+        else
+          FixedSyntaxDiagnosticsFrom(
+            text, i + 1, true, start, accumulated * 10 + digit
+          )
       else
-        rest
-    else if FixedIsDigit(text[i]) then
-      var start := if haveValue then numberStart else i;
-      var accumulated := if haveValue then value else 0;
-      var digit := FixedDigitValue(text[i]);
-      if accumulated > (FixedMaxColumn() - digit) / 10 then
-        var end := FixedFindDigitsEnd(text, i);
-        FixedCombineDiagnostics(
-          ProtocolTooLargeMessage(text[start..end]),
-          FixedSyntaxDiagnosticsFrom(text, end, true, start, accumulated)
-        )
-      else
-        FixedSyntaxDiagnosticsFrom(
-          text, i + 1, true, start, accumulated * 10 + digit
-        )
-    else
-      ProtocolInvalidCharacterMessage(text[i..]);
+        ProtocolInvalidCharacterMessage(text[i..]);
   }
 
   function FixedSyntaxDiagnostics(text: string): BenchWorld.Bytes
@@ -222,24 +222,24 @@ module Expand {
         S.TabAccumOk(S.TabAccum(acc.stops, acc.extendSize, value, marker))
     else
       S.TabAccumOk(S.TabAccum(
-        acc.stops + [value], acc.extendSize, acc.incrementSize, marker
-      ))
+                     acc.stops + [value], acc.extendSize, acc.incrementSize, marker
+                   ))
   } by method {
     return
       if marker == S.MarkerSlash then
-      if acc.extendSize != 0 then
-        S.TabAccumErr(ProtocolRepeatOnlyLastMessage(S.MarkerSlash))
+        if acc.extendSize != 0 then
+          S.TabAccumErr(ProtocolRepeatOnlyLastMessage(S.MarkerSlash))
+        else
+          S.TabAccumOk(S.TabAccum(acc.stops, value, acc.incrementSize, marker))
+      else if marker == S.MarkerPlus then
+        if acc.incrementSize != 0 then
+          S.TabAccumErr(ProtocolRepeatOnlyLastMessage(S.MarkerPlus))
+        else
+          S.TabAccumOk(S.TabAccum(acc.stops, acc.extendSize, value, marker))
       else
-        S.TabAccumOk(S.TabAccum(acc.stops, value, acc.incrementSize, marker))
-    else if marker == S.MarkerPlus then
-      if acc.incrementSize != 0 then
-        S.TabAccumErr(ProtocolRepeatOnlyLastMessage(S.MarkerPlus))
-      else
-        S.TabAccumOk(S.TabAccum(acc.stops, acc.extendSize, value, marker))
-    else
-      S.TabAccumOk(S.TabAccum(
-        acc.stops + [value], acc.extendSize, acc.incrementSize, marker
-      ));
+        S.TabAccumOk(S.TabAccum(
+                       acc.stops + [value], acc.extendSize, acc.incrementSize, marker
+                     ));
   }
 
   function FixedParseTabPart(part: string, acc: S.TabAccum): S.TabAccumParse
@@ -251,15 +251,15 @@ module Expand {
       var marker := if scan.hasMarker then scan.marker else acc.activeMarker;
       if scan.index == |part| then
         S.TabAccumOk(S.TabAccum(
-          acc.stops, acc.extendSize, acc.incrementSize, marker
-        ))
+                       acc.stops, acc.extendSize, acc.incrementSize, marker
+                     ))
       else
         var end := FixedFindDigitsEnd(part, scan.index);
         if end < |part| then
           if FixedIsMarker(part[end]) then
             S.TabAccumErr(ES.MarkerNotAtStartMessage(
-              FixedMarkerOf(part[end]), part[end..]
-            ))
+                            FixedMarkerOf(part[end]), part[end..]
+                          ))
           else
             S.TabAccumErr(ES.InvalidCharacterMessage(part[end..]))
         else
@@ -270,28 +270,28 @@ module Expand {
   } by method {
     return
       if |part| == 0 then
-      S.TabAccumOk(acc)
-    else
-      var scan := FixedScanMarkers(part, 0, S.MarkerNone, false);
-      var marker := if scan.hasMarker then scan.marker else acc.activeMarker;
-      if scan.index == |part| then
-        S.TabAccumOk(S.TabAccum(
-          acc.stops, acc.extendSize, acc.incrementSize, marker
-        ))
+        S.TabAccumOk(acc)
       else
-        var end := FixedFindDigitsEnd(part, scan.index);
-        if end < |part| then
-          if FixedIsMarker(part[end]) then
-            S.TabAccumErr(ProtocolMarkerNotAtStartMessage(
-              FixedMarkerOf(part[end]), part[end..]
-            ))
-          else
-            S.TabAccumErr(ProtocolInvalidCharacterMessage(part[end..]))
+        var scan := FixedScanMarkers(part, 0, S.MarkerNone, false);
+        var marker := if scan.hasMarker then scan.marker else acc.activeMarker;
+        if scan.index == |part| then
+          S.TabAccumOk(S.TabAccum(
+                         acc.stops, acc.extendSize, acc.incrementSize, marker
+                       ))
         else
-          var digits := part[scan.index..end];
-          match FixedParsePositiveNat(digits)
-          case NatErr => S.TabAccumErr(ProtocolTooLargeMessage(digits))
-          case NatOk(value) => FixedCommitTabValue(acc, marker, value);
+          var end := FixedFindDigitsEnd(part, scan.index);
+          if end < |part| then
+            if FixedIsMarker(part[end]) then
+              S.TabAccumErr(ProtocolMarkerNotAtStartMessage(
+                              FixedMarkerOf(part[end]), part[end..]
+                            ))
+            else
+              S.TabAccumErr(ProtocolInvalidCharacterMessage(part[end..]))
+          else
+            var digits := part[scan.index..end];
+            match FixedParsePositiveNat(digits)
+            case NatErr => S.TabAccumErr(ProtocolTooLargeMessage(digits))
+            case NatOk(value) => FixedCommitTabValue(acc, marker, value);
   }
 
   function FixedParseTabTextFrom(
@@ -327,8 +327,8 @@ module Expand {
     else
       var arg := args[i];
       var argAcc := S.TabAccum(
-        acc.stops, acc.extendSize, acc.incrementSize, S.MarkerNone
-      );
+                      acc.stops, acc.extendSize, acc.incrementSize, S.MarkerNone
+                    );
       var diagnostics := FixedSyntaxDiagnostics(arg.text);
       if diagnostics != "" then
         S.TabAccumErr(diagnostics)

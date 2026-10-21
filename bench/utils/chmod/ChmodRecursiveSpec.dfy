@@ -833,7 +833,7 @@ module ChmodRecursiveSpec {
   }
 
   ghost function NativeAccessText(cmd: Schema.ChmodCmd, path: string, kind: RecursiveFailureKind,
-    reason: string): BenchWorld.Bytes
+                                  reason: string): BenchWorld.Bytes
   {
     if cmd.silent then []
     else if kind.RecursiveDangling? then DanglingSymlinkMessageSpec(path)

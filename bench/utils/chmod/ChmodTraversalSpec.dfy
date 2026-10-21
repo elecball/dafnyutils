@@ -13,7 +13,7 @@ module ChmodTraversalSpec {
     before.topology.nodes.Keys <= after.topology.nodes.Keys &&
     after.topology.objects.Keys == before.topology.objects.Keys &&
     (forall key | key in before.topology.objects ::
-      W.NodeShapeUnchangedExceptMode(before.topology.objects[key].node, after.topology.objects[key].node)) &&
+       W.NodeShapeUnchangedExceptMode(before.topology.objects[key].node, after.topology.objects[key].node)) &&
     forall position | position in before.topology.nodes ::
       var prior := before.topology.nodes[position];
       var next := after.topology.nodes[position];

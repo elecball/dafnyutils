@@ -12,7 +12,7 @@ module LsNativeProof {
   }
 
   lemma Concat(inputs: Spec.Inputs, before: Spec.State, middle: Spec.State,
-    after: Spec.State, left: seq<Spec.Call>, right: seq<Spec.Call>)
+               after: Spec.State, left: seq<Spec.Call>, right: seq<Spec.Call>)
     requires Spec.TraceFields(inputs,before,middle,left)
     requires Spec.TraceFields(inputs,middle,after,right)
     ensures Spec.TraceFields(inputs,before,after,left+right)

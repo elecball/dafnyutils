@@ -51,7 +51,7 @@ module TouchCore {
   )
   {
     Spec.SetStdoutTimesSpecFields(nativeFailures,
-      selection, source, preNow, beforeTarget, afterTarget, ok, err
+                                  selection, source, preNow, beforeTarget, afterTarget, ok, err
     )
   }
 
@@ -79,8 +79,8 @@ module TouchCore {
       stdout2 == preStdout &&
       exists okStdout: bool, stdoutErr: int ::
         SetStdoutTimesSummaryFields(nativeFailures,
-          selection, source, preNow, preStdoutTarget, stdoutTarget2,
-          okStdout, stdoutErr
+                                    selection, source, preNow, preStdoutTarget, stdoutTarget2,
+                                    okStdout, stdoutErr
         ) &&
         hadError == !okStdout &&
         errOut == (if okStdout then [] else Spec.StdoutErrorMessageSpec(stdoutErr))
@@ -165,14 +165,14 @@ module TouchCore {
         {:trigger RunFilesSummaryFields(nativeFailures, observations, files[..|files| - 1], noCreate, followSymlink, selection, source, preFs, preNow, preStdout, preStdoutTarget, fs1, stdout1, stdoutTarget1, prefixError, prefixOut),
         RunStepSummaryFields(nativeFailures, observations, files[|files| - 1], noCreate, followSymlink, selection, source, fs1, preNow, stdout1, stdoutTarget1, fs2, stdout2, stdoutTarget2, stepError, stepOut)} ::
         RunFilesSummaryFields(nativeFailures,
-          observations, files[..|files| - 1], noCreate, followSymlink, selection, source,
-          preFs, preNow, preStdout, preStdoutTarget,
-          fs1, stdout1, stdoutTarget1, prefixError, prefixOut
+                              observations, files[..|files| - 1], noCreate, followSymlink, selection, source,
+                              preFs, preNow, preStdout, preStdoutTarget,
+                              fs1, stdout1, stdoutTarget1, prefixError, prefixOut
         ) &&
         RunStepSummaryFields(nativeFailures,
-          observations, files[|files| - 1], noCreate, followSymlink, selection, source,
-          fs1, preNow, stdout1, stdoutTarget1,
-          fs2, stdout2, stdoutTarget2, stepError, stepOut
+                             observations, files[|files| - 1], noCreate, followSymlink, selection, source,
+                             fs1, preNow, stdout1, stdoutTarget1,
+                             fs2, stdout2, stdoutTarget2, stepError, stepOut
         ) &&
         hadError == (prefixError || stepError) &&
         errOut == prefixOut + stepOut
@@ -192,9 +192,9 @@ module TouchCore {
     preStdoutTarget: BenchWorld.StdoutTimestampState
   )
     ensures RunFilesSummaryFields(nativeFailures,
-              observations, [], noCreate, followSymlink, selection, source,
-              preFs, preNow, preStdout, preStdoutTarget,
-              preFs, preStdout, preStdoutTarget, false, []
+                                  observations, [], noCreate, followSymlink, selection, source,
+                                  preFs, preNow, preStdout, preStdoutTarget,
+                                  preFs, preStdout, preStdoutTarget, false, []
             )
   {
     reveal RunFilesSummaryFields();
@@ -247,33 +247,33 @@ module TouchCore {
   }
 
   method GetTouchErrorMessage(path: BenchWorld.Path, err: int, io: BenchIO.IO)
-      returns (out: BenchWorld.Bytes)
+    returns (out: BenchWorld.Bytes)
     ensures out == Spec.TouchErrorMessageSpec(path, err)
   {
     var quoted := io.QuoteafPath(path);
     var errnoText := io.GetCLocaleErrnoText(err);
     out := Utf8.Encode(Spec.TouchErrorMessageSpecPart1()) + quoted
-      + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
+    + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
   }
 
   method GetReferenceErrorMessage(path: BenchWorld.Path, err: int, io: BenchIO.IO)
-      returns (out: BenchWorld.Bytes)
+    returns (out: BenchWorld.Bytes)
     ensures out == Spec.ReferenceErrorMessageSpec(path, err)
   {
     var quoted := io.QuoteafPath(path);
     var errnoText := io.GetCLocaleErrnoText(err);
     out := Utf8.Encode(Spec.ReferenceErrorMessageSpecPart1()) + quoted
-      + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
+    + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
   }
 
   method GetSetTimesErrorMessage(path: BenchWorld.Path, err: int, io: BenchIO.IO)
-      returns (out: BenchWorld.Bytes)
+    returns (out: BenchWorld.Bytes)
     ensures out == Spec.SetTimesErrorMessageSpec(path, err)
   {
     var quoted := io.QuoteafPath(path);
     var errnoText := io.GetCLocaleErrnoText(err);
     out := Utf8.Encode(Spec.SetTimesErrorMessageSpecPart1()) + quoted
-      + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
+    + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
   }
 
   method GetStdoutErrorMessage(err: int, io: BenchIO.IO) returns (out: BenchWorld.Bytes)
@@ -283,7 +283,7 @@ module TouchCore {
     var quoted := io.QuoteafPath("-");
     var errnoText := io.GetCLocaleErrnoText(err);
     out := Utf8.Encode(Spec.SetTimesErrorMessageSpecPart1()) + quoted
-      + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
+    + Utf8.Encode(Spec.TouchErrorMessageSpecPart2() + errnoText + Spec.TouchErrorMessageSpecPart3());
   }
 
   method GetMissingOperandMessage() returns (out: string)
@@ -332,10 +332,10 @@ module TouchCore {
         exists hadError: bool, errOut: BenchWorld.Bytes ::
           exit == (if hadError then 1 else 0) &&
           RunFilesSummaryFields(old(io.trustedNativeFailures()),
-            old(io.trustedFilesystem()), cmd.files, cmd.noCreate,
-            cmd.followSymlink, selection, source,
-            old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-            io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
+                                old(io.trustedFilesystem()), cmd.files, cmd.noCreate,
+                                cmd.followSymlink, selection, source,
+                                old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
+                                io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
           ) &&
           plannedStderr == old(io.stderr()) + errOut
   }
@@ -396,16 +396,16 @@ module TouchCore {
     else if cmd.hasDate then
       (cmd.hasReference &&
        var observed := old(io.trustedFilesystem())(
-         BenchWorld.FilesystemQuery(
-           old(io.fs()), cmd.referenceArg, cmd.followSymlink
-         )
-       );
+                         BenchWorld.FilesystemQuery(
+                           old(io.fs()), cmd.referenceArg, cmd.followSymlink
+                         )
+                       );
        observed.postFs == old(io.fs()) && !observed.ok &&
-         io.fs() == old(io.fs()) &&
-         plannedStdout == old(io.stdout()) &&
-         plannedStderr == old(io.stderr()) +
-           Spec.ReferenceErrorMessageSpec(cmd.referenceArg, observed.err) &&
-         exit == 1) ||
+       io.fs() == old(io.fs()) &&
+       plannedStdout == old(io.stdout()) &&
+       plannedStderr == old(io.stderr()) +
+       Spec.ReferenceErrorMessageSpec(cmd.referenceArg, observed.err) &&
+       exit == 1) ||
       (Spec.DateParseFailureFields(
          old(io.trustedFilesystem()), cmd, old(io.fs()), old(io.now()),
          old(io.trustedTimeParses())) &&
@@ -416,16 +416,16 @@ module TouchCore {
       ResolvedRunSummaryFields(cmd, io, exit, plannedStdout, plannedStderr)
     else if cmd.hasReference then
       (var observed := old(io.trustedFilesystem())(
-         BenchWorld.FilesystemQuery(
-           old(io.fs()), cmd.referenceArg, cmd.followSymlink
-         )
-       );
+                         BenchWorld.FilesystemQuery(
+                           old(io.fs()), cmd.referenceArg, cmd.followSymlink
+                         )
+                       );
        observed.postFs == old(io.fs()) && !observed.ok &&
-         io.fs() == old(io.fs()) &&
-         plannedStdout == old(io.stdout()) &&
-         plannedStderr == old(io.stderr()) +
-           Spec.ReferenceErrorMessageSpec(cmd.referenceArg, observed.err) &&
-         exit == 1) ||
+       io.fs() == old(io.fs()) &&
+       plannedStdout == old(io.stdout()) &&
+       plannedStderr == old(io.stderr()) +
+       Spec.ReferenceErrorMessageSpec(cmd.referenceArg, observed.err) &&
+       exit == 1) ||
       ResolvedRunSummaryFields(cmd, io, exit, plannedStdout, plannedStderr)
     else
       ResolvedRunSummaryFields(cmd, io, exit, plannedStdout, plannedStderr)
@@ -446,18 +446,18 @@ module TouchCore {
     requires cmd.hasDate && !Spec.SourceConflict(cmd)
     requires Spec.RequestedSelection(cmd, selection)
     ensures if ok then
-      Spec.RequestedSourceFields(
-        io.trustedFilesystem(), cmd, io.fs(), io.now(), io.trustedTimeParses(), source
-      ) && errOut == []
-    else
-      (Spec.DateParseFailureFields(
-        io.trustedFilesystem(), cmd, io.fs(), io.now(), io.trustedTimeParses()
-      ) && errOut == Spec.InvalidDateMessageSpec(cmd.dateArg)) ||
-      (cmd.hasReference &&
-       var observed := io.trustedFilesystem()(
-         BenchWorld.FilesystemQuery(io.fs(), cmd.referenceArg, cmd.followSymlink));
-       observed.postFs == io.fs() && !observed.ok &&
-       errOut == Spec.ReferenceErrorMessageSpec(cmd.referenceArg, observed.err))
+              Spec.RequestedSourceFields(
+                io.trustedFilesystem(), cmd, io.fs(), io.now(), io.trustedTimeParses(), source
+              ) && errOut == []
+            else
+              (Spec.DateParseFailureFields(
+                 io.trustedFilesystem(), cmd, io.fs(), io.now(), io.trustedTimeParses()
+               ) && errOut == Spec.InvalidDateMessageSpec(cmd.dateArg)) ||
+              (cmd.hasReference &&
+               var observed := io.trustedFilesystem()(
+                                 BenchWorld.FilesystemQuery(io.fs(), cmd.referenceArg, cmd.followSymlink));
+               observed.postFs == io.fs() && !observed.ok &&
+               errOut == Spec.ReferenceErrorMessageSpec(cmd.referenceArg, observed.err))
   {
     ok := false;
     source := Schema.TimeSourceCurrent;
@@ -494,15 +494,15 @@ module TouchCore {
       referenceNsec := refMtimeNsec;
     }
     assert Spec.DateReferenceFields(
-      preFilesystemObservations, cmd, preFs, preNow,
-      referenceSec, referenceNsec
-    ) by {
+        preFilesystemObservations, cmd, preFs, preNow,
+        referenceSec, referenceNsec
+      ) by {
       reveal Spec.DateReferenceFields();
     }
     assert Spec.DateAccessReferenceFields(
-      preFilesystemObservations, cmd, preFs, preNow,
-      accessReferenceSec, accessReferenceNsec
-    );
+        preFilesystemObservations, cmd, preFs, preNow,
+        accessReferenceSec, accessReferenceNsec
+      );
     var atimeSec := accessReferenceSec;
     var atimeNsec := accessReferenceNsec;
     var mtimeSec := referenceSec;
@@ -515,8 +515,8 @@ module TouchCore {
       atimeNsec := IOContract.ParsedResultValue(parseDateResult).nsec;
       if !dateOk {
         assert Spec.DateParseFailureFields(
-          preFilesystemObservations, cmd, preFs, preNow, preParses
-        ) by {
+            preFilesystemObservations, cmd, preFs, preNow, preParses
+          ) by {
           hide *;
           reveal Spec.DateParseFailureFields(), Spec.RequestedSelection();
           reveal IOContract.ParseDateSpec(), IOContract.ParseDateContractFields();
@@ -540,8 +540,8 @@ module TouchCore {
       mtimeNsec := IOContract.ParsedResultValue(parseDateResult2).nsec;
       if !dateOk {
         assert Spec.DateParseFailureFields(
-          preFilesystemObservations, cmd, preFs, preNow, preParses
-        ) by {
+            preFilesystemObservations, cmd, preFs, preNow, preParses
+          ) by {
           hide *;
           reveal Spec.DateParseFailureFields(), Spec.RequestedSelection();
           reveal IOContract.ParseDateSpec(), IOContract.ParseDateContractFields();
@@ -556,8 +556,8 @@ module TouchCore {
     }
     source := Schema.TimeSourceFixed(atimeSec, atimeNsec, mtimeSec, mtimeNsec);
     assert Spec.RequestedSourceFields(
-      preFilesystemObservations, cmd, preFs, preNow, preParses, source
-    ) by {
+        preFilesystemObservations, cmd, preFs, preNow, preParses, source
+      ) by {
       hide *;
       reveal Spec.RequestedSourceFields(), Spec.RequestedSelection(), Spec.SourceConflict();
       reveal Spec.DateReferenceFields(), Spec.DateAccessReferenceFields();
@@ -649,7 +649,7 @@ module TouchCore {
       var timestampSec := IOContract.ParsedResultValue(parseTimestampResult).sec;
       var timestampNsec := IOContract.ParsedResultValue(parseTimestampResult).nsec;
       assert IOContract.ParseTimestampContractFields(preParses, cmd.timestampArg, preNow, 0,
-        timestampOk, timestampSec, timestampNsec) by {
+                                                     timestampOk, timestampSec, timestampNsec) by {
         hide *; reveal IOContract.ParseTimestampSpec();
       }
       if !timestampOk {
@@ -661,7 +661,7 @@ module TouchCore {
       }
       if Spec.SourceConflict(cmd) {
         assert IOContract.TrustedTimeParseResultFields(preParses,
-          BenchWorld.TimestampParseRequest(cmd.timestampArg, preNow, 0)).ok by {
+                                                       BenchWorld.TimestampParseRequest(cmd.timestampArg, preNow, 0)).ok by {
           hide *; reveal IOContract.ParseTimestampContractFields();
         }
         plannedStderr := plannedStderr + (Spec.SourceConflictMessageSpec());
@@ -673,8 +673,8 @@ module TouchCore {
       }
       source := Schema.TimeSourceFixed(timestampSec, timestampNsec, timestampSec, timestampNsec);
       assert Spec.RequestedSourceFields(
-        preFilesystemObservations, cmd, preFs, preNow, preParses, source
-      );
+          preFilesystemObservations, cmd, preFs, preNow, preParses, source
+        );
     } else if cmd.hasDate {
       var dateOk, dateSource, dateError := ResolveDateSource(cmd, selection, io);
       if !dateOk {
@@ -710,7 +710,7 @@ module TouchCore {
             refIsDir, refIsSymlink, refDevice, refInode, refLinkCount, refErr
           );
         assert var observed := preFilesystemObservations(BenchWorld.FilesystemQuery(preFs, cmd.referenceArg, cmd.followSymlink));
-          observed.postFs == preFs && !observed.ok && observed.err == refErr by {
+               observed.postFs == preFs && !observed.ok && observed.err == refErr by {
           hide *; reveal IOContract.TrustedFilesystemQueryContractFields();
         }
         assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by { hide *; reveal PreparedSummary(), Schema.Command(); }
@@ -724,18 +724,18 @@ module TouchCore {
         );
       source := Schema.TimeSourceFixed(refAtimeSec, refAtimeNsec, refMtimeSec, refMtimeNsec);
       assert Spec.SuccessfulReferenceSourceFields(
-        preFilesystemObservations, preFs, cmd.referenceArg,
-        cmd.followSymlink, source
-      ) by {
+          preFilesystemObservations, preFs, cmd.referenceArg,
+          cmd.followSymlink, source
+        ) by {
         reveal Spec.SuccessfulReferenceSourceFields();
       }
       assert Spec.RequestedSourceFields(
-        preFilesystemObservations, cmd, preFs, preNow, preParses, source
-      );
+          preFilesystemObservations, cmd, preFs, preNow, preParses, source
+        );
     }
     assert Spec.RequestedSourceFields(
-      preFilesystemObservations, cmd, preFs, preNow, preParses, source
-    );
+        preFilesystemObservations, cmd, preFs, preNow, preParses, source
+      );
 
     if |cmd.files| == 0 {
       var err := GetMissingOperandMessage();
@@ -745,8 +745,8 @@ module TouchCore {
         hide *; reveal ResolvedRunSummaryFields();
         assert Spec.RequestedSelection(cmd, selection);
         assert Spec.RequestedSourceFields(
-          preFilesystemObservations, cmd, preFs, preNow, preParses, source
-        );
+            preFilesystemObservations, cmd, preFs, preNow, preParses, source
+          );
       }
       assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by { hide *; reveal PreparedSummary(), Schema.Command(); }
       return;
@@ -759,17 +759,17 @@ module TouchCore {
     exit := if hadError then 1 else 0;
     assert (emissionBeforeErr + plannedStderr) == preStderr + errOut by { hide *; }
     assert RunFilesSummaryFields(io.trustedNativeFailures(),
-      preFilesystemObservations, cmd.files, cmd.noCreate,
-      cmd.followSymlink, selection, source,
-      preFs, preNow, preStdout, old(io.stdoutTimestamp()),
-      io.fs(), (emissionBeforeOut + plannedStdout), io.stdoutTimestamp(), hadError, errOut
-    ) by { hide *; }
+                                 preFilesystemObservations, cmd.files, cmd.noCreate,
+                                 cmd.followSymlink, selection, source,
+                                 preFs, preNow, preStdout, old(io.stdoutTimestamp()),
+                                 io.fs(), (emissionBeforeOut + plannedStdout), io.stdoutTimestamp(), hadError, errOut
+      ) by { hide *; }
     assert ResolvedRunSummaryFields(cmd, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
       hide *; reveal ResolvedRunSummaryFields();
       assert Spec.RequestedSelection(cmd, selection);
       assert Spec.RequestedSourceFields(
-        preFilesystemObservations, cmd, preFs, preNow, preParses, source
-      );
+          preFilesystemObservations, cmd, preFs, preNow, preParses, source
+        );
     }
     assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by { hide *; reveal PreparedSummary(), Schema.Command(); }
   }
@@ -779,7 +779,7 @@ module TouchCore {
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -794,7 +794,7 @@ module TouchCore {
       finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -802,11 +802,11 @@ module TouchCore {
       errCommitted := StreamContract.WriteResultCommitted(result);
       errErr := StreamContract.ResultErrno(result);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                            finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
   method RunCore(raw: Schema.TouchCmdRaw, io: BenchIO.IO) returns (exit: int)
@@ -910,8 +910,8 @@ module TouchCore {
   ) returns (ok: bool, err: int)
     modifies io.stdoutTimestampRegion
     ensures SetStdoutTimesSummaryFields(io.trustedNativeFailures(),
-              selection, source, old(io.now()),
-              old(io.stdoutTimestamp()), io.stdoutTimestamp(), ok, err
+                                        selection, source, old(io.now()),
+                                        old(io.stdoutTimestamp()), io.stdoutTimestamp(), ok, err
             )
     decreases *
   {
@@ -968,9 +968,9 @@ module TouchCore {
   ) returns (stepError: bool, stepOut: BenchWorld.Bytes)
     modifies io.fsRegion, io.stdoutTimestampRegion
     ensures RunStepSummaryFields(io.trustedNativeFailures(),
-      old(io.trustedFilesystem()), path, noCreate, followSymlink, selection, source,
-      old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-      io.fs(), io.stdout(), io.stdoutTimestamp(), stepError, stepOut)
+                                 old(io.trustedFilesystem()), path, noCreate, followSymlink, selection, source,
+                                 old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
+                                 io.fs(), io.stdout(), io.stdoutTimestamp(), stepError, stepOut)
     decreases *
   {
     stepError := false;
@@ -987,7 +987,7 @@ module TouchCore {
       var found := pathExistsResult.Ok?;
       var existsErr := IOContract.ResultErrno(pathExistsResult);
       assert IOContract.TrustedPathExistsContractFields(io.trustedFilesystem(), old(io.fs()),
-        path, followSymlink, found, existsErr) by { hide *; reveal IOContract.PathExistsSpec(); }
+                                                        path, followSymlink, found, existsErr) by { hide *; reveal IOContract.PathExistsSpec(); }
       if found {
         var okSet, setErr := SetPathTimes(path, followSymlink, selection, source, io);
         stepError := !okSet;
@@ -1010,7 +1010,7 @@ module TouchCore {
         var createErr := IOContract.ResultErrno(createFileResult);
         ghost var createdFs := io.fs();
         assert IOContract.TrustedCreateFileContractFields(io.trustedFilesystem(), old(io.fs()),
-          old(io.now()), path, okCreate, createErr, createdFs) by { hide *; reveal IOContract.CreateFileSpec(); }
+                                                          old(io.now()), path, okCreate, createErr, createdFs) by { hide *; reveal IOContract.CreateFileSpec(); }
         if okCreate {
           if source == Schema.TimeSourceCurrent && selection == Schema.TimeBoth {
             stepError := false;
@@ -1028,9 +1028,9 @@ module TouchCore {
       }
     }
     assert RunStepSummaryFields(io.trustedNativeFailures(), old(io.trustedFilesystem()),
-      path, noCreate, followSymlink, selection, source,
-      old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-      io.fs(), io.stdout(), io.stdoutTimestamp(), stepError, stepOut) by {
+                                path, noCreate, followSymlink, selection, source,
+                                old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
+                                io.fs(), io.stdout(), io.stdoutTimestamp(), stepError, stepOut) by {
       hide *; reveal RunStepSummaryFields();
     }
 
@@ -1047,10 +1047,10 @@ module TouchCore {
     returns (hadError: bool, errOut: BenchWorld.Bytes)
     modifies io.fsRegion, io.stdoutTimestampRegion
     ensures RunFilesSummaryFields(io.trustedNativeFailures(),
-              old(io.trustedFilesystem()), files, noCreate,
-              followSymlink, selection, source,
-              old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-              io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
+                                  old(io.trustedFilesystem()), files, noCreate,
+                                  followSymlink, selection, source,
+                                  old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
+                                  io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
             )
     decreases *
   {
@@ -1063,16 +1063,16 @@ module TouchCore {
     errOut := [];
     var i := 0;
     RunFilesSummaryFieldsEmpty(io.trustedNativeFailures(),
-      preFilesystemObservations, noCreate, followSymlink, selection, source,
-      preFs, preNow, preStdout, preStdoutTarget
+                               preFilesystemObservations, noCreate, followSymlink, selection, source,
+                               preFs, preNow, preStdout, preStdoutTarget
     );
     while i < |files|
       invariant 0 <= i <= |files|
       invariant RunFilesSummaryFields(io.trustedNativeFailures(),
-                  preFilesystemObservations, files[..i], noCreate,
-                  followSymlink, selection, source,
-                  preFs, preNow, preStdout, preStdoutTarget,
-                  io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
+                                      preFilesystemObservations, files[..i], noCreate,
+                                      followSymlink, selection, source,
+                                      preFs, preNow, preStdout, preStdoutTarget,
+                                      io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
                 )
       decreases |files| - i
     {
@@ -1087,17 +1087,17 @@ module TouchCore {
       hadError := prefixError || stepError;
       errOut := prefixOut + stepOut;
       assert RunStepSummaryFields(io.trustedNativeFailures(),
-        preFilesystemObservations, path, noCreate, followSymlink, selection, source,
-        stepFs, preNow, stepStdout, stepStdoutTarget,
-        io.fs(), io.stdout(), io.stdoutTimestamp(), stepError, stepOut
-      );
+                                  preFilesystemObservations, path, noCreate, followSymlink, selection, source,
+                                  stepFs, preNow, stepStdout, stepStdoutTarget,
+                                  io.fs(), io.stdout(), io.stdoutTimestamp(), stepError, stepOut
+        );
       RunFilesSummaryFieldsAppend(io.trustedNativeFailures(),
-        preFilesystemObservations, files[..i], path,
-        noCreate, followSymlink, selection, source,
-        preFs, preNow, preStdout, preStdoutTarget,
-        stepFs, stepStdout, stepStdoutTarget,
-        io.fs(), io.stdout(), io.stdoutTimestamp(),
-        prefixError, stepError, prefixOut, stepOut
+                                  preFilesystemObservations, files[..i], path,
+                                  noCreate, followSymlink, selection, source,
+                                  preFs, preNow, preStdout, preStdoutTarget,
+                                  stepFs, stepStdout, stepStdoutTarget,
+                                  io.fs(), io.stdout(), io.stdoutTimestamp(),
+                                  prefixError, stepError, prefixOut, stepOut
       );
       assert files[..i] + [path] == files[..i + 1] by { hide *; }
       i := i + 1;

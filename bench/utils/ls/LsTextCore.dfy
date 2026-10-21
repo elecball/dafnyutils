@@ -211,13 +211,13 @@ module LsTextCore {
   {
     var blocks := if cmd.showBlocks then PadColumn(RenderFailedEntrySpecPart1(), widths.blocks, true) + RenderFailedEntrySpecPart2() else RenderFailedEntrySpecPart3();
     Utf8.Encode(blocks + (if cmd.numericLong then
-      [DirectoryEntryKindCharSpec(observation.entryKind)] + RenderFailedEntrySpecPart4() +
-      PadColumn(RenderFailedEntrySpecPart1(), widths.links, true) + RenderFailedEntrySpecPart2() +
-      PadColumn(RenderFailedEntrySpecPart1(), widths.owner, false) + RenderFailedEntrySpecPart2() +
-      PadColumn(RenderFailedEntrySpecPart1(), widths.group, false) + RenderFailedEntrySpecPart2() +
-      PadColumn(RenderFailedEntrySpecPart1(), widths.size, true) + RenderFailedEntrySpecPart2() +
-      PadColumn(RenderFailedEntrySpecPart1(), FailedTimeWidthSpec(cmd), true) + RenderFailedEntrySpecPart2()
-    else RenderFailedEntrySpecPart3()) + observation.displayName + RenderFailedEntrySpecPart5())
+                            [DirectoryEntryKindCharSpec(observation.entryKind)] + RenderFailedEntrySpecPart4() +
+                            PadColumn(RenderFailedEntrySpecPart1(), widths.links, true) + RenderFailedEntrySpecPart2() +
+                            PadColumn(RenderFailedEntrySpecPart1(), widths.owner, false) + RenderFailedEntrySpecPart2() +
+                            PadColumn(RenderFailedEntrySpecPart1(), widths.group, false) + RenderFailedEntrySpecPart2() +
+                            PadColumn(RenderFailedEntrySpecPart1(), widths.size, true) + RenderFailedEntrySpecPart2() +
+                            PadColumn(RenderFailedEntrySpecPart1(), FailedTimeWidthSpec(cmd), true) + RenderFailedEntrySpecPart2()
+                          else RenderFailedEntrySpecPart3()) + observation.displayName + RenderFailedEntrySpecPart5())
   }
 
   function RecursiveCycleMessageSpec(displayPath: BenchWorld.Path): BenchWorld.Bytes

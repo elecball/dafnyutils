@@ -624,7 +624,7 @@ module ExpandProof {
     stdinBefore: BenchWorld.Bytes,
     stdinAfter: BenchWorld.Bytes,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
+                                preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
   )
     requires Core.ReadStepSummary(
                input, preFs, stdinBefore, stdinAfter, result,
@@ -640,11 +640,11 @@ module ExpandProof {
   lemma InputPieceSummaryImpliesRelation(
     cmd: Schema.ExpandCmd,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-                              column: nat,
-                              leading: bool,
-                              output: BenchWorld.Bytes,
-                              nextColumn: nat,
-                              nextLeading: bool
+                                column: nat,
+                                leading: bool,
+                                output: BenchWorld.Bytes,
+                                nextColumn: nat,
+                                nextLeading: bool
   )
     requires Core.InputPieceSummary(
                cmd, result, column, leading,
@@ -674,27 +674,27 @@ module ExpandProof {
       reveal Spec.DataExpansionRelation();
     case Err(error) =>
       if error.StreamFailure? {
-      ghost var pieces: seq<BenchWorld.Bytes>,
-                columns: seq<nat>, leadings: seq<bool> :|
-        Core.DataExpansionWitnessSummary(
+        ghost var pieces: seq<BenchWorld.Bytes>,
+                  columns: seq<nat>, leadings: seq<bool> :|
+          Core.DataExpansionWitnessSummary(
+            cmd.tabs, cmd.initialOnly, error.partial, column, leading,
+            output, nextColumn, nextLeading,
+            pieces, columns, leadings
+          );
+        DataExpansionWitnessSummaryImpliesRelation(
           cmd.tabs, cmd.initialOnly, error.partial, column, leading,
           output, nextColumn, nextLeading,
           pieces, columns, leadings
         );
-      DataExpansionWitnessSummaryImpliesRelation(
-        cmd.tabs, cmd.initialOnly, error.partial, column, leading,
-        output, nextColumn, nextLeading,
-        pieces, columns, leadings
-      );
-      reveal Spec.DataExpansionRelation();
+        reveal Spec.DataExpansionRelation();
       }
   }
 
   lemma ErrorPieceSummaryImpliesRelation(
     input: Schema.Input,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-                              output: BenchWorld.Bytes,
-                              hadError: bool
+                                output: BenchWorld.Bytes,
+                                hadError: bool
   )
     requires Core.ErrorPieceSummary(
                input, result, output, hadError
@@ -875,9 +875,9 @@ module ExpandProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        out, diagnostics) &&
+                           out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      out, diagnostics);
+                                       out, diagnostics);
   }
 }

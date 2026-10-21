@@ -92,7 +92,7 @@ module PwdRecoverySpec {
   }
 
   ghost function RecoveryFailureText(failure: RecoveryFailure,
-    quotedArgument: BenchWorld.Bytes, reason: string): BenchWorld.Bytes
+                                     quotedArgument: BenchWorld.Bytes, reason: string): BenchWorld.Bytes
   {
     var suffix := RecoveryFailureTextPart1() + Utf8.Encode(reason) + RecoveryFailureTextPart2();
     match failure
@@ -122,7 +122,7 @@ module PwdRecoverySpec {
       else if failure.CurrentDirectoryStatusFailed? then StreamContract.QuoteafPathResult(".")
       else StreamContract.QuoteArgumentResult(Utf8.Encode(ParentArgumentText(failure.height)));
     var reason := if RecoveryFailureErr(failure) == 0 then ""
-      else StreamContract.CLocaleErrnoTextResult(RecoveryFailureErr(failure));
+                  else StreamContract.CLocaleErrnoTextResult(RecoveryFailureErr(failure));
     RecoveryFailureText(failure, quoted, reason)
   }
 
@@ -134,7 +134,7 @@ module PwdRecoverySpec {
   }
 
   ghost predicate LogicalSelectionFields(pwd: string,
-    observations: seq<BenchWorld.IOResult<BenchWorld.FileStatus>>, selected: bool)
+                                         observations: seq<BenchWorld.IOResult<BenchWorld.FileStatus>>, selected: bool)
   {
     if !LogicalTextFields(pwd) then |observations| == 0 && !selected
     else
@@ -143,7 +143,7 @@ module PwdRecoverySpec {
       else
         |observations| == 2 &&
         (selected <==> observations[1].Ok? &&
-          observations[0].v.hostKey == observations[1].v.hostKey)
+                       observations[0].v.hostKey == observations[1].v.hostKey)
   }
 
   datatype EntryObservation = EntryObservation(
@@ -156,14 +156,14 @@ module PwdRecoverySpec {
   }
 
   ghost predicate EntryNeedsStatusFields(child: BenchWorld.FileStatus,
-    parent: BenchWorld.FileStatus, entry: BenchWorld.DirectoryRead)
+                                         parent: BenchWorld.FileStatus, entry: BenchWorld.DirectoryRead)
   {
     entry.DirectoryItem? &&
     (entry.inode == 0 || parent.hostKey.device != child.hostKey.device)
   }
 
   ghost predicate EntryObservationFields(child: BenchWorld.FileStatus,
-    parent: BenchWorld.FileStatus, observation: EntryObservation)
+                                         parent: BenchWorld.FileStatus, observation: EntryObservation)
   {
     if observation.read.Err? then
       |observation.entryStatus| == 0 && StreamContract.ResultErrno(observation.read) > 0
@@ -173,12 +173,12 @@ module PwdRecoverySpec {
       if EntryNeedsStatusFields(child, parent, observation.read.v) then
         |observation.entryStatus| == 1 &&
         (observation.entryStatus[0].Err? ==>
-          StreamContract.ResultErrno(observation.entryStatus[0]) > 0)
+           StreamContract.ResultErrno(observation.entryStatus[0]) > 0)
       else |observation.entryStatus| == 0
   }
 
   ghost predicate EntryMatchFields(child: BenchWorld.FileStatus,
-    parent: BenchWorld.FileStatus, observation: EntryObservation)
+                                   parent: BenchWorld.FileStatus, observation: EntryObservation)
   {
     EntryObservationFields(child, parent, observation) &&
     observation.read.Ok? && observation.read.v.DirectoryItem? &&
@@ -191,24 +191,24 @@ module PwdRecoverySpec {
   }
 
   ghost predicate EntrySearchFields(child: BenchWorld.FileStatus,
-    parent: BenchWorld.FileStatus, observations: seq<EntryObservation>,
-    foundName: string, readErr: int)
+                                    parent: BenchWorld.FileStatus, observations: seq<EntryObservation>,
+                                    foundName: string, readErr: int)
   {
     |observations| > 0 &&
     (forall i: nat | i < |observations| :: EntryObservationFields(child, parent, observations[i])) &&
     (forall i: nat | i + 1 < |observations| ::
-      observations[i].read.Ok? && observations[i].read.v.DirectoryItem? &&
-      !EntryMatchFields(child, parent, observations[i])) &&
+       observations[i].read.Ok? && observations[i].read.v.DirectoryItem? &&
+       !EntryMatchFields(child, parent, observations[i])) &&
     var last := observations[|observations| - 1];
     if last.read.Err? then
       foundName == "" && readErr == StreamContract.ResultErrno(last.read)
     else if last.read.v.DirectoryEnd? then foundName == "" && readErr == 0
     else EntryMatchFields(child, parent, last) &&
-      foundName == last.read.v.name && readErr == 0
+         foundName == last.read.v.name && readErr == 0
   }
 
   ghost predicate ParentCompletionFields(height: nat, readErr: int,
-    closeErr: int, found: bool, failure: seq<RecoveryFailure>)
+                                         closeErr: int, found: bool, failure: seq<RecoveryFailure>)
   {
     height >= 1 && readErr >= 0 && closeErr >= 0 &&
     if readErr != 0 then failure == [ParentReadFailed(height, readErr)]
@@ -218,20 +218,20 @@ module PwdRecoverySpec {
   }
 
   ghost predicate RecoveredDirectoryFields(root: BenchWorld.FileStatus,
-    initial: BenchWorld.FileStatus, parents: seq<BenchWorld.FileStatus>,
-    names: seq<string>, searches: seq<seq<EntryObservation>>,
-    accesses: seq<ParentAccessObservation>, closes: seq<BenchWorld.IOResult<BenchWorld.Unit>>, directory: string)
+                                           initial: BenchWorld.FileStatus, parents: seq<BenchWorld.FileStatus>,
+                                           names: seq<string>, searches: seq<seq<EntryObservation>>,
+                                           accesses: seq<ParentAccessObservation>, closes: seq<BenchWorld.IOResult<BenchWorld.Unit>>, directory: string)
   {
     root.kind == BenchWorld.DirectoryKind && initial.kind == BenchWorld.DirectoryKind &&
     |parents| == |names| == |searches| == |accesses| == |closes| &&
     (forall i: nat | i < |parents| ::
-      var child := if i == 0 then initial else parents[i - 1];
-      parents[i].kind == BenchWorld.DirectoryKind &&
-      SuccessfulParentAccessFields(accesses[i], parents[i]) &&
-      child.hostKey != root.hostKey &&
-      EntryNameFields(names[i]) &&
-      EntrySearchFields(child, parents[i], searches[i], names[i], 0) &&
-      closes[i].Ok?) &&
+       var child := if i == 0 then initial else parents[i - 1];
+       parents[i].kind == BenchWorld.DirectoryKind &&
+       SuccessfulParentAccessFields(accesses[i], parents[i]) &&
+       child.hostKey != root.hostKey &&
+       EntryNameFields(names[i]) &&
+       EntrySearchFields(child, parents[i], searches[i], names[i], 0) &&
+       closes[i].Ok?) &&
     (if |parents| == 0 then initial.hostKey else parents[|parents| - 1].hostKey) == root.hostKey &&
     BenchWorld.IsAbsolutePath(directory) && BenchWorld.NormalizePath(directory) == directory &&
     var components := BenchWorld.SplitSegments(BenchWorld.StripLeadingSlash(directory), 0, 0);
@@ -265,7 +265,7 @@ module PwdRecoverySpec {
     status: BenchWorld.IOResult<BenchWorld.FileStatus>)
 
   ghost predicate SuccessfulParentAccessFields(observation: ParentAccessObservation,
-    parent: BenchWorld.FileStatus)
+                                               parent: BenchWorld.FileStatus)
   {
     (if observation.descriptor.Ok? then observation.descriptor.v >= 0
      else StreamContract.ResultErrno(observation.descriptor) > 0) &&
@@ -329,28 +329,28 @@ module PwdRecoverySpec {
       request.cwdHint == before.cwdHint &&
       request.occupiedLegacyHandles == inputs.occupiedLegacyHandles &&
       StreamContract.DirectoryOperationSpec(request,inputs.observations,response,
-        after.position,after.capabilities,after.ordinal,after.statusOrdinal,after.cwdHint)
+                                            after.position,after.capabilities,after.ordinal,after.statusOrdinal,after.cwdHint)
     case AbsoluteStatusAction(path,follow,result) =>
       BenchWorld.IsAbsolutePath(path) &&
       StreamContract.GetFileStatusSpec(inputs.times,inputs.failures,
-        before.statusOrdinal,after.statusOrdinal,inputs.fs,path,follow,
-        result.Ok?,StreamContract.ResultValue(result,BenchWorld.DEFAULT_FILE_STATUS),
-        StreamContract.ResultErrno(result)) &&
+                                       before.statusOrdinal,after.statusOrdinal,inputs.fs,path,follow,
+                                       result.Ok?,StreamContract.ResultValue(result,BenchWorld.DEFAULT_FILE_STATUS),
+                                       StreamContract.ResultErrno(result)) &&
       after.position == before.position && after.capabilities == before.capabilities &&
       after.ordinal == before.ordinal && after.cwdHint == before.cwdHint
   }
 
   ghost predicate RuntimeTraceFields(inputs: RuntimeInputs, before: RuntimeState,
-    after: RuntimeState, calls: seq<RuntimeObservation>)
+                                     after: RuntimeState, calls: seq<RuntimeObservation>)
   {
     (forall i: nat | i < |calls| :: RuntimeObservationFields(inputs,calls[i])) &&
     if |calls| == 0 then before == after
     else calls[0].before == before && calls[|calls|-1].after == after &&
-      (forall i: nat | i+1 < |calls| :: calls[i].after == calls[i+1].before)
+         (forall i: nat | i+1 < |calls| :: calls[i].after == calls[i+1].before)
   }
 
   ghost predicate DirectoryActionFields(observation: RuntimeObservation,
-    operation: BenchWorld.DirectoryOperation, handle: int, fd: int, name: string)
+                                        operation: BenchWorld.DirectoryOperation, handle: int, fd: int, name: string)
   {
     observation.action.DirectoryAction? &&
     observation.action.request.operation == operation &&
@@ -359,16 +359,16 @@ module PwdRecoverySpec {
   }
 
   ghost predicate EntryCallBindings(child: BenchWorld.FileStatus, parent: BenchWorld.FileStatus,
-    handle: int, observation: EntryObservation, calls: seq<RuntimeObservation>)
+                                    handle: int, observation: EntryObservation, calls: seq<RuntimeObservation>)
   {
     EntryObservationFields(child,parent,observation) &&
     |calls| == 1 + |observation.entryStatus| &&
     DirectoryActionFields(calls[0],BenchWorld.DirectoryReadNext,handle,0,"") &&
     observation.read == StreamContract.DirectoryReadResultFields(calls[0].action.response) &&
     (|observation.entryStatus| == 1 ==>
-      observation.read.Ok? && observation.read.v.DirectoryItem? &&
-      DirectoryActionFields(calls[1],BenchWorld.DirectoryEntryLstat,0,0,observation.read.v.name) &&
-      observation.entryStatus[0] == StreamContract.DirectoryStatusResultFields(calls[1].action.response))
+       observation.read.Ok? && observation.read.v.DirectoryItem? &&
+       DirectoryActionFields(calls[1],BenchWorld.DirectoryEntryLstat,0,0,observation.read.v.name) &&
+       observation.entryStatus[0] == StreamContract.DirectoryStatusResultFields(calls[1].action.response))
   }
 
   datatype SearchWitness = SearchWitness(
@@ -376,29 +376,29 @@ module PwdRecoverySpec {
     ghost boundaries: seq<nat>)
 
   ghost predicate EntryPartitionAt(child: BenchWorld.FileStatus,
-    parent: BenchWorld.FileStatus, handle: int, evidence: SearchWitness, i: nat)
+                                   parent: BenchWorld.FileStatus, handle: int, evidence: SearchWitness, i: nat)
   {
     i < |evidence.entries| && i+1 < |evidence.boundaries| &&
     evidence.boundaries[i] <= evidence.boundaries[i+1] <= |evidence.calls| &&
     EntryCallBindings(child,parent,handle,evidence.entries[i],
-      evidence.calls[evidence.boundaries[i]..evidence.boundaries[i+1]])
+                      evidence.calls[evidence.boundaries[i]..evidence.boundaries[i+1]])
   }
 
   ghost predicate EntryWitnessFields(inputs: RuntimeInputs, before: RuntimeState,
-    after: RuntimeState, child: BenchWorld.FileStatus, parent: BenchWorld.FileStatus,
-    handle: int, evidence: SearchWitness)
+                                     after: RuntimeState, child: BenchWorld.FileStatus, parent: BenchWorld.FileStatus,
+                                     handle: int, evidence: SearchWitness)
   {
     RuntimeTraceFields(inputs,before,after,evidence.calls) &&
     |evidence.boundaries| == |evidence.entries| + 1 &&
     evidence.boundaries[0] == 0 &&
     evidence.boundaries[|evidence.boundaries|-1] == |evidence.calls| &&
     (forall i: nat | i < |evidence.entries| ::
-      EntryPartitionAt(child,parent,handle,evidence,i))
+       EntryPartitionAt(child,parent,handle,evidence,i))
   }
 
   ghost predicate SearchWitnessFields(inputs: RuntimeInputs, before: RuntimeState,
-    after: RuntimeState, child: BenchWorld.FileStatus, parent: BenchWorld.FileStatus,
-    handle: int, name: string, readErr: int, evidence: SearchWitness)
+                                      after: RuntimeState, child: BenchWorld.FileStatus, parent: BenchWorld.FileStatus,
+                                      handle: int, name: string, readErr: int, evidence: SearchWitness)
   {
     EntryWitnessFields(inputs,before,after,child,parent,handle,evidence) &&
     EntrySearchFields(child,parent,evidence.entries,name,readErr)

@@ -24,7 +24,7 @@ module ChmodEntryRuntime {
 
   ghost predicate ScopeFields(io:BenchIO.IO,scope:Spec.Scope)
     reads io.trustedNativeFailuresRegion,io.cwdRegion,io.nowRegion,
-      io.statusObservationsRegion,io.directoryStateRegion
+          io.statusObservationsRegion,io.directoryStateRegion
   {
     io.statusObservations()==scope.context.times && io.trustedNativeFailures()==scope.context.failures &&
     io.cwd()==scope.cwd && scope.context.cwd==scope.cwd && io.now()==scope.now &&
@@ -32,7 +32,7 @@ module ChmodEntryRuntime {
   }
 
   method {:isolate_assertions} ReadEntry(cmd:Schema.ChmodCmd,scope:Spec.Scope,display:string,
-    operand:Operand.Operand,top:bool,io:BenchIO.IO)
+                                         operand:Operand.Operand,top:bool,io:BenchIO.IO)
     returns (native:Spec.RuntimeIdentity,decision:Spec.Decision,output:W.Bytes,diagnostics:W.Bytes,ghost entry:Spec.Entry)
     requires ScopeFields(io,scope)
     requires Operand.AnchorFields(io,operand)
@@ -55,7 +55,7 @@ module ChmodEntryRuntime {
     ensures decision.EntryReady? ==> (native.isDirectory <==> C.CwdTargetRecordFields(io.fs(),io.cwdContext(),entry.targets[0]).node.Directory?)
     // Retain the original namespace guarantees whenever the target is named.
     ensures decision.EntryReady? ==> var paths:=C.CwdTargetNamedPathFields(io.cwdContext(),entry.targets[0]);
-      |paths|==1 ==> (W.FsContainsPath(io.fs(),paths[0]) && native.key==io.fs().inodes[W.FsIdAt(io.fs(),paths[0])].hostKey && native.isDirectory==W.FsNodeAt(io.fs(),paths[0]).Directory?)
+                                     |paths|==1 ==> (W.FsContainsPath(io.fs(),paths[0]) && native.key==io.fs().inodes[W.FsIdAt(io.fs(),paths[0])].hostKey && native.isDirectory==W.FsNodeAt(io.fs(),paths[0]).Directory?)
   {
     hide *;
     assert scope.cwd==io.cwd() by { reveal ScopeFields(); }
@@ -90,7 +90,7 @@ module ChmodEntryRuntime {
       output:=RecursiveText.RecursiveAccessStdoutSpec(cmd,display);
       diagnostics:=RecursiveText.NativeAccessText(cmd,display,Recursive.RecursiveAccess,Base.NativeErrnoTextCore(err,io));
       entry:=Spec.Entry(native,fs0,native0,cursor0,attempts,[],decision,
-        Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,false));
+                        Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,false));
       assert Spec.EntryFields(cmd,scope,display,operand,top,fs0,native0,cursor0,entry) by { reveal Spec.EntryFields(); }
       return;
     }
@@ -113,7 +113,7 @@ module ChmodEntryRuntime {
         native:=Spec.RuntimeIdentity(display,operand,top,true,false,false,raw.v.hostKey);
         decision:=Spec.EntryReady; output:=[]; diagnostics:=[];
         entry:=Spec.Entry(native,fs0,native0,cursor0,attempts,[rawTarget],decision,
-          Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,true));
+                          Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,true));
         Targets.SameTopologyTarget(fs0,native0,io.cwdContext(),rawTarget);
         Targets.NamedTargetRecord(fs0,io.cwdContext(),rawTarget);
       } else {
@@ -122,7 +122,7 @@ module ChmodEntryRuntime {
         decision:=Spec.EntryFailed(err,kind); output:=RecursiveText.RecursiveAccessStdoutSpec(cmd,display);
         diagnostics:=RecursiveText.NativeAccessText(cmd,display,kind,Base.NativeErrnoTextCore(err,io));
         entry:=Spec.Entry(native,fs0,native0,cursor0,attempts,[],decision,
-          Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,false));
+                          Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,false));
       }
       assert Spec.EntryFields(cmd,scope,display,operand,top,fs0,native0,cursor0,entry) by { reveal Spec.EntryFields(); }
       return;
@@ -138,7 +138,7 @@ module ChmodEntryRuntime {
       decision:=Spec.EntryPreserved(alias); output:=[]; diagnostics:=RecursiveText.RootPreserveMessageSpec(display,alias);
     } else { decision:=Spec.EntryReady; output:=[]; diagnostics:=[]; }
     entry:=Spec.Entry(native,fs0,native0,cursor0,attempts,[resolved],decision,
-      Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,decision.EntryReady?));
+                      Spec.State(fs0,io.statusCursor(),io.cwdContext(),output,diagnostics,decision.EntryReady?));
     assert Spec.EntryFields(cmd,scope,display,operand,top,fs0,native0,cursor0,entry) by { reveal Spec.EntryFields(); }
   }
 }

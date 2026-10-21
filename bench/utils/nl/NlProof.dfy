@@ -245,7 +245,7 @@ module NlProof {
     var states := seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.PrefixStdinCore(cmd, preStdin, i, preStreams));
     forall i: nat | i < |cmd.inputs|
       ensures states[i + 1] == (if cmd.inputs[i].Stdin? then
-        IOContract.ObservedReadStdinRemainingFields(states[i], preStreams) else states[i])
+                                  IOContract.ObservedReadStdinRemainingFields(states[i], preStreams) else states[i])
     { Core.PrefixStdinStep(cmd, preStdin, i, preStreams); }
     assert states[0] == preStdin by { reveal Core.PrefixStdinCore(); }
     assert Spec.StdinTraceRelation(cmd, preStdin, postStdin, preStreams, states);
@@ -321,8 +321,8 @@ module NlProof {
     new outputPart: BW.Bytes, new plannedStdout: BW.Bytes, new plannedStderr: BW.Bytes)
     requires Schema.Command(raw).mode == Schema.ModeRun
     requires Spec.InputTraceRelation(Schema.Command(raw), old(io.fs()), old(io.stdin()), readResults,
-      inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts,
-      hadError, hasDelimiter, old(io.trustedStreams()), io.stdin())
+                                     inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts,
+                                     hadError, hasDelimiter, old(io.trustedStreams()), io.stdin())
     requires if hasDelimiter then outputPart == [] else Spec.OutputRelation(Schema.Command(raw), combined, outputPart)
     requires plannedStdout == outputPart
     requires plannedStderr == errorOutput + (if hasDelimiter then Spec.UnsupportedLogicalPageDelimiterMessage() else [])
@@ -330,9 +330,9 @@ module NlProof {
     ensures Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
   {
     var trace := Spec.RunWitness(readResults, inputFragments, combined, inputCuts, errorFragments,
-      errorOutput, errorCuts, hadError, hasDelimiter, outputPart);
+                                 errorOutput, errorCuts, hadError, hasDelimiter, outputPart);
     assert Spec.PreparedRunRelation(Schema.Command(raw), old(io.fs()), old(io.stdin()), io.stdin(),
-      old(io.trustedStreams()), plannedStdout, plannedStderr, exit, trace) by {
+                                    old(io.trustedStreams()), plannedStdout, plannedStderr, exit, trace) by {
       hide *;
       reveal Spec.PreparedRunRelation();
     }
@@ -375,14 +375,14 @@ module NlProof {
         OutputSummaryRefines(cmd, combined, outputPart);
       }
       assert Spec.InputTraceRelation(cmd, old(io.fs()), old(io.stdin()), readResults,
-        inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts,
-        hadError, hasDelimiter, old(io.trustedStreams()), io.stdin());
+                                     inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts,
+                                     hadError, hasDelimiter, old(io.trustedStreams()), io.stdin());
       assert (if hasDelimiter then outputPart == [] else Spec.OutputRelation(cmd, combined, outputPart));
       assert plannedStdout == outputPart;
       assert plannedStderr == errorOutput + (if hasDelimiter then Spec.UnsupportedLogicalPageDelimiterMessage() else []);
       assert exit == (if hasDelimiter || hadError then 1 else 0);
       PreparedSpecFromTrace(raw, io, exit, readResults, inputFragments, combined, inputCuts,
-        errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, outputPart, plannedStdout, plannedStderr);
+                            errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, outputPart, plannedStdout, plannedStderr);
       return;
     }
     assert Spec.PreparedSpec(raw, io, exit, plannedStdout, plannedStderr) by {
@@ -412,9 +412,9 @@ module NlProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, outputPart,
-        out, diagnostics) &&
+                           out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, outputPart,
-      out, diagnostics);
+                                       out, diagnostics);
   }
 }

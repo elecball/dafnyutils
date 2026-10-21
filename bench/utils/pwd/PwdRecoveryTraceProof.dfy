@@ -14,8 +14,8 @@ module PwdRecoveryTraceProof {
   }
 
   lemma ConcatTraces(inputs: Spec.RuntimeInputs, before: Spec.RuntimeState,
-    middle: Spec.RuntimeState, after: Spec.RuntimeState,
-    left: seq<Spec.RuntimeObservation>, right: seq<Spec.RuntimeObservation>)
+                     middle: Spec.RuntimeState, after: Spec.RuntimeState,
+                     left: seq<Spec.RuntimeObservation>, right: seq<Spec.RuntimeObservation>)
     requires Spec.RuntimeTraceFields(inputs,before,middle,left)
     requires Spec.RuntimeTraceFields(inputs,middle,after,right)
     ensures Spec.RuntimeTraceFields(inputs,before,after,left+right)
@@ -44,16 +44,16 @@ module PwdRecoveryTraceProof {
   }
 
   lemma AppendEntry(inputs: Spec.RuntimeInputs, before: Spec.RuntimeState,
-    middle: Spec.RuntimeState, after: Spec.RuntimeState,
-    child: BenchWorld.FileStatus, parent: BenchWorld.FileStatus, handle: int,
-    prefix: Spec.SearchWitness, entry: Spec.EntryObservation,
-    calls: seq<Spec.RuntimeObservation>)
+                    middle: Spec.RuntimeState, after: Spec.RuntimeState,
+                    child: BenchWorld.FileStatus, parent: BenchWorld.FileStatus, handle: int,
+                    prefix: Spec.SearchWitness, entry: Spec.EntryObservation,
+                    calls: seq<Spec.RuntimeObservation>)
     requires Spec.EntryWitnessFields(inputs,before,middle,child,parent,handle,prefix)
     requires Spec.RuntimeTraceFields(inputs,middle,after,calls)
     requires Spec.EntryCallBindings(child,parent,handle,entry,calls)
     ensures Spec.EntryWitnessFields(inputs,before,after,child,parent,handle,
-      Spec.SearchWitness(prefix.entries+[entry],prefix.calls+calls,
-        prefix.boundaries+[|prefix.calls+calls|]))
+                                    Spec.SearchWitness(prefix.entries+[entry],prefix.calls+calls,
+                                                       prefix.boundaries+[|prefix.calls+calls|]))
   {
     hide *;
     reveal Spec.EntryWitnessFields(), Spec.EntryPartitionAt();
@@ -69,7 +69,7 @@ module PwdRecoveryTraceProof {
         assert Spec.EntryPartitionAt(child,parent,handle,prefix,i);
         assert boundaries[i+1] <= |prefix.calls|;
         assert allCalls[boundaries[i]..boundaries[i+1]] ==
-          prefix.calls[prefix.boundaries[i]..prefix.boundaries[i+1]];
+               prefix.calls[prefix.boundaries[i]..prefix.boundaries[i+1]];
       } else {
         assert i == |prefix.entries|;
         assert boundaries[i] == |prefix.calls|;
@@ -81,18 +81,18 @@ module PwdRecoveryTraceProof {
   }
 
   lemma FinishEntrySearch(inputs: Spec.RuntimeInputs, before: Spec.RuntimeState,
-    after: Spec.RuntimeState, child: BenchWorld.FileStatus,
-    parent: BenchWorld.FileStatus, handle: int, name: string, readErr: int,
-    evidence: Spec.SearchWitness)
+                          after: Spec.RuntimeState, child: BenchWorld.FileStatus,
+                          parent: BenchWorld.FileStatus, handle: int, name: string, readErr: int,
+                          evidence: Spec.SearchWitness)
     requires Spec.EntryWitnessFields(inputs,before,after,child,parent,handle,evidence)
     requires |evidence.entries| > 0
     requires forall i: nat | i+1 < |evidence.entries| ::
-      evidence.entries[i].read.Ok? && evidence.entries[i].read.v.DirectoryItem? &&
-      !Spec.EntryMatchFields(child,parent,evidence.entries[i])
+               evidence.entries[i].read.Ok? && evidence.entries[i].read.v.DirectoryItem? &&
+               !Spec.EntryMatchFields(child,parent,evidence.entries[i])
     requires var last := evidence.entries[|evidence.entries|-1];
-      if last.read.Err? then name == "" && readErr == C.ResultErrno(last.read)
-      else if last.read.v.DirectoryEnd? then name == "" && readErr == 0
-      else Spec.EntryMatchFields(child,parent,last) && name == last.read.v.name && readErr == 0
+             if last.read.Err? then name == "" && readErr == C.ResultErrno(last.read)
+             else if last.read.v.DirectoryEnd? then name == "" && readErr == 0
+             else Spec.EntryMatchFields(child,parent,last) && name == last.read.v.name && readErr == 0
     ensures Spec.SearchWitnessFields(inputs,before,after,child,parent,handle,name,readErr,evidence)
   {
     hide *;

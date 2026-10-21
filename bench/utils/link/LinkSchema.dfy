@@ -4,7 +4,7 @@ module LinkSchema {
   import CliTypes
 
   datatype LinkMode = ModeRun | ModeHelp | ModeVersion | ModeExtraOperand(operand: string)
-  
+
   datatype LinkCmdRaw = LinkCmdRaw(
     mode: LinkMode,
     operands: seq<string>
@@ -13,9 +13,9 @@ module LinkSchema {
   method Schema() returns (schema: CliTypes.CliSchema)
   {
     schema := CliTypes.CliSchema([
-      CliTypes.OptionDecl("link.help", [], ["help"], CliTypes.NoArg),
-      CliTypes.OptionDecl("link.version", [], ["version"], CliTypes.NoArg)
-    ], true);
+                                   CliTypes.OptionDecl("link.help", [], ["help"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("link.version", [], ["version"], CliTypes.NoArg)
+                                 ], true);
   }
 
   method ParserConfig() returns (cfg: CliTypes.ParseConfig)
@@ -51,13 +51,13 @@ module LinkSchema {
       i := i + 1;
     }
     var mode := if seenHelp && (!seenVersion || helpTokenIndex <= versionTokenIndex) then
-        ModeHelp
-      else if seenVersion then
-        ModeVersion
-      else if |parsed.positionals| > 2 then
-        ModeExtraOperand(parsed.positionals[2])
-      else
-        ModeRun;
+      ModeHelp
+    else if seenVersion then
+      ModeVersion
+    else if |parsed.positionals| > 2 then
+      ModeExtraOperand(parsed.positionals[2])
+    else
+      ModeRun;
 
     raw := LinkCmdRaw(mode, parsed.positionals);
   }

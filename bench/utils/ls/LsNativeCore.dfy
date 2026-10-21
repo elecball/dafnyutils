@@ -86,7 +86,7 @@ module LsNativeCore {
   method Read(handle: int, io: BenchIO.IO)
     returns (result: W.IOResult<W.DirectoryRead>, ghost call: Spec.Call)
     requires C.DirectoryOperationCapabilitiesCurrentFields(io.directoryTopology(),
-      io.directoryCapabilities(),W.DirectoryReadNext,handle,0)
+                                                           io.directoryCapabilities(),W.DirectoryReadNext,handle,0)
     modifies io.directoryStateRegion
     ensures Inputs(io) == old(Inputs(io))
     ensures io.dirHandles() == old(io.dirHandles()) && io.directoryOrigins() == old(io.directoryOrigins())
@@ -130,7 +130,7 @@ module LsNativeCore {
   method HandleStatus(handle: int, io: BenchIO.IO)
     returns (result: W.IOResult<W.FileStatus>, ghost call: Spec.Call)
     requires handle in io.directoryCapabilities() ==>
-      C.DirectoryCapabilityAnchorCurrentFields(io.directoryTopology(),io.directoryCapabilities()[handle])
+               C.DirectoryCapabilityAnchorCurrentFields(io.directoryTopology(),io.directoryCapabilities()[handle])
     modifies io.directoryStateRegion,io.statusObservationsRegion
     ensures Inputs(io) == old(Inputs(io))
     ensures io.dirHandles() == old(io.dirHandles()) && io.directoryOrigins() == old(io.directoryOrigins())

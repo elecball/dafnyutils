@@ -115,13 +115,13 @@ module TeeSpec {
   ghost function ReadErrorMessageSpec(path: BenchWorld.Path, err: BenchWorld.IOError): BenchWorld.Bytes
   {
     ReadErrorMessageSpecText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-      ReadErrorMessageSpecText1 + Utf8.Encode(ReadErrnoTextSpec(err)) + ReadErrorMessageSpecText2
+    ReadErrorMessageSpecText1 + Utf8.Encode(ReadErrnoTextSpec(err)) + ReadErrorMessageSpecText2
   }
 
   ghost function WriteErrorMessageText(path: BenchWorld.Path, reason: string): BenchWorld.Bytes
   {
     WriteErrorMessageTextText0 + SE.SpecQuoteFBytes(Utf8.Encode(path)) +
-      WriteErrorMessageTextText1 + Utf8.Encode(reason) + WriteErrorMessageTextText2
+    WriteErrorMessageTextText1 + Utf8.Encode(reason) + WriteErrorMessageTextText2
   }
 
   ghost function WriteErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
@@ -164,7 +164,7 @@ module TeeSpec {
     else
       exists ok: bool, writeErr: int, committed: nat, stage: BenchWorld.FileWriteStage ::
         IOContract.WriteFileSpec(preFs, preProps, preNow, preCredentials, preTrustedFilesystem,
-                                fs2, path, input, ok, writeErr, committed, stage) &&
+                                 fs2, path, input, ok, writeErr, committed, stage) &&
         stderr == (if ok then [] else WriteErrorMessageSpec(path, writeErr)) &&
         exit == (if ok then 0 else 1)
   }
@@ -213,7 +213,7 @@ module TeeSpec {
       states[0] == WriteState(preFs, [], 0) &&
       states[|outputs|] == WriteState(fs2, stderr, exit) &&
       forall i {:trigger WriteStepRelation(append, outputs[i], input, preProps, preNow, preCredentials,
-                                          preTrustedFilesystem, states[i], states[i + 1])} ::
+                                           preTrustedFilesystem, states[i], states[i + 1])} ::
         0 <= i < |outputs| ==>
           WriteStepRelation(append, outputs[i], input, preProps, preNow, preCredentials,
                             preTrustedFilesystem, states[i], states[i + 1])
@@ -249,7 +249,7 @@ module TeeSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(raw, StreamContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(raw, StreamContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
@@ -295,7 +295,7 @@ module TeeSpec {
         io.stdin() == IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) &&
         plannedStdout == old(io.stdout()) + input &&
         plannedStderr == old(io.stderr()) + errOut +
-          (if read.Ok? then [] else StdinReadError(IOContract.ResultErrno(read))) &&
+        (if read.Ok? then [] else StdinReadError(IOContract.ResultErrno(read))) &&
         exit == (if read.Ok? then writeExit else 1)
   }
 

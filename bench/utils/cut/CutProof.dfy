@@ -18,7 +18,7 @@ module CutProof {
     preStdin: BenchWorld.Bytes,
     index: nat,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
+                                preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
   )
     requires index < |command.inputs|
     requires Core.InputReadCore(
@@ -81,7 +81,7 @@ module CutProof {
     var states := seq(|command.inputs| + 1, i requires 0 <= i <= |command.inputs| => Core.PrefixStdinCore(command, old(io.stdin()), i, old(io.trustedStreams())));
     forall i: nat | i < |command.inputs|
       ensures states[i + 1] == (if command.inputs[i].Stdin? then
-        IOContract.ObservedReadStdinRemainingFields(states[i], old(io.trustedStreams())) else states[i])
+                                  IOContract.ObservedReadStdinRemainingFields(states[i], old(io.trustedStreams())) else states[i])
     {
       Core.PrefixStdinStep(command, old(io.stdin()), i, old(io.trustedStreams()));
     }
@@ -100,8 +100,8 @@ module CutProof {
                                    ) &&
                                    stderrFragments[i] == []
                                  case Err(error) =>
-               (if error.StreamFailure? then Spec.DataSelectionRelation(command, error.partial, stdoutFragments[i]) else stdoutFragments[i] == []) &&
-               stderrFragments[i] == Spec.ErrorMessage("-", error))
+                                   (if error.StreamFailure? then Spec.DataSelectionRelation(command, error.partial, stdoutFragments[i]) else stdoutFragments[i] == []) &&
+                                   stderrFragments[i] == Spec.ErrorMessage("-", error))
                               case File(path) =>
                                 (match readResults[i]
                                  case Ok(data) =>
@@ -166,7 +166,7 @@ module CutProof {
       reveal Spec.InputTraceWitnessRelation();
     }
     assert Spec.InputTraceRelation(command, io, readResults, Core.JoinFragments(stdoutFragments),
-      Core.JoinFragments(stderrFragments), exists i: nat | i < |command.inputs| :: readResults[i].Err?) by {
+                                   Core.JoinFragments(stderrFragments), exists i: nat | i < |command.inputs| :: readResults[i].Err?) by {
       hide *;
       reveal Spec.InputTraceRelation();
     }
@@ -214,9 +214,9 @@ module CutProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        out, diagnostics) &&
+                           out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      out, diagnostics);
+                                       out, diagnostics);
   }
 }

@@ -14,21 +14,21 @@ module ChmodVisitFrameProof {
   import FrameSpec = ChmodTraversalSpec
 
   lemma {:isolate_assertions} VisitFrame(cmd: Schema.ChmodCmd, plan: Base.SpecModePlan,
-    scope: Spec.Scope, display: string, operand: Operand.Operand, top: bool,
-    active: set<W.HostInodeKey>, fs: W.FileSystem, native: W.CwdContext,
-    cursor: nat, visit: Spec.Visit)
+                                         scope: Spec.Scope, display: string, operand: Operand.Operand, top: bool,
+                                         active: set<W.HostInodeKey>, fs: W.FileSystem, native: W.CwdContext,
+                                         cursor: nat, visit: Spec.Visit)
     requires C.CwdContextFields(fs, native)
     requires Spec.VisitFields(cmd, plan, scope, display, operand, top, active, fs, native, cursor, visit)
     ensures var result := Spec.Result(visit);
-      C.CwdContextFields(result.fs, result.native) && FrameSpec.FrameFields(native, result.native) &&
-      W.FileSystemTopologyUnchangedExceptMode(fs, result.fs) && result.native.capabilities == native.capabilities
+            C.CwdContextFields(result.fs, result.native) && FrameSpec.FrameFields(native, result.native) &&
+            W.FileSystemTopologyUnchangedExceptMode(fs, result.fs) && result.native.capabilities == native.capabilities
     decreases visit
   {
     hide *;
     reveal Spec.VisitFields(), Spec.Result();
     var entry := visit.entry;
     assert entry.fs == fs && entry.native == native && entry.cursor == cursor &&
-      entry.identity.displayPath == display && entry.identity.operand == operand && entry.identity.top == top by {
+           entry.identity.displayPath == display && entry.identity.operand == operand && entry.identity.top == top by {
       reveal Spec.EntryFields();
     }
     State.EntryState(cmd, scope, display, operand, top, fs, native, cursor, entry);
@@ -44,12 +44,12 @@ module ChmodVisitFrameProof {
         var context := Base.AtCursor(scope.context, change.result.cursor);
         if listing.ListingOpenFailed? {
           Frame.Open(context, change.result.fs, change.result.native, operand,
-            listing.afterOpen, false, 0, listing.err);
+                     listing.afterOpen, false, 0, listing.err);
           Frame.Transitive(native, change.result.native, listing.afterOpen);
           assert C.CwdContextFields(change.result.fs, listing.afterOpen) &&
-            listing.afterOpen.capabilities == change.result.native.capabilities by {
+                 listing.afterOpen.capabilities == change.result.native.capabilities by {
             reveal Operand.OpenFields(), C.OpenDirAtCwdSpec(), C.OpenDirAtDirSpec(),
-              C.OpenDirFromCwdTargetContractFields(), C.CwdContextReadStepFields();
+                   C.OpenDirFromCwdTargetContractFields(), C.CwdContextReadStepFields();
           }
         } else {
           var handle := listing.handle;
@@ -72,7 +72,7 @@ module ChmodVisitFrameProof {
             invariant forall h | h in native.capabilities :: listing.states[i].native.capabilities[h] == native.capabilities[h]
             invariant !listing.states[i].native.capabilities[handle].includeDots
             invariant C.DirectoryCapabilityReadCurrentFields(listing.states[i].native.topology,
-              listing.states[i].native.capabilities[handle])
+                                                             listing.states[i].native.capabilities[handle])
             decreases n-i
           {
             var before := listing.states[i];
@@ -80,16 +80,16 @@ module ChmodVisitFrameProof {
             var read := listing.readSteps[i];
             var child := listing.children[i];
             assert Spec.DirectoryStepFields(cmd, plan, scope, entry.identity, active, handle,
-              before, after, read, child);
+                                            before, after, read, child);
             reveal Spec.DirectoryStepFields(), Spec.ReadFields();
             Directory.ReadShape(before.fs, read.before, scope.directories, handle, before.cursor,
-              read.response, read.after);
+                                read.response, read.after);
             State.DirectoryState(before.fs, read.before, scope.directories, W.DirectoryReadNext,
-              handle, before.cursor, read.response, read.after);
+                                 handle, before.cursor, read.response, read.after);
             Frame.Transitive(native, read.before, read.after);
             VisitFrame(cmd, plan, scope, W.AppendPath(display, read.response.read.name),
-              Operand.DirectoryOperand(handle, read.response.read.name), false, active+{entry.identity.key},
-              before.fs, read.after, before.cursor, child);
+                       Operand.DirectoryOperand(handle, read.response.read.name), false, active+{entry.identity.key},
+                       before.fs, read.after, before.cursor, child);
             var result := Spec.Result(child);
             assert after.fs == result.fs && after.native == result.native;
             Identity.TopologyTransitive(fs, before.fs, result.fs);
@@ -109,18 +109,18 @@ module ChmodVisitFrameProof {
           var terminal := listing.readSteps[n];
           assert terminal.before == last.native;
           assert C.ContextOperationSpec(last.fs, terminal.before, scope.directories, W.DirectoryReadNext,
-            handle, 0, "", last.cursor, last.cursor, terminal.response, terminal.after) by {
+                                        handle, 0, "", last.cursor, last.cursor, terminal.response, terminal.after) by {
             reveal Spec.ReadFields();
           }
           Directory.ReadShape(last.fs, terminal.before, scope.directories, handle, last.cursor,
-            terminal.response, terminal.after);
+                              terminal.response, terminal.after);
           State.DirectoryState(last.fs, terminal.before, scope.directories, W.DirectoryReadNext,
-            handle, last.cursor, terminal.response, terminal.after);
+                               handle, last.cursor, terminal.response, terminal.after);
           Frame.Transitive(native, terminal.before, terminal.after);
           Directory.CloseShape(last.fs, terminal.after, scope.directories, handle, last.cursor,
-            listing.closeResponse, listing.afterClose);
+                               listing.closeResponse, listing.afterClose);
           State.DirectoryState(last.fs, terminal.after, scope.directories, W.DirectoryClose,
-            handle, last.cursor, listing.closeResponse, listing.afterClose);
+                               handle, last.cursor, listing.closeResponse, listing.afterClose);
           Frame.Transitive(native, terminal.after, listing.afterClose);
           assert listing.afterClose.capabilities == native.capabilities;
         }

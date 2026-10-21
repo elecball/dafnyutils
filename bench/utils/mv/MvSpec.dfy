@@ -840,7 +840,7 @@ module MvSpec {
   )
 
   ghost predicate StatusExistsOutcomeFields(fs: BenchWorld.FileSystem, path: string,
-    followSymlink: bool, found: bool, err: int)
+                                            followSymlink: bool, found: bool, err: int)
   {
     if found then IOContract.PathExistsContractFields(fs, path, followSymlink, true, err)
     else err > 0 && err in IOContract.NativeStatusFailureErrnosFields(fs, path, followSymlink)
@@ -892,7 +892,7 @@ module MvSpec {
     else
       |calls| >= 1 &&
       (forall i: nat | i < |calls| ::
-        StatusRequest(calls[i], fs, NumberedBackupPathSpec(target, i + 1), false)) &&
+         StatusRequest(calls[i], fs, NumberedBackupPathSpec(target, i + 1), false)) &&
       (forall i: nat | i + 1 < |calls| :: calls[i].ok) &&
       !calls[|calls| - 1].ok
   }
@@ -913,7 +913,7 @@ module MvSpec {
        |calls| >= 2 && calls[0].ok && calls[1].ok &&
        !(|calls| >= 4 && (!calls[2].ok || !calls[3].ok) &&
          (exists leaf: string :: Basename.BasenameRelation(source, leaf) &&
-           Basename.BasenameRelation(target, leaf))) &&
+                                 Basename.BasenameRelation(target, leaf))) &&
        !SameFileMustBeRejected(cmd, fs, cwd, source, target) then
       |calls| >= 2 &&
       StatusRequest(calls[0], fs, source, false) &&
@@ -948,7 +948,7 @@ module MvSpec {
        (resolveOk && |calls| >= 6 && calls[3].ok && calls[5].ok &&
         calls[3].status.hostKey == calls[5].status.hostKey &&
         (exists referentLeaf: string ::
-          Basename.BasenameRelation(resolvedSource, referentLeaf) && referentLeaf == targetLeaf)))))
+           Basename.BasenameRelation(resolvedSource, referentLeaf) && referentLeaf == targetLeaf)))))
   }
 
   ghost predicate ObservedReferentParentFailure(
@@ -992,20 +992,20 @@ module MvSpec {
        afterEntries == 4 && |calls| == 4 &&
        !resolveOk && resolvedSource == "" && resolveErr == 0
      else (if calls[0].status.kind == BenchWorld.SymlinkKind then
-       IOContract.ResolvePathIdentitySpec(
-         fs, cwd, inputs.failures, source, resolveOk, resolvedSource, resolveErr
-       ) &&
-       |calls| >= 5 &&
-       StatusRequest(calls[4], fs, source, true) &&
-       (if resolveOk then
-          exists referentParent: string ::
-            afterEntries == 6 && |calls| >= 6 &&
-            Dirname.DirnameRelation(resolvedSource, referentParent) &&
-            StatusRequest(calls[5], fs, referentParent, false)
-        else
-          afterEntries == 5)
-     else
-       afterEntries == 4 && !resolveOk && resolvedSource == "" && resolveErr == 0))
+             IOContract.ResolvePathIdentitySpec(
+               fs, cwd, inputs.failures, source, resolveOk, resolvedSource, resolveErr
+             ) &&
+             |calls| >= 5 &&
+             StatusRequest(calls[4], fs, source, true) &&
+             (if resolveOk then
+                exists referentParent: string ::
+                  afterEntries == 6 && |calls| >= 6 &&
+                  Dirname.DirnameRelation(resolvedSource, referentParent) &&
+                  StatusRequest(calls[5], fs, referentParent, false)
+              else
+                afterEntries == 5)
+           else
+             afterEntries == 4 && !resolveOk && resolvedSource == "" && resolveErr == 0))
   }
 
   ghost predicate MoveContinuationObservations(
@@ -1029,34 +1029,34 @@ module MvSpec {
     |calls| >= 4 &&
     (if sourceLeaf == targetLeaf && (!calls[2].ok || !calls[3].ok) then true
      else
-    (if ObservedReferentParentFailure(calls, targetLeaf, resolveOk, resolvedSource) ||
-        ObservedSameFileRejection(cmd, calls, sourceLeaf, targetLeaf, resolveOk, resolvedSource) ||
-        (cmd.updateMode == Schema.UpdateOlder &&
-         !SourceNewerSpec(
-           calls[0].status.times.mtimeSec,
-           calls[0].status.times.mtimeNsec,
-           calls[1].status.times.mtimeSec,
-           calls[1].status.times.mtimeNsec
-         )) then
-       |calls| == afterEntries
-     else
-       var collisionNeeded :=
-         (cmd.backupMode == Schema.BackupSimple ||
-          cmd.backupMode == Schema.BackupExisting) &&
-         sourceLeaf == targetLeaf + cmd.backupSuffix;
-       var afterCollision := afterEntries +
-         (if collisionNeeded then 1 else 0);
-       afterCollision <= |calls| &&
-       (collisionNeeded ==>
-         StatusRequest(
-           calls[afterEntries], fs,
-           SimpleBackupPathSpec(target, cmd.backupSuffix), true
-         )) &&
-       (if collisionNeeded && calls[afterEntries].ok &&
-           calls[afterEntries].status.hostKey == calls[0].status.hostKey then
-          |calls| == afterCollision
+       (if ObservedReferentParentFailure(calls, targetLeaf, resolveOk, resolvedSource) ||
+           ObservedSameFileRejection(cmd, calls, sourceLeaf, targetLeaf, resolveOk, resolvedSource) ||
+           (cmd.updateMode == Schema.UpdateOlder &&
+            !SourceNewerSpec(
+              calls[0].status.times.mtimeSec,
+              calls[0].status.times.mtimeNsec,
+              calls[1].status.times.mtimeSec,
+              calls[1].status.times.mtimeNsec
+            )) then
+          |calls| == afterEntries
         else
-          BackupStatusSuffix(cmd.backupMode, fs, target, calls[afterCollision..]))))
+          var collisionNeeded :=
+            (cmd.backupMode == Schema.BackupSimple ||
+             cmd.backupMode == Schema.BackupExisting) &&
+            sourceLeaf == targetLeaf + cmd.backupSuffix;
+          var afterCollision := afterEntries +
+                                (if collisionNeeded then 1 else 0);
+          afterCollision <= |calls| &&
+          (collisionNeeded ==>
+             StatusRequest(
+               calls[afterEntries], fs,
+               SimpleBackupPathSpec(target, cmd.backupSuffix), true
+             )) &&
+          (if collisionNeeded && calls[afterEntries].ok &&
+              calls[afterEntries].status.hostKey == calls[0].status.hostKey then
+             |calls| == afterCollision
+           else
+             BackupStatusSuffix(cmd.backupMode, fs, target, calls[afterCollision..]))))
   }
 
   ghost opaque predicate MoveStatusShapeWitness(
@@ -1078,9 +1078,9 @@ module MvSpec {
   )
   {
     MoveComparisonObservations(cmd, fs, cwd, source, target, calls, sourceParent, targetParent,
-      sourceLeaf, targetLeaf, resolveOk, resolvedSource, resolveErr, afterEntries, inputs) &&
+                               sourceLeaf, targetLeaf, resolveOk, resolvedSource, resolveErr, afterEntries, inputs) &&
     MoveContinuationObservations(cmd, fs, cwd, source, target, calls, sourceParent, targetParent,
-      sourceLeaf, targetLeaf, resolveOk, resolvedSource, resolveErr, afterEntries, inputs)
+                                 sourceLeaf, targetLeaf, resolveOk, resolvedSource, resolveErr, afterEntries, inputs)
   }
 
   ghost opaque predicate MoveStatusShape(
@@ -1106,9 +1106,9 @@ module MvSpec {
           |calls| == 2
         else
           exists sourceParent: string, targetParent: string,
-                 sourceLeaf: string, targetLeaf: string,
-                 resolveOk: bool, resolvedSource: string, resolveErr: int,
-                 afterEntries: nat ::
+            sourceLeaf: string, targetLeaf: string,
+            resolveOk: bool, resolvedSource: string, resolveErr: int,
+            afterEntries: nat ::
             MoveStatusShapeWitness(
               cmd, fs, cwd, source, target, calls,
               sourceParent, targetParent, sourceLeaf, targetLeaf,
@@ -1277,34 +1277,34 @@ module MvSpec {
   {
     (backupPath == "" &&
      IOContract.RenamePathSpec(beforeFs, inputs.now, inputs.failures,
-       afterFs, source, target, true, 0) &&
+                               afterFs, source, target, true, 0) &&
      outcome == MoveOutcome(StepSuccessStdoutSpec(source, target, "", cmd.verbose, cmd.debug), [], false)) ||
     (backupPath == "" &&
      exists err: int ::
        IOContract.RenamePathSpec(beforeFs, inputs.now, inputs.failures,
-         afterFs, source, target, false, err) &&
+                                 afterFs, source, target, false, err) &&
        outcome == MoveOutcome([], SourceRenameFailureMessageSpec(source, target,
-         SourceRenameDiagnosticErrSpec(target, sourceIsDir, err), sourceIsDir && targetWasFound), true)) ||
+                                                                 SourceRenameDiagnosticErrSpec(target, sourceIsDir, err), sourceIsDir && targetWasFound), true)) ||
     (backupPath != "" &&
      exists err: int ::
        IOContract.RenamePathSpec(beforeFs, inputs.now, inputs.failures,
-         afterFs, target, backupPath, false, err) &&
+                                 afterFs, target, backupPath, false, err) &&
        outcome == MoveOutcome([], RenameFailureMessageSpec(source, target, err), true)) ||
     (backupPath != "" &&
      exists backupFs: BenchWorld.FileSystem ::
        IOContract.RenamePathSpec(beforeFs, inputs.now, inputs.failures,
-         backupFs, target, backupPath, true, 0) &&
+                                 backupFs, target, backupPath, true, 0) &&
        IOContract.RenamePathSpec(backupFs, inputs.now, inputs.failures,
-         afterFs, source, target, true, 0) &&
+                                 afterFs, source, target, true, 0) &&
        outcome == MoveOutcome(StepSuccessStdoutSpec(source, target, backupPath, cmd.verbose, cmd.debug), [], false)) ||
     (backupPath != "" &&
      exists backupFs: BenchWorld.FileSystem, err: int ::
        IOContract.RenamePathSpec(beforeFs, inputs.now, inputs.failures,
-         backupFs, target, backupPath, true, 0) &&
+                                 backupFs, target, backupPath, true, 0) &&
        IOContract.RenamePathSpec(backupFs, inputs.now, inputs.failures,
-         afterFs, source, target, false, err) &&
+                                 afterFs, source, target, false, err) &&
        outcome == MoveOutcome([], SourceRenameFailureMessageSpec(source, target,
-         SourceRenameDiagnosticErrSpec(target, sourceIsDir, err), false), true))
+                                                                 SourceRenameDiagnosticErrSpec(target, sourceIsDir, err), false), true))
   }
 
   ghost predicate BackupPathFromObservations(
@@ -1424,7 +1424,7 @@ module MvSpec {
                 )
               else if cmd.updateMode == Schema.UpdateOlder then
                 exists sourceMtimeSec: int, sourceMtimeNsec: int,
-                       targetMtimeSec: int, targetMtimeNsec: int ::
+                  targetMtimeSec: int, targetMtimeNsec: int ::
                   if !SourceNewerSpec(
                        sourceMtimeSec, sourceMtimeNsec,
                        targetMtimeSec, targetMtimeNsec
@@ -1449,7 +1449,7 @@ module MvSpec {
   )
   {
     (exists i: nat :: i < |calls| && !calls[i].ok &&
-      StatusExistsOutcomeFields(calls[i].fs, calls[i].path, calls[i].followSymlink, true, 0)) ||
+                      StatusExistsOutcomeFields(calls[i].fs, calls[i].path, calls[i].followSymlink, true, 0)) ||
     (|calls| >= 4 && calls[0].ok && calls[1].ok &&
      (!calls[2].ok || !calls[3].ok) &&
      (exists leaf: string :: Basename.BasenameRelation(source, leaf) && Basename.BasenameRelation(calls[1].path, leaf))) ||
@@ -1468,10 +1468,10 @@ module MvSpec {
     OriginalMoveEffectRelation(source, target, cmd, beforeFs, cwd, afterFs, outcome) ||
     ParentMetadataFailureEffect(source, target, cmd, beforeFs, afterFs, outcome) ||
     (exists inputs: NativeStatusInputs, first: nat, calls: seq<StatusCallEvidence> ::
-      StatusCallsFor(inputs, first, calls) &&
-      MoveStatusShape(cmd, beforeFs, cwd, source, target, calls, inputs) &&
-      ObservedMoveOutcome(source, target, cmd, beforeFs, cwd, afterFs, outcome, calls, inputs) &&
-      ObservedMetadataFault(source, beforeFs, cwd, calls, inputs))
+       StatusCallsFor(inputs, first, calls) &&
+       MoveStatusShape(cmd, beforeFs, cwd, source, target, calls, inputs) &&
+       ObservedMoveOutcome(source, target, cmd, beforeFs, cwd, afterFs, outcome, calls, inputs) &&
+       ObservedMetadataFault(source, beforeFs, cwd, calls, inputs))
   }
 
   ghost predicate BatchMoveWitnessRelation(
@@ -1754,16 +1754,16 @@ module MvSpec {
     if |calls| >= 4 && calls[0].ok && calls[1].ok &&
        (!calls[2].ok || !calls[3].ok) &&
        (exists leaf: string :: Basename.BasenameRelation(source, leaf) &&
-         Basename.BasenameRelation(target, leaf)) then
+                               Basename.BasenameRelation(target, leaf)) then
       |calls| == 4 && afterFs == fs &&
       (exists sourceParent: string, targetParent: string ::
-        Dirname.DirnameRelation(source, sourceParent) &&
-        Dirname.DirnameRelation(target, targetParent) &&
-        StatusRequest(calls[2], fs, sourceParent, false) &&
-        StatusRequest(calls[3], fs, targetParent, false) &&
-        outcome == MoveOutcome([], ParentStatFailureMessageSpec(
-          if !calls[2].ok then sourceParent else targetParent,
-          if !calls[2].ok then calls[2].err else calls[3].err), true))
+         Dirname.DirnameRelation(source, sourceParent) &&
+         Dirname.DirnameRelation(target, targetParent) &&
+         StatusRequest(calls[2], fs, sourceParent, false) &&
+         StatusRequest(calls[3], fs, targetParent, false) &&
+         outcome == MoveOutcome([], ParentStatFailureMessageSpec(
+                                  if !calls[2].ok then sourceParent else targetParent,
+                                  if !calls[2].ok then calls[2].err else calls[3].err), true))
     else OriginalMoveEffectRelation(source, target, cmd, fs, cwd, afterFs, outcome)
   }
 
@@ -1782,23 +1782,23 @@ module MvSpec {
     var targetLeaf := names.3;
     |calls| >= 4 &&
     MoveStatusShapeWitness(cmd, fs, cwd, source, target, calls,
-      sourceParent, targetParent, sourceLeaf, targetLeaf,
-      resolveOk, resolvedSource, resolveErr, afterEntries, inputs) &&
+                           sourceParent, targetParent, sourceLeaf, targetLeaf,
+                           resolveOk, resolvedSource, resolveErr, afterEntries, inputs) &&
     (if sourceLeaf == targetLeaf && (!calls[2].ok || !calls[3].ok) then
        afterFs == fs && outcome == MoveOutcome([], ParentStatFailureMessageSpec(
-         if !calls[2].ok then sourceParent else targetParent,
-         if !calls[2].ok then calls[2].err else calls[3].err), true)
+                                                 if !calls[2].ok then sourceParent else targetParent,
+                                                 if !calls[2].ok then calls[2].err else calls[3].err), true)
      else if ObservedReferentParentFailure(calls, targetLeaf, resolveOk, resolvedSource) then
        afterFs == fs &&
        (exists referentParent: string :: Dirname.DirnameRelation(resolvedSource, referentParent) &&
-         outcome == MoveOutcome([], ParentStatFailureMessageSpec(
-           if !calls[5].ok then referentParent else targetParent,
-           if !calls[5].ok then calls[5].err else calls[3].err), true))
+                                         outcome == MoveOutcome([], ParentStatFailureMessageSpec(
+                                                                  if !calls[5].ok then referentParent else targetParent,
+                                                                  if !calls[5].ok then calls[5].err else calls[3].err), true))
      else if ObservedSameFileRejection(cmd, calls, sourceLeaf, targetLeaf, resolveOk, resolvedSource) then
        afterFs == fs && outcome == MoveOutcome([], SameFileMessageSpec(source, target), true)
      else if cmd.updateMode == Schema.UpdateOlder &&
-       !SourceNewerSpec(calls[0].status.times.mtimeSec, calls[0].status.times.mtimeNsec,
-         calls[1].status.times.mtimeSec, calls[1].status.times.mtimeNsec) then
+             !SourceNewerSpec(calls[0].status.times.mtimeSec, calls[0].status.times.mtimeNsec,
+                              calls[1].status.times.mtimeSec, calls[1].status.times.mtimeNsec) then
        afterFs == fs && outcome == MoveOutcome(SkipStdoutSpec(target, cmd.debug), [], false)
      else
        var collisionNeeded :=
@@ -1813,8 +1813,8 @@ module MvSpec {
           exists backupPath: string ::
             BackupPathFromObservations(cmd, fs, target, calls[afterCollision..], backupPath) &&
             ObservedRenameEffectRelation(source, target, backupPath, cmd,
-              calls[0].status.kind == BenchWorld.DirectoryKind, true, inputs,
-              fs, afterFs, outcome)))
+                                         calls[0].status.kind == BenchWorld.DirectoryKind, true, inputs,
+                                         fs, afterFs, outcome)))
   }
 
   ghost predicate ObservedMoveOutcome(
@@ -1831,8 +1831,8 @@ module MvSpec {
        |calls| >= 2 &&
        (if !calls[1].ok then
           ObservedRenameEffectRelation(source, target, "", cmd,
-            calls[0].status.kind == BenchWorld.DirectoryKind, false, inputs,
-            fs, afterFs, outcome)
+                                       calls[0].status.kind == BenchWorld.DirectoryKind, false, inputs,
+                                       fs, afterFs, outcome)
         else if cmd.overwriteMode == Schema.OverwriteSkip || cmd.updateMode == Schema.UpdateNone then
           afterFs == fs && outcome == MoveOutcome(SkipStdoutSpec(target, cmd.debug), [], false)
         else if cmd.updateMode == Schema.UpdateNoneFail then
@@ -1841,8 +1841,8 @@ module MvSpec {
           exists sourceParent: string, targetParent: string, sourceLeaf: string, targetLeaf: string,
             resolveOk: bool, resolvedSource: string, resolveErr: int, afterEntries: nat ::
             ObservedClassificationOutcome(source, target, cmd, fs, cwd, afterFs, outcome,
-              calls, inputs, (sourceParent, targetParent, sourceLeaf, targetLeaf),
-              resolveOk, resolvedSource, resolveErr, afterEntries)))
+                                          calls, inputs, (sourceParent, targetParent, sourceLeaf, targetLeaf),
+                                          resolveOk, resolvedSource, resolveErr, afterEntries)))
   }
 
   ghost predicate ObservedStepRelation(
@@ -1865,7 +1865,7 @@ module MvSpec {
     MoveStatusShape(cmd, beforeFs, cwd, source, target, calls, observations) &&
     ObservedMoveOutcome(source, target, cmd, beforeFs, cwd, afterFs, outcome, calls, observations) &&
     (!ObservedMetadataFault(source, beforeFs, cwd, calls, observations) ==>
-      OriginalMoveEffectRelation(source, target, cmd, beforeFs, cwd, afterFs, outcome))
+       OriginalMoveEffectRelation(source, target, cmd, beforeFs, cwd, afterFs, outcome))
   }
 
   ghost predicate ObservedBatchRelation(
@@ -1887,10 +1887,10 @@ module MvSpec {
     afterStatus == firstStatus + |calls| &&
     StatusCallsFor(observations, firstStatus, calls) &&
     exists fsBounds: seq<BenchWorld.FileSystem>,
-           outcomes: seq<MoveOutcome>,
-           stdoutFragments: seq<BenchWorld.Bytes>,
-           stderrFragments: seq<BenchWorld.Bytes>,
-           statusBounds: seq<nat> ::
+      outcomes: seq<MoveOutcome>,
+      stdoutFragments: seq<BenchWorld.Bytes>,
+      stderrFragments: seq<BenchWorld.Bytes>,
+      statusBounds: seq<nat> ::
       BatchMoveWitnessRelation(
         sources, directory, cmd, beforeFs, cwd, afterFs,
         hadError, out, err,
@@ -1900,19 +1900,19 @@ module MvSpec {
       statusBounds[0] == firstStatus &&
       statusBounds[|sources|] == afterStatus &&
       (forall i: nat {:trigger statusBounds[i]} | i < |sources| ::
-        firstStatus <= statusBounds[i] <= statusBounds[i + 1] <= afterStatus &&
-        ObservedStepRelation(
-          NormalizeSourceSpec(sources[i], cmd.stripTrailingSlashes),
-          TargetInDirectorySpec(
-            directory,
-            NormalizeSourceSpec(sources[i], cmd.stripTrailingSlashes)
-          ),
-          cmd,
-          fsBounds[i], cwd, fsBounds[i + 1], outcomes[i],
-          observations, statusBounds[i], statusBounds[i + 1],
-          calls[statusBounds[i] - firstStatus ..
-                statusBounds[i + 1] - firstStatus]
-        ))
+         firstStatus <= statusBounds[i] <= statusBounds[i + 1] <= afterStatus &&
+         ObservedStepRelation(
+           NormalizeSourceSpec(sources[i], cmd.stripTrailingSlashes),
+           TargetInDirectorySpec(
+             directory,
+             NormalizeSourceSpec(sources[i], cmd.stripTrailingSlashes)
+           ),
+           cmd,
+           fsBounds[i], cwd, fsBounds[i + 1], outcomes[i],
+           observations, statusBounds[i], statusBounds[i + 1],
+           calls[statusBounds[i] - firstStatus ..
+           statusBounds[i + 1] - firstStatus]
+         ))
   }
 
   ghost predicate ObservedStatusSpec(
@@ -1963,8 +1963,8 @@ module MvSpec {
           |calls| == 1)
      else if |cmd.operands| == 2 then
        var source := NormalizeSourceSpec(
-         cmd.operands[0], cmd.stripTrailingSlashes
-       );
+                       cmd.operands[0], cmd.stripTrailingSlashes
+                     );
        var destination := cmd.operands[1];
        (if cmd.noTargetDirectory then
           exists outcome: MoveOutcome ::
@@ -2042,7 +2042,7 @@ module MvSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else IOContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else IOContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
@@ -2058,7 +2058,7 @@ module MvSpec {
   {
     exists committed: nat, outErr: int, errCommitted: nat, errErr: int ::
       EmissionOutcomeFields(beforeOut, beforeErr, afterOut, afterErr, observations,
-        output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr)
+                            output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr)
   }
 
   opaque twostate predicate Spec(raw: Schema.MvCmdRaw, io: BenchIO.IO, exit: int)
@@ -2066,12 +2066,12 @@ module MvSpec {
   {
     exists output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       CandidateSpecFields(raw, old(io.fs()), old(io.cwd()), [], [],
-        io.fs(), output, diagnostics, normalExit) &&
+                          io.fs(), output, diagnostics, normalExit) &&
       (exists calls: seq<StatusCallEvidence> ::
-        ObservedStatusSpec(raw, old(io.fs()), old(io.cwd()), io.fs(),
-          [], output, [], diagnostics, normalExit, NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
-          old(io.statusCursor()), io.statusCursor(), calls)) &&
+         ObservedStatusSpec(raw, old(io.fs()), old(io.cwd()), io.fs(),
+                            [], output, [], diagnostics, normalExit, NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
+                            old(io.statusCursor()), io.statusCursor(), calls)) &&
       EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-        io.trustedStreams(), output, diagnostics, normalExit, exit)
+                     io.trustedStreams(), output, diagnostics, normalExit, exit)
   }
 }

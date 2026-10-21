@@ -121,27 +121,27 @@ module Link {
     ensures ProtocolParseErrorText(err) == ProtocolModel.ParseErrorText(err)
   {
     if err.kind == CliTypes.UnknownOption then
-        if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-          ParseErrorTextPart1() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2() +
-          ParseErrorTextPart3()
-        else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
-          UnknownShortText(ProtocolEncodeChar(err.rawToken[1])[0])
-        else
-          ParseErrorTextPart4()
-      else if err.kind == CliTypes.UnexpectedValue then
-        ParseErrorTextPart5() + ProtocolEncode(LongOptionName(err.rawToken)) +
-        ParseErrorTextPart6() +
+      if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
+        ParseErrorTextPart1() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2() +
         ParseErrorTextPart3()
-      else if err.kind == CliTypes.Ambiguous then
-        ParseErrorTextPart5() + ProtocolEncode(err.rawToken) +
-        ParseErrorTextPart7() +
-        ParseErrorTextPart3()
+      else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
+        UnknownShortText(ProtocolEncodeChar(err.rawToken[1])[0])
       else
-        ParseErrorTextPart8() + ProtocolEncode(
+        ParseErrorTextPart4()
+    else if err.kind == CliTypes.UnexpectedValue then
+      ParseErrorTextPart5() + ProtocolEncode(LongOptionName(err.rawToken)) +
+      ParseErrorTextPart6() +
+      ParseErrorTextPart3()
+    else if err.kind == CliTypes.Ambiguous then
+      ParseErrorTextPart5() + ProtocolEncode(err.rawToken) +
+      ParseErrorTextPart7() +
+      ParseErrorTextPart3()
+    else
+      ParseErrorTextPart8() + ProtocolEncode(
         (if err.kind == CliTypes.MissingValue
-        then ParseErrorTextPart9()
-        else ParseErrorTextPart10())) +
-        ParseErrorTextPart11() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2()
+         then ParseErrorTextPart9()
+         else ParseErrorTextPart10())) +
+      ParseErrorTextPart11() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2()
   }
 
 }

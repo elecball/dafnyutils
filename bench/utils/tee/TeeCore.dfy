@@ -41,7 +41,7 @@ module TeeCore {
     else
       exists ok: bool, writeErr: int, committed: nat, stage: BenchWorld.FileWriteStage ::
         IOContract.WriteFileSpec(preFs, preProps, preNow, preCredentials, preTrustedFilesystem,
-                                fs2, path, input, ok, writeErr, committed, stage) &&
+                                 fs2, path, input, ok, writeErr, committed, stage) &&
         stderr == (if ok then [] else Spec.WriteErrorMessageSpec(path, writeErr)) &&
         exit == (if ok then 0 else 1)
   }
@@ -67,7 +67,7 @@ module TeeCore {
       exists prefixFs: BenchWorld.FileSystem, prefixErr: BenchWorld.Bytes, prefixExit: int,
         stepErr: BenchWorld.Bytes, stepExit: int
         {:trigger WriteOutputsSummaryFields(append, outputs[..|outputs| - 1], input, preFs, preProps,
-                                             preNow, preCredentials, preTrustedFilesystem, prefixFs, prefixErr, prefixExit),
+                                            preNow, preCredentials, preTrustedFilesystem, prefixFs, prefixErr, prefixExit),
         WriteOneSummaryFields(append, outputs[|outputs| - 1], input, prefixFs, preProps,
                               preNow, preCredentials, preTrustedFilesystem, fs2, stepErr, stepExit)} ::
         WriteOutputsSummaryFields(outputs := outputs[..|outputs| - 1], append := append,
@@ -127,7 +127,7 @@ module TeeCore {
         io.stdin() == IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) &&
         plannedStdout == old(io.stdout()) + input &&
         plannedStderr == old(io.stderr()) + errOut +
-          (if read.Ok? then [] else Spec.StdinReadError(IOContract.ResultErrno(read))) &&
+        (if read.Ok? then [] else Spec.StdinReadError(IOContract.ResultErrno(read))) &&
         exit == (if read.Ok? then writeExit else 1)
   }
 
@@ -288,15 +288,15 @@ module TeeCore {
       assert (emissionBeforeOut + plannedStdout) == preStdout + input;
       assert (emissionBeforeErr + plannedStderr) == preStderr + diagnostics;
       assert diagnostics == errOut + (if read.Ok? then []
-        else Spec.StdinReadError(IOContract.ResultErrno(read))) by {
+                                      else Spec.StdinReadError(IOContract.ResultErrno(read))) by {
         reveal Spec.StdinReadError();
       }
       assert exists errors: BenchWorld.Bytes, status: int ::
-        WriteOutputsSummaryFields(cmd.append, cmd.outputs, input, preFs, preProps,
-          preNow, preCredentials, preTrustedFilesystem, io.fs(), errors, status) &&
-        plannedStderr == errors + (if read.Ok? then []
-          else Spec.StdinReadError(IOContract.ResultErrno(read))) &&
-        exit == (if read.Ok? then status else 1) by {
+          WriteOutputsSummaryFields(cmd.append, cmd.outputs, input, preFs, preProps,
+                                    preNow, preCredentials, preTrustedFilesystem, io.fs(), errors, status) &&
+          plannedStderr == errors + (if read.Ok? then []
+                                     else Spec.StdinReadError(IOContract.ResultErrno(read))) &&
+          exit == (if read.Ok? then status else 1) by {
         ghost var errors := errOut;
         ghost var status := writeExit;
       }
@@ -307,7 +307,7 @@ module TeeCore {
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(raw, old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -322,7 +322,7 @@ module TeeCore {
       finalDiagnostics := diagnostics + Text.WriteErrorText(raw, reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Text.WriteErrorText(raw, StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else Text.WriteErrorText(raw, StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -330,11 +330,11 @@ module TeeCore {
       errCommitted := StreamContract.WriteResultCommitted(result);
       errErr := StreamContract.ResultErrno(result);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                            finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(raw, old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
   method RunCore(raw: Schema.TeeCmdRaw, io: BenchIO.IO) returns (exit: int)
@@ -347,9 +347,9 @@ module TeeCore {
     ghost var beforeErr := io.stderr();
     exit := Flush(raw, output, diagnostics, normalExit, io);
     assert exists plannedOut: StreamWorld.Bytes, plannedErr: StreamWorld.Bytes, preparedExit: int ::
-      PreparedSummary(raw, io, preparedExit, beforeOut + plannedOut, beforeErr + plannedErr) &&
-      Spec.EmissionFields(raw, beforeOut, beforeErr, io.stdout(), io.stderr(),
-        io.trustedStreams(), plannedOut, plannedErr, preparedExit, exit) by {
+        PreparedSummary(raw, io, preparedExit, beforeOut + plannedOut, beforeErr + plannedErr) &&
+        Spec.EmissionFields(raw, beforeOut, beforeErr, io.stdout(), io.stderr(),
+                            io.trustedStreams(), plannedOut, plannedErr, preparedExit, exit) by {
       hide *;
       ghost var plannedOut := output;
       ghost var plannedErr := diagnostics;

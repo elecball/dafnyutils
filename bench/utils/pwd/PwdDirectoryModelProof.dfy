@@ -17,7 +17,7 @@ module PwdDirectoryModelProof {
     ensures GetFileStatusResultFields(fs,"/",false).Ok?
     ensures GetFileStatusResultFields(fs,"/",false).v.kind == DirectoryKind
     ensures forall entry | entry in DirectoryEntriesForPathFields(fs,"/") ::
-      InodeChildNameValid(entry.name)
+              InodeChildNameValid(entry.name)
   {
     reveal ValidInodeFileSystemData(), InodeNamespaceWellFormed();
     reveal FsContainsPath(), InodeFsContainsPath(), InodeFsLookupId();
@@ -40,7 +40,7 @@ module PwdDirectoryModelProof {
       ensures InodeChildNameValid(entry.name)
     {
       var name :| name in fs.namespace.children && ValidLeafName(name) &&
-        entry == EntryForNode(name,InodeTreeChildNodeFields(fs,fs.namespace,name));
+                  entry == EntryForNode(name,InodeTreeChildNodeFields(fs,fs.namespace,name));
       reveal InodeTreeWellFormed(), EntryForNode(), LeafName();
       assert InodeChildNameValid(name);
       assert LeafName(name) == name;

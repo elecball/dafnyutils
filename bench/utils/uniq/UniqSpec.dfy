@@ -301,7 +301,7 @@ module UniqSpec {
   {
     if IOContract.IOErrorIsDirectory(err) then
       ReadErrorMessageSpecText0 + SpecQuoteAfBytes(Utf8.Encode(path)) +
-        ReadErrorMessageSpecText1 + Utf8.Encode(ErrnoText(err)) + ReadErrorMessageSpecText2
+      ReadErrorMessageSpecText1 + Utf8.Encode(ErrnoText(err)) + ReadErrorMessageSpecText2
     else
       ReadErrorMessageSpecText3 + QuoteIfNeeded(path) + ReadErrorMessageSpecText4 + Utf8.Encode(ErrnoText(err)) + ReadErrorMessageSpecText5
   }
@@ -312,19 +312,19 @@ module UniqSpec {
   ghost function UnsupportedOutputMessageSpec(path: BenchWorld.Path): BenchWorld.Bytes
   {
     Utf8.Encode(UnsupportedOutputMessageSpecText0 + QuoteAlways(path) +
-    UnsupportedOutputMessageSpecText1)
+                UnsupportedOutputMessageSpecText1)
   }
 
   ghost function UnsupportedSkipCharsMessageSpec(operand: string): BenchWorld.Bytes
   {
     Utf8.Encode(UnsupportedSkipCharsMessageSpecText0 + operand +
-    UnsupportedSkipCharsMessageSpecText1)
+                UnsupportedSkipCharsMessageSpecText1)
   }
 
   ghost function ExtraOperandMessageSpec(operand: string): BenchWorld.Bytes
   {
     ExtraOperandMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
-      ExtraOperandMessageSpecText1
+    ExtraOperandMessageSpecText1
   }
 
   function InputFromOperands(operands: seq<string>): UniqSchema.Input
@@ -716,28 +716,28 @@ module UniqSpec {
   )
   {
     var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
-      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+                        else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
     stdoutResult.StreamWriteResult? &&
     var errors := diagnostics + (if stdoutResult.err == 0 then [] else
-      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+                                 StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
     var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
-      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+                        else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
     stderrResult.StreamWriteResult? &&
     (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
-      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+       beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
     (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
-      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+       beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
     exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
   }
 
   twostate predicate Emission(raw: UniqSchema.UniqCmdRaw, io: BenchIO.IO,
-    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
-    normalExit: int, exit: int)
+                              out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+                              normalExit: int, exit: int)
     reads io.stdoutRegion, io.stderrRegion
   {
     if Emits(raw) then
       EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                 io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
     else
       io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
       exit == normalExit
@@ -748,7 +748,7 @@ module UniqSpec {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSpec(raw, io, normalExit,
-        out, diagnostics) &&
+                   out, diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

@@ -130,27 +130,27 @@ module LinkSpec {
   ghost function ParseErrorText(err: CliTypes.ParseError): BenchWorld.Bytes
   {
     if err.kind == CliTypes.UnknownOption then
-        if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-          ParseErrorTextPart1() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2() +
-          ParseErrorTextPart3()
-        else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
-          UnknownShortText(Utf8.EncodeChar(err.rawToken[1])[0])
-        else
-          ParseErrorTextPart4()
-      else if err.kind == CliTypes.UnexpectedValue then
-        ParseErrorTextPart5() + Utf8.Encode(LongOptionName(err.rawToken)) +
-        ParseErrorTextPart6() +
+      if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
+        ParseErrorTextPart1() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2() +
         ParseErrorTextPart3()
-      else if err.kind == CliTypes.Ambiguous then
-        ParseErrorTextPart5() + Utf8.Encode(err.rawToken) +
-        ParseErrorTextPart7() +
-        ParseErrorTextPart3()
+      else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
+        UnknownShortText(Utf8.EncodeChar(err.rawToken[1])[0])
       else
-        ParseErrorTextPart8() + Utf8.Encode(
+        ParseErrorTextPart4()
+    else if err.kind == CliTypes.UnexpectedValue then
+      ParseErrorTextPart5() + Utf8.Encode(LongOptionName(err.rawToken)) +
+      ParseErrorTextPart6() +
+      ParseErrorTextPart3()
+    else if err.kind == CliTypes.Ambiguous then
+      ParseErrorTextPart5() + Utf8.Encode(err.rawToken) +
+      ParseErrorTextPart7() +
+      ParseErrorTextPart3()
+    else
+      ParseErrorTextPart8() + Utf8.Encode(
         (if err.kind == CliTypes.MissingValue
-        then ParseErrorTextPart9()
-        else ParseErrorTextPart10())) +
-        ParseErrorTextPart11() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2()
+         then ParseErrorTextPart9()
+         else ParseErrorTextPart10())) +
+      ParseErrorTextPart11() + Utf8.Encode(err.rawToken) + ParseErrorTextPart2()
   }
 
   twostate predicate LinkResult(
@@ -252,7 +252,7 @@ module LinkSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
@@ -290,7 +290,7 @@ module LinkSpec {
         io.fs() == old(io.fs()) &&
         plannedStdout == [] &&
         plannedStderr == [] +
-          ExtraOperandText(C.QuoteArgumentResult(Utf8.Encode(operand))) &&
+        ExtraOperandText(C.QuoteArgumentResult(Utf8.Encode(operand))) &&
         exit == 1
       case _ => false
     else if |raw.operands| == 0 then
@@ -302,20 +302,20 @@ module LinkSpec {
       io.fs() == old(io.fs()) &&
       plannedStdout == [] &&
       plannedStderr == [] +
-        MissingOperandAfterText(
-          C.QuoteArgumentResult(Utf8.Encode(raw.operands[0]))
-        ) &&
+      MissingOperandAfterText(
+        C.QuoteArgumentResult(Utf8.Encode(raw.operands[0]))
+      ) &&
       exit == 1
     else
       exists ok: bool, err: int ::
         LinkResult(io, raw.operands[0], raw.operands[1], ok, err) &&
         plannedStdout == [] &&
         (if ok then
-          plannedStderr == [] && exit == 0
-        else
-          plannedStderr == [] +
-            CannotCreateLinkText(C.QuoteafPathResult(raw.operands[1]), C.QuoteafPathResult(raw.operands[0]), C.CLocaleErrnoTextResult(err)) &&
-          exit == 1)
+           plannedStderr == [] && exit == 0
+         else
+           plannedStderr == [] +
+           CannotCreateLinkText(C.QuoteafPathResult(raw.operands[1]), C.QuoteafPathResult(raw.operands[0]), C.CLocaleErrnoTextResult(err)) &&
+           exit == 1)
   }
 
   twostate predicate Spec(raw: Schema.LinkCmdRaw, io: BenchIO.IO, exit: int)

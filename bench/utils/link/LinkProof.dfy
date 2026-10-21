@@ -28,6 +28,6 @@ module LinkProof {
       Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
                           io.trustedStreams(), output, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      output, diagnostics);
+                                       output, diagnostics);
   }
 }

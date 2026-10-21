@@ -189,8 +189,8 @@ module LsSchema {
   ): LsCmd
   {
     cmd.(statusContext := BenchWorld.BoundStatusObservations(observations, firstStatus, failures),
-         directoryHandles := handles, workingDirectory := cwd,
-         nativeInputs := nativeInputs, nativeStart := nativeStart)
+    directoryHandles := handles, workingDirectory := cwd,
+    nativeInputs := nativeInputs, nativeStart := nativeStart)
   }
 
   method Schema() returns (s: CliTypes.CliSchema)

@@ -41,9 +41,9 @@ module HeadRecordSpec {
     exists total: nat, cut: nat ::
       RecordCountRelation(data, delimiter, total) &&
       var keep :=
-      (if fromEnd
-       then if total <= count then 0 else total - count
-       else if total <= count then total else count);
+        (if fromEnd
+         then if total <= count then 0 else total - count
+         else if total <= count then total else count);
       RecordCutPointRelation(data, delimiter, cut, keep) &&
       output == data[..cut]
   }

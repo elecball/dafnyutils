@@ -35,7 +35,7 @@ module UnlinkCore {
         io.fs() == old(io.fs()) &&
         plannedStdout == [] &&
         plannedStderr == [] +
-          Spec.ExtraOperandText(C.QuoteArgumentResult(Utf8.Encode(operand))) &&
+        Spec.ExtraOperandText(C.QuoteArgumentResult(Utf8.Encode(operand))) &&
         exit == 1
       case _ => false
     else if |raw.operands| == 0 then
@@ -48,11 +48,11 @@ module UnlinkCore {
         Spec.UnlinkResult(io, raw.operands[0], ok, err) &&
         plannedStdout == [] &&
         (if ok then
-          plannedStderr == [] && exit == 0
-        else
-          plannedStderr == [] +
-            Spec.CannotUnlinkText(C.QuoteafPathResult(raw.operands[0]), C.CLocaleErrnoTextResult(err)) &&
-          exit == 1)
+           plannedStderr == [] && exit == 0
+         else
+           plannedStderr == [] +
+           Spec.CannotUnlinkText(C.QuoteafPathResult(raw.operands[0]), C.CLocaleErrnoTextResult(err)) &&
+           exit == 1)
   }
 
   twostate predicate CoreSummary(raw: Schema.UnlinkCmdRaw, io: BenchIO.IO, exit: int)
@@ -115,7 +115,7 @@ module UnlinkCore {
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -130,7 +130,7 @@ module UnlinkCore {
       finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -138,11 +138,11 @@ module UnlinkCore {
       errCommitted := StreamContract.WriteResultCommitted(result);
       errErr := StreamContract.ResultErrno(result);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                            finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
   method RunCore(raw: Schema.UnlinkCmdRaw, io: BenchIO.IO) returns (exit: int)
@@ -154,10 +154,10 @@ module UnlinkCore {
     exit := Flush(output, diagnostics, normalExit, io);
     assert PreparedSummary(raw, io, normalExit, output, diagnostics);
     assert Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit);
+                               io.trustedStreams(), output, diagnostics, normalExit, exit);
     assert exists emitted: StreamWorld.Bytes, reported: StreamWorld.Bytes, preparedExit: int ::
-      PreparedSummary(raw, io, preparedExit, emitted, reported) &&
-      Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-        io.trustedStreams(), emitted, reported, preparedExit, exit);
+        PreparedSummary(raw, io, preparedExit, emitted, reported) &&
+        Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
+                            io.trustedStreams(), emitted, reported, preparedExit, exit);
   }
 }

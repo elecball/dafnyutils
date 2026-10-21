@@ -337,7 +337,7 @@ module ReadlinkCore {
       invariant RunFilesSummaryFields(cmd, cmd.operands[..i], preFs, preCwd, hadError, out, errOut)
       invariant io.cwdContext() == preContext.(ordinal := preContext.ordinal+Schema.NativeReadCount(cmd.operands[..i]))
       invariant io.directoryModel() == preModel
-        decreases *
+      decreases *
     {
       var oldI := i;
       assert oldI < |cmd.operands|;
@@ -402,7 +402,7 @@ module ReadlinkCore {
       Context.ReadCountSnoc(cmd.operands[..oldI],path);
       assert cmd.operands[..i] == cmd.operands[..oldI]+[path];
       assert io.cwdContext() == preContext.(ordinal := preContext.ordinal+
-        Schema.NativeReadCount(cmd.operands[..i])) by {
+                                Schema.NativeReadCount(cmd.operands[..i])) by {
         if path != "" { reveal IOContract.CwdContextReadStepFields(); }
       }
       assert |cmd.operands| - i < |cmd.operands| - oldI;
@@ -425,7 +425,7 @@ module ReadlinkCore {
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -440,7 +440,7 @@ module ReadlinkCore {
       finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -448,11 +448,11 @@ module ReadlinkCore {
       errCommitted := StreamContract.WriteResultCommitted(result);
       errErr := StreamContract.ResultErrno(result);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                            finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
   method RunCore(raw: Schema.ReadlinkCmdRaw, io: BenchIO.IO) returns (exit: int)

@@ -490,13 +490,13 @@ module TrCore {
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) &&
       plannedStderr == old(io.stderr()) +
-        Text.ExtraOperandMessageSpec(operand, |raw.operands| == 2) &&
+      Text.ExtraOperandMessageSpec(operand, |raw.operands| == 2) &&
       exit == 1
     case ModeUnsupportedSet(operand) =>
       io.stdin() == old(io.stdin()) &&
       plannedStdout == old(io.stdout()) &&
       plannedStderr == old(io.stderr()) + cmd.warnings +
-        Text.UnsupportedSetMessageSpec(operand) &&
+      Text.UnsupportedSetMessageSpec(operand) &&
       exit == 1
     case ModeEmptySet2 =>
       io.stdin() == old(io.stdin()) &&
@@ -509,7 +509,7 @@ module TrCore {
       io.stdin() == IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) &&
       plannedStdout == old(io.stdout()) + RenderData(cmd, input) &&
       plannedStderr == old(io.stderr()) + cmd.warnings +
-        (if read.Ok? then [] else Spec.ReadError(IOContract.ResultErrno(read))) &&
+      (if read.Ok? then [] else Spec.ReadError(IOContract.ResultErrno(read))) &&
       exit == (if read.Ok? then 0 else 1)
   }
 
@@ -591,7 +591,7 @@ module TrCore {
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -604,11 +604,11 @@ module TrCore {
     if outErr != 0 {
       var reason := io.GetCLocaleErrnoText(outErr);
       finalDiagnostics := diagnostics + (if normalExit != 0 then
-        Spec.WriteErrorAfterReadFailure() else Text.WriteErrorText(reason));
+                                           Spec.WriteErrorAfterReadFailure() else Text.WriteErrorText(reason));
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else if normalExit != 0 then Spec.WriteErrorAfterReadFailure()
-      else Text.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else if normalExit != 0 then Spec.WriteErrorAfterReadFailure()
+                                              else Text.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -616,11 +616,11 @@ module TrCore {
       errCommitted := StreamContract.WriteResultCommitted(result);
       errErr := StreamContract.ResultErrno(result);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                            finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
   method RunCore(raw: Schema.TrCmdRaw, io: BenchIO.IO) returns (exit: int)

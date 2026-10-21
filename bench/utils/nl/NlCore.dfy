@@ -101,24 +101,24 @@ module NlCore {
   }
 
   opaque ghost function PrefixStdinCore(cmd: NlSchema.NlCmd, before: BenchWorld.Bytes, count: nat,
-    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
+                                        observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
     requires count <= |cmd.inputs|
     decreases count
   {
     if count == 0 then before else
-      var previous := PrefixStdinCore(cmd, before, count - 1, observations);
-      if cmd.inputs[count - 1].Stdin? then IOContract.ObservedReadStdinRemainingFields(previous, observations) else previous
+    var previous := PrefixStdinCore(cmd, before, count - 1, observations);
+    if cmd.inputs[count - 1].Stdin? then IOContract.ObservedReadStdinRemainingFields(previous, observations) else previous
   }
 
   lemma PrefixStdinStep(cmd: NlSchema.NlCmd, before: BenchWorld.Bytes, count: nat,
-    observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
+                        observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
     requires count < |cmd.inputs|
     ensures PrefixStdinCore(cmd, before, count + 1, observations) ==
-      (if cmd.inputs[count].Stdin? then IOContract.ObservedReadStdinRemainingFields(
-        PrefixStdinCore(cmd, before, count, observations), observations)
-       else PrefixStdinCore(cmd, before, count, observations))
+            (if cmd.inputs[count].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+                                                PrefixStdinCore(cmd, before, count, observations), observations)
+             else PrefixStdinCore(cmd, before, count, observations))
   {
-      reveal PrefixStdinCore();
+    reveal PrefixStdinCore();
   }
 
   ghost predicate InputTraceSummary(
@@ -526,7 +526,7 @@ module NlCore {
       invariant LineNumberFromSummary(cmd, lines[..i], start, numbers)
       invariant |outputFragments| == i
       invariant forall j: nat :: j < i ==>
-        LineRenderSummary(cmd, lines[j], terminated[j], numbers[j], outputFragments[j])
+                                   LineRenderSummary(cmd, lines[j], terminated[j], numbers[j], outputFragments[j])
       invariant Spec.FragmentsConcatenate(outputFragments, out, outputCuts)
       decreases |lines| - i
     {
@@ -595,10 +595,10 @@ module NlCore {
       assert plannedOut == help;
       assert plannedErr == diagnostics;
       assert PreparedSummary(
-              raw, io, exit, readResults, inputFragments, combinedWitness,
-              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
-              hasDelimiterWitness, outputPart
-            , plannedOut, plannedErr) by {
+          raw, io, exit, readResults, inputFragments, combinedWitness,
+          inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+          hasDelimiterWitness, outputPart
+        , plannedOut, plannedErr) by {
         hide *;
         reveal PreparedSummary();
       }
@@ -615,10 +615,10 @@ module NlCore {
       assert plannedOut == version;
       assert plannedErr == diagnostics;
       assert PreparedSummary(
-              raw, io, exit, readResults, inputFragments, combinedWitness,
-              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
-              hasDelimiterWitness, outputPart
-            , plannedOut, plannedErr) by {
+          raw, io, exit, readResults, inputFragments, combinedWitness,
+          inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+          hasDelimiterWitness, outputPart
+        , plannedOut, plannedErr) by {
         hide *;
         reveal PreparedSummary();
       }
@@ -633,10 +633,10 @@ module NlCore {
       assert plannedOut == [];
       assert plannedErr == err;
       assert PreparedSummary(
-              raw, io, exit, readResults, inputFragments, combinedWitness,
-              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
-              hasDelimiterWitness, outputPart
-            , plannedOut, plannedErr) by {
+          raw, io, exit, readResults, inputFragments, combinedWitness,
+          inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+          hasDelimiterWitness, outputPart
+        , plannedOut, plannedErr) by {
         hide *;
         reveal PreparedSummary();
       }
@@ -663,7 +663,7 @@ module NlCore {
       invariant |errorFragments| == i
       invariant forall j: nat :: j < i ==>
                                    Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, j, preStreams), j, readResults[j],
-                                     preStreams
+                                                           preStreams
                                    ) &&
                                    inputFragments[j] ==
                                    (match readResults[j]
@@ -714,9 +714,9 @@ module NlCore {
           }
       }
       assert io.stdin() == (if input.Stdin? then
-        IOContract.ObservedReadStdinRemainingFields(beforeReadStdin, preStreams) else beforeReadStdin) by { hide *; }
+                              IOContract.ObservedReadStdinRemainingFields(beforeReadStdin, preStreams) else beforeReadStdin) by { hide *; }
       assert Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, i, preStreams), i, readResult,
-          preStreams
+                                     preStreams
         ) by {
         reveal Spec.ReadResultRelation();
       }
@@ -746,7 +746,7 @@ module NlCore {
           errorFragments, err, errorCuts);
       assert forall j: nat :: j < i + 1 ==>
                                 Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, j, preStreams), j, readResults[j],
-                                  preStreams
+                                                        preStreams
                                 ) &&
                                 inputFragments[j] ==
                                 (match readResults[j]
@@ -756,7 +756,7 @@ module NlCore {
                                 Text.ErrorPiece(cmd.inputs[j], readResults[j]) by {
         forall j: nat | j < i + 1
           ensures Spec.ReadResultRelation(cmd, preFs, PrefixStdinCore(cmd, preStdin, j, preStreams), j, readResults[j],
-                    preStreams
+                                          preStreams
                   ) &&
                   inputFragments[j] ==
                   (match readResults[j]
@@ -894,10 +894,10 @@ module NlCore {
       assert plannedOut == [];
       assert plannedErr == err + delimiterErr;
       assert PreparedSummary(
-              raw, io, exit, readResults, inputFragments, combinedWitness,
-              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
-              hasDelimiterWitness, outputPart
-            , plannedOut, plannedErr) by {
+          raw, io, exit, readResults, inputFragments, combinedWitness,
+          inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+          hasDelimiterWitness, outputPart
+        , plannedOut, plannedErr) by {
         hide *;
         reveal PreparedSummary();
       }
@@ -935,14 +935,14 @@ module NlCore {
     exit := if hadError then 1 else 0;
     assert plannedOut == rendered;
     assert plannedErr == err;
-      assert PreparedSummary(
-              raw, io, exit, readResults, inputFragments, combinedWitness,
-              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
-              hasDelimiterWitness, outputPart
-            , plannedOut, plannedErr) by {
-        hide *;
-        reveal PreparedSummary();
-      }
+    assert PreparedSummary(
+        raw, io, exit, readResults, inputFragments, combinedWitness,
+        inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+        hasDelimiterWitness, outputPart
+      , plannedOut, plannedErr) by {
+      hide *;
+      reveal PreparedSummary();
+    }
   }
 
   twostate predicate CoreSummary(
@@ -964,15 +964,15 @@ module NlCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit, readResults, inputFragments, combined, inputCuts, errorFragments, errorOutput, errorCuts, hadError, hasDelimiter, outputPart,
-        out, diagnostics) &&
+                      out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var outErr := 0;
     if out != [] {
@@ -985,13 +985,13 @@ module NlCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
       errErr := StreamContract.ResultErrno(diagnosed);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }
@@ -1023,20 +1023,20 @@ module NlCore {
     normalExit, readResults, inputFragments, combinedWitness, inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness, hasDelimiterWitness, outputPart, out, diagnostics := Prepare(raw, io);
 
     assert PreparedSummary(
-              raw, io, normalExit, readResults, inputFragments, combinedWitness,
-              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
-              hasDelimiterWitness, outputPart
-            , out, diagnostics);
+        raw, io, normalExit, readResults, inputFragments, combinedWitness,
+        inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+        hasDelimiterWitness, outputPart
+      , out, diagnostics);
     if Spec.Emits(raw) {
       exit := Flush(io, out, diagnostics, normalExit);
     } else {
       exit := normalExit;
     }
     assert PreparedSummary(
-              raw, io, normalExit, readResults, inputFragments, combinedWitness,
-              inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
-              hasDelimiterWitness, outputPart
-            , out, diagnostics);
+        raw, io, normalExit, readResults, inputFragments, combinedWitness,
+        inputCuts, errorFragments, errorOutput, errorCuts, hadErrorWitness,
+        hasDelimiterWitness, outputPart
+      , out, diagnostics);
     assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
   }
 }

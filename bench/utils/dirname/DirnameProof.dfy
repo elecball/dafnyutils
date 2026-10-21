@@ -91,23 +91,23 @@ module DirnameProof {
           assert Spec.NormalizedDirnamePrefix(prefix, value);
         }
         assert exists prefix: string, component: string ::
-          Spec.MaximalDirnamePrefix(trimmed, prefix, component) &&
-          Spec.NormalizedDirnamePrefix(prefix, value);
+            Spec.MaximalDirnamePrefix(trimmed, prefix, component) &&
+            Spec.NormalizedDirnamePrefix(prefix, value);
       }
       assert if Spec.SlashFree(trimmed) then
-               value == "."
-             else
-               exists prefix: string, component: string ::
-                 Spec.MaximalDirnamePrefix(trimmed, prefix, component) &&
-                 Spec.NormalizedDirnamePrefix(prefix, value);
+          value == "."
+        else
+          exists prefix: string, component: string ::
+            Spec.MaximalDirnamePrefix(trimmed, prefix, component) &&
+            Spec.NormalizedDirnamePrefix(prefix, value);
       assert exists trimmed: string, trailing: string ::
-        Spec.PathWithoutTrailingSlashes(path, trimmed, trailing) &&
-        (if Spec.SlashFree(trimmed) then
-           value == "."
-         else
-           exists prefix: string, component: string ::
-             Spec.MaximalDirnamePrefix(trimmed, prefix, component) &&
-             Spec.NormalizedDirnamePrefix(prefix, value));
+          Spec.PathWithoutTrailingSlashes(path, trimmed, trailing) &&
+          (if Spec.SlashFree(trimmed) then
+             value == "."
+           else
+             exists prefix: string, component: string ::
+               Spec.MaximalDirnamePrefix(trimmed, prefix, component) &&
+               Spec.NormalizedDirnamePrefix(prefix, value));
     }
   }
 
@@ -258,9 +258,9 @@ module DirnameProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                           old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

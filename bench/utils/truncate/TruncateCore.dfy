@@ -88,8 +88,8 @@ module TruncateCore {
       invariant value == (if i == 0 then 0 else parsed[i - 1].value)
       invariant error == [] ==> forall j :: 0 <= j < i ==> Spec.ErrorAt(parsed, j, [])
       invariant error != [] ==>
-        (exists j: nat :: j < i && Spec.ErrorAt(parsed, j, error) &&
-          (forall k :: 0 <= k < j ==> Spec.ErrorAt(parsed, k, [])))
+                  (exists j: nat :: j < i && Spec.ErrorAt(parsed, j, error) &&
+                                    (forall k :: 0 <= k < j ==> Spec.ErrorAt(parsed, k, [])))
       decreases |parsed| - i
     {
       var prior := mode;
@@ -101,7 +101,7 @@ module TruncateCore {
         else if mode in {S.RoundDown, S.RoundUp} && parsed[i].value == 0 then Spec.DivisionByZero()
         else [];
       assert (prior != S.Absolute) <==>
-        (exists j: nat :: j < i && parsed[j].modifier != S.Absolute);
+             (exists j: nat :: j < i && parsed[j].modifier != S.Absolute);
       assert Spec.ErrorAt(parsed, i, step);
       if error == [] { error := step; }
       value := parsed[i].value;
@@ -134,7 +134,7 @@ module TruncateCore {
   method OpenOne(io: BenchIO.IO, path: string, noCreate: bool) returns (isOpen: bool, err: int)
     modifies io.fsRegion
     ensures Spec.OpenRelation(old(io.trustedFilesystem()), old(io.now()), path, noCreate,
-      old(io.fs()), io.fs(), isOpen, err)
+                              old(io.fs()), io.fs(), isOpen, err)
   {
     reveal Spec.OpenRelation();
     if noCreate {
@@ -152,7 +152,7 @@ module TruncateCore {
   method Status(io: BenchIO.IO, path: string) returns (result: W.IOResult<W.FileStatus>)
     modifies io.statusObservationsRegion
     ensures Spec.StatusRelation(Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()), old(io.statusCursor()), io.statusCursor(),
-      old(io.fs()), path, result.Ok?, C.ResultValue(result, W.DEFAULT_FILE_STATUS), C.ResultErrno(result))
+                                old(io.fs()), path, result.Ok?, C.ResultValue(result, W.DEFAULT_FILE_STATUS), C.ResultErrno(result))
   {
     reveal Spec.StatusRelation();
     result := io.GetFileStatus(path, true);
@@ -161,7 +161,7 @@ module TruncateCore {
   method TruncateOne(io: BenchIO.IO, path: string, size: nat) returns (error: W.Bytes)
     modifies io.fsRegion
     ensures Spec.Truncation(old(io.trustedFilesystem()), old(io.now()), path, size,
-      old(io.fs()), io.fs(), error)
+                            old(io.fs()), io.fs(), error)
   {
     reveal Spec.Truncation();
     var result := io.TruncateFile(path, size);
@@ -173,8 +173,8 @@ module TruncateCore {
     returns (error: W.Bytes)
     modifies io.fsRegion, io.statusObservationsRegion
     ensures Spec.ResizeRelation(old(io.trustedFilesystem()), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()), old(io.now()),
-      path, mode, delta, blocks, reference, old(io.fs()), old(io.statusCursor()),
-      io.fs(), io.statusCursor(), error)
+                                path, mode, delta, blocks, reference, old(io.fs()), old(io.statusCursor()),
+                                io.fs(), io.statusCursor(), error)
   {
     ghost var observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult := io.trustedFilesystem();
     ghost var timeSamples := Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures());
@@ -190,23 +190,23 @@ module TruncateCore {
       if result.Err? {
         error := StatMessage(io, path, statErr, false);
         assert Spec.ResizeOutcome(observations, timeSamples, instant,
-          path, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
-          error, status, statOk, statErr) by { hide *; reveal Spec.ResizeOutcome(); }
+                                  path, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
+                                  error, status, statOk, statErr) by { hide *; reveal Spec.ResizeOutcome(); }
         assert Spec.ResizeRelation(observations, timeSamples, instant, path,
-          mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
+                                   mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
           hide *;
           Proof.ResizeWitness(observations, timeSamples, instant, path,
-          mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
-          error, status, statOk, statErr);
+                              mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
+                              error, status, statOk, statErr);
         }
         return;
       }
     }
     ghost var afterCursor := io.statusCursor();
     assert (if blocks || (mode != S.Absolute && reference < 0) then
-      Spec.StatusRelation(timeSamples, cursor, afterCursor, before,
-        path, statOk, status, statErr)
-      else afterCursor == cursor && statOk && status == W.DEFAULT_FILE_STATUS && statErr == 0);
+              Spec.StatusRelation(timeSamples, cursor, afterCursor, before,
+                                  path, statOk, status, statErr)
+            else afterCursor == cursor && statOk && status == W.DEFAULT_FILE_STATUS && statErr == 0);
     var scaled := delta * (if blocks then Spec.BlockSize(status) else 1);
     var base := if reference >= 0 then reference as nat else status.storage.size;
     var requested := Spec.AdjustedSize(mode, base, scaled);
@@ -215,50 +215,50 @@ module TruncateCore {
       error := Text.BlockOverflowText(quote, delta, Spec.BlockSize(status));
       assert error == Spec.BlockOverflow(path, delta, Spec.BlockSize(status));
       assert Spec.ResizeOutcome(observations, timeSamples, instant,
-        path, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
-        error, status, statOk, statErr) by { hide *; reveal Spec.ResizeOutcome(); }
+                                path, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
+                                error, status, statOk, statErr) by { hide *; reveal Spec.ResizeOutcome(); }
       assert Spec.ResizeRelation(observations, timeSamples, instant, path,
-        mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
+                                 mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
         hide *;
         Proof.ResizeWitness(observations, timeSamples, instant, path,
-        mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
-        error, status, statOk, statErr);
+                            mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
+                            error, status, statOk, statErr);
       }
     } else if requested > Spec.MaxSize {
       var quote := io.QuoteafPath(path);
       error := Spec.ExtendOverflowText(quote);
       assert error == Spec.ExtendOverflow(path);
       assert Spec.ResizeOutcome(observations, timeSamples, instant,
-        path, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
-        error, status, statOk, statErr) by { hide *; reveal Spec.ResizeOutcome(); }
+                                path, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
+                                error, status, statOk, statErr) by { hide *; reveal Spec.ResizeOutcome(); }
       assert Spec.ResizeRelation(observations, timeSamples, instant, path,
-        mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
+                                 mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
         hide *;
         Proof.ResizeWitness(observations, timeSamples, instant, path,
-        mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
-        error, status, statOk, statErr);
+                            mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
+                            error, status, statOk, statErr);
       }
     } else {
       error := TruncateOne(io, path, Spec.Clamped(requested));
       assert Spec.ResizeOutcome(observations, timeSamples, instant,
-        path, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
-        error, status, statOk, statErr) by { hide *; reveal Spec.ResizeOutcome(); }
+                                path, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
+                                error, status, statOk, statErr) by { hide *; reveal Spec.ResizeOutcome(); }
       assert Spec.ResizeRelation(observations, timeSamples, instant, path,
-        mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
+                                 mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
         hide *;
         Proof.ResizeWitness(observations, timeSamples, instant, path,
-        mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
-        error, status, statOk, statErr);
+                            mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(),
+                            error, status, statOk, statErr);
       }
     }
   }
 
   method {:vcs_split_on_every_assert} File(io: BenchIO.IO, path: string, noCreate: bool, mode: S.Modifier,
-      delta: int, blocks: bool, reference: int) returns (error: W.Bytes)
+                                           delta: int, blocks: bool, reference: int) returns (error: W.Bytes)
     modifies io.fsRegion, io.statusObservationsRegion
     ensures Spec.FileStep(old(io.trustedFilesystem()), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()), old(io.now()),
-      path, noCreate, mode, delta, blocks, reference, old(io.fs()), old(io.statusCursor()),
-      io.fs(), io.statusCursor(), error)
+                          path, noCreate, mode, delta, blocks, reference, old(io.fs()), old(io.statusCursor()),
+                          io.fs(), io.statusCursor(), error)
   {
     hide *;
     ghost var observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult := io.trustedFilesystem();
@@ -272,20 +272,20 @@ module TruncateCore {
       if err == 0 { error := []; }
       else { error := OpenMessage(io, path, err); }
       assert Spec.FileStep(observations, timeSamples, instant, path,
-        noCreate, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
+                           noCreate, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
         hide *;
         Proof.FileWitness(observations, timeSamples, instant, path,
-        noCreate, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error,
-        openedFs, isOpen, err);
+                          noCreate, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error,
+                          openedFs, isOpen, err);
       }
     } else {
       error := ResizeOne(io, path, mode, delta, blocks, reference);
       assert Spec.FileStep(observations, timeSamples, instant, path,
-        noCreate, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
+                           noCreate, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error) by {
         hide *;
         Proof.FileWitness(observations, timeSamples, instant, path,
-        noCreate, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error,
-        openedFs, isOpen, err);
+                          noCreate, mode, delta, blocks, reference, before, cursor, io.fs(), io.statusCursor(), error,
+                          openedFs, isOpen, err);
       }
     }
   }
@@ -294,8 +294,8 @@ module TruncateCore {
     returns (errors: W.Bytes, exit: int)
     modifies io.fsRegion, io.statusObservationsRegion
     ensures Spec.FilesRelation(raw, mode, delta, reference, old(io.trustedFilesystem()),
-      Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()), old(io.now()), old(io.fs()), old(io.statusCursor()),
-      io.fs(), io.statusCursor(), errors, exit)
+                               Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()), old(io.now()), old(io.fs()), old(io.statusCursor()),
+                               io.fs(), io.statusCursor(), errors, exit)
   {
     ghost var before := io.fs();
     ghost var cursor := io.statusCursor();
@@ -309,8 +309,8 @@ module TruncateCore {
       invariant states[0] == Spec.FileState(before, cursor, [], false)
       invariant states[i] == Spec.FileState(io.fs(), io.statusCursor(), errors, failed)
       invariant forall j :: 0 <= j < i ==>
-        Spec.FileRelation(io.trustedFilesystem(), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()), io.now(), raw.files[j],
-          raw.noCreate, mode, delta, raw.blocks, reference, states[j], states[j + 1])
+                              Spec.FileRelation(io.trustedFilesystem(), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()), io.now(), raw.files[j],
+                                                raw.noCreate, mode, delta, raw.blocks, reference, states[j], states[j + 1])
       decreases |raw.files| - i
     {
       ghost var previous := states[i];
@@ -319,12 +319,12 @@ module TruncateCore {
       failed := failed || error != [];
       ghost var next := Spec.FileState(io.fs(), io.statusCursor(), errors, failed);
       Proof.FileStepImpliesRelation(io.trustedFilesystem(), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()), io.now(),
-        raw.files[i], raw.noCreate, mode, delta, raw.blocks, reference, previous, next, error);
+                                    raw.files[i], raw.noCreate, mode, delta, raw.blocks, reference, previous, next, error);
       ghost var priorStates := states;
       states := states + [next];
       forall j | 0 <= j < i + 1
         ensures Spec.FileRelation(io.trustedFilesystem(), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()), io.now(),
-          raw.files[j], raw.noCreate, mode, delta, raw.blocks, reference, states[j], states[j + 1])
+                                  raw.files[j], raw.noCreate, mode, delta, raw.blocks, reference, states[j], states[j + 1])
       {
         if j == i { assert states[j] == previous && states[j + 1] == next; }
         else { assert states[j] == priorStates[j] && states[j + 1] == priorStates[j + 1]; }
@@ -333,14 +333,14 @@ module TruncateCore {
     }
     exit := if failed then 1 else 0;
     Proof.FilesWitness(raw, mode, delta, reference, io.trustedFilesystem(), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()),
-      io.now(), before, cursor, io.fs(), io.statusCursor(), errors, exit, states);
+                       io.now(), before, cursor, io.fs(), io.statusCursor(), errors, exit, states);
   }
 
   method {:vcs_split_on_every_assert} Run(raw: S.TruncateCmdRaw, mode: S.Modifier, value: int, io: BenchIO.IO)
     returns (errors: W.Bytes, exit: int)
     modifies io.fsRegion, io.statusObservationsRegion
     ensures Spec.RunRelation(raw, mode, value, old(io.trustedFilesystem()), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()),
-      old(io.now()), old(io.fs()), old(io.statusCursor()), io.fs(), io.statusCursor(), errors, exit)
+                             old(io.now()), old(io.fs()), old(io.statusCursor()), io.fs(), io.statusCursor(), errors, exit)
   {
     ghost var observations: (W.TrustedFilesystemRequest) -> W.TrustedFilesystemResult := io.trustedFilesystem();
     ghost var timeSamples := Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures());
@@ -356,15 +356,15 @@ module TruncateCore {
       } else {
         var size := result.v.storage.size;
         errors, exit := Files(raw, mode, if |raw.sizes| == 0 then size else value,
-          if |raw.sizes| == 0 then -1 else size, io);
+                              if |raw.sizes| == 0 then -1 else size, io);
       }
       Proof.ReferenceRunWitness(raw, mode, value, observations, timeSamples, instant,
-        before, cursor, io.fs(), io.statusCursor(), errors, exit,
-        result.Ok?, C.ResultValue(result, W.DEFAULT_FILE_STATUS), C.ResultErrno(result), next);
+                                before, cursor, io.fs(), io.statusCursor(), errors, exit,
+                                result.Ok?, C.ResultValue(result, W.DEFAULT_FILE_STATUS), C.ResultErrno(result), next);
     } else {
       errors, exit := Files(raw, mode, value, -1, io);
       Proof.NoReferenceRunWitness(raw, mode, value, observations, timeSamples, instant,
-        before, cursor, io.fs(), io.statusCursor(), errors, exit);
+                                  before, cursor, io.fs(), io.statusCursor(), errors, exit);
     }
   }
 
@@ -383,7 +383,7 @@ module TruncateCore {
   method Information(mode: S.Mode, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.HelpResult(mode, old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-      io.trustedStreams(), exit)
+                            io.trustedStreams(), exit)
   {
     reveal Spec.DiagnosticResult();
     var payload := if mode == S.Help then Spec.HelpText() else Spec.VersionText();
@@ -398,7 +398,7 @@ module TruncateCore {
       exit := 1;
     }
     Proof.HelpOutputWitness(old(io.stdout()), io.trustedStreams(), io.stdout(), mode,
-      old(io.stderr()), io.stderr(), exit, committed, writeErr, diagnosticErr);
+                            old(io.stderr()), io.stderr(), exit, committed, writeErr, diagnosticErr);
   }
 
   method {:vcs_split_on_every_assert} RunCore(raw: S.TruncateCmdRaw, io: BenchIO.IO) returns (exit: int)
@@ -437,15 +437,15 @@ module TruncateCore {
       var diagnosticErr := Diagnostic(errors, io);
       exit := if diagnosticErr == 0 then normalExit else 1;
       assert Spec.RunRelation(raw, mode, value, old(io.trustedFilesystem()), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()),
-        old(io.now()), old(io.fs()), old(io.statusCursor()), io.fs(), io.statusCursor(), errors, normalExit);
+                              old(io.now()), old(io.fs()), old(io.statusCursor()), io.fs(), io.statusCursor(), errors, normalExit);
       assert Spec.DiagnosticResult(old(io.stderr()), io.stderr(), old(io.trustedStreams()), errors, diagnosticErr);
       assert Spec.ExecutionRelation(raw, mode, value, error, io, exit) by {
         reveal Spec.ExecutionRelation();
         assert exists emitted: W.Bytes, runExit: int, err: int ::
-          Spec.RunRelation(raw, mode, value, old(io.trustedFilesystem()), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()),
-            old(io.now()), old(io.fs()), old(io.statusCursor()), io.fs(), io.statusCursor(), emitted, runExit) &&
-          Spec.DiagnosticResult(old(io.stderr()), io.stderr(), old(io.trustedStreams()), emitted, err) &&
-          exit == (if err == 0 then runExit else 1);
+            Spec.RunRelation(raw, mode, value, old(io.trustedFilesystem()), Spec.StatusObservations(io.statusObservations(),io.trustedNativeFailures()),
+                             old(io.now()), old(io.fs()), old(io.statusCursor()), io.fs(), io.statusCursor(), emitted, runExit) &&
+            Spec.DiagnosticResult(old(io.stderr()), io.stderr(), old(io.trustedStreams()), emitted, err) &&
+            exit == (if err == 0 then runExit else 1);
       }
     }
     Proof.RunWitness(raw, mode, value, error, io, exit);

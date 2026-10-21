@@ -717,8 +717,8 @@ module CutCore {
                    |SelectionScanIndices(selection, record, 1)| &&
                    SelectionScanIndices(selection, record, 1)[k] == i;
           assert exists k :: 0 <= k <
-                     |SelectionScanIndices(selection, record, 1)| &&
-                     SelectionScanIndices(selection, record, 1)[k] == i;
+                             |SelectionScanIndices(selection, record, 1)| &&
+                             SelectionScanIndices(selection, record, 1)[k] == i;
         } else if (
             exists k :: 0 <= k <
                         |SelectionScanIndices(selection, record, 1)| &&
@@ -833,10 +833,10 @@ module CutCore {
     requires k < |SelectionScanFragments(command, record, 1, false)|
     requires SelectionScanIndices(command.selection, record, 1)[k] < |record|
     ensures SelectionScanFragments(command, record, 1, false)[k] ==
-      (if k > 0 && Spec.DelimiterBeforeSelected(command,
-        SelectionScanIndices(command.selection, record, 1)[k] + 1)
-       then Text.OutputDelimiterBytes(command.outputDelimiter) else []) +
-      [record[SelectionScanIndices(command.selection, record, 1)[k]]]
+            (if k > 0 && Spec.DelimiterBeforeSelected(command,
+                                                      SelectionScanIndices(command.selection, record, 1)[k] + 1)
+             then Text.OutputDelimiterBytes(command.outputDelimiter) else []) +
+            [record[SelectionScanIndices(command.selection, record, 1)[k]]]
   {
     SelectionScanSelectedIndexSequence(command.selection, record);
     SelectionScanFragmentsCorrespond(command, record, 1, false);
@@ -1264,23 +1264,23 @@ module CutCore {
   }
 
   ghost function PrefixStdinCore(command: CutSchema.CutCmdRaw, before: BenchWorld.Bytes,
-    count: nat, observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
+                                 count: nat, observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
     requires count <= |command.inputs|
     decreases count
   {
     if count == 0 then before else
-      var previous := PrefixStdinCore(command, before, count - 1, observations);
-      if command.inputs[count - 1].Stdin? then IOContract.ObservedReadStdinRemainingFields(previous, observations)
-      else previous
+    var previous := PrefixStdinCore(command, before, count - 1, observations);
+    if command.inputs[count - 1].Stdin? then IOContract.ObservedReadStdinRemainingFields(previous, observations)
+    else previous
   }
 
   lemma PrefixStdinStep(command: CutSchema.CutCmdRaw, before: BenchWorld.Bytes,
-    count: nat, observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
+                        count: nat, observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
     requires count < |command.inputs|
     ensures PrefixStdinCore(command, before, count + 1, observations) ==
-      (if command.inputs[count].Stdin? then IOContract.ObservedReadStdinRemainingFields(
-        PrefixStdinCore(command, before, count, observations), observations)
-       else PrefixStdinCore(command, before, count, observations))
+            (if command.inputs[count].Stdin? then IOContract.ObservedReadStdinRemainingFields(
+                                                    PrefixStdinCore(command, before, count, observations), observations)
+             else PrefixStdinCore(command, before, count, observations))
   {
   }
 
@@ -1290,7 +1290,7 @@ module CutCore {
     preStdin: BenchWorld.Bytes,
     index: nat,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
+                                preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
   )
     requires index < |command.inputs|
   {
@@ -1524,15 +1524,15 @@ module CutCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit,
-        out, diagnostics) &&
+                      out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var outErr := 0;
     if out != [] {
@@ -1545,13 +1545,13 @@ module CutCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
       errErr := StreamContract.ResultErrno(diagnosed);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }

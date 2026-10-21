@@ -9,7 +9,7 @@ module PwdPhysicalSpec {
   import Parent = PwdRecoveryParentSpec
 
   datatype ParentStep = ParentStep(ghost parent: W.FileStatus, ghost name: string,
-    ghost failure: seq<Recovery.RecoveryFailure>, ghost evidence: Parent.ParentEvidence)
+                                   ghost failure: seq<Recovery.RecoveryFailure>, ghost evidence: Parent.ParentEvidence)
 
   datatype PhysicalEvidence = PhysicalEvidence(
     ghost direct: W.IOResult<string>, ghost root: seq<W.IOResult<W.FileStatus>>,
@@ -18,7 +18,7 @@ module PwdPhysicalSpec {
     ghost textBoundaries: seq<nat>)
 
   ghost predicate PathPartitionAt(names: seq<string>, directory: string,
-    boundaries: seq<nat>, i: nat)
+                                  boundaries: seq<nat>, i: nat)
   {
     i < |names| && i+1 < |boundaries| &&
     W.InodeChildNameValid(names[|names|-1-i]) &&
@@ -34,22 +34,22 @@ module PwdPhysicalSpec {
   }
 
   ghost predicate StepPartitionAt(inputs: Recovery.RuntimeInputs,
-    root: W.FileStatus, initial: W.FileStatus, steps: seq<ParentStep>,
-    calls: seq<Recovery.RuntimeObservation>, boundaries: seq<nat>, i: nat)
+                                  root: W.FileStatus, initial: W.FileStatus, steps: seq<ParentStep>,
+                                  calls: seq<Recovery.RuntimeObservation>, boundaries: seq<nat>, i: nat)
   {
     i < |steps| && i+1 < |boundaries| && boundaries[i] < boundaries[i+1] <= |calls| &&
     var child := if i == 0 then initial else steps[i-1].parent;
     child.hostKey != root.hostKey &&
     Parent.ParentAttemptFields(inputs,calls[boundaries[i]].before,
-      calls[boundaries[i+1]-1].after,child,i+1,
-      steps[i].parent,steps[i].name,steps[i].failure,steps[i].evidence) &&
+                               calls[boundaries[i+1]-1].after,child,i+1,
+                               steps[i].parent,steps[i].name,steps[i].failure,steps[i].evidence) &&
     steps[i].evidence.calls == calls[boundaries[i]..boundaries[i+1]]
   }
 
   ghost predicate StepsWitnessFields(inputs: Recovery.RuntimeInputs,
-    before: Recovery.RuntimeState, after: Recovery.RuntimeState,
-    root: W.FileStatus, initial: W.FileStatus, steps: seq<ParentStep>,
-    calls: seq<Recovery.RuntimeObservation>, boundaries: seq<nat>)
+                                     before: Recovery.RuntimeState, after: Recovery.RuntimeState,
+                                     root: W.FileStatus, initial: W.FileStatus, steps: seq<ParentStep>,
+                                     calls: seq<Recovery.RuntimeObservation>, boundaries: seq<nat>)
   {
     root.kind == initial.kind == W.DirectoryKind &&
     Recovery.RuntimeTraceFields(inputs,before,after,calls) &&
@@ -60,8 +60,8 @@ module PwdPhysicalSpec {
   }
 
   ghost predicate PhysicalSelectionFields(inputs: Recovery.RuntimeInputs,
-    before: Recovery.RuntimeState, after: Recovery.RuntimeState,
-    outcome: Recovery.DirectoryOutcome, evidence: PhysicalEvidence)
+                                          before: Recovery.RuntimeState, after: Recovery.RuntimeState,
+                                          outcome: Recovery.DirectoryOutcome, evidence: PhysicalEvidence)
   {
     Recovery.DirectoryOutcomeFields(outcome) &&
     Recovery.RuntimeTraceFields(inputs,before,after,evidence.calls) && |evidence.calls| >= 1 &&
@@ -88,7 +88,7 @@ module PwdPhysicalSpec {
           |evidence.calls| == 3 && |evidence.steps| == 0
         else
           StepsWitnessFields(inputs,evidence.calls[2].after,after,evidence.root[0].v,
-            evidence.current[0].v,evidence.steps,evidence.calls[3..],evidence.boundaries) &&
+                             evidence.current[0].v,evidence.steps,evidence.calls[3..],evidence.boundaries) &&
           if |evidence.steps| > 0 && |evidence.steps[|evidence.steps|-1].failure| != 0 then
             outcome == Recovery.DirectoryFailed(evidence.steps[|evidence.steps|-1].failure[0])
           else

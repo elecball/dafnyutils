@@ -924,12 +924,12 @@ module SeqProof {
       RenderValuesAt(values[1..], scale, false);
       forall i: nat | i < |values|
         ensures Core.RenderValues(values, scale, firstNegativeZero)[i] ==
-          Core.RenderFixed(values[i], scale, i == 0 && firstNegativeZero)
+                Core.RenderFixed(values[i], scale, i == 0 && firstNegativeZero)
       {
         if i != 0 {
           assert values[1..][i - 1] == values[i];
           assert Core.RenderValues(values, scale, firstNegativeZero)[i] ==
-            Core.RenderValues(values[1..], scale, false)[i - 1];
+                 Core.RenderValues(values[1..], scale, false)[i - 1];
         }
       }
     }
@@ -1252,9 +1252,9 @@ module SeqProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                           old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
 }

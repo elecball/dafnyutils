@@ -159,7 +159,7 @@ module CommCore {
   }
 
   function OutputForReads(cmd: Schema.CommCmd,
-    first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
+                          first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     if first.Err? || second.Err? then FailedReadsPlan(cmd, first, second).output
     else if Render.DataSorted(first.v, cmd.zeroTerminated) && Render.DataSorted(second.v, cmd.zeroTerminated)
@@ -168,7 +168,7 @@ module CommCore {
 
 
   function ErrorForReads(cmd: Schema.CommCmd,
-    first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
+                         first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
   {
     if first.Err? || second.Err? then
       Text.FailedReadMessage(cmd, first, second, FailedReadsPlan(cmd, first, second).leftFault)
@@ -180,7 +180,7 @@ module CommCore {
   function HadRunError(
     cmd: Schema.CommCmd,
     first: BenchWorld.IOResult<BenchWorld.Bytes>,
-                             second: BenchWorld.IOResult<BenchWorld.Bytes>
+                               second: BenchWorld.IOResult<BenchWorld.Bytes>
   ): bool
   {
     match first
@@ -386,15 +386,15 @@ module CommCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                      old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var outErr := 0;
     if out != [] {
@@ -407,13 +407,13 @@ module CommCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errErr := 0;
     if errors != [] {
       var diagnosed := io.WriteStderr(errors);
       errErr := StreamContract.ResultErrno(diagnosed);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
   }
@@ -456,7 +456,7 @@ module CommCore {
   }
 
   function RenderBeforeReadFailure(cmd: Schema.CommCmd, left: seq<BenchWorld.Bytes>, right: seq<BenchWorld.Bytes>,
-    leftFailed: bool, rightFailed: bool): FailedMergePlan
+                                   leftFailed: bool, rightFailed: bool): FailedMergePlan
     requires leftFailed || rightFailed
     decreases |left| + |right|
   {
@@ -482,11 +482,11 @@ module CommCore {
   }
 
   function FailedReadsPlan(cmd: Schema.CommCmd,
-    first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>): FailedMergePlan
+                           first: BenchWorld.IOResult<BenchWorld.Bytes>, second: BenchWorld.IOResult<BenchWorld.Bytes>): FailedMergePlan
     requires first.Err? || second.Err?
   {
     var delimiter := Render.RecordDelimiter(cmd.zeroTerminated);
     RenderBeforeReadFailure(cmd, Render.Records(ReadRecordsData(first, delimiter), delimiter),
-      Render.Records(ReadRecordsData(second, delimiter), delimiter), first.Err?, second.Err?)
+                            Render.Records(ReadRecordsData(second, delimiter), delimiter), first.Err?, second.Err?)
   }
 }

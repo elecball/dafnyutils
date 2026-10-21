@@ -19,22 +19,22 @@ module ChmodNormalEntryProof {
   {
     entry.identity.isSymlink && !Spec.ModeFollow(cmd, entry.identity.top) &&
     (!Recursive.TraversalFollowSpec(cmd, entry.identity.top) ||
-      entry.identity.metadataFollow != Spec.MetadataFollow(cmd, entry.identity.top))
+     entry.identity.metadataFollow != Spec.MetadataFollow(cmd, entry.identity.top))
   }
 
   ghost function LogicalIdentity(cmd: Schema.ChmodCmd, scope: Spec.Scope,
-    entry: Spec.Entry): Recursive.RecursiveIdentity
+                                 entry: Spec.Entry): Recursive.RecursiveIdentity
   {
     if LogicalSkip(cmd, entry) then
       Recursive.RecursiveIdentity(entry.identity.displayPath,
-        Operand.ModelPath(scope.cwd, entry.native, entry.identity.operand), "",
-        entry.identity.top, entry.identity.isSymlink, false)
+                                  Operand.ModelPath(scope.cwd, entry.native, entry.identity.operand), "",
+                                  entry.identity.top, entry.identity.isSymlink, false)
     else Spec.MathematicalIdentity(scope, entry)
   }
 
   lemma {:isolate_assertions} SuccessfulEntry(cmd: Schema.ChmodCmd, scope: Spec.Scope,
-    display: string, operand: Operand.Operand, top: bool, fs: W.FileSystem,
-    native: W.CwdContext, cursor: nat, entry: Spec.Entry)
+                                              display: string, operand: Operand.Operand, top: bool, fs: W.FileSystem,
+                                              native: W.CwdContext, cursor: nat, entry: Spec.Entry)
     requires cmd.recursive && scope.context.cwd == scope.cwd
     requires Spec.EntryFields(cmd, scope, display, operand, top, fs, native, cursor, entry)
     requires Spec.SuccessfulEntry(cmd, scope, entry) && Spec.CompatibleEntry(cmd, scope, entry)
@@ -45,14 +45,14 @@ module ChmodNormalEntryProof {
     ensures !LogicalSkip(cmd, entry) ==> Recursive.IdentityResolvesSpec(fs, LogicalIdentity(cmd, scope, entry))
     ensures !LogicalSkip(cmd, entry) ==> LogicalIdentity(cmd, scope, entry) == Spec.MathematicalIdentity(scope, entry)
     ensures var identity := LogicalIdentity(cmd, scope, entry);
-      identity.displayPath == display && identity.accessPath == Operand.ModelPath(scope.cwd, native, operand) &&
-      identity.isTopLevel == top && identity.isSymlink == entry.identity.isSymlink
+            identity.displayPath == display && identity.accessPath == Operand.ModelPath(scope.cwd, native, operand) &&
+            identity.isTopLevel == top && identity.isSymlink == entry.identity.isSymlink
     ensures entry.result.fs == fs && entry.result.cursor == cursor+2 &&
-      entry.result.native == Operand.AtOffset(native, 2)
+            entry.result.native == Operand.AtOffset(native, 2)
     ensures entry.decision.EntryReady? ==> entry.result.output == [] && entry.result.diagnostics == [] && entry.result.ok
     ensures entry.decision.EntryPreserved? ==>
-      entry.result.output == [] && entry.result.diagnostics == Recursive.RootPreserveMessageSpec(display, display != "/") &&
-      entry.decision.alias == (display != "/") && !entry.result.ok
+              entry.result.output == [] && entry.result.diagnostics == Recursive.RootPreserveMessageSpec(display, display != "/") &&
+              entry.decision.alias == (display != "/") && !entry.result.ok
   {
     hide *;
     reveal Spec.EntryFields(), Spec.SuccessfulEntry(), Spec.CompatibleEntry();
@@ -82,7 +82,7 @@ module ChmodNormalEntryProof {
       Identity.ShiftStatus(context, fs, native, operand, 1, Spec.MetadataFollow(cmd, top));
       var shifted := Operand.AtOffset(native, 1);
       var metadataPath := Steps.NamedStatus(scope, Base.AtCursor(context, cursor+1), fs,
-        shifted, operand, Spec.MetadataFollow(cmd, top));
+                                            shifted, operand, Spec.MetadataFollow(cmd, top));
       assert Operand.ModelPath(scope.cwd, shifted, operand) == actual by {
         reveal Operand.ModelPath(), Operand.AtOffset();
       }
@@ -103,10 +103,10 @@ module ChmodNormalEntryProof {
   }
 
   lemma {:isolate_assertions} OperandOffset(fs: W.FileSystem, native: W.CwdContext,
-    offset: nat, operand: Operand.Operand, follow: bool)
+                                            offset: nat, operand: Operand.Operand, follow: bool)
     requires C.CwdContextFields(fs, native)
     ensures Operand.ResolveTarget(fs, Operand.AtOffset(native, offset), operand, follow) ==
-      Operand.ResolveTarget(fs, native, operand, follow)
+            Operand.ResolveTarget(fs, native, operand, follow)
   {
     hide *;
     Contexts.OffsetValid(fs, native, offset);
@@ -118,21 +118,21 @@ module ChmodNormalEntryProof {
       if operand.path == "" || (0 as char) in operand.path || W.IsAbsolutePath(operand.path) {
         Contexts.CwdOffset(fs, native, offset, operand.path, follow);
       } else if operand.parent in native.capabilities &&
-          C.DirectoryCapabilityAnchorCurrentFields(native.topology, native.capabilities[operand.parent]) {
+                C.DirectoryCapabilityAnchorCurrentFields(native.topology, native.capabilities[operand.parent]) {
         assert native.capabilities[operand.parent].position in native.topology.nodes by {
           reveal C.DirectoryCapabilityAnchorCurrentFields();
         }
         Contexts.LiveOffset(fs, native, offset, native.capabilities[operand.parent].position,
-          C.RawPathSegmentsFields(operand.path), 0, W.SYMLINK_MAX_DEPTH, follow, C.HasTrailingSlash(operand.path));
+                            C.RawPathSegmentsFields(operand.path), 0, W.SYMLINK_MAX_DEPTH, follow, C.HasTrailingSlash(operand.path));
       }
     }
   }
 
   lemma {:isolate_assertions} SkipChange(cmd: Schema.ChmodCmd, plan: Base.SpecModePlan,
-    scope: Spec.Scope, entry: Spec.Entry, change: Spec.Change)
+                                         scope: Spec.Scope, entry: Spec.Entry, change: Spec.Change)
     requires cmd.recursive
     requires Spec.EntryFields(cmd, scope, entry.identity.displayPath, entry.identity.operand,
-      entry.identity.top, entry.fs, entry.native, entry.cursor, entry)
+                              entry.identity.top, entry.fs, entry.native, entry.cursor, entry)
     requires Spec.SuccessfulEntry(cmd, scope, entry)
     requires entry.identity.isSymlink && !Spec.ModeFollow(cmd, entry.identity.top)
     requires Spec.ChangeFields(cmd, plan, scope, entry, entry.fs, entry.result.native, entry.result.cursor, change)
@@ -156,25 +156,25 @@ module ChmodNormalEntryProof {
     Identity.OffsetAddition(entry.native, 2, 1);
     assert change.setErr != 0 by {
       reveal Operand.SetFields(), Operand.ResolveTarget(), Operand.AtOffset(), C.SetFileModeAtCwdSpec(),
-        C.SetFileModeAtDirSpec(), C.SetFileModeFromCwdTargetContractFields(), C.CwdResolvedModeCanSucceedFields();
+             C.SetFileModeAtDirSpec(), C.SetFileModeFromCwdTargetContractFields(), C.CwdResolvedModeCanSucceedFields();
     }
     assert change.setFs == entry.fs by {
       reveal Operand.SetFields(), C.SetFileModeAtCwdSpec(), C.SetFileModeAtDirSpec(),
-        C.SetFileModeFromCwdTargetContractFields();
+             C.SetFileModeFromCwdTargetContractFields();
     }
     Identity.TopologyReflexive(entry.fs);
   }
 
   lemma {:isolate_assertions} ModeModelPath(context: Base.ObservationContext, scope: Spec.Scope,
-    fs: W.FileSystem, native: W.CwdContext, operand: Operand.Operand, follow: bool,
-    desired: bv32, afterFs: W.FileSystem, afterNative: W.CwdContext, ok: bool, err: int)
+                                            fs: W.FileSystem, native: W.CwdContext, operand: Operand.Operand, follow: bool,
+                                            desired: bv32, afterFs: W.FileSystem, afterNative: W.CwdContext, ok: bool, err: int)
     requires Operand.SetFields(context, scope.now, fs, native, operand, follow,
-      desired, afterFs, afterNative, ok, err)
+                               desired, afterFs, afterNative, ok, err)
     ensures Operand.ModelPath(scope.cwd, afterNative, operand) == Operand.ModelPath(scope.cwd, native, operand)
   {
     hide *;
     reveal Operand.SetFields(), Operand.ResolveTarget(), C.SetFileModeAtCwdSpec(), C.SetFileModeAtDirSpec(),
-      C.SetFileModeFromCwdTargetContractFields(), C.CwdContextReadStepFields();
+           C.SetFileModeFromCwdTargetContractFields(), C.CwdContextReadStepFields();
     if ok {
       reveal C.CwdResolvedModeCanSucceedFields();
       var resolved := Operand.ResolveTarget(fs, native, operand, follow);
@@ -185,10 +185,10 @@ module ChmodNormalEntryProof {
   }
 
   lemma {:isolate_assertions} SuccessfulChange(cmd: Schema.ChmodCmd, plan: Base.SpecModePlan,
-    scope: Spec.Scope, entry: Spec.Entry, change: Spec.Change) returns (result: Base.SpecPathResult)
+                                               scope: Spec.Scope, entry: Spec.Entry, change: Spec.Change) returns (result: Base.SpecPathResult)
     requires cmd.recursive && scope.context.cwd == scope.cwd
     requires Spec.EntryFields(cmd, scope, entry.identity.displayPath, entry.identity.operand,
-      entry.identity.top, entry.fs, entry.native, entry.cursor, entry)
+                              entry.identity.top, entry.fs, entry.native, entry.cursor, entry)
     requires Spec.SuccessfulEntry(cmd, scope, entry) && Spec.CompatibleEntry(cmd, scope, entry)
     requires entry.decision.EntryReady? && !LogicalSkip(cmd, entry)
     requires Recursive.IdentityResolvesSpec(entry.fs, LogicalIdentity(cmd, scope, entry))
@@ -196,12 +196,12 @@ module ChmodNormalEntryProof {
     requires Spec.SuccessfulChange(cmd, scope, entry, change) && Spec.CompatibleChange(cmd, scope, entry, change)
     ensures Recursive.ApplyResolvedSpecRelation(cmd, plan, LogicalIdentity(cmd, scope, entry), entry.fs, result, scope.now)
     ensures result.fs == change.result.fs && result.stdoutChunk == change.result.output &&
-      result.stderrChunk == change.result.diagnostics && result.ok == change.result.ok
+            result.stderrChunk == change.result.diagnostics && result.ok == change.result.ok
     ensures W.FileSystemTopologyUnchangedExceptMode(entry.fs, change.result.fs)
   {
     hide *;
     SuccessfulEntry(cmd, scope, entry.identity.displayPath, entry.identity.operand,
-      entry.identity.top, entry.fs, entry.native, entry.cursor, entry);
+                    entry.identity.top, entry.fs, entry.native, entry.cursor, entry);
     var identity := LogicalIdentity(cmd, scope, entry);
     if entry.identity.isSymlink && !Spec.ModeFollow(cmd, entry.identity.top) {
       SkipChange(cmd, plan, scope, entry, change);
@@ -233,7 +233,7 @@ module ChmodNormalEntryProof {
       var setContext := Base.AtCursor(context, entry.result.cursor+1);
       var setNative := Operand.AtOffset(native, 1);
       var changePath := Steps.NamedModeChange(setContext, scope, fs, setNative, operand,
-        Spec.ModeFollow(cmd, entry.identity.top), change.desired, change.setFs, change.setNative);
+                                              Spec.ModeFollow(cmd, entry.identity.top), change.desired, change.setFs, change.setNative);
       assert Operand.ModelPath(scope.cwd, setNative, operand) == actual by {
         reveal Operand.ModelPath(), Operand.AtOffset();
       }
@@ -245,18 +245,18 @@ module ChmodNormalEntryProof {
         reveal Base.SpecModeSetFs(), Base.SpecModeSetSuppressed();
       }
       var step: Base.SpecPathResult :| Spec.SuccessFields(cmd, plan, scope, entry, change.setFs,
-        change.setNative, entry.result.cursor+1, mode.v.mode, W.NormalizeMode(change.desired),
-        change.result.cursor, change.result.native, step) &&
-        change.result == Spec.State(change.setFs, change.result.cursor, change.result.native,
-          step.stdoutChunk, step.stderrChunk, step.ok);
+                                                          change.setNative, entry.result.cursor+1, mode.v.mode, W.NormalizeMode(change.desired),
+                                                          change.result.cursor, change.result.native, step) &&
+                                       change.result == Spec.State(change.setFs, change.result.cursor, change.result.native,
+                                                                   step.stdoutChunk, step.stderrChunk, step.ok);
       Steps.SuccessfulResult(cmd, plan, scope, entry, change.setFs, change.setNative, entry.result.cursor+1,
-        mode.v.mode, W.NormalizeMode(change.desired), change.result.cursor, change.result.native, step);
+                             mode.v.mode, W.NormalizeMode(change.desired), change.result.cursor, change.result.native, step);
       ModeModelPath(setContext, scope, fs, setNative, operand, Spec.ModeFollow(cmd, entry.identity.top),
-        change.desired, change.setFs, change.setNative, true, 0);
+                    change.desired, change.setFs, change.setNative, true, 0);
       result := step;
       assert Recursive.ApplyResolvedSpecRelation(cmd, plan, identity, fs, result, scope.now) by {
         reveal Recursive.ApplyResolvedSpecRelation(), Recursive.IdentityResolvesSpec(), Spec.ModeFollow(),
-          LogicalIdentity(), Spec.MathematicalIdentity();
+               LogicalIdentity(), Spec.MathematicalIdentity();
       }
     }
   }

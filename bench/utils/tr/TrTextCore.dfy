@@ -19,22 +19,22 @@ module TrTextCore {
     ensures MissingSet2MessageSpec(operand, deleteAndSqueeze) == Model.MissingSet2MessageSpec(operand, deleteAndSqueeze)
   {
     Model.MissingSet2MessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
-      (if deleteAndSqueeze then
-         Model.MissingSet2MessageSpecText1
-       else
-         Model.MissingSet2MessageSpecText2) +
-      Model.MissingSet2MessageSpecText3
+    (if deleteAndSqueeze then
+       Model.MissingSet2MessageSpecText1
+     else
+       Model.MissingSet2MessageSpecText2) +
+    Model.MissingSet2MessageSpecText3
   }
 
   function ExtraOperandMessageSpec(operand: string, explainDeleteLimit: bool): BenchWorld.Bytes
     ensures ExtraOperandMessageSpec(operand, explainDeleteLimit) == Model.ExtraOperandMessageSpec(operand, explainDeleteLimit)
   {
     Model.ExtraOperandMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
-      (if explainDeleteLimit then
-         Model.ExtraOperandMessageSpecText1
-       else
-         Model.ExtraOperandMessageSpecText2) +
-      Model.ExtraOperandMessageSpecText3
+    (if explainDeleteLimit then
+       Model.ExtraOperandMessageSpecText1
+     else
+       Model.ExtraOperandMessageSpecText2) +
+    Model.ExtraOperandMessageSpecText3
   }
 
   function UnsupportedSetMessageSpec(operand: string): BenchWorld.Bytes

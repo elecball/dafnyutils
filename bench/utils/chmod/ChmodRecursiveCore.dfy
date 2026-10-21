@@ -908,12 +908,12 @@ module ChmodRecursiveCore {
           first.stdoutChunk +
           (rest.stdoutChunk + childResult.stdoutChunk);
         == {
-          Base.AppendAssociative(
-            first.stdoutChunk,
-            rest.stdoutChunk,
-            childResult.stdoutChunk
-          );
-        }
+            Base.AppendAssociative(
+              first.stdoutChunk,
+              rest.stdoutChunk,
+              childResult.stdoutChunk
+            );
+          }
           (first.stdoutChunk + rest.stdoutChunk) +
           childResult.stdoutChunk;
         ==
@@ -1635,15 +1635,15 @@ module ChmodRecursiveCore {
             ).Directory?
   {
     var next := BenchWorld.WithNodeChangeTime(
-                  BenchWorld.WithNodeMode(
-                    BenchWorld.FsNodeAt(fs, path), mode
-                  ),
-                  now,
-                  0
-                );
+      BenchWorld.WithNodeMode(
+        BenchWorld.FsNodeAt(fs, path), mode
+      ),
+      now,
+      0
+    );
     assert BenchWorld.InodeSameNodeKind(
-             BenchWorld.FsNodeAt(fs, path), next
-           );
+        BenchWorld.FsNodeAt(fs, path), next
+      );
     WorldProof.FsSetPathIsInodeFsUpdateNode(fs, path, next);
     WorldProof.InodeUpdateAliasVisible(fs, path, path, next);
   }

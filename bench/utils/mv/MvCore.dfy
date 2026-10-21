@@ -231,10 +231,10 @@ module MvCore {
   }
 
   lemma StatusTranscriptWitness(inputs: Spec.NativeStatusInputs, first: nat, after: nat,
-    calls: seq<Spec.StatusCallEvidence>)
+                                calls: seq<Spec.StatusCallEvidence>)
     requires after == first + |calls| && StatusCallsFor(inputs, first, calls)
     ensures exists transcript: seq<Spec.StatusCallEvidence> ::
-      after == first + |transcript| && StatusCallsFor(inputs, first, transcript)
+              after == first + |transcript| && StatusCallsFor(inputs, first, transcript)
   {
   }
 
@@ -250,11 +250,11 @@ module MvCore {
   {
     forall i: nat | i < |left + right|
       ensures IOContract.ObservedNativeFileStatusContractFields(
-        observations.times, observations.failures, first + i, (left + right)[i].fs,
-        (left + right)[i].path, (left + right)[i].followSymlink,
-        (left + right)[i].ok, (left + right)[i].status,
-        (left + right)[i].err
-      )
+                observations.times, observations.failures, first + i, (left + right)[i].fs,
+                (left + right)[i].path, (left + right)[i].followSymlink,
+                (left + right)[i].ok, (left + right)[i].status,
+                (left + right)[i].err
+              )
     {
       if i >= |left| {
         assert first + i == first + |left| + (i - |left|);
@@ -270,9 +270,9 @@ module MvCore {
   )
     requires StatusCallsFor(observations, first, calls)
     requires IOContract.ObservedNativeFileStatusContractFields(
-        observations.times, observations.failures, first + |calls|, call.fs, call.path,
-      call.followSymlink, call.ok, call.status, call.err
-    )
+               observations.times, observations.failures, first + |calls|, call.fs, call.path,
+               call.followSymlink, call.ok, call.status, call.err
+             )
     ensures StatusCallsFor(observations, first, calls + [call])
   {
     StatusCallsConcat(observations, first, calls, [call]);
@@ -368,39 +368,39 @@ module MvCore {
     requires |prefixBounds| == |prefixSteps| + 1
     requires prefixBounds[|prefixSteps|] == first + |prefixCalls|
     requires forall j: nat {:trigger prefixBounds[j]} | j < |prefixSteps| ::
-      first <= prefixBounds[j] <= prefixBounds[j + 1] <=
-        first + |prefixCalls| &&
-      prefixSteps[j].firstStatus == prefixBounds[j] &&
-      prefixBounds[j + 1] ==
-        prefixBounds[j] + |prefixSteps[j].statusCalls| &&
-      prefixCalls[prefixBounds[j] - first ..
-                  prefixBounds[j + 1] - first] ==
-        prefixSteps[j].statusCalls
+               first <= prefixBounds[j] <= prefixBounds[j + 1] <=
+               first + |prefixCalls| &&
+               prefixSteps[j].firstStatus == prefixBounds[j] &&
+               prefixBounds[j + 1] ==
+               prefixBounds[j] + |prefixSteps[j].statusCalls| &&
+               prefixCalls[prefixBounds[j] - first ..
+               prefixBounds[j + 1] - first] ==
+               prefixSteps[j].statusCalls
     requires step.firstStatus == first + |prefixCalls|
     requires nextCalls == prefixCalls + step.statusCalls
     requires nextBounds == prefixBounds + [first + |nextCalls|]
     requires nextSteps == prefixSteps + [step]
     ensures forall j: nat {:trigger nextBounds[j]} | j < |nextSteps| ::
-      first <= nextBounds[j] <= nextBounds[j + 1] <=
-        first + |nextCalls| &&
-      nextSteps[j].firstStatus == nextBounds[j] &&
-      nextBounds[j + 1] ==
-        nextBounds[j] + |nextSteps[j].statusCalls| &&
-      nextCalls[nextBounds[j] - first ..
-                nextBounds[j + 1] - first] ==
-        nextSteps[j].statusCalls
+              first <= nextBounds[j] <= nextBounds[j + 1] <=
+              first + |nextCalls| &&
+              nextSteps[j].firstStatus == nextBounds[j] &&
+              nextBounds[j + 1] ==
+              nextBounds[j] + |nextSteps[j].statusCalls| &&
+              nextCalls[nextBounds[j] - first ..
+              nextBounds[j + 1] - first] ==
+              nextSteps[j].statusCalls
   {
     hide *;
     StatusCallTail(prefixCalls, step.statusCalls);
     forall j: nat {:trigger nextBounds[j]} | j < |nextSteps|
       ensures first <= nextBounds[j] <= nextBounds[j + 1] <=
-                first + |nextCalls| &&
+              first + |nextCalls| &&
               nextSteps[j].firstStatus == nextBounds[j] &&
               nextBounds[j + 1] ==
-                nextBounds[j] + |nextSteps[j].statusCalls| &&
+              nextBounds[j] + |nextSteps[j].statusCalls| &&
               nextCalls[nextBounds[j] - first ..
-                        nextBounds[j + 1] - first] ==
-                nextSteps[j].statusCalls
+              nextBounds[j + 1] - first] ==
+              nextSteps[j].statusCalls
     {
       if j < |prefixSteps| {
         assert nextBounds[j] == prefixBounds[j];
@@ -432,11 +432,11 @@ module MvCore {
   {
     forall i: nat | i < |calls[lo..hi]|
       ensures IOContract.ObservedNativeFileStatusContractFields(
-        observations.times, observations.failures, first + lo + i,
-        calls[lo..hi][i].fs, calls[lo..hi][i].path,
-        calls[lo..hi][i].followSymlink,
-        calls[lo..hi][i].ok, calls[lo..hi][i].status,
-        calls[lo..hi][i].err)
+                observations.times, observations.failures, first + lo + i,
+                calls[lo..hi][i].fs, calls[lo..hi][i].path,
+                calls[lo..hi][i].followSymlink,
+                calls[lo..hi][i].ok, calls[lo..hi][i].status,
+                calls[lo..hi][i].err)
     {
       assert calls[lo..hi][i] == calls[lo + i];
     }
@@ -577,19 +577,19 @@ module MvCore {
     |evidence.statusBounds| == |evidence.steps| + 1 &&
     evidence.statusBounds[0] == evidence.firstStatus &&
     evidence.statusBounds[|evidence.steps|] ==
-      evidence.firstStatus + |evidence.statusCalls| &&
+    evidence.firstStatus + |evidence.statusCalls| &&
     StatusCallsFor(observations, evidence.firstStatus, evidence.statusCalls) &&
     forall i: nat {:trigger evidence.statusBounds[i]} | i < |evidence.steps| ::
       evidence.firstStatus <= evidence.statusBounds[i] <=
-        evidence.statusBounds[i + 1] <=
-        evidence.firstStatus + |evidence.statusCalls| &&
+      evidence.statusBounds[i + 1] <=
+      evidence.firstStatus + |evidence.statusCalls| &&
       evidence.steps[i].inputs == observations &&
       evidence.steps[i].firstStatus == evidence.statusBounds[i] &&
       evidence.statusBounds[i + 1] ==
-        evidence.statusBounds[i] + |evidence.steps[i].statusCalls| &&
+      evidence.statusBounds[i] + |evidence.steps[i].statusCalls| &&
       evidence.statusCalls[
-        evidence.statusBounds[i] - evidence.firstStatus ..
-        evidence.statusBounds[i + 1] - evidence.firstStatus
+      evidence.statusBounds[i] - evidence.firstStatus ..
+      evidence.statusBounds[i + 1] - evidence.firstStatus
       ] == evidence.steps[i].statusCalls
   }
 
@@ -604,16 +604,16 @@ module MvCore {
     requires StatusCallsFor(observations, evidence.firstStatus,
                             evidence.statusCalls)
     requires forall i: nat {:trigger evidence.statusBounds[i]} | i < |evidence.steps| ::
-      evidence.firstStatus <= evidence.statusBounds[i] <=
-        evidence.statusBounds[i + 1] <=
-          evidence.firstStatus + |evidence.statusCalls| &&
-      evidence.steps[i].firstStatus == evidence.statusBounds[i] &&
-      evidence.statusBounds[i + 1] ==
-        evidence.statusBounds[i] + |evidence.steps[i].statusCalls| &&
-      evidence.statusCalls[
-        evidence.statusBounds[i] - evidence.firstStatus ..
-        evidence.statusBounds[i + 1] - evidence.firstStatus
-      ] == evidence.steps[i].statusCalls
+               evidence.firstStatus <= evidence.statusBounds[i] <=
+               evidence.statusBounds[i + 1] <=
+               evidence.firstStatus + |evidence.statusCalls| &&
+               evidence.steps[i].firstStatus == evidence.statusBounds[i] &&
+               evidence.statusBounds[i + 1] ==
+               evidence.statusBounds[i] + |evidence.steps[i].statusCalls| &&
+               evidence.statusCalls[
+               evidence.statusBounds[i] - evidence.firstStatus ..
+               evidence.statusBounds[i + 1] - evidence.firstStatus
+               ] == evidence.steps[i].statusCalls
     requires forall i: nat | i < |evidence.steps| :: evidence.steps[i].inputs == observations
     ensures BatchStatusEvidenceFor(observations, evidence)
   {
@@ -635,48 +635,48 @@ module MvCore {
     requires bounds[|steps|] == first + |calls|
     requires StatusCallsFor(observations, first, calls)
     requires forall i: nat {:trigger bounds[i]} | i < |steps| ::
-      first <= bounds[i] <= bounds[i + 1] <= first + |calls| &&
-      steps[i].firstStatus == bounds[i] &&
-      bounds[i + 1] == bounds[i] + |steps[i].statusCalls| &&
-      calls[bounds[i] - first .. bounds[i + 1] - first] ==
-        steps[i].statusCalls
+               first <= bounds[i] <= bounds[i + 1] <= first + |calls| &&
+               steps[i].firstStatus == bounds[i] &&
+               bounds[i + 1] == bounds[i] + |steps[i].statusCalls| &&
+               calls[bounds[i] - first .. bounds[i + 1] - first] ==
+               steps[i].statusCalls
     requires forall i: nat | i < |steps| :: steps[i].inputs == observations
     ensures BatchStatusEvidenceFor(
-      observations,
-      BatchEvidence(steps, fsBounds, outcomes, stdoutFragments,
-                    stderrFragments, first, calls, bounds))
+              observations,
+              BatchEvidence(steps, fsBounds, outcomes, stdoutFragments,
+                            stderrFragments, first, calls, bounds))
   {
     hide *;
     var evidence := BatchEvidence(steps, fsBounds, outcomes,
-      stdoutFragments, stderrFragments, first, calls, bounds);
+                                  stdoutFragments, stderrFragments, first, calls, bounds);
     assert forall i: nat {:trigger evidence.statusBounds[i]} | i < |evidence.steps| ::
-      evidence.firstStatus <= evidence.statusBounds[i] <=
+        evidence.firstStatus <= evidence.statusBounds[i] <=
         evidence.statusBounds[i + 1] <=
-          evidence.firstStatus + |evidence.statusCalls| &&
-      evidence.steps[i].firstStatus == evidence.statusBounds[i] &&
-      evidence.statusBounds[i + 1] ==
+        evidence.firstStatus + |evidence.statusCalls| &&
+        evidence.steps[i].firstStatus == evidence.statusBounds[i] &&
+        evidence.statusBounds[i + 1] ==
         evidence.statusBounds[i] + |evidence.steps[i].statusCalls| &&
-      evidence.statusCalls[
+        evidence.statusCalls[
         evidence.statusBounds[i] - evidence.firstStatus ..
         evidence.statusBounds[i + 1] - evidence.firstStatus
-      ] == evidence.steps[i].statusCalls by {
+        ] == evidence.steps[i].statusCalls by {
       forall i: nat {:trigger evidence.statusBounds[i]} | i < |evidence.steps|
         ensures evidence.firstStatus <= evidence.statusBounds[i] <=
-                  evidence.statusBounds[i + 1] <=
-                    evidence.firstStatus + |evidence.statusCalls| &&
+                evidence.statusBounds[i + 1] <=
+                evidence.firstStatus + |evidence.statusCalls| &&
                 evidence.steps[i].firstStatus == evidence.statusBounds[i] &&
                 evidence.statusBounds[i + 1] ==
-                  evidence.statusBounds[i] + |evidence.steps[i].statusCalls| &&
+                evidence.statusBounds[i] + |evidence.steps[i].statusCalls| &&
                 evidence.statusCalls[
-                  evidence.statusBounds[i] - evidence.firstStatus ..
-                  evidence.statusBounds[i + 1] - evidence.firstStatus
+                evidence.statusBounds[i] - evidence.firstStatus ..
+                evidence.statusBounds[i + 1] - evidence.firstStatus
                 ] == evidence.steps[i].statusCalls
       {
         assert bounds[i] == evidence.statusBounds[i];
         assert bounds[i + 1] == evidence.statusBounds[i + 1];
         assert steps[i] == evidence.steps[i];
         assert calls[bounds[i] - first .. bounds[i + 1] - first] ==
-          steps[i].statusCalls;
+               steps[i].statusCalls;
       }
     }
     PackageBatchStatusEvidence(observations, evidence);
@@ -693,14 +693,14 @@ module MvCore {
     BatchStatusEvidenceFor(observations, evidence) &&
     |evidence.steps| == |sources| &&
     (forall i: nat | i < |sources| ::
-      var normalizedSource :=
-        NormalizeSource(sources[i], cmd.stripTrailingSlashes);
-      StepStatusEvidenceFor(
-        normalizedSource,
-        TargetInDirectory(directory, normalizedSource),
-        cmd,
-        evidence.steps[i]
-      ))
+       var normalizedSource :=
+         NormalizeSource(sources[i], cmd.stripTrailingSlashes);
+       StepStatusEvidenceFor(
+         normalizedSource,
+         TargetInDirectory(directory, normalizedSource),
+         cmd,
+         evidence.steps[i]
+       ))
   }
 
   ghost function MakeStepEvidence(
@@ -763,22 +763,22 @@ module MvCore {
     evidence.times.mtimeSec == evidence.rawStatus.times.mtimeSec &&
     evidence.times.mtimeNsec == evidence.rawStatus.times.mtimeNsec &&
     (evidence.ok ==>
-      evidence.key == evidence.rawStatus.hostKey &&
-      evidence.isDir == (evidence.rawStatus.kind == BenchWorld.DirectoryKind) &&
-      evidence.isSymlink == (evidence.rawStatus.kind == BenchWorld.SymlinkKind) &&
-      MetadataLinkCountValue(evidence) == evidence.rawStatus.linkCount) &&
+       evidence.key == evidence.rawStatus.hostKey &&
+       evidence.isDir == (evidence.rawStatus.kind == BenchWorld.DirectoryKind) &&
+       evidence.isSymlink == (evidence.rawStatus.kind == BenchWorld.SymlinkKind) &&
+       MetadataLinkCountValue(evidence) == evidence.rawStatus.linkCount) &&
     IOContract.FileStatusStructureContractFields(fs, path, followSymlink,
-      evidence.ok, evidence.rawStatus, evidence.err) &&
+                                                 evidence.ok, evidence.rawStatus, evidence.err) &&
     if evidence.ok then
-    match IOContract.GetFileStatusResultFields(fs, path, followSymlink)
-    case Ok(expected) =>
-      evidence.ok && evidence.err == 0 &&
-      evidence.key == expected.hostKey &&
-      evidence.links.LinkCountKnown? &&
-      MetadataLinkCountValue(evidence) == expected.linkCount &&
-      evidence.isDir == (expected.kind == BenchWorld.DirectoryKind) &&
-      evidence.isSymlink == (expected.kind == BenchWorld.SymlinkKind)
-    case Err(_) => false
+      match IOContract.GetFileStatusResultFields(fs, path, followSymlink)
+      case Ok(expected) =>
+        evidence.ok && evidence.err == 0 &&
+        evidence.key == expected.hostKey &&
+        evidence.links.LinkCountKnown? &&
+        MetadataLinkCountValue(evidence) == expected.linkCount &&
+        evidence.isDir == (expected.kind == BenchWorld.DirectoryKind) &&
+        evidence.isSymlink == (expected.kind == BenchWorld.SymlinkKind)
+      case Err(_) => false
     else evidence.err > 0
   }
 
@@ -793,18 +793,18 @@ module MvCore {
     MetadataEvidenceFor(fs, path, followSymlink, evidence) &&
     var status := evidence.rawStatus;
     IOContract.ObservedNativeFileStatusContractFields(
-        observations.times, observations.failures, evidence.ordinal, fs, path, followSymlink,
+      observations.times, observations.failures, evidence.ordinal, fs, path, followSymlink,
       evidence.ok, status, evidence.err
     ) &&
-      (evidence.ok ==>
-        evidence.key == status.hostKey &&
-        evidence.isDir == (status.kind == BenchWorld.DirectoryKind) &&
-        evidence.isSymlink == (status.kind == BenchWorld.SymlinkKind) &&
-        MetadataLinkCountValue(evidence) == status.linkCount &&
-        evidence.times.atimeSec == status.times.atimeSec &&
-        evidence.times.atimeNsec == status.times.atimeNsec &&
-        evidence.times.mtimeSec == status.times.mtimeSec &&
-        evidence.times.mtimeNsec == status.times.mtimeNsec)
+    (evidence.ok ==>
+       evidence.key == status.hostKey &&
+       evidence.isDir == (status.kind == BenchWorld.DirectoryKind) &&
+       evidence.isSymlink == (status.kind == BenchWorld.SymlinkKind) &&
+       MetadataLinkCountValue(evidence) == status.linkCount &&
+       evidence.times.atimeSec == status.times.atimeSec &&
+       evidence.times.atimeNsec == status.times.atimeNsec &&
+       evidence.times.mtimeSec == status.times.mtimeSec &&
+       evidence.times.mtimeNsec == status.times.mtimeNsec)
   }
 
   ghost predicate EntryNameEvidenceFor(
@@ -877,41 +877,41 @@ module MvCore {
            if !sourceEntry.parentMetadata.ok then sourceEntry.parent else targetEntry.parent,
            if !sourceEntry.parentMetadata.ok then sourceEntry.parentMetadata.err else targetEntry.parentMetadata.err)
        else (if sourceMetadata.isSymlink then
-         (match sourceFollowed
-          case SomeMetadataEvidence(value) =>
-            MetadataEvidenceFor(fs, source, true, value)
-          case NoMetadataEvidence => false) &&
-         (match sourceReferentEntry
-          case NoEntryNameEvidence => false
-          case FailedEntryNameEvidence(resolveErr) =>
-            IOContract.ResolvePathIdentityContractFields(
-              fs, preCwd, source, false, "", resolveErr
-            )
-          case SomeEntryNameEvidence(resolvedPath, value) =>
-            IOContract.ResolvePathIdentityContractFields(
-              fs, preCwd, source, true, resolvedPath, 0
-            ) &&
-            EntryNameEvidenceFor(fs, resolvedPath, value))
-       else
-         sourceFollowed == NoMetadataEvidence &&
-         sourceReferentEntry == NoEntryNameEvidence) &&
-      decision ==
-      if sourceReferentEntry.SomeEntryNameEvidence? &&
-         sourceReferentEntry.value.leaf == targetEntry.leaf &&
-         (!sourceReferentEntry.value.parentMetadata.ok || !targetEntry.parentMetadata.ok) then
-        Spec.FailedParentStat(
-          if !sourceReferentEntry.value.parentMetadata.ok then sourceReferentEntry.value.parent else targetEntry.parent,
-          if !sourceReferentEntry.value.parentMetadata.ok then sourceReferentEntry.value.parentMetadata.err else targetEntry.parentMetadata.err)
-      else if EvidenceNamesSame(sourceEntry, targetEntry) ||
-         (cmd.backupMode == Schema.BackupOff &&
-          ((sourceMetadata.ok &&
-            targetMetadata.ok &&
-            sourceMetadata.key == targetMetadata.key) ||
-           ReferentEvidenceNamesTarget(
-             sourceReferentEntry, targetEntry
-           )))
-      then Spec.RejectSameFile
-      else Spec.ContinueMove)
+               (match sourceFollowed
+                case SomeMetadataEvidence(value) =>
+                  MetadataEvidenceFor(fs, source, true, value)
+                case NoMetadataEvidence => false) &&
+               (match sourceReferentEntry
+                case NoEntryNameEvidence => false
+                case FailedEntryNameEvidence(resolveErr) =>
+                  IOContract.ResolvePathIdentityContractFields(
+                    fs, preCwd, source, false, "", resolveErr
+                  )
+                case SomeEntryNameEvidence(resolvedPath, value) =>
+                  IOContract.ResolvePathIdentityContractFields(
+                    fs, preCwd, source, true, resolvedPath, 0
+                  ) &&
+                  EntryNameEvidenceFor(fs, resolvedPath, value))
+             else
+               sourceFollowed == NoMetadataEvidence &&
+               sourceReferentEntry == NoEntryNameEvidence) &&
+            decision ==
+            if sourceReferentEntry.SomeEntryNameEvidence? &&
+               sourceReferentEntry.value.leaf == targetEntry.leaf &&
+               (!sourceReferentEntry.value.parentMetadata.ok || !targetEntry.parentMetadata.ok) then
+              Spec.FailedParentStat(
+                if !sourceReferentEntry.value.parentMetadata.ok then sourceReferentEntry.value.parent else targetEntry.parent,
+                if !sourceReferentEntry.value.parentMetadata.ok then sourceReferentEntry.value.parentMetadata.err else targetEntry.parentMetadata.err)
+            else if EvidenceNamesSame(sourceEntry, targetEntry) ||
+                    (cmd.backupMode == Schema.BackupOff &&
+                     ((sourceMetadata.ok &&
+                       targetMetadata.ok &&
+                       sourceMetadata.key == targetMetadata.key) ||
+                      ReferentEvidenceNamesTarget(
+                        sourceReferentEntry, targetEntry
+                      )))
+            then Spec.RejectSameFile
+            else Spec.ContinueMove)
   }
 
   lemma PackageSameFileEvidence(
@@ -939,7 +939,7 @@ module MvCore {
     requires EntryNameEvidenceFor(fs, source, sourceEntry)
     requires EntryNameEvidenceFor(fs, target, targetEntry)
     requires sourceEntry.leaf == targetEntry.leaf ==>
-      sourceEntry.parentMetadata.ok && targetEntry.parentMetadata.ok
+               sourceEntry.parentMetadata.ok && targetEntry.parentMetadata.ok
     requires if sourceMetadata.isSymlink then
                (match sourceFollowed
                 case SomeMetadataEvidence(value) =>
@@ -961,19 +961,19 @@ module MvCore {
                sourceReferentEntry == NoEntryNameEvidence
     requires decision ==
              if sourceReferentEntry.SomeEntryNameEvidence? &&
-         sourceReferentEntry.value.leaf == targetEntry.leaf &&
-         (!sourceReferentEntry.value.parentMetadata.ok || !targetEntry.parentMetadata.ok) then
-        Spec.FailedParentStat(
-          if !sourceReferentEntry.value.parentMetadata.ok then sourceReferentEntry.value.parent else targetEntry.parent,
-          if !sourceReferentEntry.value.parentMetadata.ok then sourceReferentEntry.value.parentMetadata.err else targetEntry.parentMetadata.err)
-      else if EvidenceNamesSame(sourceEntry, targetEntry) ||
-                (cmd.backupMode == Schema.BackupOff &&
-                 ((sourceMetadata.ok &&
-                   targetMetadata.ok &&
-                   sourceMetadata.key == targetMetadata.key) ||
-                  ReferentEvidenceNamesTarget(
-                    sourceReferentEntry, targetEntry
-                  )))
+                sourceReferentEntry.value.leaf == targetEntry.leaf &&
+                (!sourceReferentEntry.value.parentMetadata.ok || !targetEntry.parentMetadata.ok) then
+               Spec.FailedParentStat(
+                 if !sourceReferentEntry.value.parentMetadata.ok then sourceReferentEntry.value.parent else targetEntry.parent,
+                 if !sourceReferentEntry.value.parentMetadata.ok then sourceReferentEntry.value.parentMetadata.err else targetEntry.parentMetadata.err)
+             else if EvidenceNamesSame(sourceEntry, targetEntry) ||
+                     (cmd.backupMode == Schema.BackupOff &&
+                      ((sourceMetadata.ok &&
+                        targetMetadata.ok &&
+                        sourceMetadata.key == targetMetadata.key) ||
+                       ReferentEvidenceNamesTarget(
+                         sourceReferentEntry, targetEntry
+                       )))
              then Spec.RejectSameFile
              else Spec.ContinueMove
     ensures SameFileEvidenceFor(
@@ -1082,7 +1082,7 @@ module MvCore {
     else
       |calls| >= 1 &&
       (forall i: nat | i < |calls| ::
-        Spec.StatusRequest(calls[i], fs, NumberedBackupPath(target, i + 1), false)) &&
+         Spec.StatusRequest(calls[i], fs, NumberedBackupPath(target, i + 1), false)) &&
       (forall i: nat | i + 1 < |calls| :: calls[i].ok) &&
       !calls[|calls| - 1].ok
   }
@@ -1095,12 +1095,12 @@ module MvCore {
     BackupStatusSuffixFor(backupMode, fs, target, calls) &&
     (if backupMode == Schema.BackupOff then evidence == NoBackupSelection
      else evidence.SelectedBackup? &&
-       (if backupMode == Schema.BackupSimple ||
-           (backupMode == Schema.BackupExisting && !calls[0].ok) then
-          evidence.backupPath == SimpleBackupPath(target, suffix)
-        else if backupMode == Schema.BackupExisting then
-          |calls| >= 2 && evidence.backupPath == NumberedBackupPath(target, |calls| - 1)
-        else |calls| >= 1 && evidence.backupPath == NumberedBackupPath(target, |calls|)))
+          (if backupMode == Schema.BackupSimple ||
+              (backupMode == Schema.BackupExisting && !calls[0].ok) then
+             evidence.backupPath == SimpleBackupPath(target, suffix)
+           else if backupMode == Schema.BackupExisting then
+             |calls| >= 2 && evidence.backupPath == NumberedBackupPath(target, |calls| - 1)
+           else |calls| >= 1 && evidence.backupPath == NumberedBackupPath(target, |calls|)))
   }
 
   ghost predicate BackupSelectionEvidenceFor(
@@ -1352,10 +1352,10 @@ module MvCore {
       match step.sameFile.sourceReferentEntry
       case FailedEntryNameEvidence(err) =>
         IOContract.ResolvePathIdentitySpec(step.beforeFs, cwd, step.inputs.failures,
-          source, false, "", err)
+                                           source, false, "", err)
       case SomeEntryNameEvidence(path, _) =>
         IOContract.ResolvePathIdentitySpec(step.beforeFs, cwd, step.inputs.failures,
-          source, true, path, 0)
+                                           source, true, path, 0)
       case NoEntryNameEvidence => false
     else true
   }
@@ -1369,14 +1369,14 @@ module MvCore {
      else if step.backup.NoBackupSelection? then
        |step.renames| == 1 &&
        IOContract.RenamePathSpec(step.beforeFs, step.inputs.now, step.inputs.failures,
-         step.renames[0].afterFs, source, target, step.renames[0].ok, step.renames[0].err)
+                                 step.renames[0].afterFs, source, target, step.renames[0].ok, step.renames[0].err)
      else
        IOContract.RenamePathSpec(step.beforeFs, step.inputs.now, step.inputs.failures,
-         step.renames[0].afterFs, target, step.backup.backupPath,
-         step.renames[0].ok, step.renames[0].err) &&
+                                 step.renames[0].afterFs, target, step.backup.backupPath,
+                                 step.renames[0].ok, step.renames[0].err) &&
        (|step.renames| == 2 ==>
-         IOContract.RenamePathSpec(step.renames[0].afterFs, step.inputs.now, step.inputs.failures,
-           step.renames[1].afterFs, source, target, step.renames[1].ok, step.renames[1].err)))
+          IOContract.RenamePathSpec(step.renames[0].afterFs, step.inputs.now, step.inputs.failures,
+                                    step.renames[1].afterFs, source, target, step.renames[1].ok, step.renames[1].err)))
   }
 
   opaque ghost predicate StepEvidenceFor(
@@ -1427,7 +1427,7 @@ module MvCore {
            source,
            target,
            evidence.sourceIsDir,
-          evidence.targetFound,
+           evidence.targetFound,
            "",
            cmd.verbose,
            cmd.debug,
@@ -1484,7 +1484,7 @@ module MvCore {
              evidence.backup == NoBackupSelection && |evidence.renames| == 0 &&
              evidence.afterFs == evidence.beforeFs &&
              evidence.outcome == Spec.MoveOutcome([], Spec.ParentStatFailureMessageSpec(
-               decision.path, decision.err), true)
+                                                    decision.path, decision.err), true)
            else if decision == Spec.RejectSameFile then
              evidence.backup == NoBackupSelection &&
              |evidence.renames| == 0 &&
@@ -1528,7 +1528,7 @@ module MvCore {
     calls[0].ok == evidence.sourceOk &&
     calls[0].err == evidence.sourceErr &&
     (evidence.sourceOk ==> evidence.sourceIsDir ==
-      (calls[0].status.kind == BenchWorld.DirectoryKind)) &&
+                           (calls[0].status.kind == BenchWorld.DirectoryKind)) &&
     (if !evidence.sourceOk then
        |calls| == 1
      else
@@ -1548,7 +1548,7 @@ module MvCore {
             sourceMetadata, targetMetadata, sourceFollowed,
             sourceEntry, targetEntry, sourceReferentEntry,
             collision, decision
-          ) =>
+            ) =>
             |calls| >= 4 &&
             calls[0] == MetadataStatusCall(fs, source, false, sourceMetadata) &&
             calls[1] == MetadataStatusCall(fs, target, false, targetMetadata) &&
@@ -1561,58 +1561,58 @@ module MvCore {
             (if decision.FailedParentStat? && sourceReferentEntry.NoEntryNameEvidence? then
                |calls| == 4
              else var afterEntries :=
-              if sourceMetadata.isSymlink then
-                (if sourceReferentEntry.SomeEntryNameEvidence? then 6 else 5)
-              else 4;
-              (if sourceMetadata.isSymlink then
-                 |calls| >= 5 &&
-                 (match sourceFollowed
-                  case SomeMetadataEvidence(followed) =>
-                    calls[4] == MetadataStatusCall(fs, source, true, followed)
-                  case _ => false) &&
-                 (match sourceReferentEntry
-                  case SomeEntryNameEvidence(resolvedPath, referentEntry) =>
-                    |calls| >= 6 &&
-                    calls[5] == MetadataStatusCall(
-                      fs, referentEntry.parent, false,
-                      referentEntry.parentMetadata
-                    )
-                  case FailedEntryNameEvidence(_) => true
-                  case NoEntryNameEvidence => false)
-               else
-                 true) &&
-              (if decision.FailedParentStat? || decision == Spec.RejectSameFile ||
-                  (cmd.updateMode == Schema.UpdateOlder &&
-                   !SourceNewer(
-                     sourceMetadata.times.mtimeSec,
-                     sourceMetadata.times.mtimeNsec,
-                     targetMetadata.times.mtimeSec,
-                     targetMetadata.times.mtimeNsec
-                   )) then
-                 |calls| == afterEntries
-               else
-                 var collisionNeeded :=
-                   (cmd.backupMode == Schema.BackupSimple ||
-                    cmd.backupMode == Schema.BackupExisting) &&
-                   sourceEntry.leaf == targetEntry.leaf + cmd.backupSuffix;
-                 var afterCollision := afterEntries +
-                   (if collisionNeeded then 1 else 0);
-                 afterCollision <= |calls| &&
-                 (collisionNeeded ==>
-                   (match collision
-                    case CheckedBackupCollision(_, candidate) =>
-                      calls[afterEntries] == MetadataStatusCall(
-                        fs, SimpleBackupPath(target, cmd.backupSuffix),
-                        true, candidate
-                      )
-                    case _ => false)) &&
-                 (if BackupCollisionDetected(collision) then
-                    |calls| == afterCollision
-                  else
-                    BackupSelectionFromStatusCallsFor(
-                      cmd.backupMode, cmd.backupSuffix, fs, target,
-                      evidence.backup, calls[afterCollision..]
-                    ))))))
+                    if sourceMetadata.isSymlink then
+                      (if sourceReferentEntry.SomeEntryNameEvidence? then 6 else 5)
+                    else 4;
+                  (if sourceMetadata.isSymlink then
+                     |calls| >= 5 &&
+                     (match sourceFollowed
+                      case SomeMetadataEvidence(followed) =>
+                        calls[4] == MetadataStatusCall(fs, source, true, followed)
+                      case _ => false) &&
+                     (match sourceReferentEntry
+                      case SomeEntryNameEvidence(resolvedPath, referentEntry) =>
+                        |calls| >= 6 &&
+                        calls[5] == MetadataStatusCall(
+                          fs, referentEntry.parent, false,
+                          referentEntry.parentMetadata
+                        )
+                      case FailedEntryNameEvidence(_) => true
+                      case NoEntryNameEvidence => false)
+                   else
+                     true) &&
+                  (if decision.FailedParentStat? || decision == Spec.RejectSameFile ||
+                      (cmd.updateMode == Schema.UpdateOlder &&
+                       !SourceNewer(
+                         sourceMetadata.times.mtimeSec,
+                         sourceMetadata.times.mtimeNsec,
+                         targetMetadata.times.mtimeSec,
+                         targetMetadata.times.mtimeNsec
+                       )) then
+                     |calls| == afterEntries
+                   else
+                     var collisionNeeded :=
+                       (cmd.backupMode == Schema.BackupSimple ||
+                        cmd.backupMode == Schema.BackupExisting) &&
+                       sourceEntry.leaf == targetEntry.leaf + cmd.backupSuffix;
+                     var afterCollision := afterEntries +
+                                           (if collisionNeeded then 1 else 0);
+                     afterCollision <= |calls| &&
+                     (collisionNeeded ==>
+                        (match collision
+                         case CheckedBackupCollision(_, candidate) =>
+                           calls[afterEntries] == MetadataStatusCall(
+                             fs, SimpleBackupPath(target, cmd.backupSuffix),
+                             true, candidate
+                           )
+                         case _ => false)) &&
+                     (if BackupCollisionDetected(collision) then
+                        |calls| == afterCollision
+                      else
+                        BackupSelectionFromStatusCallsFor(
+                          cmd.backupMode, cmd.backupSuffix, fs, target,
+                          evidence.backup, calls[afterCollision..]
+                        ))))))
   }
 
   lemma StepStatusEvidenceTransfer(
@@ -1700,7 +1700,7 @@ module MvCore {
                source,
                target,
                evidence.sourceIsDir,
-          evidence.targetFound,
+               evidence.targetFound,
                "",
                cmd.verbose,
                cmd.debug,
@@ -1849,18 +1849,18 @@ module MvCore {
     requires !sourceEntry.parentMetadata.ok || !targetEntry.parentMetadata.ok
     requires step.sourceOk && step.targetExistsCalled && step.targetFound
     requires IOContract.IsDirectoryStrictContractFields(step.beforeFs, source, false,
-      step.sourceOk, step.sourceIsDir, step.sourceErr)
+                                                        step.sourceOk, step.sourceIsDir, step.sourceErr)
     requires Spec.StatusExistsOutcomeFields(step.beforeFs, target, false, true, step.targetExistsErr)
     requires cmd.overwriteMode != Schema.OverwriteSkip && cmd.updateMode != Schema.UpdateNone &&
-      cmd.updateMode != Schema.UpdateNoneFail
+             cmd.updateMode != Schema.UpdateNoneFail
     requires step.sameFile == CheckedSameFile(sourceMetadata, targetMetadata, NoMetadataEvidence,
-      sourceEntry, targetEntry, NoEntryNameEvidence, NoBackupCollisionCheck,
-      Spec.FailedParentStat(
-        if !sourceEntry.parentMetadata.ok then sourceEntry.parent else targetEntry.parent,
-        if !sourceEntry.parentMetadata.ok then sourceEntry.parentMetadata.err else targetEntry.parentMetadata.err))
+                                              sourceEntry, targetEntry, NoEntryNameEvidence, NoBackupCollisionCheck,
+                                              Spec.FailedParentStat(
+                                                if !sourceEntry.parentMetadata.ok then sourceEntry.parent else targetEntry.parent,
+                                                if !sourceEntry.parentMetadata.ok then sourceEntry.parentMetadata.err else targetEntry.parentMetadata.err))
     requires step.backup == NoBackupSelection && step.renames == [] && step.afterFs == step.beforeFs
     requires step.outcome == Spec.MoveOutcome([], Spec.ParentStatFailureMessageSpec(
-      step.sameFile.decision.path, step.sameFile.decision.err), true)
+                                                step.sameFile.decision.path, step.sameFile.decision.err), true)
     requires StatusCallsFor(step.inputs, step.firstStatus, step.statusCalls)
     requires StepStatusEvidenceFor(source, target, cmd, step)
     ensures StepEvidenceFor(source, target, cmd, cwd, step)
@@ -1874,17 +1874,17 @@ module MvCore {
     step: StepEvidence
   )
     requires IOContract.IsDirectoryStrictContractFields(step.beforeFs, source, false,
-      step.sourceOk, step.sourceIsDir, step.sourceErr)
+                                                        step.sourceOk, step.sourceIsDir, step.sourceErr)
     requires step.sourceOk && step.targetExistsCalled && step.targetFound
     requires Spec.StatusExistsOutcomeFields(step.beforeFs, target, false, true, step.targetExistsErr)
     requires cmd.overwriteMode != Schema.OverwriteSkip && cmd.updateMode != Schema.UpdateNone &&
-      cmd.updateMode != Schema.UpdateNoneFail
+             cmd.updateMode != Schema.UpdateNoneFail
     requires SameFileEvidenceFor(cmd, step.beforeFs, cwd, source, target, step.sameFile)
     requires step.sameFile.CheckedSameFile? && step.sameFile.decision.FailedParentStat?
     requires step.sameFile.sourceReferentEntry.SomeEntryNameEvidence?
     requires step.backup == NoBackupSelection && step.renames == [] && step.afterFs == step.beforeFs
     requires step.outcome == Spec.MoveOutcome([], Spec.ParentStatFailureMessageSpec(
-      step.sameFile.decision.path, step.sameFile.decision.err), true)
+                                                step.sameFile.decision.path, step.sameFile.decision.err), true)
     requires StatusCallsFor(step.inputs, step.firstStatus, step.statusCalls)
     requires StepStatusEvidenceFor(source, target, cmd, step)
     requires SourceResolutionObservationFor(source, cwd, step)
@@ -2143,19 +2143,19 @@ module MvCore {
     requires evidence.fsBounds[0] == beforeFs
     requires evidence.fsBounds[|evidence.fsBounds| - 1] == afterFs
     requires forall i: nat | i < |sources| ::
-      BatchStepEvidenceFor(
-        sources[i], directory, cmd,
-        evidence.fsBounds[i], preCwd, evidence.fsBounds[i + 1],
-        evidence.outcomes[i], evidence.stdoutFragments[i],
-        evidence.stderrFragments[i], evidence.steps[i])
+               BatchStepEvidenceFor(
+                 sources[i], directory, cmd,
+                 evidence.fsBounds[i], preCwd, evidence.fsBounds[i + 1],
+                 evidence.outcomes[i], evidence.stdoutFragments[i],
+                 evidence.stderrFragments[i], evidence.steps[i])
     requires Spec.ConcatenateFragments(evidence.stdoutFragments) == out
     requires Spec.ConcatenateFragments(evidence.stderrFragments) == err
     requires hadError <==>
-      exists i: nat ::
-        i < |evidence.outcomes| && evidence.outcomes[i].failed
+             exists i: nat ::
+               i < |evidence.outcomes| && evidence.outcomes[i].failed
     ensures BatchEvidenceFor(
-      sources, directory, cmd, beforeFs, preCwd, afterFs,
-      hadError, out, err, evidence)
+              sources, directory, cmd, beforeFs, preCwd, afterFs,
+              hadError, out, err, evidence)
   {
   }
 
@@ -2226,18 +2226,18 @@ module MvCore {
     step: StepEvidence
   ) returns (next: BatchEvidence)
     requires BatchEvidenceFor(sources, directory, cmd, beforeFs, cwd, step.beforeFs,
-      prefixError, prefixOut, prefixErr, prefix)
+                              prefixError, prefixOut, prefixErr, prefix)
     requires BatchMoveStatusEvidenceFor(sources, directory, cmd, inputs, prefix)
     requires StepEvidenceFor(NormalizeSource(source, cmd.stripTrailingSlashes),
-      TargetInDirectory(directory, NormalizeSource(source, cmd.stripTrailingSlashes)), cmd, cwd, step)
+                             TargetInDirectory(directory, NormalizeSource(source, cmd.stripTrailingSlashes)), cmd, cwd, step)
     requires StepStatusEvidenceFor(NormalizeSource(source, cmd.stripTrailingSlashes),
-      TargetInDirectory(directory, NormalizeSource(source, cmd.stripTrailingSlashes)), cmd, step)
+                                   TargetInDirectory(directory, NormalizeSource(source, cmd.stripTrailingSlashes)), cmd, step)
     requires step.inputs == inputs
     requires step.firstStatus == prefix.firstStatus + |prefix.statusCalls|
     requires StatusCallsFor(inputs, step.firstStatus, step.statusCalls)
     ensures BatchEvidenceFor(sources + [source], directory, cmd, beforeFs, cwd, step.afterFs,
-      prefixError || step.outcome.failed, prefixOut + step.outcome.stdoutFragment,
-      prefixErr + step.outcome.stderrFragment, next)
+                             prefixError || step.outcome.failed, prefixOut + step.outcome.stdoutFragment,
+                             prefixErr + step.outcome.stderrFragment, next)
     ensures BatchMoveStatusEvidenceFor(sources + [source], directory, cmd, inputs, next)
     ensures next.firstStatus == prefix.firstStatus
     ensures next.statusCalls == prefix.statusCalls + step.statusCalls
@@ -2245,24 +2245,24 @@ module MvCore {
     hide *;
     reveal BatchEvidenceFor(), BatchMoveStatusEvidenceFor(), BatchStatusEvidenceFor();
     next := BatchEvidence(prefix.steps + [step], prefix.fsBounds + [step.afterFs],
-      prefix.outcomes + [step.outcome], prefix.stdoutFragments + [step.outcome.stdoutFragment],
-      prefix.stderrFragments + [step.outcome.stderrFragment], prefix.firstStatus,
-      prefix.statusCalls + step.statusCalls,
-      prefix.statusBounds + [prefix.firstStatus + |prefix.statusCalls + step.statusCalls|]);
+                          prefix.outcomes + [step.outcome], prefix.stdoutFragments + [step.outcome.stdoutFragment],
+                          prefix.stderrFragments + [step.outcome.stderrFragment], prefix.firstStatus,
+                          prefix.statusCalls + step.statusCalls,
+                          prefix.statusBounds + [prefix.firstStatus + |prefix.statusCalls + step.statusCalls|]);
     StatusCallsConcat(inputs, prefix.firstStatus, prefix.statusCalls, step.statusCalls);
     StatusBoundsSnoc(prefix.firstStatus, prefix.statusCalls, prefix.statusBounds,
-      prefix.steps, step, next.statusCalls, next.statusBounds, next.steps);
+                     prefix.steps, step, next.statusCalls, next.statusBounds, next.steps);
     ConcatenateFragmentsSnoc(prefix.stdoutFragments, step.outcome.stdoutFragment);
     ConcatenateFragmentsSnoc(prefix.stderrFragments, step.outcome.stderrFragment);
     FailureExistsSnoc(prefix.outcomes, step.outcome, prefixError);
     assert BatchStepEvidenceFor(source, directory, cmd, step.beforeFs, cwd, step.afterFs,
-      step.outcome, step.outcome.stdoutFragment, step.outcome.stderrFragment, step) by {
+                                step.outcome, step.outcome.stdoutFragment, step.outcome.stderrFragment, step) by {
       reveal BatchStepEvidenceFor();
     }
     forall j: nat | j < |sources + [source]|
       ensures BatchStepEvidenceFor((sources + [source])[j], directory, cmd,
-        next.fsBounds[j], cwd, next.fsBounds[j + 1], next.outcomes[j],
-        next.stdoutFragments[j], next.stderrFragments[j], next.steps[j])
+                                   next.fsBounds[j], cwd, next.fsBounds[j + 1], next.outcomes[j],
+                                   next.stdoutFragments[j], next.stderrFragments[j], next.steps[j])
       ensures next.steps[j].inputs == inputs
       ensures
         var normalized := NormalizeSource((sources + [source])[j], cmd.stripTrailingSlashes);
@@ -2575,7 +2575,7 @@ module MvCore {
       var found := rawMetadataOk5;
       var err := rawMetadataErr5;
       ghost var seedCall := Spec.StatusCallEvidence(old(io.fs()), numberedSeed, false,
-                                               rawMetadataOk5, rawMetadataStatus5, rawMetadataErr5);
+                                                    rawMetadataOk5, rawMetadataStatus5, rawMetadataErr5);
       assert Spec.StatusRequest(seedCall, old(io.fs()), numberedSeed, false);
       assert StatusCallsFor(inputs, firstStatus, [seedCall]) by {
         reveal StatusCallsFor(), Spec.StatusCallsFor();
@@ -2586,51 +2586,51 @@ module MvCore {
         calls := [seedCall];
         assert Spec.StatusExistsOutcomeFields(old(io.fs()), numberedSeed, false, false, err);
       } else {
-      ghost var checks: seq<BackupCheckEvidence>;
-      ghost var numberedCalls: seq<Spec.StatusCallEvidence>;
-      path, checks, numberedCalls := FindUnusedNumberedBackupPath(target, 1, io);
-      evidence := SelectedBackup(path, checks, true, found, err);
-      calls := [seedCall] + numberedCalls;
-      assert StatusCallsFor(inputs, firstStatus + 1, numberedCalls);
-      {
-        hide *;
-        StatusCallsConcat(inputs, firstStatus, [seedCall], numberedCalls);
-      }
-      assert Spec.StatusExistsOutcomeFields(
-          old(io.fs()), numberedSeed, false, true, err
-        );
-      assert BackupStatusSuffixFor(backupMode, old(io.fs()), target, calls) by {
-        forall i: nat | 1 <= i < |calls|
-          ensures Spec.StatusRequest(calls[i], old(io.fs()), NumberedBackupPath(target, i), false)
+        ghost var checks: seq<BackupCheckEvidence>;
+        ghost var numberedCalls: seq<Spec.StatusCallEvidence>;
+        path, checks, numberedCalls := FindUnusedNumberedBackupPath(target, 1, io);
+        evidence := SelectedBackup(path, checks, true, found, err);
+        calls := [seedCall] + numberedCalls;
+        assert StatusCallsFor(inputs, firstStatus + 1, numberedCalls);
         {
-          StatusCallConsIndex(seedCall, numberedCalls, i);
-          assert calls[i] == numberedCalls[i - 1];
+          hide *;
+          StatusCallsConcat(inputs, firstStatus, [seedCall], numberedCalls);
         }
-        forall i: nat | 1 <= i + 1 < |calls|
-          ensures calls[i].ok
-        {
-          if i == 0 {
-            assert calls[i] == seedCall;
-          } else {
+        assert Spec.StatusExistsOutcomeFields(
+            old(io.fs()), numberedSeed, false, true, err
+          );
+        assert BackupStatusSuffixFor(backupMode, old(io.fs()), target, calls) by {
+          forall i: nat | 1 <= i < |calls|
+            ensures Spec.StatusRequest(calls[i], old(io.fs()), NumberedBackupPath(target, i), false)
+          {
             StatusCallConsIndex(seedCall, numberedCalls, i);
             assert calls[i] == numberedCalls[i - 1];
-            assert checks[i - 1].found;
           }
+          forall i: nat | 1 <= i + 1 < |calls|
+            ensures calls[i].ok
+          {
+            if i == 0 {
+              assert calls[i] == seedCall;
+            } else {
+              StatusCallConsIndex(seedCall, numberedCalls, i);
+              assert calls[i] == numberedCalls[i - 1];
+              assert checks[i - 1].found;
+            }
+          }
+          assert calls[|calls| - 1] == numberedCalls[|numberedCalls| - 1];
         }
-        assert calls[|calls| - 1] == numberedCalls[|numberedCalls| - 1];
-      }
       }
     } else {
-    ghost var checks: seq<BackupCheckEvidence>;
-    path, checks, calls := FindUnusedNumberedBackupPath(target, 1, io);
-    evidence := SelectedBackup(path, checks, false, false, 0);
-    assert BackupStatusSuffixFor(backupMode, old(io.fs()), target, calls) by {
-      forall i: nat | i + 1 < |calls|
-        ensures calls[i].ok
-      {
-        assert checks[i].found;
+      ghost var checks: seq<BackupCheckEvidence>;
+      path, checks, calls := FindUnusedNumberedBackupPath(target, 1, io);
+      evidence := SelectedBackup(path, checks, false, false, 0);
+      assert BackupStatusSuffixFor(backupMode, old(io.fs()), target, calls) by {
+        forall i: nat | i + 1 < |calls|
+          ensures calls[i].ok
+        {
+          assert checks[i].found;
+        }
       }
-    }
     }
     assert BackupSelectionEvidenceFor(target, backupMode, suffix, old(io.fs()), evidence);
     assert BackupStatusSuffixFor(backupMode, old(io.fs()), target, calls);
@@ -2654,13 +2654,13 @@ module MvCore {
               Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), old(io.fs()), path, followSymlink, evidence
             )
     ensures IOContract.IsDirectoryStrictContractFields(old(io.fs()), path, followSymlink,
-      evidence.ok, evidence.isDir, evidence.err)
+                                                       evidence.ok, evidence.isDir, evidence.err)
     ensures Spec.StatusExistsOutcomeFields(old(io.fs()), path, followSymlink, evidence.ok, evidence.err)
     ensures IOContract.IsDirectoryContractFields(old(io.fs()), path, followSymlink,
-      evidence.ok, evidence.isDir, evidence.err)
+                                                 evidence.ok, evidence.isDir, evidence.err)
     ensures evidence.isDir == (evidence.rawStatus.kind == BenchWorld.DirectoryKind)
     ensures StatusCallsFor(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
-      old(io.statusCursor()), [MetadataStatusCall(old(io.fs()), path, followSymlink, evidence)])
+                           old(io.statusCursor()), [MetadataStatusCall(old(io.fs()), path, followSymlink, evidence)])
     ensures evidence.ok <==> evidence.err == 0
     ensures evidence.ordinal == old(io.statusCursor())
     ensures io.statusCursor() == old(io.statusCursor()) + 1
@@ -2672,7 +2672,7 @@ module MvCore {
     var status := IOContract.ResultValue(getFileStatusResult3, BenchWorld.DEFAULT_FILE_STATUS);
     var err := IOContract.ResultErrno(getFileStatusResult3);
     assert IOContract.ObservedNativeFileStatusContractFields(io.statusObservations(), io.trustedNativeFailures(),
-      ordinal, io.fs(), path, followSymlink, ok, status, err) by {
+                                                             ordinal, io.fs(), path, followSymlink, ok, status, err) by {
       hide *;
       reveal IOContract.GetFileStatusSpec();
     }
@@ -2705,7 +2705,7 @@ module MvCore {
       err
     );
     assert StatusCallsFor(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
-      ordinal, [MetadataStatusCall(io.fs(), path, followSymlink, evidence)]) by {
+                          ordinal, [MetadataStatusCall(io.fs(), path, followSymlink, evidence)]) by {
       hide *;
       reveal StatusCallsFor(), Spec.StatusCallsFor(), MetadataStatusCall();
     }
@@ -2723,7 +2723,7 @@ module MvCore {
               Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), old(io.fs()), evidence.parent,
               false, evidence.parentMetadata)
     ensures StatusCallsFor(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
-      old(io.statusCursor()), [MetadataStatusCall(old(io.fs()), evidence.parent, false, evidence.parentMetadata)])
+                           old(io.statusCursor()), [MetadataStatusCall(old(io.fs()), evidence.parent, false, evidence.parentMetadata)])
     decreases *
   {
     var leaf := BasenameCore.ComputeBasenameValue(path);
@@ -2966,8 +2966,8 @@ module MvCore {
        case _ => false
      else if |cmd.operands| == 2 then
        var source := NormalizeSource(
-         cmd.operands[0], cmd.stripTrailingSlashes
-       );
+                       cmd.operands[0], cmd.stripTrailingSlashes
+                     );
        var destination := cmd.operands[1];
        if cmd.noTargetDirectory then
          match evidence
@@ -3133,7 +3133,7 @@ module MvCore {
       reveal StatusCallsFor(), Spec.StatusCallsFor();
     }
     StatusTranscriptWitness(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
-      firstStatus, io.statusCursor(), calls);
+                            firstStatus, io.statusCursor(), calls);
     var cmd := Schema.Command(raw);
     if cmd.mode == Schema.ModeInvalidBackup {
       var err := GetInvalidBackupArgumentMessage(cmd.invalidBackupArg);
@@ -3195,23 +3195,23 @@ module MvCore {
       assert |cmd.operands| > 0;
       assert io.statusCursor() == firstStatus + |calls|;
       assert StatusCallsFor(
-        Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus, calls
-      );
+          Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus, calls
+        );
       assert DirectoryStatusEvidenceFor(
-        cmd.operands, cmd.targetDirectory, cmd,
-        preFs, preCwd, io.fs(),
-        preStdout, plannedStdout, preStderr, plannedStderr,
-        exit, Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus,
-        calls, directoryEvidence
-      );
+          cmd.operands, cmd.targetDirectory, cmd,
+          preFs, preCwd, io.fs(),
+          preStdout, plannedStdout, preStderr, plannedStderr,
+          exit, Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus,
+          calls, directoryEvidence
+        );
       assert RunStatusEvidenceFor(
-        raw, preFs, preCwd, io.fs(),
-        preStdout, plannedStdout, preStderr, plannedStderr,
-        exit, Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus,
-        io.statusCursor(), calls, runEvidence
-      );
+          raw, preFs, preCwd, io.fs(),
+          preStdout, plannedStdout, preStderr, plannedStderr,
+          exit, Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus,
+          io.statusCursor(), calls, runEvidence
+        );
       StatusTranscriptWitness(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
-        firstStatus, io.statusCursor(), calls);
+                              firstStatus, io.statusCursor(), calls);
       assert PreparedSummary(raw, io, exit, plannedStdout, plannedStderr);
       return;
     }
@@ -3264,9 +3264,9 @@ module MvCore {
       assert StatusCallsFor(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus, calls);
       assert step.firstStatus == firstStatus + |calls|;
       assert StatusCallsFor(
-        Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus + |calls|,
-        step.statusCalls
-      );
+          Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus + |calls|,
+          step.statusCalls
+        );
       StatusCallsConcat(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus,
                         calls, step.statusCalls);
       calls := calls + step.statusCalls;
@@ -3320,31 +3320,31 @@ module MvCore {
             );
           hide BatchStepEvidenceFor();
           assert forall i: nat | i < 1 ::
-            BatchStepEvidenceFor(
-              [cmd.operands[0]][i], dest, cmd,
-              batch.fsBounds[i], preCwd, batch.fsBounds[i + 1],
-              batch.outcomes[i], batch.stdoutFragments[i],
-              batch.stderrFragments[i], batch.steps[i]
-            );
+              BatchStepEvidenceFor(
+                [cmd.operands[0]][i], dest, cmd,
+                batch.fsBounds[i], preCwd, batch.fsBounds[i + 1],
+                batch.outcomes[i], batch.stdoutFragments[i],
+                batch.stderrFragments[i], batch.steps[i]
+              );
           assert step.outcome.failed == hadError;
           assert |batch.outcomes| == 1;
           assert batch.outcomes[0] == step.outcome;
           assert (exists i: nat :: (i < |batch.outcomes| &&
-                                   batch.outcomes[i].failed)) <==> batch.outcomes[0].failed by {
+                                    batch.outcomes[i].failed)) <==> batch.outcomes[0].failed by {
             if exists i: nat :: (i < |batch.outcomes| &&
-                                batch.outcomes[i].failed) {
+                                 batch.outcomes[i].failed) {
               var i: nat :| i < |batch.outcomes| &&
-                batch.outcomes[i].failed;
+                            batch.outcomes[i].failed;
               assert i == 0;
             } else if batch.outcomes[0].failed {
               assert 0 < |batch.outcomes|;
             }
           }
           assert hadError <==>
-            exists i: nat :: i < |batch.outcomes| &&
-              batch.outcomes[i].failed;
+                 exists i: nat :: i < |batch.outcomes| &&
+                                  batch.outcomes[i].failed;
           assert BatchEvidenceFor([cmd.operands[0]], dest, cmd, preFs, preCwd,
-            movedFs, hadError, out, errOut, batch) by {
+                                  movedFs, hadError, out, errOut, batch) by {
             reveal BatchEvidenceFor();
           }
           ghost var batchOutcome := step.outcome;
@@ -3473,8 +3473,8 @@ module MvCore {
       assert PreparedSummaryIO(raw, preFs, preCwd, preStdout, preStderr, io, exit, plannedStdout, plannedStderr);
       assert io.statusCursor() == firstStatus + |calls|;
       assert StatusCallsFor(
-        Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus, calls
-      );
+          Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus, calls
+        );
       if cmd.noTargetDirectory {
         assert calls == step.statusCalls;
         assert step.firstStatus == firstStatus;
@@ -3488,13 +3488,13 @@ module MvCore {
         assert step.beforeFs == preFs && step.afterFs == io.fs();
       }
       assert RunStatusEvidenceFor(
-        raw, preFs, preCwd, io.fs(),
-        preStdout, plannedStdout, preStderr, plannedStderr,
-        exit, Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus,
-        io.statusCursor(), calls, runEvidence
-      );
+          raw, preFs, preCwd, io.fs(),
+          preStdout, plannedStdout, preStderr, plannedStderr,
+          exit, Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus,
+          io.statusCursor(), calls, runEvidence
+        );
       StatusTranscriptWitness(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
-        firstStatus, io.statusCursor(), calls);
+                              firstStatus, io.statusCursor(), calls);
       assert PreparedSummary(raw, io, exit, plannedStdout, plannedStderr);
       return;
     }
@@ -3508,13 +3508,13 @@ module MvCore {
     runEvidence := DirectoryRunStatus(directoryEvidence);
     assert PreparedSummaryIO(raw, preFs, preCwd, preStdout, preStderr, io, exit, plannedStdout, plannedStderr);
     assert RunStatusEvidenceFor(
-      raw, preFs, preCwd, io.fs(),
-      preStdout, plannedStdout, preStderr, plannedStderr,
-      exit, Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus,
-      io.statusCursor(), calls, runEvidence
-    );
+        raw, preFs, preCwd, io.fs(),
+        preStdout, plannedStdout, preStderr, plannedStderr,
+        exit, Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus,
+        io.statusCursor(), calls, runEvidence
+      );
     StatusTranscriptWitness(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
-      firstStatus, io.statusCursor(), calls);
+                            firstStatus, io.statusCursor(), calls);
     assert PreparedSummary(raw, io, exit, plannedStdout, plannedStderr);
   }
 
@@ -3532,7 +3532,7 @@ module MvCore {
     var rawMetadataStatus3 := IOContract.ResultValue(getFileStatusResult5, BenchWorld.DEFAULT_FILE_STATUS);
     var rawMetadataErr3 := IOContract.ResultErrno(getFileStatusResult5);
     call := Spec.StatusCallEvidence(old(io.fs()), directory, true,
-      rawMetadataOk3, rawMetadataStatus3, rawMetadataErr3);
+                                    rawMetadataOk3, rawMetadataStatus3, rawMetadataErr3);
     MetadataProof.FileStatusStructureImpliesMetadata(io.fs(), directory, true, rawMetadataOk3, rawMetadataStatus3, rawMetadataErr3);
     var statOk := rawMetadataOk3;
     var isDir := rawMetadataStatus3.kind == BenchWorld.DirectoryKind;
@@ -3608,8 +3608,8 @@ module MvCore {
     assert StatusCallsFor(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus, [dirCall]);
     assert batch.firstStatus == firstStatus + 1;
     assert StatusCallsFor(
-      Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus + 1, batch.statusCalls
-    );
+        Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus + 1, batch.statusCalls
+      );
     {
       hide *;
       StatusCallsConcat(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), firstStatus,
@@ -3645,9 +3645,9 @@ module MvCore {
   ghost function RenameFramePrototype(frame: RenameFrame): StepEvidence
   {
     MakeStepEvidence(frame.beforeFs, frame.beforeFs, [], [], false,
-      true, frame.sourceIsDir, 0, true, frame.targetFound, frame.targetErr,
-      frame.sameFile, frame.backup, [], frame.beforeFs,
-      StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs))
+                     true, frame.sourceIsDir, 0, true, frame.targetFound, frame.targetErr,
+                     frame.sameFile, frame.backup, [], frame.beforeFs,
+                     StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs))
   }
 
   lemma ExistingTargetNonempty(fs: BenchWorld.FileSystem, target: string)
@@ -3659,7 +3659,7 @@ module MvCore {
   }
 
   lemma SelectedBackupNonempty(target: string, mode: Schema.BackupMode, suffix: string,
-    fs: BenchWorld.FileSystem, evidence: BackupSelectionEvidence)
+                               fs: BenchWorld.FileSystem, evidence: BackupSelectionEvidence)
     requires BackupSelectionEvidenceFor(target, mode, suffix, fs, evidence)
     requires evidence.SelectedBackup? && target != ""
     ensures evidence.backupPath != ""
@@ -3674,7 +3674,7 @@ module MvCore {
   )
   {
     IOContract.IsDirectoryStrictContractFields(frame.beforeFs, source, false,
-      true, frame.sourceIsDir, 0) &&
+                                               true, frame.sourceIsDir, 0) &&
     Spec.StatusExistsOutcomeFields(frame.beforeFs, target, false, frame.targetFound, frame.targetErr) &&
     StatusCallsFor(frame.inputs, frame.firstStatus, frame.statusCalls) &&
     StepStatusEvidenceFor(source, target, cmd, RenameFramePrototype(frame)) &&
@@ -3687,16 +3687,16 @@ module MvCore {
       SameFileEvidenceFor(cmd, frame.beforeFs, frame.cwd, source, target, frame.sameFile) &&
       frame.sameFile.CheckedSameFile? && frame.sameFile.decision == Spec.ContinueMove &&
       (cmd.updateMode != Schema.UpdateOlder || SourceNewer(
-        frame.sameFile.source.times.mtimeSec, frame.sameFile.source.times.mtimeNsec,
-        frame.sameFile.target.times.mtimeSec, frame.sameFile.target.times.mtimeNsec)) &&
+         frame.sameFile.source.times.mtimeSec, frame.sameFile.source.times.mtimeNsec,
+         frame.sameFile.target.times.mtimeSec, frame.sameFile.target.times.mtimeNsec)) &&
       BackupCollisionEvidenceFor(cmd, frame.beforeFs, source, target, frame.sameFile.source,
-        frame.sameFile.sourceEntry, frame.sameFile.targetEntry, frame.sameFile.backupCollision) &&
+                                 frame.sameFile.sourceEntry, frame.sameFile.targetEntry, frame.sameFile.backupCollision) &&
       !BackupCollisionDetected(frame.sameFile.backupCollision) &&
       (if cmd.backupMode == Schema.BackupOff then
-        frame.backup == NoBackupSelection && frame.backupPath == ""
+         frame.backup == NoBackupSelection && frame.backupPath == ""
        else frame.backup.SelectedBackup? && frame.backup.backupPath == frame.backupPath &&
-        frame.backupPath != "" &&
-        BackupSelectionEvidenceFor(target, cmd.backupMode, cmd.backupSuffix, frame.beforeFs, frame.backup))
+            frame.backupPath != "" &&
+            BackupSelectionEvidenceFor(target, cmd.backupMode, cmd.backupSuffix, frame.beforeFs, frame.backup))
   }
 
   ghost opaque predicate RenamePhaseSummary(
@@ -3718,21 +3718,21 @@ module MvCore {
   ) returns (step: StepEvidence)
     requires RenameFrameReady(source, target, cmd, frame)
     requires RenameEvidenceFor(source, target, frame.sourceIsDir, frame.targetFound,
-      frame.backupPath, cmd.verbose, cmd.debug, frame.beforeFs, frame.cwd,
-      afterFs, outcome, calls, backupFs)
+                               frame.backupPath, cmd.verbose, cmd.debug, frame.beforeFs, frame.cwd,
+                               afterFs, outcome, calls, backupFs)
     requires RenameNativeObservationsFor(source, target,
-      MakeStepEvidence(frame.beforeFs, afterFs, outcome.stdoutFragment, outcome.stderrFragment, outcome.failed,
-        true, frame.sourceIsDir, 0, true, frame.targetFound, frame.targetErr,
-        frame.sameFile, frame.backup, calls, backupFs,
-        StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs)))
+                                         MakeStepEvidence(frame.beforeFs, afterFs, outcome.stdoutFragment, outcome.stderrFragment, outcome.failed,
+                                                          true, frame.sourceIsDir, 0, true, frame.targetFound, frame.targetErr,
+                                                          frame.sameFile, frame.backup, calls, backupFs,
+                                                          StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs)))
     ensures RenamePhaseSummary(source, target, cmd, frame, afterFs, outcome, step)
   {
     hide *;
     reveal RenameFrameReady(), RenameFramePrototype(), MakeStepEvidence();
     step := MakeStepEvidence(frame.beforeFs, afterFs, outcome.stdoutFragment, outcome.stderrFragment, outcome.failed,
-      true, frame.sourceIsDir, 0, true, frame.targetFound, frame.targetErr,
-      frame.sameFile, frame.backup, calls, backupFs,
-      StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs));
+                             true, frame.sourceIsDir, 0, true, frame.targetFound, frame.targetErr,
+                             frame.sameFile, frame.backup, calls, backupFs,
+                             StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs));
     StepStatusEvidenceTransfer(source, target, cmd, RenameFramePrototype(frame), step);
     assert SourceResolutionObservationFor(source, frame.cwd, step) by {
       reveal SourceResolutionObservationFor();
@@ -3753,7 +3753,7 @@ module MvCore {
     modifies io.fsRegion
     ensures call == RenameCallEvidence(ok, err, io.fs())
     ensures IOContract.RenamePathSpec(old(io.fs()), io.now(), io.trustedNativeFailures(),
-      io.fs(), source, target, ok, err)
+                                      io.fs(), source, target, ok, err)
     ensures IOContract.RenamePathContractFields(old(io.fs()), source, target, ok, err, io.fs())
     ensures ok <==> err == 0
   {
@@ -3770,12 +3770,12 @@ module MvCore {
     modifies io.fsRegion
     ensures call.afterFs == io.fs()
     ensures IOContract.RenamePathSpec(old(io.fs()), io.now(), io.trustedNativeFailures(),
-      io.fs(), source, target, call.ok, call.err)
+                                      io.fs(), source, target, call.ok, call.err)
     ensures IOContract.RenamePathContractFields(old(io.fs()), source, target, call.ok, call.err, io.fs())
     ensures if call.ok then outcome == Spec.MoveOutcome(
-      StepSuccessStdout(source, target, backupPath, cmd.verbose, cmd.debug), [], false)
-    else outcome == Spec.MoveOutcome([], Spec.SourceRenameFailureMessageSpec(source, target,
-      SourceRenameDiagnosticErr(target, sourceIsDir, call.err), sourceIsDir && targetWasFound), true)
+                                         StepSuccessStdout(source, target, backupPath, cmd.verbose, cmd.debug), [], false)
+            else outcome == Spec.MoveOutcome([], Spec.SourceRenameFailureMessageSpec(source, target,
+                                                                                     SourceRenameDiagnosticErr(target, sourceIsDir, call.err), sourceIsDir && targetWasFound), true)
   {
     var ok, err, actual := AttemptRename(source, target, io);
     call := actual;
@@ -3796,7 +3796,7 @@ module MvCore {
   }
 
   method ExecuteRenameFrame(source: string, target: string, cmd: Schema.MvCmd,
-    frame: RenameFrame, io: BenchIO.IO)
+                            frame: RenameFrame, io: BenchIO.IO)
     returns (hadError: bool, out: BenchWorld.Bytes, errOut: BenchWorld.Bytes, ghost step: StepEvidence)
     requires RenameFrameReady(source, target, cmd, frame)
     requires io.fs() == frame.beforeFs && io.cwd() == frame.cwd
@@ -3826,37 +3826,37 @@ module MvCore {
       } else {
         ghost var sourceCall: RenameCallEvidence;
         outcome, sourceCall := RenameOriginalSource(source, target, frame.backupPath,
-          frame.sourceIsDir, false, cmd, io);
+                                                    frame.sourceIsDir, false, cmd, io);
         calls := [backupCall, sourceCall];
       }
     } else {
       ghost var sourceCall: RenameCallEvidence;
       outcome, sourceCall := RenameOriginalSource(source, target, "", frame.sourceIsDir,
-        frame.targetFound, cmd, io);
+                                                  frame.targetFound, cmd, io);
       calls := [sourceCall];
     }
     assert RenameEvidenceFor(source, target, frame.sourceIsDir, frame.targetFound,
-      frame.backupPath, cmd.verbose, cmd.debug, frame.beforeFs, frame.cwd, io.fs(), outcome, calls, backupFs) by {
+                             frame.backupPath, cmd.verbose, cmd.debug, frame.beforeFs, frame.cwd, io.fs(), outcome, calls, backupFs) by {
       reveal RenameEvidenceFor();
     }
     assert |calls| <= 2;
     if frame.backup.NoBackupSelection? {
       assert |calls| == 1;
       assert IOContract.RenamePathSpec(frame.beforeFs, frame.inputs.now, frame.inputs.failures,
-        calls[0].afterFs, source, target, calls[0].ok, calls[0].err);
+                                       calls[0].afterFs, source, target, calls[0].ok, calls[0].err);
     } else {
       assert frame.backup.backupPath == frame.backupPath;
       assert IOContract.RenamePathSpec(frame.beforeFs, frame.inputs.now, frame.inputs.failures,
-        calls[0].afterFs, target, frame.backup.backupPath, calls[0].ok, calls[0].err);
+                                       calls[0].afterFs, target, frame.backup.backupPath, calls[0].ok, calls[0].err);
       if |calls| == 2 {
         assert IOContract.RenamePathSpec(calls[0].afterFs, frame.inputs.now, frame.inputs.failures,
-          calls[1].afterFs, source, target, calls[1].ok, calls[1].err);
+                                         calls[1].afterFs, source, target, calls[1].ok, calls[1].err);
       }
     }
     assert RenameNativeObservationsFor(source, target,
-      MakeStepEvidence(frame.beforeFs, io.fs(), outcome.stdoutFragment, outcome.stderrFragment, outcome.failed,
-        true, frame.sourceIsDir, 0, true, frame.targetFound, frame.targetErr, frame.sameFile, frame.backup,
-        calls, backupFs, StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs))) by {
+                                       MakeStepEvidence(frame.beforeFs, io.fs(), outcome.stdoutFragment, outcome.stderrFragment, outcome.failed,
+                                                        true, frame.sourceIsDir, 0, true, frame.targetFound, frame.targetErr, frame.sameFile, frame.backup,
+                                                        calls, backupFs, StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs))) by {
       hide *;
       reveal RenameNativeObservationsFor(), MakeStepEvidence();
     }
@@ -3881,7 +3881,7 @@ module MvCore {
     Spec.StatusExistsOutcomeFields(frame.beforeFs, target, false, true, 0) &&
     frame.sameFile == NoSameFileCheck && frame.backup == NoBackupSelection && frame.backupPath == "" &&
     frame.statusCalls == [MetadataStatusCall(frame.beforeFs, source, false, sourceMetadata),
-      MetadataStatusCall(frame.beforeFs, target, false, targetMetadata)] &&
+                          MetadataStatusCall(frame.beforeFs, target, false, targetMetadata)] &&
     StatusCallsFor(frame.inputs, frame.firstStatus, frame.statusCalls) &&
     frame.beforeFs == io.fs() && frame.cwd == io.cwd() &&
     frame.inputs == Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()) &&
@@ -3915,14 +3915,14 @@ module MvCore {
        calls[4] == MetadataStatusCall(frame.beforeFs, source, true, same.sourceFollowed.value) &&
        (match same.sourceReferentEntry
         case SomeEntryNameEvidence(_, value) => |calls| == 6 &&
-          calls[5] == MetadataStatusCall(frame.beforeFs, value.parent, false, value.parentMetadata)
+                                                calls[5] == MetadataStatusCall(frame.beforeFs, value.parent, false, value.parentMetadata)
         case FailedEntryNameEvidence(_) => |calls| == 5
         case NoEntryNameEvidence => false)
      else |calls| == 4)
   }
 
   ghost function StoppedComparisonOutcome(source: string, target: string, cmd: Schema.MvCmd,
-    frame: RenameFrame): Spec.MoveOutcome
+                                          frame: RenameFrame): Spec.MoveOutcome
     requires frame.sameFile.CheckedSameFile?
   {
     var decision := frame.sameFile.decision;
@@ -3940,9 +3940,9 @@ module MvCore {
     requires ComparisonFrameFields(source, target, cmd, frame)
     requires frame.sameFile.CheckedSameFile?
     requires frame.sameFile.decision.FailedParentStat? || frame.sameFile.decision == Spec.RejectSameFile ||
-      (cmd.updateMode == Schema.UpdateOlder && !SourceNewer(
-        frame.sameFile.source.times.mtimeSec, frame.sameFile.source.times.mtimeNsec,
-        frame.sameFile.target.times.mtimeSec, frame.sameFile.target.times.mtimeNsec))
+             (cmd.updateMode == Schema.UpdateOlder && !SourceNewer(
+                frame.sameFile.source.times.mtimeSec, frame.sameFile.source.times.mtimeNsec,
+                frame.sameFile.target.times.mtimeSec, frame.sameFile.target.times.mtimeNsec))
     requires outcome == StoppedComparisonOutcome(source, target, cmd, frame)
     ensures RenamePhaseSummary(source, target, cmd, frame, frame.beforeFs, outcome, step)
   {
@@ -3950,8 +3950,8 @@ module MvCore {
     reveal ComparisonFrameFields(), RenameFramePrototype(), MakeStepEvidence();
     reveal SameFileEvidenceFor(), MetadataEvidenceFor(), MetadataStatusCall(), Spec.StatusRequest();
     step := MakeStepEvidence(frame.beforeFs, frame.beforeFs, outcome.stdoutFragment, outcome.stderrFragment,
-      outcome.failed, true, frame.sourceIsDir, 0, true, true, 0, frame.sameFile, NoBackupSelection,
-      [], frame.beforeFs, StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs));
+                             outcome.failed, true, frame.sourceIsDir, 0, true, true, 0, frame.sameFile, NoBackupSelection,
+                             [], frame.beforeFs, StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs));
     assert StepStatusEvidenceFor(source, target, cmd, step) by {
       reveal StepStatusEvidenceFor();
     }
@@ -3969,7 +3969,7 @@ module MvCore {
   method ResolveSourceIdentity(source: string, io: BenchIO.IO)
     returns (ok: bool, path: string, err: int)
     ensures IOContract.ResolvePathIdentitySpec(old(io.fs()), old(io.cwd()), io.trustedNativeFailures(),
-      source, ok, path, err)
+                                               source, ok, path, err)
     ensures IOContract.ResolvePathIdentityContractFields(old(io.fs()), old(io.cwd()), source, ok, path, err)
     ensures ok <==> err == 0
   {
@@ -3980,14 +3980,14 @@ module MvCore {
   }
 
   method CaptureMoveComparison(source: string, target: string, cmd: Schema.MvCmd,
-    sourceMetadata: MetadataEvidence, targetMetadata: MetadataEvidence, frame: RenameFrame, io: BenchIO.IO)
+                               sourceMetadata: MetadataEvidence, targetMetadata: MetadataEvidence, frame: RenameFrame, io: BenchIO.IO)
     returns (same: SameFileEvidence, ghost resultFrame: RenameFrame)
     requires ComparisonInputs(source, target, cmd, sourceMetadata, targetMetadata, frame, io)
     modifies io.statusObservationsRegion
     ensures ComparisonFrameFields(source, target, cmd, resultFrame)
     ensures resultFrame.sourceIsDir == frame.sourceIsDir && resultFrame.targetFound == frame.targetFound &&
-      resultFrame.targetErr == frame.targetErr && resultFrame.beforeFs == frame.beforeFs &&
-      resultFrame.cwd == frame.cwd && resultFrame.firstStatus == frame.firstStatus && resultFrame.inputs == frame.inputs
+            resultFrame.targetErr == frame.targetErr && resultFrame.beforeFs == frame.beforeFs &&
+            resultFrame.cwd == frame.cwd && resultFrame.firstStatus == frame.firstStatus && resultFrame.inputs == frame.inputs
     ensures resultFrame.sameFile == same && same.CheckedSameFile?
     ensures same.source == sourceMetadata && same.target == targetMetadata
     ensures io.statusCursor() == resultFrame.firstStatus + |resultFrame.statusCalls|
@@ -4024,8 +4024,8 @@ module MvCore {
       var failedPath := if !sourceEntry.parentMetadata.ok then sourceEntry.parent else targetEntry.parent;
       var parentErr := if !sourceEntry.parentMetadata.ok then sourceEntry.parentMetadata.err else targetEntry.parentMetadata.err;
       same := CheckedSameFile(sourceMetadata, targetMetadata, NoMetadataEvidence,
-        sourceEntry, targetEntry, NoEntryNameEvidence, NoBackupCollisionCheck,
-        Spec.FailedParentStat(failedPath, parentErr));
+                              sourceEntry, targetEntry, NoEntryNameEvidence, NoBackupCollisionCheck,
+                              Spec.FailedParentStat(failedPath, parentErr));
       assert SameFileEvidenceFor(cmd, preFs, preCwd, source, target, same) by {
         hide *;
         reveal ComparisonInputs();
@@ -4071,19 +4071,19 @@ module MvCore {
           if !referentEntry.parentMetadata.ok then referentEntry.parentMetadata.err else targetEntry.parentMetadata.err);
       } else {
         var sameEntry := sourceEntry.parentMetadata.ok && targetEntry.parentMetadata.ok &&
-          sourceEntry.parentMetadata.key == targetEntry.parentMetadata.key && sourceEntry.leaf == targetEntry.leaf;
+                         sourceEntry.parentMetadata.key == targetEntry.parentMetadata.key && sourceEntry.leaf == targetEntry.leaf;
         var referentSameEntry := false;
         if sourceReferentEntry.SomeEntryNameEvidence? {
           var referentEntry := sourceReferentEntry.value;
           referentSameEntry := referentEntry.parentMetadata.ok && targetEntry.parentMetadata.ok &&
-            referentEntry.parentMetadata.key == targetEntry.parentMetadata.key && referentEntry.leaf == targetEntry.leaf;
+                               referentEntry.parentMetadata.key == targetEntry.parentMetadata.key && referentEntry.leaf == targetEntry.leaf;
         }
         var rejectSameFile := sameEntry || (cmd.backupMode == Schema.BackupOff &&
-          (sourceMetadata.key == targetMetadata.key || referentSameEntry));
+                                            (sourceMetadata.key == targetMetadata.key || referentSameEntry));
         decision := if rejectSameFile then Spec.RejectSameFile else Spec.ContinueMove;
       }
       same := CheckedSameFile(sourceMetadata, targetMetadata, sourceFollowed,
-        sourceEntry, targetEntry, sourceReferentEntry, NoBackupCollisionCheck, decision);
+                              sourceEntry, targetEntry, sourceReferentEntry, NoBackupCollisionCheck, decision);
       assert SameFileEvidenceFor(cmd, preFs, preCwd, source, target, same) by {
         hide *;
         reveal ComparisonInputs();
@@ -4107,7 +4107,7 @@ module MvCore {
     MetadataEvidenceFor(frame.beforeFs, source, false, sourceMetadata) &&
     frame.sourceIsDir == sourceMetadata.isDir &&
     IOContract.IsDirectoryStrictContractFields(frame.beforeFs, source, false,
-      sourceMetadata.ok, sourceMetadata.isDir, sourceMetadata.err) &&
+                                               sourceMetadata.ok, sourceMetadata.isDir, sourceMetadata.err) &&
     frame.sameFile == NoSameFileCheck && frame.backup == NoBackupSelection && frame.backupPath == "" &&
     StatusCallsFor(frame.inputs, frame.firstStatus, frame.statusCalls) &&
     |frame.statusCalls| >= 1 && frame.statusCalls[0] == MetadataStatusCall(frame.beforeFs, source, false, sourceMetadata) &&
@@ -4121,9 +4121,9 @@ module MvCore {
       frame.statusCalls[1] == MetadataStatusCall(frame.beforeFs, target, false, targetMetadata.value) &&
       Spec.StatusExistsOutcomeFields(frame.beforeFs, target, false, true, 0) &&
       (if cmd.overwriteMode == Schema.OverwriteSkip || cmd.updateMode == Schema.UpdateNone then
-        outcome == Spec.MoveOutcome(SkipStdout(target, cmd.debug), [], false)
+         outcome == Spec.MoveOutcome(SkipStdout(target, cmd.debug), [], false)
        else cmd.updateMode == Schema.UpdateNoneFail &&
-        outcome == Spec.MoveOutcome([], Spec.NotReplacingMessageSpec(target), true))
+            outcome == Spec.MoveOutcome([], Spec.NotReplacingMessageSpec(target), true))
   }
 
   lemma AssembleInitialMoveStep(
@@ -4137,9 +4137,9 @@ module MvCore {
     hide *;
     reveal InitialStepInputs(), MakeStepEvidence(), MetadataStatusCall(), MetadataEvidenceFor(), Spec.StatusRequest();
     step := MakeStepEvidence(frame.beforeFs, frame.beforeFs, outcome.stdoutFragment, outcome.stderrFragment,
-      outcome.failed, sourceMetadata.ok, sourceMetadata.isDir, sourceMetadata.err,
-      sourceMetadata.ok, frame.targetFound, frame.targetErr, NoSameFileCheck, NoBackupSelection,
-      [], frame.beforeFs, StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs));
+                             outcome.failed, sourceMetadata.ok, sourceMetadata.isDir, sourceMetadata.err,
+                             sourceMetadata.ok, frame.targetFound, frame.targetErr, NoSameFileCheck, NoBackupSelection,
+                             [], frame.beforeFs, StatusTranscript(frame.firstStatus, frame.statusCalls, frame.inputs));
     assert StepStatusEvidenceFor(source, target, cmd, step) by {
       reveal StepStatusEvidenceFor();
     }
@@ -4148,7 +4148,7 @@ module MvCore {
   }
 
   method CompleteComparedMove(source: string, target: string, cmd: Schema.MvCmd,
-    comparison: SameFileEvidence, ghost comparisonFrame: RenameFrame, io: BenchIO.IO)
+                              comparison: SameFileEvidence, ghost comparisonFrame: RenameFrame, io: BenchIO.IO)
     returns (hadError: bool, out: BenchWorld.Bytes, errOut: BenchWorld.Bytes, ghost step: StepEvidence)
     requires ComparisonFrameFields(source, target, cmd, comparisonFrame)
     requires comparison == comparisonFrame.sameFile && comparison.CheckedSameFile?
@@ -4199,8 +4199,8 @@ module MvCore {
     ghost var afterEntries := |statusCalls|;
     if sameFileDecision.FailedParentStat? || sameFileDecision == Spec.RejectSameFile ||
        (cmd.updateMode == Schema.UpdateOlder && !SourceNewer(
-         sourceMetadata.times.mtimeSec, sourceMetadata.times.mtimeNsec,
-         targetMetadata.times.mtimeSec, targetMetadata.times.mtimeNsec)) {
+          sourceMetadata.times.mtimeSec, sourceMetadata.times.mtimeNsec,
+          targetMetadata.times.mtimeSec, targetMetadata.times.mtimeNsec)) {
       if sameFileDecision.FailedParentStat? {
         hadError := true;
         errOut := Text.ParentStatFailureMessageSpec(sameFileDecision.path, sameFileDecision.err);
@@ -4211,7 +4211,7 @@ module MvCore {
         out := GetDebugSkipMessage(target);
       }
       step := AssembleStoppedComparison(source, target, cmd, comparisonFrame,
-        Spec.MoveOutcome(out, errOut, hadError));
+                                        Spec.MoveOutcome(out, errOut, hadError));
       reveal RenamePhaseSummary();
       return;
     }
@@ -4240,9 +4240,9 @@ module MvCore {
       assert io.statusCursor() == firstStatus + |statusCalls|;
       assert |statusCalls| == afterEntries + 1;
       assert statusCalls[afterEntries] == MetadataStatusCall(
-        preFs, SimpleBackupPath(target, cmd.backupSuffix), true,
-        candidateMetadata
-      );
+                                            preFs, SimpleBackupPath(target, cmd.backupSuffix), true,
+                                            candidateMetadata
+                                          );
       collisionEvidence := CheckedBackupCollision(
         sourceMetadata, candidateMetadata
       );
@@ -4300,7 +4300,7 @@ module MvCore {
        cmd.backupMode == Schema.BackupExisting) &&
       sourceEntry.leaf == targetEntry.leaf + cmd.backupSuffix;
     ghost var afterCollision := afterEntries +
-      (if collisionNeeded then 1 else 0);
+    (if collisionNeeded then 1 else 0);
     assert |statusCalls| == afterCollision;
     assert io.statusCursor() == firstStatus + |statusCalls|;
     assert io.fs() == preFs;
@@ -4323,8 +4323,8 @@ module MvCore {
       assert io.statusCursor() == firstStatus + |statusCalls|;
       assert statusCalls[afterCollision..] == backupCalls;
       assert BackupStatusSuffixFor(
-        cmd.backupMode, preFs, target, statusCalls[afterCollision..]
-      );
+          cmd.backupMode, preFs, target, statusCalls[afterCollision..]
+        );
       backupEvidence := selectedBackup;
       assert fsBeforeBackup == preFs;
       assert io.fs() == preFs;
@@ -4334,14 +4334,14 @@ module MvCore {
         true, found, existsErr,
         sameFileEvidence, backupEvidence, [], preFs,
         StatusTranscript(firstStatus, statusCalls,
-        comparisonFrame.inputs)
+                         comparisonFrame.inputs)
       );
       assert StepStatusEvidenceFor(source, target, cmd, backupStatusTemplate) by {
         reveal StepStatusEvidenceFor(), MetadataEvidenceFor(), MetadataStatusCall(), Spec.StatusRequest();
       }
       var frame := RenameFrame(sourceIsDir, found, existsErr, backupPath,
-        sameFileEvidence, backupEvidence, preFs, preCwd, firstStatus,
-        comparisonFrame.inputs, statusCalls);
+                               sameFileEvidence, backupEvidence, preFs, preCwd, firstStatus,
+                               comparisonFrame.inputs, statusCalls);
       assert backupStatusTemplate == RenameFramePrototype(frame);
       assert SourceResolutionObservationFor(source, preCwd, RenameFramePrototype(frame)) by {
         hide *;
@@ -4365,7 +4365,7 @@ module MvCore {
 
     assert cmd.backupMode == Schema.BackupOff;
     var frame := RenameFrame(sourceIsDir, found, existsErr, "", sameFileEvidence, backupEvidence,
-      preFs, preCwd, firstStatus, comparisonFrame.inputs, statusCalls);
+                             preFs, preCwd, firstStatus, comparisonFrame.inputs, statusCalls);
     assert RenameFrameReady(source, target, cmd, frame) by {
       reveal RenameFrameReady(), RenameFramePrototype(), MakeStepEvidence();
       reveal StepStatusEvidenceFor(), MetadataEvidenceFor(), MetadataStatusCall(), Spec.StatusRequest();
@@ -4404,7 +4404,7 @@ module MvCore {
     ghost var firstStatus := io.statusCursor();
     ghost var statusCalls: seq<Spec.StatusCallEvidence> := [];
     assert StatusCallsFor(Spec.NativeStatusInputs(io.statusObservations(),
-      io.trustedNativeFailures(), io.now()), firstStatus, statusCalls) by {
+                                                  io.trustedNativeFailures(), io.now()), firstStatus, statusCalls) by {
       reveal StatusCallsFor(), Spec.StatusCallsFor();
     }
     hadError := false;
@@ -4419,7 +4419,7 @@ module MvCore {
     var sourceMetadata := CaptureMetadata(source, false, io);
     ghost var nextStatusCall := MetadataStatusCall(preFs, source, false, sourceMetadata);
     StatusCallsConcat(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
-      firstStatus, statusCalls, [nextStatusCall]);
+                      firstStatus, statusCalls, [nextStatusCall]);
     statusCalls := statusCalls + [nextStatusCall];
     var sourceOk := sourceMetadata.ok;
     var sourceIsDir := sourceMetadata.isDir;
@@ -4428,14 +4428,14 @@ module MvCore {
       hadError := true;
       errOut := GetSourceStatFailureMessage(source, sourceErr);
       var frame := RenameFrame(sourceIsDir, false, 0, "", NoSameFileCheck, NoBackupSelection,
-        preFs, preCwd, firstStatus,
-        Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), statusCalls);
+                               preFs, preCwd, firstStatus,
+                               Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), statusCalls);
       assert InitialStepInputs(source, target, cmd, sourceMetadata, NoMetadataEvidence, frame,
-        Spec.MoveOutcome(out, errOut, hadError)) by {
+                               Spec.MoveOutcome(out, errOut, hadError)) by {
         reveal InitialStepInputs(), SkipStdout();
       }
       step := AssembleInitialMoveStep(source, target, cmd, sourceMetadata, NoMetadataEvidence, frame,
-        Spec.MoveOutcome(out, errOut, hadError));
+                                      Spec.MoveOutcome(out, errOut, hadError));
       assert RenamePhaseSummary(source, target, cmd, frame, preFs, Spec.MoveOutcome(out, errOut, hadError), step);
       reveal RenamePhaseSummary();
       return;
@@ -4444,7 +4444,7 @@ module MvCore {
     var targetMetadata := CaptureMetadata(target, false, io);
     nextStatusCall := MetadataStatusCall(preFs, target, false, targetMetadata);
     StatusCallsConcat(Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()),
-      firstStatus, statusCalls, [nextStatusCall]);
+                      firstStatus, statusCalls, [nextStatusCall]);
     statusCalls := statusCalls + [nextStatusCall];
     var found := targetMetadata.ok;
     var existsErr := targetMetadata.err;
@@ -4458,26 +4458,26 @@ module MvCore {
           out := GetDebugSkipMessage(target);
         }
         var frame := RenameFrame(sourceIsDir, found, existsErr, "", NoSameFileCheck, NoBackupSelection,
-          preFs, preCwd, firstStatus,
-          Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), statusCalls);
+                                 preFs, preCwd, firstStatus,
+                                 Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), statusCalls);
         assert InitialStepInputs(source, target, cmd, sourceMetadata, SomeMetadataEvidence(targetMetadata), frame,
-          Spec.MoveOutcome(out, errOut, hadError)) by {
+                                 Spec.MoveOutcome(out, errOut, hadError)) by {
           reveal InitialStepInputs(), SkipStdout();
         }
         step := AssembleInitialMoveStep(source, target, cmd, sourceMetadata, SomeMetadataEvidence(targetMetadata), frame,
-          Spec.MoveOutcome(out, errOut, hadError));
+                                        Spec.MoveOutcome(out, errOut, hadError));
         reveal RenamePhaseSummary();
         return;
       }
 
       var initialComparisonFrame := RenameFrame(sourceIsDir, found, existsErr, "",
-        NoSameFileCheck, NoBackupSelection, preFs, preCwd, firstStatus,
-        Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), statusCalls);
+                                                NoSameFileCheck, NoBackupSelection, preFs, preCwd, firstStatus,
+                                                Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), statusCalls);
       assert ComparisonInputs(source, target, cmd, sourceMetadata, targetMetadata, initialComparisonFrame, io) by {
         reveal ComparisonInputs();
       }
       var comparison, comparisonFrame := CaptureMoveComparison(source, target, cmd,
-        sourceMetadata, targetMetadata, initialComparisonFrame, io);
+                                                               sourceMetadata, targetMetadata, initialComparisonFrame, io);
       hadError, out, errOut, step := CompleteComparedMove(source, target, cmd, comparison, comparisonFrame, io);
       return;
     }
@@ -4485,8 +4485,8 @@ module MvCore {
     assert io.fs() == preFs;
     assert io.statusCursor() == firstStatus + |statusCalls|;
     var frame := RenameFrame(sourceIsDir, found, existsErr, "", sameFileEvidence, backupEvidence,
-      preFs, preCwd, firstStatus,
-      Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), statusCalls);
+                             preFs, preCwd, firstStatus,
+                             Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), statusCalls);
     assert RenameFrameReady(source, target, cmd, frame) by {
       reveal RenameFrameReady(), RenameFramePrototype(), MakeStepEvidence(), StepStatusEvidenceFor();
       reveal MetadataStatusCall(), Spec.StatusRequest(), SourceResolutionObservationFor(), MetadataEvidenceFor();
@@ -4540,7 +4540,7 @@ module MvCore {
       invariant batch.firstStatus == firstStatus
       invariant io.statusCursor() == firstStatus + |batch.statusCalls|
       invariant BatchEvidenceFor(sources[..i], directory, cmd, preFs, preCwd, io.fs(),
-        hadError, out, errOut, batch)
+                                 hadError, out, errOut, batch)
       invariant BatchMoveStatusEvidenceFor(sources[..i], directory, cmd, inputs, batch)
       decreases |sources| - i
     {
@@ -4550,7 +4550,7 @@ module MvCore {
       var stepError, stepOut, stepErr, step := MoveOne(normalizedSource, target, cmd, io);
       assert Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()) == inputs;
       ghost var next := AppendBatchEvidence(sources[..i], source, directory, cmd,
-        preFs, preCwd, hadError, out, errOut, inputs, batch, step);
+                                            preFs, preCwd, hadError, out, errOut, inputs, batch, step);
       hadError := hadError || stepError;
       out := out + stepOut;
       errOut := errOut + stepErr;
@@ -4567,14 +4567,14 @@ module MvCore {
   {
     PreparedSummary(raw, io, plan.normalExit, plan.stdout, plan.stderr) &&
     Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), plan.stdout, plan.stderr, plan.normalExit, exit)
+                        io.trustedStreams(), plan.stdout, plan.stderr, plan.normalExit, exit)
   }
 
   method Flush(output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -4589,7 +4589,7 @@ module MvCore {
       finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Spec.WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -4597,11 +4597,11 @@ module MvCore {
       errCommitted := IOContract.WriteResultCommitted(result);
       errErr := IOContract.ResultErrno(result);
       assert IOContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                        finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
   method RunCore(raw: Schema.MvCmdRaw, io: BenchIO.IO)
@@ -4610,8 +4610,8 @@ module MvCore {
     modifies io.fsRegion, io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion
     ensures CoreSummary(raw, io, exit, plan)
     ensures RunStatusEvidenceFor(raw, old(io.fs()), old(io.cwd()), io.fs(),
-      [], plan.stdout, [], plan.stderr, plan.normalExit,
-      Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), old(io.statusCursor()), io.statusCursor(), calls, evidence)
+                                 [], plan.stdout, [], plan.stderr, plan.normalExit,
+                                 Spec.NativeStatusInputs(io.statusObservations(), io.trustedNativeFailures(), io.now()), old(io.statusCursor()), io.statusCursor(), calls, evidence)
     decreases *
   {
     var normalExit, output, diagnostics;

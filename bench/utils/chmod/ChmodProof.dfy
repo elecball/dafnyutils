@@ -32,23 +32,23 @@ module ChmodProof {
     ensures Utf8.Encode(Spec.ErrnoTextSpec(err)) == Spec.ErrnoTextSpec(err)
   {
     assert forall i | 0 <= i < |Spec.ErrnoTextSpec(err)| ::
-      Spec.ErrnoTextSpec(err)[i] as int <= 0x7f;
+        Spec.ErrnoTextSpec(err)[i] as int <= 0x7f;
     AsciiEncodingIdentity(Spec.ErrnoTextSpec(err));
   }
 
   lemma NormalErrorMessagesBytes(path: string, err: int)
     ensures Spec.ReferenceErrorMessageSpec(path, Spec.ErrnoTextSpec(err)) ==
-      "chmod: failed to get attributes of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-      ": " + Spec.ErrnoTextSpec(err) + "\n"
+            "chmod: failed to get attributes of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+            ": " + Spec.ErrnoTextSpec(err) + "\n"
     ensures Spec.GettingNewAttributesMessageSpec(path, Spec.ErrnoTextSpec(err)) ==
-      "chmod: getting new attributes of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-      ": " + Spec.ErrnoTextSpec(err) + "\n"
+            "chmod: getting new attributes of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+            ": " + Spec.ErrnoTextSpec(err) + "\n"
     ensures Spec.ChangeErrorMessageSpec(path, Spec.ErrnoTextSpec(err)) ==
-      "chmod: changing permissions of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-      ": " + Spec.ErrnoTextSpec(err) + "\n"
+            "chmod: changing permissions of " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+            ": " + Spec.ErrnoTextSpec(err) + "\n"
     ensures Spec.AccessErrorMessageSpec(path, Spec.ErrnoTextSpec(err)) ==
-      "chmod: cannot access " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
-      ": " + Spec.ErrnoTextSpec(err) + "\n"
+            "chmod: cannot access " + Quote.SpecQuoteAfBytes(Utf8.Encode(path)) +
+            ": " + Spec.ErrnoTextSpec(err) + "\n"
   {
     NormalErrnoEncodingIdentity(err);
   }
@@ -563,7 +563,7 @@ module ChmodProof {
   {
     hide *;
     reveal Schema.ParseWho(), Schema.ParseSymbolic(),
-      Spec.SpecWhoRelation(), Spec.SpecSymbolicChangesFromRelation();
+           Spec.SpecWhoRelation(), Spec.SpecSymbolicChangesFromRelation();
     if i < |expr| {
       ParseWhoSatisfiesRelation(expr, i, 0 as bv32);
       match Schema.ParseWho(expr, i)

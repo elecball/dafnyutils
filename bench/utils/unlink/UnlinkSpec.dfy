@@ -122,27 +122,27 @@ module UnlinkSpec {
   {
     var shortOptionPrefix: string := ParseErrorTextPart4();
     var text: string := if err.kind == CliTypes.UnknownOption then
-        if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-          ParseErrorTextPart1() + err.rawToken + ParseErrorTextPart2() +
-          ParseErrorTextPart3()
-        else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
-          shortOptionPrefix + [err.rawToken[1]] + ParseErrorTextPart2() +
-          ParseErrorTextPart3()
-        else
-          ParseErrorTextPart5()
-      else if err.kind == CliTypes.UnexpectedValue then
-        ParseErrorTextPart6() + LongOptionName(err.rawToken) +
-        ParseErrorTextPart7() +
-        ParseErrorTextPart3()
-      else if err.kind == CliTypes.Ambiguous then
-        ParseErrorTextPart6() + err.rawToken + ParseErrorTextPart8() +
-        ParseErrorTextPart3()
-      else
-        ParseErrorTextPart9() +
-        (if err.kind == CliTypes.MissingValue
-        then ParseErrorTextPart10()
-        else ParseErrorTextPart11()) +
-        ParseErrorTextPart12() + err.rawToken + ParseErrorTextPart2();
+                          if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
+                            ParseErrorTextPart1() + err.rawToken + ParseErrorTextPart2() +
+                            ParseErrorTextPart3()
+                          else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
+                            shortOptionPrefix + [err.rawToken[1]] + ParseErrorTextPart2() +
+                            ParseErrorTextPart3()
+                          else
+                            ParseErrorTextPart5()
+                        else if err.kind == CliTypes.UnexpectedValue then
+                          ParseErrorTextPart6() + LongOptionName(err.rawToken) +
+                          ParseErrorTextPart7() +
+                          ParseErrorTextPart3()
+                        else if err.kind == CliTypes.Ambiguous then
+                          ParseErrorTextPart6() + err.rawToken + ParseErrorTextPart8() +
+                          ParseErrorTextPart3()
+                        else
+                          ParseErrorTextPart9() +
+                          (if err.kind == CliTypes.MissingValue
+                           then ParseErrorTextPart10()
+                           else ParseErrorTextPart11()) +
+                          ParseErrorTextPart12() + err.rawToken + ParseErrorTextPart2();
     Utf8.Encode(text)
   }
 
@@ -229,7 +229,7 @@ module UnlinkSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
@@ -267,7 +267,7 @@ module UnlinkSpec {
         io.fs() == old(io.fs()) &&
         plannedStdout == [] &&
         plannedStderr == [] +
-          ExtraOperandText(C.QuoteArgumentResult(Utf8.Encode(operand))) &&
+        ExtraOperandText(C.QuoteArgumentResult(Utf8.Encode(operand))) &&
         exit == 1
       case _ => false
     else if |raw.operands| == 0 then
@@ -280,11 +280,11 @@ module UnlinkSpec {
         UnlinkResult(io, raw.operands[0], ok, err) &&
         plannedStdout == [] &&
         (if ok then
-          plannedStderr == [] && exit == 0
-        else
-          plannedStderr == [] +
-            CannotUnlinkText(C.QuoteafPathResult(raw.operands[0]), C.CLocaleErrnoTextResult(err)) &&
-          exit == 1)
+           plannedStderr == [] && exit == 0
+         else
+           plannedStderr == [] +
+           CannotUnlinkText(C.QuoteafPathResult(raw.operands[0]), C.CLocaleErrnoTextResult(err)) &&
+           exit == 1)
   }
 
   twostate predicate Spec(raw: Schema.UnlinkCmdRaw, io: BenchIO.IO, exit: int)

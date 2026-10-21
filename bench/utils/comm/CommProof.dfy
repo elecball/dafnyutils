@@ -947,10 +947,10 @@ module CommProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                           old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+                                       old(io.stdout()) + out, old(io.stderr()) + diagnostics);
   }
   lemma FirstReadAbortsEq(cmd: Schema.CommCmd, first: BW.IOResult<BW.Bytes>)
     ensures Core.FirstReadAborts(cmd, first) == Spec.FirstReadAborts(cmd, first)
@@ -970,14 +970,14 @@ module CommProof {
   }
 
   lemma FailedMergeWitnessForCore(cmd: Schema.CommCmd,
-    left: seq<BW.Bytes>, right: seq<BW.Bytes>, leftFailed: bool, rightFailed: bool)
+                                  left: seq<BW.Bytes>, right: seq<BW.Bytes>, leftFailed: bool, rightFailed: bool)
     returns (kinds: seq<RSpec.MergeKind>, leftStates: seq<seq<BW.Bytes>>, rightStates: seq<seq<BW.Bytes>>,
-      fragments: seq<BW.Bytes>, cuts: seq<nat>)
+             fragments: seq<BW.Bytes>, cuts: seq<nat>)
     requires leftFailed || rightFailed
     ensures Spec.FailedMergeWitness(cmd, left, right, leftFailed, rightFailed,
-      Core.RenderBeforeReadFailure(cmd, left, right, leftFailed, rightFailed).output,
-      Core.RenderBeforeReadFailure(cmd, left, right, leftFailed, rightFailed).leftFault,
-      kinds, leftStates, rightStates, fragments, cuts)
+                                    Core.RenderBeforeReadFailure(cmd, left, right, leftFailed, rightFailed).output,
+                                    Core.RenderBeforeReadFailure(cmd, left, right, leftFailed, rightFailed).leftFault,
+                                    kinds, leftStates, rightStates, fragments, cuts)
     decreases |left| + |right|
   {
     var plan := Core.RenderBeforeReadFailure(cmd, left, right, leftFailed, rightFailed);
@@ -1033,8 +1033,8 @@ module CommProof {
       PrependFragment(head, tailFragments, tail.output, tailCuts);
       forall i: nat | i < |kinds|
         ensures (!leftFailed || leftStates[i] != []) && (!rightFailed || rightStates[i] != []) &&
-          RSpec.MergeStepRelation(cmd, kinds[i], leftStates[i], leftStates[i + 1],
-            rightStates[i], rightStates[i + 1], fragments[i])
+                RSpec.MergeStepRelation(cmd, kinds[i], leftStates[i], leftStates[i + 1],
+                                        rightStates[i], rightStates[i + 1], fragments[i])
       {
         if i > 0 {
           assert kinds[i] == tailKinds[i - 1];
@@ -1044,14 +1044,14 @@ module CommProof {
       }
     }
     assert Spec.FailedMergeWitness(cmd, left, right, leftFailed, rightFailed,
-      plan.output, plan.leftFault, kinds, leftStates, rightStates, fragments, cuts);
+                                   plan.output, plan.leftFault, kinds, leftStates, rightStates, fragments, cuts);
   }
 
   lemma FailedReadOutputForCore(cmd: Schema.CommCmd,
-    first: BW.IOResult<BW.Bytes>, second: BW.IOResult<BW.Bytes>)
+                                first: BW.IOResult<BW.Bytes>, second: BW.IOResult<BW.Bytes>)
     requires first.Err? || second.Err?
     ensures Spec.FailedReadOutputRelation(cmd, first, second,
-      Core.FailedReadsPlan(cmd, first, second).output, Core.FailedReadsPlan(cmd, first, second).leftFault)
+                                          Core.FailedReadsPlan(cmd, first, second).output, Core.FailedReadsPlan(cmd, first, second).leftFault)
   {
     var delimiter := RCore.RecordDelimiter(cmd.zeroTerminated);
     var leftData := Core.ReadRecordsData(first, delimiter);
@@ -1063,6 +1063,6 @@ module CommProof {
     var kinds, leftStates, rightStates, fragments, cuts :=
       FailedMergeWitnessForCore(cmd, left, right, first.Err?, second.Err?);
     assert Spec.FailedReadOutputRelation(cmd, first, second,
-      Core.FailedReadsPlan(cmd, first, second).output, Core.FailedReadsPlan(cmd, first, second).leftFault);
+                                         Core.FailedReadsPlan(cmd, first, second).output, Core.FailedReadsPlan(cmd, first, second).leftFault);
   }
 }

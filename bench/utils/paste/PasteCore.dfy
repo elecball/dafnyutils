@@ -108,10 +108,10 @@ module PasteCore {
   function EntryForRead(result: BenchWorld.IOResult<BenchWorld.Bytes>, recordDelimiter: BenchWorld.RawByte): Entry
   {
     Entry(Lines(IOContract.ReadResultData(result), recordDelimiter),
-      result.Ok? || !Spec.BlockingReadFailure(result.e))
+          result.Ok? || !Spec.BlockingReadFailure(result.e))
   } by method {
     return Entry(Lines(IOContract.ReadResultData(result), recordDelimiter),
-      result.Ok? || !Spec.BlockingReadFailure(result.e));
+                 result.Ok? || !Spec.BlockingReadFailure(result.e));
   }
 
   function IsStdinInput(input: PasteSchema.Input): bool
@@ -242,21 +242,21 @@ module PasteCore {
   }
 
   ghost function StdinDataPrefixCore(cmd: PasteSchema.PasteCmd,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
-    preStdin: BenchWorld.Bytes, i: nat): BenchWorld.Bytes
+                                     preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+                                     preStdin: BenchWorld.Bytes, i: nat): BenchWorld.Bytes
     requires i <= |cmd.inputs|
     decreases i
   {
     if i == 0 then [] else
-      StdinDataPrefixCore(cmd, preStreams, preStdin, i - 1) +
-      (if cmd.inputs[i - 1].Stdin? then IOContract.ReadResultData(
-        IOContract.ObservedReadStdinResultFields(
-          PrefixStdinCore(cmd, preStreams, preStdin, i - 1), preStreams)) else [])
+    StdinDataPrefixCore(cmd, preStreams, preStdin, i - 1) +
+    (if cmd.inputs[i - 1].Stdin? then IOContract.ReadResultData(
+                                        IOContract.ObservedReadStdinResultFields(
+                                          PrefixStdinCore(cmd, preStreams, preStdin, i - 1), preStreams)) else [])
   }
 
   ghost function StdinDataForOutputCore(cmd: PasteSchema.PasteCmd,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
-    preStdin: BenchWorld.Bytes): BenchWorld.Bytes
+                                        preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+                                        preStdin: BenchWorld.Bytes): BenchWorld.Bytes
   {
     StdinDataPrefixCore(cmd, preStreams, preStdin, |cmd.inputs|)
   }
@@ -665,20 +665,20 @@ module PasteCore {
 
   twostate predicate PreparedSummary(raw: PasteSchema.PasteCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
     reads io.Footprint() - {
-    io.stdoutRegion, io.stderrRegion}
+            io.stdoutRegion, io.stderrRegion}
   {
     CoreSummaryCmd(Command(raw), io, exit, plannedStdout, plannedStderr)
   }
 
   lemma StdinDataPrefixCoreStep(cmd: PasteSchema.PasteCmd,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
-    preStdin: BenchWorld.Bytes, i: nat)
+                                preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+                                preStdin: BenchWorld.Bytes, i: nat)
     requires i < |cmd.inputs|
     ensures StdinDataPrefixCore(cmd, preStreams, preStdin, i + 1) ==
-      StdinDataPrefixCore(cmd, preStreams, preStdin, i) +
-      (if cmd.inputs[i].Stdin? then IOContract.ReadResultData(
-        IOContract.ObservedReadStdinResultFields(
-          PrefixStdinCore(cmd, preStreams, preStdin, i), preStreams)) else [])
+            StdinDataPrefixCore(cmd, preStreams, preStdin, i) +
+            (if cmd.inputs[i].Stdin? then IOContract.ReadResultData(
+                                            IOContract.ObservedReadStdinResultFields(
+                                              PrefixStdinCore(cmd, preStreams, preStdin, i), preStreams)) else [])
   {
   }
 
@@ -928,10 +928,10 @@ module PasteCore {
       assert hadBlockingError == PrefixHadBlockingErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|);
       assert io.stdin() == PrefixStdinCore(cmd, preStreams, preStdin, |cmd.inputs|);
       assert (initialStdout + plannedOut) == preStdout +
-                          (if PrefixHadBlockingErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|) && !cmd.serial then
-                             []
-                           else
-                             RunOutputCore(cmd, preFs, preStreams, preStdin, delims)) by {
+                                             (if PrefixHadBlockingErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|) && !cmd.serial then
+                                                []
+                                              else
+                                                RunOutputCore(cmd, preFs, preStreams, preStdin, delims)) by {
         hide *;
       }
       assert (initialStderr + plannedErr) == preStderr + PrefixVisibleErrorOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|) by {
@@ -948,15 +948,15 @@ module PasteCore {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSummary(raw, io, normalExit,
-        old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+                      old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 
   method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
-    diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-      io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
   {
     var written := io.WriteStdout(out);
     var outErr := StreamContract.ResultErrno(written);
@@ -966,10 +966,10 @@ module PasteCore {
       errors := errors + Text.StreamWriteErrorMessage(message);
     }
     assert errors == diagnostics + (if outErr == 0 then [] else
-      Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                    Text.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
     var diagnosed := io.WriteStderr(errors);
     assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-      errors, StreamContract.WriteResultCommitted(diagnosed), StreamContract.ResultErrno(diagnosed));
+                                          errors, StreamContract.WriteResultCommitted(diagnosed), StreamContract.ResultErrno(diagnosed));
     exit := if outErr != 0 || StreamContract.ResultErrno(diagnosed) != 0 then 1 else normalExit;
   }
 

@@ -452,7 +452,7 @@ module CatProof {
                observation
              )
     ensures Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, Core.ExpectedStdinAt(cmd, preStdin, i, preStreams), i,
-              observation.result
+                                          observation.result
             )
     ensures Core.InputDataPiece(observation) ==
             Spec.InputDataPiece(observation.result)
@@ -521,7 +521,7 @@ module CatProof {
            |cmd.inputs|;
     assert forall i: nat | i < |cmd.inputs| ::
         Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, Core.ExpectedStdinAt(cmd, preStdin, i, preStreams), i,
-          ObservationResults(observations)[i]
+                                      ObservationResults(observations)[i]
         ) &&
         Core.ObservationDataFragments(observations)[i] ==
         Spec.InputDataPiece(ObservationResults(observations)[i]) &&
@@ -532,7 +532,7 @@ module CatProof {
         ) by {
       forall i: nat | i < |cmd.inputs|
         ensures Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, Core.ExpectedStdinAt(cmd, preStdin, i, preStreams), i,
-                  ObservationResults(observations)[i]
+                                              ObservationResults(observations)[i]
                 ) &&
                 Core.ObservationDataFragments(observations)[i] ==
                 Spec.InputDataPiece(ObservationResults(observations)[i]) &&
@@ -635,7 +635,7 @@ module CatProof {
     var states := seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => Core.ExpectedStdinAt(cmd, preStdin, i, preStreams));
     forall i: nat | i < |cmd.inputs|
       ensures states[i + 1] == (if cmd.inputs[i].Stdin? then
-        IOContract.ObservedReadStdinRemainingFields(states[i], preStreams) else states[i])
+                                  IOContract.ObservedReadStdinRemainingFields(states[i], preStreams) else states[i])
     { Core.ExpectedStdinAtExtend(cmd, preStdin, i, preStreams); }
     assert Spec.StdinTraceRelation(cmd, preStdin, currentStdin, preStreams, states);
   }
@@ -912,9 +912,9 @@ module CatProof {
       );
     reveal Spec.InputTraceRelation();
     var states1: seq<BW.Bytes> :| Spec.StdinTraceRelation(cmd, preStdin, postStdin1, preStreams, states1) &&
-      forall i: nat | i < |cmd.inputs| :: Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, states1[i], i, readResults1[i]);
+                                  forall i: nat | i < |cmd.inputs| :: Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, states1[i], i, readResults1[i]);
     var states2: seq<BW.Bytes> :| Spec.StdinTraceRelation(cmd, preStdin, postStdin2, preStreams, states2) &&
-      forall i: nat | i < |cmd.inputs| :: Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, states2[i], i, readResults2[i]);
+                                  forall i: nat | i < |cmd.inputs| :: Spec.InputReadOutcomeRelation(cmd, preFs, preStreams, states2[i], i, readResults2[i]);
     forall i: nat | i <= |cmd.inputs|
       ensures states1[i] == states2[i]
     { Spec.StdinStatePrefixFunctional(cmd, preStdin, preStreams, states1, states2, i); }
@@ -1059,21 +1059,21 @@ module CatProof {
     cmd: Schema.CatCmd, preFs: BW.FileSystem, preStreams: (BW.TrustedStreamRequest) -> BW.TrustedStreamResult, preStdin: BW.Bytes,
     postStdin: BW.Bytes, output: BW.Bytes, errors: BW.Bytes, exit: int
   ) returns (
-    readResults: seq<BW.IOResult<BW.Bytes>>, data: BW.Bytes,
-    dataFragments: seq<BW.Bytes>, dataCuts: seq<nat>,
-    errorFragments: seq<BW.Bytes>, errorCuts: seq<nat>, hadError: bool,
-    byteFragments: seq<BW.Bytes>, outputCuts: seq<nat>, numbers: seq<nat>
-  )
+      readResults: seq<BW.IOResult<BW.Bytes>>, data: BW.Bytes,
+      dataFragments: seq<BW.Bytes>, dataCuts: seq<nat>,
+      errorFragments: seq<BW.Bytes>, errorCuts: seq<nat>, hadError: bool,
+      byteFragments: seq<BW.Bytes>, outputCuts: seq<nat>, numbers: seq<nat>
+    )
     requires Spec.RunRelation(cmd, preFs, preStreams, preStdin, postStdin, output, errors, exit)
     ensures Spec.InputTraceRelation(cmd, preFs, preStreams, preStdin, postStdin, data,
-      errors, hadError, readResults, dataFragments, dataCuts, errorFragments, errorCuts)
+                                    errors, hadError, readResults, dataFragments, dataCuts, errorFragments, errorCuts)
     ensures Spec.RenderRelation(cmd, data, output, byteFragments, outputCuts, numbers)
     ensures exit == (if hadError then 1 else 0)
   {
     readResults, data, dataFragments, dataCuts, errorFragments, errorCuts,
-      hadError, byteFragments, outputCuts, numbers :|
+    hadError, byteFragments, outputCuts, numbers :|
       Spec.InputTraceRelation(cmd, preFs, preStreams, preStdin, postStdin, data,
-        errors, hadError, readResults, dataFragments, dataCuts, errorFragments, errorCuts) &&
+                              errors, hadError, readResults, dataFragments, dataCuts, errorFragments, errorCuts) &&
       Spec.RenderRelation(cmd, data, output, byteFragments, outputCuts, numbers) &&
       exit == (if hadError then 1 else 0);
   }
@@ -1269,8 +1269,8 @@ module CatProof {
       Spec.PreparedSpec(raw, io2, normal2, out2, diagnostics2) &&
       Spec.Emission(raw, io2, out2, diagnostics2, normal2, exit2);
     PreparedRunObservationFunctional(raw, io1, io2, normal1, normal2,
-      out1, diagnostics1,
-      out2, diagnostics2);
+                                     out1, diagnostics1,
+                                     out2, diagnostics2);
     assert out1 == out2 && diagnostics1 == diagnostics2 && normal1 == normal2;
   }
 
@@ -1280,9 +1280,9 @@ module CatProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit,
-        out, diagnostics) &&
+                           out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit,
-      out, diagnostics);
+                                       out, diagnostics);
   }
 }

@@ -11,10 +11,10 @@ module MkdirSchema {
 
   method Schema() returns (schema: CliTypes.CliSchema) {
     schema := CliTypes.CliSchema([
-      CliTypes.OptionDecl("mkdir.verbose", ['v'], ["verbose"], CliTypes.NoArg),
-      CliTypes.OptionDecl("mkdir.help", [], ["help"], CliTypes.NoArg),
-      CliTypes.OptionDecl("mkdir.version", [], ["version"], CliTypes.NoArg)
-    ], true);
+                                   CliTypes.OptionDecl("mkdir.verbose", ['v'], ["verbose"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("mkdir.help", [], ["help"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("mkdir.version", [], ["version"], CliTypes.NoArg)
+                                 ], true);
   }
 
   method ParserConfig() returns (cfg: CliTypes.ParseConfig) {
@@ -35,7 +35,7 @@ module MkdirSchema {
          (firstIndex < 0 || option.tokenIndex < firstIndex) {
         firstIndex := option.tokenIndex;
         request := if option.key == "mkdir.help" then CliTypes.RequestHelp
-                   else CliTypes.RequestVersion;
+        else CliTypes.RequestVersion;
       }
       i := i + 1;
     }
@@ -51,7 +51,7 @@ module MkdirSchema {
       i := i + 1;
     }
     raw := MkdirCmdRaw(verbose,
-      if |parsed.positionals| == 0 then "" else parsed.positionals[0],
-      if |parsed.positionals| == 0 then [] else parsed.positionals[1..]);
+                       if |parsed.positionals| == 0 then "" else parsed.positionals[0],
+                       if |parsed.positionals| == 0 then [] else parsed.positionals[1..]);
   }
 }

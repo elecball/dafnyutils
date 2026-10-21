@@ -134,8 +134,8 @@ module StatCore {
     ensures Spec.FormatRenderingRelation(format, status, rendered)
   {
     assert Spec.PrefixRenderingWitnessRelation(
-      format, BenchWorld.DEFAULT_FILE_STATUS, |format|, templateText, cuts, templatePieces
-    );
+        format, BenchWorld.DEFAULT_FILE_STATUS, |format|, templateText, cuts, templatePieces
+      );
     rendered := "";
     ghost var pieces: seq<BenchWorld.Bytes> := [];
     var step: nat := 0;
@@ -254,7 +254,7 @@ module StatCore {
     requires RunFilesSummaryFields(cmd, prefix, fs, prefixError, prefixOut, prefixErrOut)
     requires FileStepSummaryFields(cmd, |prefix|, path, fs, stepError, stepOut, stepErrOut)
     ensures RunFilesSummaryFields(cmd, prefix + [path], fs,
-      prefixError || stepError, prefixOut + stepOut, prefixErrOut + stepErrOut)
+                                  prefixError || stepError, prefixOut + stepOut, prefixErrOut + stepErrOut)
   {
     assert (prefix + [path])[..|prefix|] == prefix;
     assert (prefix + [path])[|prefix|] == path;
@@ -264,10 +264,10 @@ module StatCore {
     reads io.statusObservationsRegion
   {
     var cmd := Schema.WithStatusObservations(
-      Schema.Command(raw), io.statusObservations(), old(io.statusCursor()), old(io.trustedNativeFailures())
-    );
+                 Schema.Command(raw), io.statusObservations(), old(io.statusCursor()), old(io.trustedNativeFailures())
+               );
     io.statusCursor() == old(io.statusCursor()) +
-      (if cmd.mode == Schema.ModeRun then |cmd.files| else 0) &&
+    (if cmd.mode == Schema.ModeRun then |cmd.files| else 0) &&
     if cmd.mode == Schema.ModeHelp then
       plannedStdout == [] + Spec.HelpTextSpec() && plannedStderr == [] && exit == 0
     else if cmd.mode == Schema.ModeVersion then
@@ -396,9 +396,9 @@ module StatCore {
         );
         stepOut := text + "\n";
         assert FileStepSummaryFields(
-          summaryCmd, statusIndex, path, preFs,
-          stepError, stepOut, stepErrOut
-        ) by {
+            summaryCmd, statusIndex, path, preFs,
+            stepError, stepOut, stepErrOut
+          ) by {
           hide *;
           reveal FileStepSummaryFields(), Spec.ErrorMessageSpec(), Spec.ErrnoTextSpec();
           reveal Schema.WithStatusObservations();
@@ -409,9 +409,9 @@ module StatCore {
         var reason := io.GetCLocaleErrnoText(errno);
         stepErrOut := Text.ErrorMessageWithReasonSpec(path, reason);
         assert FileStepSummaryFields(
-          summaryCmd, statusIndex, path, preFs,
-          stepError, stepOut, stepErrOut
-        ) by {
+            summaryCmd, statusIndex, path, preFs,
+            stepError, stepOut, stepErrOut
+          ) by {
           hide *;
           reveal FileStepSummaryFields(), Spec.ErrorMessageSpec(), Spec.ErrnoTextSpec();
           reveal Schema.WithStatusObservations();
@@ -428,13 +428,13 @@ module StatCore {
       index := index + 1;
       assert cmd.files[..index] == prefixFiles + [path] by { hide *; }
       RunFilesSummarySnoc(summaryCmd, prefixFiles, path, preFs,
-        prefixError, prefixOut, prefixErrOut, stepError, stepOut, stepErrOut);
+                          prefixError, prefixOut, prefixErrOut, stepError, stepOut, stepErrOut);
     }
 
     assert cmd.files[..|cmd.files|] == cmd.files;
     assert RunFilesSummaryFields(
-      summaryCmd, cmd.files, preFs, hadError, output, errors
-    );
+        summaryCmd, cmd.files, preFs, hadError, output, errors
+      );
     plannedStdout := plannedStdout + (output);
     assert (emissionBeforeOut + plannedStdout) == preStdout + output by { hide *; }
     assert (emissionBeforeErr + plannedStderr) == preStderr;
@@ -465,7 +465,7 @@ module StatCore {
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -480,7 +480,7 @@ module StatCore {
       finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -488,11 +488,11 @@ module StatCore {
       errCommitted := StreamContract.WriteResultCommitted(result);
       errErr := StreamContract.ResultErrno(result);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                            finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
   method RunCore(raw: Schema.StatCmdRaw, io: BenchIO.IO) returns (exit: int)

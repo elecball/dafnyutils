@@ -125,8 +125,8 @@ module Rmdir {
 
     method RunCore(raw: S.RmdirCmdRaw, io: BenchIO.IO) returns (exit: int)
       modifies if raw.mode != S.ModeRun || |raw.operands| == 0
-        then {io.stdoutRegion as object, io.stderrRegion}
-        else {io.fsRegion, io.stdoutRegion, io.stderrRegion, io.dirHandlesRegion}
+               then {io.stdoutRegion as object, io.stderrRegion}
+               else {io.fsRegion, io.stdoutRegion, io.stderrRegion, io.dirHandlesRegion}
       ensures Spec.Spec(raw, io, exit)
     {
       exit := Core.RunCore(raw, io);
@@ -174,12 +174,12 @@ module Rmdir {
     var end := CliModel.FindChar(e.rawToken, '=');
     var name := if end < 0 then e.rawToken else e.rawToken[..end];
     var full := if name in {ParseErrorTextPart1(), ParseErrorTextPart2(), ParseErrorTextPart3(), ParseErrorTextPart4()} then ParseErrorTextPart4()
-      else if CliModel.HasPrefix(ParseErrorTextPart5(), name) then ParseErrorTextPart5()
-      else if CliModel.HasPrefix(ParseErrorTextPart6(), name) then ParseErrorTextPart6()
-      else if CliModel.HasPrefix(ParseErrorTextPart7(), name) then ParseErrorTextPart7()
-      else if CliModel.HasPrefix(ParseErrorTextPart8(), name) then ParseErrorTextPart8()
-      else if CliModel.HasPrefix(ParseErrorTextPart9(), name) then ParseErrorTextPart9()
-      else name;
+                else if CliModel.HasPrefix(ParseErrorTextPart5(), name) then ParseErrorTextPart5()
+                else if CliModel.HasPrefix(ParseErrorTextPart6(), name) then ParseErrorTextPart6()
+                else if CliModel.HasPrefix(ParseErrorTextPart7(), name) then ParseErrorTextPart7()
+                else if CliModel.HasPrefix(ParseErrorTextPart8(), name) then ParseErrorTextPart8()
+                else if CliModel.HasPrefix(ParseErrorTextPart9(), name) then ParseErrorTextPart9()
+                else name;
     if e.kind == CliTypes.UnexpectedValue then
       ParseErrorTextPart10() + ProtocolEncode(full) + ParseErrorTextPart11() +
       ParseErrorTextPart12()
@@ -187,7 +187,7 @@ module Rmdir {
       ParseErrorTextPart10() + ProtocolEncode(e.rawToken) +
       ParseErrorTextPart13() +
       (if name == ParseErrorTextPart14() then
-        ParseErrorTextPart15()
+         ParseErrorTextPart15()
        else ParseErrorTextPart16()) +
       ParseErrorTextPart12()
     else

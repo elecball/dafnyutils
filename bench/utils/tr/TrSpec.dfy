@@ -84,7 +84,7 @@ module TrSpec {
 
   type SetDecode = Result.Result<BenchWorld.Bytes, string>
   datatype ReverseRange = NoReverseRange |
-    FoundReverseRange(first: BenchWorld.RawByte, last: BenchWorld.RawByte)
+                          FoundReverseRange(first: BenchWorld.RawByte, last: BenchWorld.RawByte)
 
   function HelpTextSpec(): BenchWorld.Bytes
   {
@@ -172,21 +172,21 @@ module TrSpec {
   ghost function MissingSet2MessageSpec(operand: string, deleteAndSqueeze: bool): BenchWorld.Bytes
   {
     MissingSet2MessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
-      (if deleteAndSqueeze then
-         MissingSet2MessageSpecText1
-       else
-         MissingSet2MessageSpecText2) +
-      MissingSet2MessageSpecText3
+    (if deleteAndSqueeze then
+       MissingSet2MessageSpecText1
+     else
+       MissingSet2MessageSpecText2) +
+    MissingSet2MessageSpecText3
   }
 
   ghost function ExtraOperandMessageSpec(operand: string, explainDeleteLimit: bool): BenchWorld.Bytes
   {
     ExtraOperandMessageSpecText0 + SE.SpecLocaleQuoteBytes(Utf8.Encode(operand)) +
-      (if explainDeleteLimit then
-         ExtraOperandMessageSpecText1
-       else
-         ExtraOperandMessageSpecText2) +
-      ExtraOperandMessageSpecText3
+    (if explainDeleteLimit then
+       ExtraOperandMessageSpecText1
+     else
+       ExtraOperandMessageSpecText2) +
+    ExtraOperandMessageSpecText3
   }
 
   ghost function UnsupportedSetMessageSpec(operand: string): BenchWorld.Bytes
@@ -476,7 +476,7 @@ module TrSpec {
         inputCuts[i + 1] == AtomNext(text, inputCuts[i]) &&
         outputCuts[i] <= outputCuts[i + 1] <= |warnings| &&
         warnings[outputCuts[i]..outputCuts[i + 1]] ==
-          WarningAtSpec(text, inputCuts[i])
+        WarningAtSpec(text, inputCuts[i])
   }
 
   ghost predicate WarningBytesRelation(
@@ -745,9 +745,9 @@ module TrSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then []
-       else if normalExit != 0 then WriteErrorAfterReadFailure()
-       else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then []
+                             else if normalExit != 0 then WriteErrorAfterReadFailure()
+                             else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
@@ -791,13 +791,13 @@ module TrSpec {
         io.stdin() == old(io.stdin()) &&
         plannedStdout == old(io.stdout()) &&
         plannedStderr == old(io.stderr()) +
-          ExtraOperandMessageSpec(operand, |raw.operands| == 2) &&
+        ExtraOperandMessageSpec(operand, |raw.operands| == 2) &&
         exit == 1
       case ModeUnsupportedSet(operand) =>
         io.stdin() == old(io.stdin()) &&
         plannedStdout == old(io.stdout()) &&
         plannedStderr == old(io.stderr()) + cmd.warnings +
-          UnsupportedSetMessageSpec(operand) &&
+        UnsupportedSetMessageSpec(operand) &&
         exit == 1
       case ModeEmptySet2 =>
         io.stdin() == old(io.stdin()) &&
@@ -812,7 +812,7 @@ module TrSpec {
            OutputRelation(cmd, input, output) &&
            plannedStdout == old(io.stdout()) + output) &&
         plannedStderr == old(io.stderr()) + cmd.warnings +
-          (if read.Ok? then [] else ReadError(IOContract.ResultErrno(read))) &&
+        (if read.Ok? then [] else ReadError(IOContract.ResultErrno(read))) &&
         exit == (if read.Ok? then 0 else 1)
   }
 

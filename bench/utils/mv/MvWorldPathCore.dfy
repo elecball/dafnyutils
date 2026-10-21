@@ -40,7 +40,7 @@ module MvWorldPathCore {
     }
     if segments[i] == ".." {
       return NormalizeSegments(segments, i + 1,
-        if |acc| == 0 then acc else acc[..|acc| - 1]);
+                               if |acc| == 0 then acc else acc[..|acc| - 1]);
     }
     return NormalizeSegments(segments, i + 1, acc + [segments[i]]);
   }

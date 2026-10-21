@@ -539,7 +539,7 @@ module FactorSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
@@ -590,7 +590,7 @@ module FactorSpec {
         RunRelation(tokens, raw.seenExponents, fromArgv, output, errorOutput, hadError) &&
         plannedStdout == old(io.stdout()) + output &&
         plannedStderr == old(io.stderr()) + errorOutput +
-          (if fromArgv || read.Ok? then [] else ReadError(IOContract.ResultErrno(read))) &&
+        (if fromArgv || read.Ok? then [] else ReadError(IOContract.ResultErrno(read))) &&
         exit == (if hadError || (!fromArgv && read.Err?) then 1 else 0)
   }
 

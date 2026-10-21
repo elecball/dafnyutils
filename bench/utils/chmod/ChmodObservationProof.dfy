@@ -22,8 +22,8 @@ module ChmodObservationProof {
   }
 
   lemma {:isolate_assertions} EntryState(cmd: Schema.ChmodCmd, scope: Spec.Scope,
-    display: string, operand: Operand.Operand, top: bool, fs: W.FileSystem,
-    native: W.CwdContext, cursor: nat, entry: Spec.Entry)
+                                         display: string, operand: Operand.Operand, top: bool, fs: W.FileSystem,
+                                         native: W.CwdContext, cursor: nat, entry: Spec.Entry)
     requires C.CwdContextFields(fs, native)
     requires Spec.EntryFields(cmd, scope, display, operand, top, fs, native, cursor, entry)
     ensures entry.result.fs == fs && C.CwdContextFields(fs, entry.result.native)
@@ -38,10 +38,10 @@ module ChmodObservationProof {
   }
 
   lemma {:isolate_assertions} SetState(context: Base.ObservationContext, scope: Spec.Scope,
-    fs: W.FileSystem, native: W.CwdContext, operand: Operand.Operand, follow: bool,
-    mode: bv32, afterFs: W.FileSystem, after: W.CwdContext, ok: bool, err: int)
+                                       fs: W.FileSystem, native: W.CwdContext, operand: Operand.Operand, follow: bool,
+                                       mode: bv32, afterFs: W.FileSystem, after: W.CwdContext, ok: bool, err: int)
     requires Operand.SetFields(context, scope.now, fs, native, operand, follow, mode,
-      afterFs, after, ok, err)
+                               afterFs, after, ok, err)
     ensures C.CwdContextFields(afterFs, after)
     ensures FrameSpec.FrameFields(native, after)
     ensures W.FileSystemTopologyUnchangedExceptMode(fs, afterFs)
@@ -50,14 +50,14 @@ module ChmodObservationProof {
     hide *;
     Frame.Mode(context, scope.now, fs, native, operand, follow, mode, afterFs, after, ok, err);
     reveal Operand.SetFields(), C.SetFileModeAtCwdSpec(), C.SetFileModeAtDirSpec(),
-      C.SetFileModeFromCwdTargetContractFields();
+           C.SetFileModeFromCwdTargetContractFields();
     if !ok { Identity.TopologyReflexive(fs); }
     reveal C.CwdContextReadStepFields();
   }
 
   lemma {:isolate_assertions} ChangeState(cmd: Schema.ChmodCmd, plan: Base.SpecModePlan,
-    scope: Spec.Scope, entry: Spec.Entry, fs: W.FileSystem, native: W.CwdContext,
-    cursor: nat, change: Spec.Change)
+                                          scope: Spec.Scope, entry: Spec.Entry, fs: W.FileSystem, native: W.CwdContext,
+                                          cursor: nat, change: Spec.Change)
     requires C.CwdContextFields(fs, native)
     requires Spec.ChangeFields(cmd, plan, scope, entry, fs, native, cursor, change)
     ensures C.CwdContextFields(change.result.fs, change.result.native)
@@ -68,7 +68,7 @@ module ChmodObservationProof {
     hide *;
     reveal Spec.ChangeFields();
     var mode := Operand.StatusAt(Base.AtCursor(scope.context, cursor), fs, native,
-      entry.identity.operand, 0, entry.identity.metadataFollow);
+                                 entry.identity.operand, 0, entry.identity.metadataFollow);
     Frame.Offset(native, 1);
     OffsetValid(fs, native, 1);
     if mode.Err? {
@@ -76,17 +76,17 @@ module ChmodObservationProof {
       reveal Operand.AtOffset();
     } else {
       SetState(Base.AtCursor(scope.context, cursor+1), scope, fs, Operand.AtOffset(native, 1),
-        entry.identity.operand, Spec.ModeFollow(cmd, entry.identity.top), change.desired,
-        change.setFs, change.setNative, change.setErr == 0, change.setErr);
+               entry.identity.operand, Spec.ModeFollow(cmd, entry.identity.top), change.desired,
+               change.setFs, change.setNative, change.setErr == 0, change.setErr);
       Frame.Transitive(native, Operand.AtOffset(native, 1), change.setNative);
       assert change.result.fs == change.setFs;
       assert Operand.AtOffset(native, 1).capabilities == native.capabilities by { reveal Operand.AtOffset(); }
       if change.setErr == 0 {
         var result: Base.SpecPathResult :| Spec.SuccessFields(cmd, plan, scope, entry,
-          change.setFs, change.setNative, cursor+1, mode.v.mode, W.NormalizeMode(change.desired),
-          change.result.cursor, change.result.native, result) &&
-          change.result == Spec.State(change.setFs, change.result.cursor, change.result.native,
-            result.stdoutChunk, result.stderrChunk, result.ok);
+                                                              change.setFs, change.setNative, cursor+1, mode.v.mode, W.NormalizeMode(change.desired),
+                                                              change.result.cursor, change.result.native, result) &&
+                                           change.result == Spec.State(change.setFs, change.result.cursor, change.result.native,
+                                                                       result.stdoutChunk, result.stderrChunk, result.ok);
         reveal Spec.SuccessFields();
         var count: nat := if Base.SpecPostChangeLookupNeeded(cmd, W.NormalizeMode(change.desired)) then 1 else 0;
         Frame.Offset(change.setNative, count);
@@ -104,26 +104,26 @@ module ChmodObservationProof {
   }
 
   lemma {:isolate_assertions} DirectoryState(fs: W.FileSystem, native: W.CwdContext,
-    observations: W.DirectoryObservations, operation: W.DirectoryOperation, handle: int,
-    cursor: nat, response: W.DirectoryResponse, after: W.CwdContext)
+                                             observations: W.DirectoryObservations, operation: W.DirectoryOperation, handle: int,
+                                             cursor: nat, response: W.DirectoryResponse, after: W.CwdContext)
     requires C.CwdContextFields(fs, native)
     requires operation == W.DirectoryReadNext || operation == W.DirectoryClose
     requires C.ContextOperationSpec(fs, native, observations, operation, handle, 0, "",
-      cursor, cursor, response, after)
+                                    cursor, cursor, response, after)
     ensures C.CwdContextFields(fs, after)
     ensures FrameSpec.FrameFields(native, after)
   {
     hide *;
     Frame.DirectoryOperation(fs, native, observations, operation, handle, cursor, response, after);
     reveal C.ContextOperationSpec(), C.DirectoryRequestForContextFields(), C.DirectoryOperationSpec(),
-      C.DirectoryResponseFields(), C.CwdContextFields(), C.LiveDirectoryCapabilitiesFields();
+           C.DirectoryResponseFields(), C.CwdContextFields(), C.LiveDirectoryCapabilitiesFields();
     forall h | h in after.capabilities
       ensures var state := after.capabilities[h];
-        C.LiveDirectoryTopologyFields(state.anchorFs, state.anchorTopology) &&
-        state.anchorTopology.nodes.Keys <= after.topology.nodes.Keys &&
-        state.position in state.anchorTopology.nodes && state.position in after.topology.nodes &&
-        state.remaining <= C.DirectoryCapabilityNamesFields(state.anchorTopology, state.position, state.includeDots) &&
-        |state.descriptor| <= 1
+              C.LiveDirectoryTopologyFields(state.anchorFs, state.anchorTopology) &&
+              state.anchorTopology.nodes.Keys <= after.topology.nodes.Keys &&
+              state.position in state.anchorTopology.nodes && state.position in after.topology.nodes &&
+              state.remaining <= C.DirectoryCapabilityNamesFields(state.anchorTopology, state.position, state.includeDots) &&
+              |state.descriptor| <= 1
     {
       assert h in native.capabilities;
     }

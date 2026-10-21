@@ -18,7 +18,7 @@ module CatTextCore {
     ensures ErrorMessageSpec(path, err) == Spec.ErrorMessageSpec(path, err)
   {
     Spec.ErrorPrefix() + Quote.SpecQuoteFBytes(Utf8.Encode(path)) + Spec.ErrorSeparator() +
-      Utf8.Encode(Spec.ErrnoText(err)) + Spec.DiagnosticSuffix()
+    Utf8.Encode(Spec.ErrnoText(err)) + Spec.DiagnosticSuffix()
   }
 
   function StreamWriteErrorMessage(message: string): BW.Bytes

@@ -57,7 +57,7 @@ module Mkdir {
         }
         if j < |err.rawToken| {
           normalized := CliTypes.ParseError(err.kind, err.tokenIndex,
-            "-" + err.rawToken[j..]);
+                                            "-" + err.rawToken[j..]);
         }
       }
       msg := ProtocolParseErrorText(normalized);
@@ -147,30 +147,30 @@ module Mkdir {
     ensures ProtocolParseErrorText(err) == ProtocolModel.ParseErrorText(err)
   {
     if err.kind == CliTypes.UnknownOption then
-        if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-          ParseErrorTextPart1() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2() +
-          ParseErrorTextPart3()
-        else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
-          UnknownShortText(ProtocolEncodeChar(err.rawToken[1])[0])
-        else
-          ParseErrorTextPart4()
-      else if err.kind == CliTypes.UnexpectedValue then
-        ParseErrorTextPart5() + ProtocolEncode(LongOptionName(err.rawToken)) +
-        ParseErrorTextPart6() +
+      if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
+        ParseErrorTextPart1() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2() +
         ParseErrorTextPart3()
-      else if err.kind == CliTypes.Ambiguous then
-        ParseErrorTextPart5() + ProtocolEncode(err.rawToken) +
-        ParseErrorTextPart7() +
-        (if |err.rawToken| > 2 && err.rawToken[2] == '=' then
-          ParseErrorTextPart8()
-         else ParseErrorTextPart9()) +
-        ParseErrorTextPart3()
+      else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
+        UnknownShortText(ProtocolEncodeChar(err.rawToken[1])[0])
       else
-        ParseErrorTextPart10() + ProtocolEncode(
+        ParseErrorTextPart4()
+    else if err.kind == CliTypes.UnexpectedValue then
+      ParseErrorTextPart5() + ProtocolEncode(LongOptionName(err.rawToken)) +
+      ParseErrorTextPart6() +
+      ParseErrorTextPart3()
+    else if err.kind == CliTypes.Ambiguous then
+      ParseErrorTextPart5() + ProtocolEncode(err.rawToken) +
+      ParseErrorTextPart7() +
+      (if |err.rawToken| > 2 && err.rawToken[2] == '=' then
+         ParseErrorTextPart8()
+       else ParseErrorTextPart9()) +
+      ParseErrorTextPart3()
+    else
+      ParseErrorTextPart10() + ProtocolEncode(
         (if err.kind == CliTypes.MissingValue
-        then ParseErrorTextPart11()
-        else ParseErrorTextPart12())) +
-        ParseErrorTextPart13() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2()
+         then ParseErrorTextPart11()
+         else ParseErrorTextPart12())) +
+      ParseErrorTextPart13() + ProtocolEncode(err.rawToken) + ParseErrorTextPart2()
   }
 
 }

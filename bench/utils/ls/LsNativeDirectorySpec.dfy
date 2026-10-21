@@ -4,7 +4,7 @@ module LsNativeDirectorySpec {
   import W = BenchWorld
 
   ghost function EntryForName(topology: W.LiveDirectoryTopology,
-    position: W.DirectoryPosition, name: string): (entry: W.DirEntry)
+                              position: W.DirectoryPosition, name: string): (entry: W.DirEntry)
     requires position in topology.nodes
     requires name == "." || name == ".." || name in topology.nodes[position].entries
     ensures entry.name == name
@@ -16,7 +16,7 @@ module LsNativeDirectorySpec {
   }
 
   ghost function EntriesForNames(topology: W.LiveDirectoryTopology,
-    position: W.DirectoryPosition, names: set<string>): set<W.DirEntry>
+                                 position: W.DirectoryPosition, names: set<string>): set<W.DirEntry>
     requires position in topology.nodes
     requires names <= topology.nodes[position].entries.Keys + {".", ".."}
   {

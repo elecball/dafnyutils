@@ -169,9 +169,9 @@ module DuCore {
       plannedStdout := plannedStdout + (Spec.HelpTextSpec());
       exit := 0;
       assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
-      hide *;
-      reveal PreparedSummary();
-    }
+        hide *;
+        reveal PreparedSummary();
+      }
       return;
     }
 
@@ -179,9 +179,9 @@ module DuCore {
       plannedStdout := plannedStdout + (Spec.VersionTextSpec());
       exit := 0;
       assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
-      hide *;
-      reveal PreparedSummary();
-    }
+        hide *;
+        reveal PreparedSummary();
+      }
       return;
     }
 
@@ -189,9 +189,9 @@ module DuCore {
       plannedStderr := plannedStderr + (Spec.UnsupportedAccountingMessageSpec());
       exit := 1;
       assert PreparedSummary(raw, io, exit, emissionBeforeOut + plannedStdout, emissionBeforeErr + plannedStderr) by {
-      hide *;
-      reveal PreparedSummary();
-    }
+        hide *;
+        reveal PreparedSummary();
+      }
       return;
     }
 
@@ -250,7 +250,7 @@ module DuCore {
                normalExit: int, io: BenchIO.IO) returns (exit: int)
     modifies io.stdoutRegion, io.stderrRegion
     ensures Spec.EmissionFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit)
+                                io.trustedStreams(), output, diagnostics, normalExit, exit)
   {
     var committed: nat := 0;
     var outErr := 0;
@@ -265,7 +265,7 @@ module DuCore {
       finalDiagnostics := diagnostics + Text.WriteErrorText(reason);
     }
     assert finalDiagnostics == diagnostics + (if outErr == 0 then []
-      else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                                              else Spec.WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     var errCommitted: nat := 0;
     var errErr := 0;
     if |finalDiagnostics| != 0 {
@@ -273,11 +273,11 @@ module DuCore {
       errCommitted := StreamContract.WriteResultCommitted(result);
       errErr := StreamContract.ResultErrno(result);
       assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
-        finalDiagnostics, errCommitted, errErr);
+                                            finalDiagnostics, errCommitted, errErr);
     }
     exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
     assert Spec.EmissionOutcomeFields(old(io.stdout()), old(io.stderr()), io.stdout(), io.stderr(),
-      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
+                                      io.trustedStreams(), output, diagnostics, normalExit, exit, committed, outErr, errCommitted, errErr);
   }
 
   method RunCore(raw: Schema.DuCmdRaw, io: BenchIO.IO) returns (exit: int)

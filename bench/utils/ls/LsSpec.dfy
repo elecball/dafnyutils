@@ -25,7 +25,7 @@ module LsMaximumModel {
     } else {
       MaximumExists(remaining);
       ghost var tail: nat :| tail in remaining &&
-        forall value: nat | value in remaining :: value <= tail;
+                             forall value: nat | value in remaining :: value <= tail;
       ghost var maximum := if member > tail then member else tail;
       assert forall value: nat | value in values :: value <= maximum by {
         forall value: nat | value in values
@@ -47,7 +47,7 @@ module LsMaximumModel {
     else
       MaximumExists(values);
       var maximum: nat :| maximum in values &&
-        forall value: nat | value in values :: value <= maximum;
+                          forall value: nat | value in values :: value <= maximum;
       maximum
   }
 
@@ -102,18 +102,18 @@ module LsSpec {
     ghost nativeCalls: seq<Native.Call> := [])
 
   datatype DirectoryTrace = NoDirectoryTrace | DirectoryTrace(
-    openedHandles: map<int, BenchWorld.DirectoryCapabilityState>, handle: int,
-    openOk: bool, openErr: int,
-    readSteps: seq<DirectoryReadStep>, terminal: DirectoryReadStep,
-    closed: map<int, BenchWorld.DirectoryCapabilityState>, closeOk: bool, closeErr: int,
-    raw: seq<EntryObservation>, positions: seq<nat>,
-    ghost openCalls: seq<Native.Call> := [],
-    ghost statusCalls: seq<Native.Call> := [],
-    ghost closeCalls: seq<Native.Call> := [],
-    ghost readCalls: seq<Native.Call> := [],
-    ghost nativeCalls: seq<Native.Call> := [],
-    ghost nativePieces: seq<seq<Native.Call>> := [],
-    ghost nativeCuts: seq<nat> := [])
+                              openedHandles: map<int, BenchWorld.DirectoryCapabilityState>, handle: int,
+                              openOk: bool, openErr: int,
+                              readSteps: seq<DirectoryReadStep>, terminal: DirectoryReadStep,
+                              closed: map<int, BenchWorld.DirectoryCapabilityState>, closeOk: bool, closeErr: int,
+                              raw: seq<EntryObservation>, positions: seq<nat>,
+                              ghost openCalls: seq<Native.Call> := [],
+                              ghost statusCalls: seq<Native.Call> := [],
+                              ghost closeCalls: seq<Native.Call> := [],
+                              ghost readCalls: seq<Native.Call> := [],
+                              ghost nativeCalls: seq<Native.Call> := [],
+                              ghost nativePieces: seq<seq<Native.Call>> := [],
+                              ghost nativeCuts: seq<nat> := [])
 
   datatype OperandClass = AccessFailure | DirectOperand | ExpandedDirectory
 
@@ -511,7 +511,7 @@ module LsSpec {
   }
 
   ghost predicate BoundOpenDirectoryTrace(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path, trace: DirectoryTrace, ok: bool, err: int)
+                                          path: BenchWorld.Path, trace: DirectoryTrace, ok: bool, err: int)
   {
     trace.DirectoryTrace? && trace.openOk == ok && trace.openErr == err &&
     |trace.openCalls| == 1 && NativeCallsFields(cmd,fs,trace.openCalls) &&
@@ -523,7 +523,7 @@ module LsSpec {
   }
 
   ghost predicate FailedOpenDirectoryTrace(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path, trace: DirectoryTrace)
+                                           path: BenchWorld.Path, trace: DirectoryTrace)
   {
     trace.DirectoryTrace? && BoundOpenDirectoryTrace(cmd,fs,path,trace,false,trace.openErr) &&
     trace.readSteps == [] && trace.raw == [] && trace.positions == [] &&
@@ -534,7 +534,7 @@ module LsSpec {
   }
 
   ghost predicate DirectoryReadStepFields(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    handle: int, step: DirectoryReadStep)
+                                          handle: int, step: DirectoryReadStep)
   {
     |step.nativeCalls| == 1 && NativeCallsFields(cmd,fs,step.nativeCalls) &&
     var call := step.nativeCalls[0];
@@ -548,38 +548,38 @@ module LsSpec {
   }
 
   ghost predicate DirectoryReadPrefix(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    openedHandles: map<int,BenchWorld.DirectoryCapabilityState>, handle: int,
-    steps: seq<DirectoryReadStep>, after: map<int,BenchWorld.DirectoryCapabilityState>)
+                                      openedHandles: map<int,BenchWorld.DirectoryCapabilityState>, handle: int,
+                                      steps: seq<DirectoryReadStep>, after: map<int,BenchWorld.DirectoryCapabilityState>)
   {
     cmd.statusContext.BoundStatusObservations? &&
     (if |steps| == 0 then after == openedHandles
      else steps[0].before == openedHandles && steps[|steps|-1].after == after) &&
     forall i: nat | i < |steps| :: steps[i].more && steps[i].err == 0 &&
-      DirectoryReadStepFields(cmd,fs,handle,steps[i]) &&
-      (i > 0 ==> steps[i-1].after == steps[i].before)
+                                   DirectoryReadStepFields(cmd,fs,handle,steps[i]) &&
+                                   (i > 0 ==> steps[i-1].after == steps[i].before)
   }
 
   ghost predicate DirectoryReadEvidence(cmd: Schema.LsCmd,
-    steps: seq<DirectoryReadStep>, raw: seq<EntryObservation>, positions: seq<nat>)
+                                        steps: seq<DirectoryReadStep>, raw: seq<EntryObservation>, positions: seq<nat>)
   {
     |positions| == |raw| &&
     (forall i: nat | i < |raw| ::
-      positions[i] < |steps| &&
-      raw[i].displayName == steps[positions[i]].name &&
-      raw[i].directoryRead == steps[positions[i]].nativeCalls &&
-      (raw[i].entryKind == steps[positions[i]].kind ||
-       ((raw[i].displayName == "." || raw[i].displayName == "..") &&
-        raw[i].entryKind == BenchWorld.DirectoryDirentKind)) &&
-      (i > 0 ==> positions[i-1] < positions[i])) &&
+       positions[i] < |steps| &&
+       raw[i].displayName == steps[positions[i]].name &&
+       raw[i].directoryRead == steps[positions[i]].nativeCalls &&
+       (raw[i].entryKind == steps[positions[i]].kind ||
+        ((raw[i].displayName == "." || raw[i].displayName == "..") &&
+         raw[i].entryKind == BenchWorld.DirectoryDirentKind)) &&
+       (i > 0 ==> positions[i-1] < positions[i])) &&
     (forall i: nat | i < |steps| && VisibleNameSpec(cmd, steps[i].name) ::
-      exists j: nat :: j < |raw| && raw[j].displayName == steps[i].name)
+       exists j: nat :: j < |raw| && raw[j].displayName == steps[i].name)
   }
 
   ghost predicate NativeCallFragments(pieces: seq<seq<Native.Call>>, combined: seq<Native.Call>, cuts: seq<nat>)
   {
     |cuts| == |pieces|+1 && cuts[0] == 0 && cuts[|pieces|] == |combined| &&
     forall i: nat {:trigger pieces[i]} | i < |pieces| :: cuts[i] <= cuts[i+1] <= |combined| &&
-      combined[cuts[i]..cuts[i+1]] == pieces[i]
+                                                         combined[cuts[i]..cuts[i+1]] == pieces[i]
   }
 
   ghost predicate DirectoryCallPieces(trace: DirectoryTrace)
@@ -587,14 +587,14 @@ module LsSpec {
     trace.DirectoryTrace? && |trace.nativePieces| == |trace.readSteps| &&
     NativeCallFragments(trace.nativePieces,trace.readCalls,trace.nativeCuts) &&
     (forall i: nat | i < |trace.readSteps| ::
-      if exists j: nat :: j < |trace.positions| && trace.positions[j] == i then
-        exists j: nat :: j < |trace.positions| && j < |trace.raw| && trace.positions[j] == i &&
-          trace.nativePieces[i] == trace.readSteps[i].nativeCalls+trace.raw[j].nativeCalls
-      else trace.nativePieces[i] == trace.readSteps[i].nativeCalls)
+       if exists j: nat :: j < |trace.positions| && trace.positions[j] == i then
+         exists j: nat :: j < |trace.positions| && j < |trace.raw| && trace.positions[j] == i &&
+                          trace.nativePieces[i] == trace.readSteps[i].nativeCalls+trace.raw[j].nativeCalls
+       else trace.nativePieces[i] == trace.readSteps[i].nativeCalls)
   }
 
   ghost predicate ReadCloseDirectoryTrace(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path, trace: DirectoryTrace, readErr: int, closeErr: int)
+                                          path: BenchWorld.Path, trace: DirectoryTrace, readErr: int, closeErr: int)
   {
     BoundOpenDirectoryTrace(cmd,fs,path,trace,true,0) &&
     DirectoryReadPrefix(cmd,fs,trace.openedHandles,trace.handle,trace.readSteps,trace.terminal.before) &&
@@ -610,11 +610,11 @@ module LsSpec {
     trace.closed == trace.openCalls[0].before.context.capabilities &&
     DirectoryCallPieces(trace) &&
     trace.nativeCalls == trace.openCalls+trace.statusCalls+trace.readCalls+
-      trace.terminal.nativeCalls+trace.closeCalls && NativeCallsFields(cmd,fs,trace.nativeCalls)
+    trace.terminal.nativeCalls+trace.closeCalls && NativeCallsFields(cmd,fs,trace.nativeCalls)
   }
 
   ghost predicate RecursiveNativeDirectoryTrace(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path, tree: RecursiveWitness)
+                                                path: BenchWorld.Path, tree: RecursiveWitness)
   {
     BoundOpenDirectoryTrace(cmd,fs,path,tree.nativeTrace,tree.openOk,tree.openErr) &&
     if !tree.openOk then FailedOpenDirectoryTrace(cmd,fs,path,tree.nativeTrace)
@@ -639,30 +639,30 @@ module LsSpec {
   }
 
   ghost predicate OpenDirectoryObservation(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path, ok: bool, err: int)
+                                           path: BenchWorld.Path, ok: bool, err: int)
   {
     exists call: Native.Call :: NativeCallsFields(cmd,fs,[call]) &&
-      call.action.OpenAction? && call.action.path == path && call.action.dots &&
-      call.action.openResult.Ok? == ok && IOContract.ResultErrno(call.action.openResult) == err
+                                call.action.OpenAction? && call.action.path == path && call.action.dots &&
+                                call.action.openResult.Ok? == ok && IOContract.ResultErrno(call.action.openResult) == err
   }
 
   ghost predicate OpenedDirectoryStatusObservation(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path, firstStatus: nat, ok: bool, status: BenchWorld.FileStatus, err: int)
+                                                   path: BenchWorld.Path, firstStatus: nat, ok: bool, status: BenchWorld.FileStatus, err: int)
   {
     exists call: Native.Call :: NativeCallsFields(cmd,fs,[call]) &&
-      call.before.status == firstStatus && call.action.HandleStatusAction? &&
-      NativeObservation.StatusFields(call.action.statusResult,ok,status,err)
+                                call.before.status == firstStatus && call.action.HandleStatusAction? &&
+                                NativeObservation.StatusFields(call.action.statusResult,ok,status,err)
   }
 
   ghost predicate DirectoryCloseObservation(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path, readErr: int, err: int)
+                                            path: BenchWorld.Path, readErr: int, err: int)
   {
     exists read: Native.Call, closed: Native.Call :: NativeCallsFields(cmd,fs,[read,closed]) &&
-      read.action.ReadAction? && closed.action.CloseAction? &&
-      read.action.handle == closed.action.handle &&
-      (read.action.readResult.Err? || read.action.readResult.v.DirectoryEnd?) &&
-      IOContract.ResultErrno(read.action.readResult) == readErr &&
-      IOContract.ResultErrno(closed.action.closeResult) == err
+                                                     read.action.ReadAction? && closed.action.CloseAction? &&
+                                                     read.action.handle == closed.action.handle &&
+                                                     (read.action.readResult.Err? || read.action.readResult.v.DirectoryEnd?) &&
+                                                     IOContract.ResultErrno(read.action.readResult) == readErr &&
+                                                     IOContract.ResultErrno(closed.action.closeResult) == err
   }
 
   function OpenDirectoryErrorMessageSpecPart1(): StreamWorld.Bytes
@@ -999,7 +999,7 @@ module LsSpec {
     requires index < |observations|
   {
     RenderAlignedEntrySpec(cmd, observations[index].renderName, observations[index].status,
-                          OperandWidthsSpec(cmd, observations))
+                           OperandWidthsSpec(cmd, observations))
   }
 
   ghost function RenderEntrySpec(cmd: Schema.LsCmd, displayName: string, status: BenchWorld.FileStatus): BenchWorld.Bytes
@@ -1033,17 +1033,17 @@ module LsSpec {
                          PadColumn(NatTextSpec(DisplayedBlocksSpec(status.storage.allocatedBlocks, cmd.cliBlockSize)), widths.blocks, true) + RenderAlignedEntrySpecPart1()
                        else RenderAlignedEntrySpecPart2();
     Utf8.Encode(blockPrefix + if !cmd.numericLong then
-      displayName + RenderAlignedEntrySpecPart3()
-    else
-      ModeTextSpec(status) + RenderAlignedEntrySpecPart1() +
-      PadColumn(NatTextSpec(status.linkCount), widths.links, true) + RenderAlignedEntrySpecPart1() +
-      PadColumn(NatTextSpec(status.ownership.uid), widths.owner, true) + RenderAlignedEntrySpecPart1() +
-      PadColumn(NatTextSpec(status.ownership.gid), widths.group, true) + RenderAlignedEntrySpecPart1() +
-      PadColumn(NatTextSpec(DisplayedFileSizeSpec(
-                    status.storage.size, cmd.fileSizeBlockSize)), widths.size, true) + RenderAlignedEntrySpecPart1() +
-      TimeTextSpec(cmd, SelectedSecondsSpec(cmd, status),
-                   SelectedNanosecondsSpec(cmd, status)) + RenderAlignedEntrySpecPart1() +
-      displayName + RenderAlignedEntrySpecPart3())
+                  displayName + RenderAlignedEntrySpecPart3()
+                else
+                  ModeTextSpec(status) + RenderAlignedEntrySpecPart1() +
+                  PadColumn(NatTextSpec(status.linkCount), widths.links, true) + RenderAlignedEntrySpecPart1() +
+                  PadColumn(NatTextSpec(status.ownership.uid), widths.owner, true) + RenderAlignedEntrySpecPart1() +
+                  PadColumn(NatTextSpec(status.ownership.gid), widths.group, true) + RenderAlignedEntrySpecPart1() +
+                  PadColumn(NatTextSpec(DisplayedFileSizeSpec(
+                                          status.storage.size, cmd.fileSizeBlockSize)), widths.size, true) + RenderAlignedEntrySpecPart1() +
+                  TimeTextSpec(cmd, SelectedSecondsSpec(cmd, status),
+                               SelectedNanosecondsSpec(cmd, status)) + RenderAlignedEntrySpecPart1() +
+                  displayName + RenderAlignedEntrySpecPart3())
   }
 
   function ClassifiedDirentKindSpec(kind: BenchWorld.DirectoryEntryKind): DirentKindEvidence
@@ -1109,13 +1109,13 @@ module LsSpec {
   {
     var blocks := if cmd.showBlocks then PadColumn(RenderFailedEntrySpecPart1(), widths.blocks, true) + RenderFailedEntrySpecPart2() else RenderFailedEntrySpecPart3();
     Utf8.Encode(blocks + (if cmd.numericLong then
-      [DirectoryEntryKindCharSpec(observation.entryKind)] + RenderFailedEntrySpecPart4() +
-      PadColumn(RenderFailedEntrySpecPart1(), widths.links, true) + RenderFailedEntrySpecPart2() +
-      PadColumn(RenderFailedEntrySpecPart1(), widths.owner, false) + RenderFailedEntrySpecPart2() +
-      PadColumn(RenderFailedEntrySpecPart1(), widths.group, false) + RenderFailedEntrySpecPart2() +
-      PadColumn(RenderFailedEntrySpecPart1(), widths.size, true) + RenderFailedEntrySpecPart2() +
-      PadColumn(RenderFailedEntrySpecPart1(), FailedTimeWidthSpec(cmd), true) + RenderFailedEntrySpecPart2()
-    else RenderFailedEntrySpecPart3()) + observation.displayName + RenderFailedEntrySpecPart5())
+                            [DirectoryEntryKindCharSpec(observation.entryKind)] + RenderFailedEntrySpecPart4() +
+                            PadColumn(RenderFailedEntrySpecPart1(), widths.links, true) + RenderFailedEntrySpecPart2() +
+                            PadColumn(RenderFailedEntrySpecPart1(), widths.owner, false) + RenderFailedEntrySpecPart2() +
+                            PadColumn(RenderFailedEntrySpecPart1(), widths.group, false) + RenderFailedEntrySpecPart2() +
+                            PadColumn(RenderFailedEntrySpecPart1(), widths.size, true) + RenderFailedEntrySpecPart2() +
+                            PadColumn(RenderFailedEntrySpecPart1(), FailedTimeWidthSpec(cmd), true) + RenderFailedEntrySpecPart2()
+                          else RenderFailedEntrySpecPart3()) + observation.displayName + RenderFailedEntrySpecPart5())
   }
 
   ghost function EntryDiagnosticPathSpec(displayPath: BenchWorld.Path, name: string): BenchWorld.Path
@@ -1171,7 +1171,7 @@ module LsSpec {
   {
     if cmd.numericLong || cmd.showBlocks then
       Utf8.Encode(TotalLineSpecPart1() + NatTextSpec(
-        DisplayedBlocksSpec(AllocatedBlocksSumSpec(observations), cmd.cliBlockSize)) + TotalLineSpecPart2())
+                    DisplayedBlocksSpec(AllocatedBlocksSumSpec(observations), cmd.cliBlockSize)) + TotalLineSpecPart2())
     else
       []
   }
@@ -1227,8 +1227,8 @@ module LsSpec {
   {
     EntryRenderSortMetadataRequiredSpec(cmd) ||
     (cmd.recursive && name != "." && name != ".." &&
-      (kind == UnknownDirentKind ||
-       (kind == KnownSymlink && cmd.followMode == Schema.FollowAlways)))
+     (kind == UnknownDirentKind ||
+      (kind == KnownSymlink && cmd.followMode == Schema.FollowAlways)))
   }
 
   function DirentKindMatchesEntrySpec(
@@ -1296,14 +1296,14 @@ module LsSpec {
   }
 
   ghost function ReadLinkResultSpec(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path): BenchWorld.IOResult<BenchWorld.Path>
+                                    path: BenchWorld.Path): BenchWorld.IOResult<BenchWorld.Path>
   {
     IOContract.ReadLinkResultFields(fs,path)
   }
 
   ghost function LinkReadErrorSpec(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path, followSymlink: bool, showTarget: bool,
-    status: BenchWorld.FileStatus): int
+                                   path: BenchWorld.Path, followSymlink: bool, showTarget: bool,
+                                   status: BenchWorld.FileStatus): int
   {
     if status.kind != BenchWorld.SymlinkKind || followSymlink || !showTarget then 0
     else IOContract.ResultErrno(ReadLinkResultSpec(cmd, fs, path))
@@ -1354,7 +1354,7 @@ module LsSpec {
   ): bool
   {
     if cmd.sortMode == Schema.SortSize &&
-            (if left.ok then left.status.storage.size else 0) != (if right.ok then right.status.storage.size else 0) then
+       (if left.ok then left.status.storage.size else 0) != (if right.ok then right.status.storage.size else 0) then
       (if left.ok then left.status.storage.size else 0) > (if right.ok then right.status.storage.size else 0)
     else if cmd.sortMode == Schema.SortTime &&
             (if left.ok then SelectedSecondsSpec(cmd, left.status) else 0) != (if right.ok then SelectedSecondsSpec(cmd, right.status) else 0) then
@@ -1400,7 +1400,7 @@ module LsSpec {
   }
 
   ghost predicate NativeCallsFields(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    calls: seq<Native.Call>)
+                                    calls: seq<Native.Call>)
   {
     NativeCommandFields(cmd,fs) &&
     if |calls| == 0 then true
@@ -1414,22 +1414,22 @@ module LsSpec {
       NativeCommandFields(cmd,fs) && |observation.nativeCalls| >= 1 &&
       observation.nativeCalls[0].before.status == observation.statusOrdinal &&
       NativeObservation.PathFields(cmd.nativeInputs[0],observation.nativeCalls[0].before,
-        observation.nativeCalls[|observation.nativeCalls|-1].after,observation.displayName,
-        observation.accessPath,observation.followSymlink,cmd.numericLong,observation.ok,
-        observation.status,observation.err,observation.renderName,observation.linkErr,
-        observation.nativeCalls)
+                                   observation.nativeCalls[|observation.nativeCalls|-1].after,observation.displayName,
+                                   observation.accessPath,observation.followSymlink,cmd.numericLong,observation.ok,
+                                   observation.status,observation.err,observation.renderName,observation.linkErr,
+                                   observation.nativeCalls)
     else
       match StatusResultSpec(cmd, fs, observation.statusOrdinal,
-                                 observation.accessPath, observation.followSymlink)
-          case Ok(expected) =>
-            observation.ok && observation.status == expected && observation.err == 0 &&
-            observation.renderName == RenderNameSpec(cmd, fs, observation.displayName,
-              observation.accessPath, observation.followSymlink, cmd.numericLong, expected) &&
-            observation.linkErr == LinkReadErrorSpec(cmd, fs, observation.accessPath,
-              observation.followSymlink, cmd.numericLong, expected)
-          case Err(error) =>
-            !observation.ok && observation.err == IOContract.IOErrorErrno(error) &&
-            observation.linkErr == 0 && observation.renderName == observation.displayName
+                             observation.accessPath, observation.followSymlink)
+      case Ok(expected) =>
+        observation.ok && observation.status == expected && observation.err == 0 &&
+        observation.renderName == RenderNameSpec(cmd, fs, observation.displayName,
+                                                 observation.accessPath, observation.followSymlink, cmd.numericLong, expected) &&
+        observation.linkErr == LinkReadErrorSpec(cmd, fs, observation.accessPath,
+                                                 observation.followSymlink, cmd.numericLong, expected)
+      case Err(error) =>
+        !observation.ok && observation.err == IOContract.IOErrorErrno(error) &&
+        observation.linkErr == 0 && observation.renderName == observation.displayName
   }
 
   ghost predicate CanonicalDirentFields(observation: EntryObservation)
@@ -1442,7 +1442,7 @@ module LsSpec {
   }
 
   ghost predicate NativeDirectoryReadFields(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    observation: EntryObservation)
+                                            observation: EntryObservation)
   {
     |observation.directoryRead| == 1 && NativeCallsFields(cmd,fs,observation.directoryRead) &&
     var call := observation.directoryRead[0];
@@ -1453,7 +1453,7 @@ module LsSpec {
     var capability := call.before.context.capabilities[call.action.handle];
     capability.position in call.before.context.topology.nodes &&
     (observation.displayName == "." || observation.displayName == ".." ||
-      observation.displayName in call.before.context.topology.nodes[capability.position].entries)
+     observation.displayName in call.before.context.topology.nodes[capability.position].entries)
   }
 
   ghost predicate NativeDirentEntryFields(observation: EntryObservation, entry: BenchWorld.DirEntry)
@@ -1464,12 +1464,12 @@ module LsSpec {
     var capability := call.before.context.capabilities[call.action.handle];
     capability.position in call.before.context.topology.nodes &&
     (observation.displayName == "." || observation.displayName == ".." ||
-      observation.displayName in call.before.context.topology.nodes[capability.position].entries) &&
+     observation.displayName in call.before.context.topology.nodes[capability.position].entries) &&
     entry == NativeDirectory.EntryForName(call.before.context.topology,capability.position,observation.displayName)
   }
 
   ghost predicate DirectorySourceRelation(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    path: BenchWorld.Path, observation: EntryObservation)
+                                          path: BenchWorld.Path, observation: EntryObservation)
   {
     if cmd.statusContext.BoundStatusObservations? then
       VisibleNameSpec(cmd,observation.displayName) && NativeDirectoryReadFields(cmd,fs,observation) &&
@@ -1494,49 +1494,49 @@ module LsSpec {
         (observation.displayName == "." || observation.displayName == "..")
     else
       VisibleNameSpec(cmd, observation.displayName) &&
-          match observation.source
-          case StatusEntryEvidence(ordinal) =>
-            ordinal == observation.statusOrdinal &&
-            EntryStatusRequiredSpec(
-              cmd, ClassifiedDirentKindSpec(observation.entryKind), observation.displayName) &&
-            MetadataObservationRelation(cmd, fs, observation) &&
-            observation.followSymlink ==
-              (cmd.followMode == Schema.FollowAlways && EntryMetadataRequiredSpec(cmd)) &&
-            ((cmd.hiddenMode == Schema.All && observation.displayName == "." &&
-              observation.accessPath == BenchWorld.AppendPath(path, ".") &&
-              observation.entryKind == BenchWorld.DirectoryDirentKind) ||
-             (cmd.hiddenMode == Schema.All && observation.displayName == ".." &&
-              observation.accessPath == BenchWorld.AppendPath(path, "..") &&
-              observation.entryKind == BenchWorld.DirectoryDirentKind) ||
-             (observation.accessPath == BenchWorld.AppendPath(path, observation.displayName) &&
-              exists resolved: BenchWorld.Path, entry: BenchWorld.DirEntry ::
-                IOContract.ResolvePathForMetadataFields(fs, ModelPathSpec(cmd, path), true) == Result.Ok(resolved) &&
-                BenchWorld.FsContainsPath(fs, resolved) &&
-                entry in IOContract.DirectoryEntriesForPathFields(fs, resolved) &&
-                entry.name == observation.displayName &&
-                IOContract.DirectoryEntryKindMatchesFilesystemFields(
-                  fs, resolved, entry.name, observation.entryKind)))
-          case DirentEntryEvidence(entry, kind) =>
-            kind == ClassifiedDirentKindSpec(observation.entryKind) &&
-            !EntryStatusRequiredSpec(cmd, kind, observation.displayName) &&
-            DirentKindMatchesEntrySpec(kind, entry) &&
-            IOContract.DirectoryEntryKindMatchesEntry(observation.entryKind, entry) &&
-            CanonicalDirentFields(observation) &&
-            observation.accessPath == BenchWorld.AppendPath(path, observation.displayName) &&
+      match observation.source
+      case StatusEntryEvidence(ordinal) =>
+        ordinal == observation.statusOrdinal &&
+        EntryStatusRequiredSpec(
+          cmd, ClassifiedDirentKindSpec(observation.entryKind), observation.displayName) &&
+        MetadataObservationRelation(cmd, fs, observation) &&
+        observation.followSymlink ==
+        (cmd.followMode == Schema.FollowAlways && EntryMetadataRequiredSpec(cmd)) &&
+        ((cmd.hiddenMode == Schema.All && observation.displayName == "." &&
+          observation.accessPath == BenchWorld.AppendPath(path, ".") &&
+          observation.entryKind == BenchWorld.DirectoryDirentKind) ||
+         (cmd.hiddenMode == Schema.All && observation.displayName == ".." &&
+          observation.accessPath == BenchWorld.AppendPath(path, "..") &&
+          observation.entryKind == BenchWorld.DirectoryDirentKind) ||
+         (observation.accessPath == BenchWorld.AppendPath(path, observation.displayName) &&
+          exists resolved: BenchWorld.Path, entry: BenchWorld.DirEntry ::
+            IOContract.ResolvePathForMetadataFields(fs, ModelPathSpec(cmd, path), true) == Result.Ok(resolved) &&
+            BenchWorld.FsContainsPath(fs, resolved) &&
+            entry in IOContract.DirectoryEntriesForPathFields(fs, resolved) &&
             entry.name == observation.displayName &&
-            (exists resolved: BenchWorld.Path ::
-              IOContract.ResolvePathForMetadataFields(fs, ModelPathSpec(cmd, path), true) == Result.Ok(resolved) &&
-              BenchWorld.FsContainsPath(fs, resolved) &&
-              entry in IOContract.DirectoryEntriesForPathFields(fs, resolved) &&
-              IOContract.DirectoryEntryKindMatchesFilesystemFields(
-                fs, resolved, entry.name, observation.entryKind))
-          case ImpliedDotEntryEvidence =>
-            observation.entryKind == BenchWorld.DirectoryDirentKind &&
-            !EntryRenderSortMetadataRequiredSpec(cmd) &&
-            CanonicalDirentFields(observation) &&
-            cmd.hiddenMode == Schema.All &&
-            (observation.displayName == "." || observation.displayName == "..") &&
-            observation.accessPath == BenchWorld.AppendPath(path, observation.displayName)
+            IOContract.DirectoryEntryKindMatchesFilesystemFields(
+              fs, resolved, entry.name, observation.entryKind)))
+      case DirentEntryEvidence(entry, kind) =>
+        kind == ClassifiedDirentKindSpec(observation.entryKind) &&
+        !EntryStatusRequiredSpec(cmd, kind, observation.displayName) &&
+        DirentKindMatchesEntrySpec(kind, entry) &&
+        IOContract.DirectoryEntryKindMatchesEntry(observation.entryKind, entry) &&
+        CanonicalDirentFields(observation) &&
+        observation.accessPath == BenchWorld.AppendPath(path, observation.displayName) &&
+        entry.name == observation.displayName &&
+        (exists resolved: BenchWorld.Path ::
+           IOContract.ResolvePathForMetadataFields(fs, ModelPathSpec(cmd, path), true) == Result.Ok(resolved) &&
+           BenchWorld.FsContainsPath(fs, resolved) &&
+           entry in IOContract.DirectoryEntriesForPathFields(fs, resolved) &&
+           IOContract.DirectoryEntryKindMatchesFilesystemFields(
+             fs, resolved, entry.name, observation.entryKind))
+      case ImpliedDotEntryEvidence =>
+        observation.entryKind == BenchWorld.DirectoryDirentKind &&
+        !EntryRenderSortMetadataRequiredSpec(cmd) &&
+        CanonicalDirentFields(observation) &&
+        cmd.hiddenMode == Schema.All &&
+        (observation.displayName == "." || observation.displayName == "..") &&
+        observation.accessPath == BenchWorld.AppendPath(path, observation.displayName)
   }
 
   ghost opaque predicate DistinctDisplayNames(observations: seq<EntryObservation>)
@@ -1559,12 +1559,12 @@ module LsSpec {
   )
   {
     (exists statusCuts: seq<nat> ::
-      |statusCuts| == |observations| + 1 &&
-      statusCuts[0] == firstStatus &&
-      statusCuts[|observations|] == afterStatus &&
-      (forall i: nat | i < |observations| ::
-        observations[i].statusOrdinal == statusCuts[i] &&
-        statusCuts[i + 1] == statusCuts[i] + EntryStatusCallCount(observations[i]))) &&
+       |statusCuts| == |observations| + 1 &&
+       statusCuts[0] == firstStatus &&
+       statusCuts[|observations|] == afterStatus &&
+       (forall i: nat | i < |observations| ::
+          observations[i].statusOrdinal == statusCuts[i] &&
+          statusCuts[i + 1] == statusCuts[i] + EntryStatusCallCount(observations[i]))) &&
     DistinctDisplayNames(observations) &&
     (forall i: nat :: i < |observations| ==>
                         DirectorySourceRelation(cmd, fs, path, observations[i])) &&
@@ -1576,14 +1576,14 @@ module LsSpec {
          forall entry | entry in expected && VisibleNameSpec(cmd,entry.name) ::
            exists i: nat :: i < |observations| && observations[i].displayName == entry.name
        else match IOContract.ResolvePathForMetadataFields(fs, ModelPathSpec(cmd, path), true)
-       case Err(_) => true
-       case Ok(resolved) =>
-         BenchWorld.FsContainsPath(fs, resolved) ==>
-           forall entry: BenchWorld.DirEntry ::
-             entry in IOContract.DirectoryEntriesForPathFields(fs, resolved) &&
-             VisibleNameSpec(cmd, entry.name) ==>
-               exists i: nat ::
-                 i < |observations| && observations[i].displayName == entry.name)
+            case Err(_) => true
+            case Ok(resolved) =>
+              BenchWorld.FsContainsPath(fs, resolved) ==>
+                forall entry: BenchWorld.DirEntry ::
+                  entry in IOContract.DirectoryEntriesForPathFields(fs, resolved) &&
+                  VisibleNameSpec(cmd, entry.name) ==>
+                    exists i: nat ::
+                      i < |observations| && observations[i].displayName == entry.name)
   }
 
   ghost predicate FragmentsConcatenate(
@@ -1623,7 +1623,7 @@ module LsSpec {
   {
     |errorFragments| == |observations| &&
     forall i: nat | i < |observations| :: errorFragments[i] ==
-      EntryErrorTextSpec(EntryDiagnosticPathSpec(displayPath, observations[i].displayName), observations[i])
+                                          EntryErrorTextSpec(EntryDiagnosticPathSpec(displayPath, observations[i].displayName), observations[i])
   }
 
   ghost predicate DirectoryExpectedEntries(trace: DirectoryTrace, expected: set<BenchWorld.DirEntry>)
@@ -1742,7 +1742,7 @@ module LsSpec {
   }
 
   ghost predicate RecursiveNativeCallsFields(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    tree: RecursiveWitness)
+                                             tree: RecursiveWitness)
   {
     tree.nativeTrace.DirectoryTrace? && NativeCallsFields(cmd,fs,tree.nativeCalls) &&
     |tree.nativeCalls| >= |tree.nativeTrace.nativeCalls| > 0 &&
@@ -1752,9 +1752,9 @@ module LsSpec {
     if !tree.openOk || !tree.statusOk || tree.cycle then
       tree.nativeCalls == tree.nativeTrace.nativeCalls && tree.childNativePieces == [] && tree.childNativeCuts == [0]
     else |tree.childNativePieces| == |tree.observations| &&
-      NativeCallFragments(tree.childNativePieces,tree.nativeCalls[|tree.nativeTrace.nativeCalls|..],tree.childNativeCuts) &&
-      forall i: nat | i < |tree.observations| ::
-        tree.childNativePieces[i] == (if i in tree.children then tree.children[i].nativeCalls else [])
+         NativeCallFragments(tree.childNativePieces,tree.nativeCalls[|tree.nativeTrace.nativeCalls|..],tree.childNativeCuts) &&
+         forall i: nat | i < |tree.observations| ::
+           tree.childNativePieces[i] == (if i in tree.children then tree.children[i].nativeCalls else [])
   }
 
   ghost predicate RecursiveDirectoryRelation(
@@ -1772,8 +1772,8 @@ module LsSpec {
     cmd.statusContext.BoundStatusObservations? &&
     OpenDirectoryObservation(cmd, fs, accessPath, tree.openOk, tree.openErr) &&
     (tree.openOk ==> OpenedDirectoryStatusObservation(
-      cmd, fs, accessPath, tree.firstStatus, tree.statusOk,
-      tree.openedStatus, tree.statusErr)) &&
+         cmd, fs, accessPath, tree.firstStatus, tree.statusOk,
+         tree.openedStatus, tree.statusErr)) &&
     (if !tree.openOk then
        tree.openErr > 0 && !tree.statusOk && !tree.cycle &&
        tree.listingFirstStatus == tree.firstStatus &&
@@ -1811,25 +1811,25 @@ module LsSpec {
             tree.observations, tree.readErr,
             tree.listingOutput, tree.listingErrors, tree.listingHadError, tree.nativeTrace) &&
           (exists statusCuts: seq<nat> ::
-            |statusCuts| == |tree.observations| + 1 &&
-            statusCuts[0] == tree.listingAfterStatus &&
-            statusCuts[|tree.observations|] == tree.afterStatus &&
-            (forall i: nat | i < |tree.observations| ::
-              (if i in tree.children then
-                 tree.children[i].firstStatus == statusCuts[i] &&
-                 tree.children[i].afterStatus == statusCuts[i + 1]
-               else statusCuts[i] == statusCuts[i + 1]))) &&
+             |statusCuts| == |tree.observations| + 1 &&
+             statusCuts[0] == tree.listingAfterStatus &&
+             statusCuts[|tree.observations|] == tree.afterStatus &&
+             (forall i: nat | i < |tree.observations| ::
+                (if i in tree.children then
+                   tree.children[i].firstStatus == statusCuts[i] &&
+                   tree.children[i].afterStatus == statusCuts[i + 1]
+                 else statusCuts[i] == statusCuts[i + 1]))) &&
           tree.cycles <= tree.children.Keys &&
           (forall i: nat :: i < |tree.observations| ==>
-            (i in tree.children <==> RecursiveEntryEligible(tree.observations[i])) &&
-            (i in tree.cycles <==> i in tree.children && tree.children[i].cycle)) &&
+                              (i in tree.children <==> RecursiveEntryEligible(tree.observations[i])) &&
+                              (i in tree.cycles <==> i in tree.children && tree.children[i].cycle)) &&
           (forall i: nat :: i in tree.children ==>
-            i < |tree.observations| &&
-            RecursiveDirectoryRelation(
-              cmd, fs,
-              ChildDisplayPath(displayPath, tree.observations[i].displayName),
-              tree.observations[i].accessPath,
-              ancestors + {tree.openedStatus.hostKey}, tree.children[i])) &&
+                              i < |tree.observations| &&
+                              RecursiveDirectoryRelation(
+                                cmd, fs,
+                                ChildDisplayPath(displayPath, tree.observations[i].displayName),
+                                tree.observations[i].accessPath,
+                                ancestors + {tree.openedStatus.hostKey}, tree.children[i])) &&
           (exists outputCuts: seq<nat>, errorCuts: seq<nat>,
              childOutput: BenchWorld.Bytes, childErrors: BenchWorld.Bytes ::
              FragmentsConcatenate(RecursiveOutputFragments(tree), childOutput, outputCuts) &&
@@ -1838,8 +1838,8 @@ module LsSpec {
              tree.output == DirectoryHeaderSpec(displayPath) + tree.listingOutput + childOutput &&
              tree.errors == tree.listingErrors + childErrors) &&
           tree.hadError ==
-            (tree.listingHadError ||
-             exists i: nat :: i in tree.children && tree.children[i].hadError)))
+          (tree.listingHadError ||
+           exists i: nat :: i in tree.children && tree.children[i].hadError)))
   }
 
   function OperandAsEntry(observation: OperandObservation): EntryObservation
@@ -1887,58 +1887,58 @@ module LsSpec {
   }
 
   ghost function ObservedOperandStatusResult(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    observation: OperandObservation): BenchWorld.IOResult<BenchWorld.FileStatus>
+                                             observation: OperandObservation): BenchWorld.IOResult<BenchWorld.FileStatus>
   {
     if cmd.statusContext.BoundStatusObservations? && |observation.statusCalls| > 0 &&
-        observation.statusCalls[|observation.statusCalls|-1].action.StatusAction?
+       observation.statusCalls[|observation.statusCalls|-1].action.StatusAction?
     then observation.statusCalls[|observation.statusCalls|-1].action.statusResult
     else OperandStatusResultSpec(cmd,fs,observation.path,observation.firstStatus)
   }
 
   ghost function ObservedOperandStatusCallCount(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    observation: OperandObservation): nat
+                                                observation: OperandObservation): nat
   {
     if cmd.statusContext.BoundStatusObservations? then |observation.statusCalls|
     else OperandStatusCallCountSpec(cmd,fs,observation.path,observation.firstStatus)
   }
 
   ghost predicate OperandNativeFields(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    observation: OperandObservation)
+                                      observation: OperandObservation)
   {
     if !cmd.statusContext.BoundStatusObservations? then true
     else NativeCommandFields(cmd,fs) && |observation.statusCalls| > 0 &&
-      var first := observation.statusCalls[0].before;
-      var last := observation.statusCalls[|observation.statusCalls|-1].after;
-      first.status == observation.firstStatus &&
-      NativeObservation.OperandFields(cmd.nativeInputs[0],first,last,observation.path,
-        ImplicitDirectoryFollowSpec(cmd),ExplicitCommandLineFollowSpec(cmd),
-        observation.ok,observation.status,observation.err,observation.statusCalls) &&
-      NativeCallsFields(cmd,fs,observation.nativeCalls) && |observation.nativeCalls| > 0 &&
-      observation.nativeCalls[0].before == first &&
-      observation.nativeCalls[|observation.nativeCalls|-1].after.status == observation.afterStatus &&
-      if observation.operandClass == DirectOperand then
-        observation.nativeCalls == observation.statusCalls+observation.renderCalls &&
-        NativeObservation.RenderFields(cmd.nativeInputs[0],last,
-          observation.nativeCalls[|observation.nativeCalls|-1].after,
-          observation.operand,observation.path,ExplicitCommandLineFollowSpec(cmd),cmd.numericLong,
-          observation.status,observation.renderName,observation.linkErr,observation.renderCalls)
-      else observation.renderCalls == [] && observation.linkErr == 0 &&
-        (observation.operandClass == AccessFailure ==> observation.nativeCalls == observation.statusCalls)
+         var first := observation.statusCalls[0].before;
+         var last := observation.statusCalls[|observation.statusCalls|-1].after;
+         first.status == observation.firstStatus &&
+         NativeObservation.OperandFields(cmd.nativeInputs[0],first,last,observation.path,
+                                         ImplicitDirectoryFollowSpec(cmd),ExplicitCommandLineFollowSpec(cmd),
+                                         observation.ok,observation.status,observation.err,observation.statusCalls) &&
+         NativeCallsFields(cmd,fs,observation.nativeCalls) && |observation.nativeCalls| > 0 &&
+         observation.nativeCalls[0].before == first &&
+         observation.nativeCalls[|observation.nativeCalls|-1].after.status == observation.afterStatus &&
+         if observation.operandClass == DirectOperand then
+           observation.nativeCalls == observation.statusCalls+observation.renderCalls &&
+           NativeObservation.RenderFields(cmd.nativeInputs[0],last,
+                                          observation.nativeCalls[|observation.nativeCalls|-1].after,
+                                          observation.operand,observation.path,ExplicitCommandLineFollowSpec(cmd),cmd.numericLong,
+                                          observation.status,observation.renderName,observation.linkErr,observation.renderCalls)
+         else observation.renderCalls == [] && observation.linkErr == 0 &&
+              (observation.operandClass == AccessFailure ==> observation.nativeCalls == observation.statusCalls)
   }
 
   ghost predicate DirectOperandRenderFields(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    observation: OperandObservation, status: BenchWorld.FileStatus)
+                                            observation: OperandObservation, status: BenchWorld.FileStatus)
   {
     if cmd.statusContext.BoundStatusObservations? then
       OperandNativeFields(cmd,fs,observation) &&
       observation.accessErrors == ReadLinkErrorMessageSpec(observation.operand,observation.linkErr) &&
       observation.failed == (observation.linkErr != 0)
     else observation.renderName == RenderNameSpec(cmd,fs,observation.operand,observation.path,
-      ExplicitCommandLineFollowSpec(cmd),cmd.numericLong,status) &&
-      observation.accessErrors == ReadLinkErrorMessageSpec(observation.operand,
-        LinkReadErrorSpec(cmd,fs,observation.path,ExplicitCommandLineFollowSpec(cmd),cmd.numericLong,status)) &&
-      observation.failed == (LinkReadErrorSpec(cmd,fs,observation.path,
-        ExplicitCommandLineFollowSpec(cmd),cmd.numericLong,status) != 0)
+                                                  ExplicitCommandLineFollowSpec(cmd),cmd.numericLong,status) &&
+         observation.accessErrors == ReadLinkErrorMessageSpec(observation.operand,
+                                                              LinkReadErrorSpec(cmd,fs,observation.path,ExplicitCommandLineFollowSpec(cmd),cmd.numericLong,status)) &&
+         observation.failed == (LinkReadErrorSpec(cmd,fs,observation.path,
+                                                  ExplicitCommandLineFollowSpec(cmd),cmd.numericLong,status) != 0)
   }
 
   ghost predicate OperandObservationRelation(
@@ -1956,21 +1956,21 @@ module LsSpec {
        observation.operandClass == ExpandedDirectory &&
        OpenDirectoryObservation(cmd, fs, observation.path, true, 0)) &&
     (observation.operandClass == ExpandedDirectory ==>
-      observation.nativeTrace.DirectoryTrace? &&
-      BoundOpenDirectoryTrace(cmd, fs, observation.path, observation.nativeTrace,
-        observation.sectionAvailable,
-        if observation.sectionAvailable then 0 else observation.nativeTrace.openErr) &&
-      (!observation.sectionAvailable ==>
-        FailedOpenDirectoryTrace(cmd, fs, observation.path, observation.nativeTrace) &&
-        observation.sectionErrors == OpenDirectoryErrorMessageSpec(
-          observation.operand, observation.nativeTrace.openErr))) &&
+       observation.nativeTrace.DirectoryTrace? &&
+       BoundOpenDirectoryTrace(cmd, fs, observation.path, observation.nativeTrace,
+                               observation.sectionAvailable,
+                               if observation.sectionAvailable then 0 else observation.nativeTrace.openErr) &&
+       (!observation.sectionAvailable ==>
+          FailedOpenDirectoryTrace(cmd, fs, observation.path, observation.nativeTrace) &&
+          observation.sectionErrors == OpenDirectoryErrorMessageSpec(
+            observation.operand, observation.nativeTrace.openErr))) &&
     match ObservedOperandStatusResult(cmd,fs,observation)
     case Err(error) =>
       !observation.ok && !observation.sectionAvailable &&
       observation.err == IOContract.IOErrorErrno(error) &&
       observation.operandClass == AccessFailure &&
       observation.afterStatus == observation.firstStatus +
-        ObservedOperandStatusCallCount(cmd,fs,observation) &&
+      ObservedOperandStatusCallCount(cmd,fs,observation) &&
       observation.body == [] &&
       observation.accessErrors == AccessErrorMessageSpec(
         observation.operand, observation.err) &&
@@ -1990,7 +1990,7 @@ module LsSpec {
               tree.openOk && tree.nativeTrace == observation.nativeTrace &&
               observation.nativeCalls == observation.statusCalls+tree.nativeCalls &&
               tree.firstStatus == observation.firstStatus +
-                ObservedOperandStatusCallCount(cmd,fs,observation) &&
+              ObservedOperandStatusCallCount(cmd,fs,observation) &&
               tree.afterStatus == observation.afterStatus &&
               observation.body == tree.output &&
               observation.sectionErrors == tree.errors &&
@@ -2019,18 +2019,18 @@ module LsSpec {
                else []) + listingOutput
         else
           observation.afterStatus == observation.firstStatus +
-            ObservedOperandStatusCallCount(cmd,fs,observation) &&
+          ObservedOperandStatusCallCount(cmd,fs,observation) &&
           observation.body == [] &&
           observation.nativeCalls == observation.statusCalls+observation.nativeTrace.nativeCalls &&
           (exists openErr: int ::
-            OpenDirectoryObservation(cmd, fs, observation.path, false, openErr) &&
-            observation.sectionErrors == OpenDirectoryErrorMessageSpec(
-              observation.operand, openErr)) &&
+             OpenDirectoryObservation(cmd, fs, observation.path, false, openErr) &&
+             observation.sectionErrors == OpenDirectoryErrorMessageSpec(
+               observation.operand, openErr)) &&
           observation.failed && !observation.hasCycle && observation.directoryFailed
       else
         observation.operandClass == DirectOperand &&
         observation.afterStatus == observation.firstStatus +
-          ObservedOperandStatusCallCount(cmd,fs,observation) &&
+        ObservedOperandStatusCallCount(cmd,fs,observation) &&
         !observation.sectionAvailable &&
         DirectOperandRenderFields(cmd,fs,observation,status) &&
         observation.body == RenderEntrySpec(cmd,observation.renderName,status) &&
@@ -2081,10 +2081,10 @@ module LsSpec {
        groups[0] == OutputGroup(
          directIndices,
          directBody +
-           (if |directoryPositions| == 0 &&
-               (exists i: nat :: i < |sorted| &&
-                 sorted[i].operandClass == ExpandedDirectory)
-            then "\n" else []), false)) &&
+         (if |directoryPositions| == 0 &&
+             (exists i: nat :: i < |sorted| &&
+                               sorted[i].operandClass == ExpandedDirectory)
+          then "\n" else []), false)) &&
     (forall k: nat :: k < |directoryPositions| ==>
                         var offset := if |directPositions| == 0 then 0 else 1;
                         groups[k + offset] == OutputGroup(
@@ -2138,16 +2138,16 @@ module LsSpec {
   }
 
   ghost predicate RunNativeFields(cmd: Schema.LsCmd, fs: BenchWorld.FileSystem,
-    firstStatus: nat, afterStatus: nat, observations: seq<OperandObservation>,
-    afterNative: seq<Native.State>)
+                                  firstStatus: nat, afterStatus: nat, observations: seq<OperandObservation>,
+                                  afterNative: seq<Native.State>)
   {
     if !cmd.statusContext.BoundStatusObservations? then true
     else NativeCommandFields(cmd,fs) && |cmd.nativeStart| == 1 && |afterNative| == 1 &&
-      cmd.nativeStart[0].status == firstStatus && afterNative[0].status == afterStatus &&
-      exists calls: seq<Native.Call>, cuts: seq<nat>
-        {:trigger |calls|, |cuts|} ::
-        NativeCallFragments(seq(|observations|,i requires 0 <= i < |observations| => observations[i].nativeCalls),calls,cuts) &&
-        Native.TraceFields(cmd.nativeInputs[0],cmd.nativeStart[0],afterNative[0],calls)
+         cmd.nativeStart[0].status == firstStatus && afterNative[0].status == afterStatus &&
+         exists calls: seq<Native.Call>, cuts: seq<nat>
+           {:trigger |calls|, |cuts|} ::
+           NativeCallFragments(seq(|observations|,i requires 0 <= i < |observations| => observations[i].nativeCalls),calls,cuts) &&
+           Native.TraceFields(cmd.nativeInputs[0],cmd.nativeStart[0],afterNative[0],calls)
   }
 
   ghost opaque predicate RunRelation(
@@ -2170,8 +2170,8 @@ module LsSpec {
       statusCuts[0] == firstStatus &&
       statusCuts[|observations|] == afterStatus &&
       (forall i: nat | i < |observations| ::
-        observations[i].firstStatus == statusCuts[i] &&
-        observations[i].afterStatus == statusCuts[i + 1]) &&
+         observations[i].firstStatus == statusCuts[i] &&
+         observations[i].afterStatus == statusCuts[i + 1]) &&
       (forall i: nat | i < |observations| ::
          observations[i].index == i &&
          OperandObservationRelation(cmd, fs, cwd, observations[i])) &&
@@ -2206,7 +2206,7 @@ module LsSpec {
   )
   {
     var cmd := Schema.WithStatusObservations(
-      EffectiveCommandSpec(raw,env,now),observations,firstStatus,failures,handles,cwd,native.inputs,native.before);
+                 EffectiveCommandSpec(raw,env,now),observations,firstStatus,failures,handles,cwd,native.inputs,native.before);
     (cmd.mode != Schema.ModeRun ==> afterStatus == firstStatus) &&
     if cmd.mode == Schema.ModeHelp then
       afterStdout == beforeStdout + HelpTextSpec() &&
@@ -2256,7 +2256,7 @@ module LsSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 2 else normalExit)
@@ -2283,9 +2283,9 @@ module LsSpec {
     ObservedSpec(raw, old(io.fs()), old(io.cwd()), old(io.env()), old(io.now()),
                  io.statusObservations(), io.trustedNativeFailures(), old(io.dirHandles()), old(io.statusCursor()), io.statusCursor(),
                  [],plannedStdout,[],plannedStderr,exit,NativeRunContext(
-                 [Native.Inputs(old(io.fs()),io.statusObservations(),old(io.trustedNativeFailures()),old(io.directoryObservations()))],
-                 [Native.State(old(io.cwdContext()),old(io.statusCursor()))],
-                 [Native.State(io.cwdContext(),io.statusCursor())]))
+                   [Native.Inputs(old(io.fs()),io.statusObservations(),old(io.trustedNativeFailures()),old(io.directoryObservations()))],
+                   [Native.State(old(io.cwdContext()),old(io.statusCursor()))],
+                   [Native.State(io.cwdContext(),io.statusCursor())]))
   }
 
   twostate predicate Spec(raw: Schema.LsCmdRaw, io: BenchIO.IO, exit: int)

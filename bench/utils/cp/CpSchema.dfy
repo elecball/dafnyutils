@@ -16,8 +16,8 @@ module CpSchema {
 
   datatype CpMode = Run | Help | Version
   datatype CpError = NoError | TargetConflict | MultipleTargets | LinkConflict |
-    InvalidPreserve(value: string, enable: bool, ambiguous: bool) | InvalidUpdate(value: string, ambiguous: bool) |
-    InvalidBackup(value: string, ambiguous: bool, environment: bool) | BackupConflict
+                     InvalidPreserve(value: string, enable: bool, ambiguous: bool) | InvalidUpdate(value: string, ambiguous: bool) |
+                     InvalidBackup(value: string, ambiguous: bool, environment: bool) | BackupConflict
   datatype BackupSettings = BackupSettings(enabled: bool, control: CliTypes.OptionalString, suffix: CliTypes.OptionalString)
   datatype CreationPolicy = CreationPolicy(defaultMode: bool, preserveLinks: bool, parents: bool, backup: BackupSettings, writeDangling: bool)
   datatype CopyPolicy = CopyPolicy(
@@ -31,35 +31,35 @@ module CpSchema {
 
   method Schema() returns (schema: CliTypes.CliSchema) {
     schema := CliTypes.CliSchema([
-      CliTypes.OptionDecl("help", [], ["help"], CliTypes.NoArg),
-      CliTypes.OptionDecl("version", [], ["version"], CliTypes.NoArg),
-      CliTypes.OptionDecl("force", ['f'], ["force"], CliTypes.NoArg),
-      CliTypes.OptionDecl("skip", ['n'], ["no-clobber"], CliTypes.NoArg),
-      CliTypes.OptionDecl("verbose", ['v'], ["verbose"], CliTypes.NoArg),
-      CliTypes.OptionDecl("target", ['t'], ["target-directory"], CliTypes.ReqArg),
-      CliTypes.OptionDecl("noTarget", ['T'], ["no-target-directory"], CliTypes.NoArg),
-      CliTypes.OptionDecl("recursive", ['r', 'R'], ["recursive"], CliTypes.NoArg),
-      CliTypes.OptionDecl("follow", ['L'], ["dereference"], CliTypes.NoArg),
-      CliTypes.OptionDecl("commandFollow", ['H'], [], CliTypes.NoArg),
-      CliTypes.OptionDecl("oneFileSystem", ['x'], ["one-file-system"], CliTypes.NoArg),
-      CliTypes.OptionDecl("keepDirectorySymlink", [], ["keep-directory-symlink"], CliTypes.NoArg),
-      CliTypes.OptionDecl("copyContents", [], ["copy-contents"], CliTypes.NoArg),
-      CliTypes.OptionDecl("strip", [], ["strip-trailing-slashes"], CliTypes.NoArg),
-      CliTypes.OptionDecl("noFollow", ['P'], ["no-dereference"], CliTypes.NoArg),
-      CliTypes.OptionDecl("preserveLinks", ['d'], [], CliTypes.NoArg),
-      CliTypes.OptionDecl("hard", ['l'], ["link"], CliTypes.NoArg),
-      CliTypes.OptionDecl("symbolic", ['s'], ["symbolic-link"], CliTypes.NoArg),
-      CliTypes.OptionDecl("remove", [], ["remove-destination"], CliTypes.NoArg),
-      CliTypes.OptionDecl("attributes", [], ["attributes-only"], CliTypes.NoArg),
-      CliTypes.OptionDecl("preserve", [], ["preserve"], CliTypes.OptArg),
-      CliTypes.OptionDecl("noPreserve", [], ["no-preserve"], CliTypes.ReqArg),
-      CliTypes.OptionDecl("parents", [], ["parents"], CliTypes.NoArg),
-      CliTypes.OptionDecl("backup", [], ["backup"], CliTypes.OptArg),
-      CliTypes.OptionDecl("backupShort", ['b'], [], CliTypes.NoArg),
-      CliTypes.OptionDecl("suffix", ['S'], ["suffix"], CliTypes.ReqArg),
-      CliTypes.OptionDecl("older", ['u'], [], CliTypes.NoArg),
-      CliTypes.OptionDecl("update", [], ["update"], CliTypes.OptArg)
-    ], true);
+                                   CliTypes.OptionDecl("help", [], ["help"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("version", [], ["version"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("force", ['f'], ["force"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("skip", ['n'], ["no-clobber"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("verbose", ['v'], ["verbose"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("target", ['t'], ["target-directory"], CliTypes.ReqArg),
+                                   CliTypes.OptionDecl("noTarget", ['T'], ["no-target-directory"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("recursive", ['r', 'R'], ["recursive"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("follow", ['L'], ["dereference"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("commandFollow", ['H'], [], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("oneFileSystem", ['x'], ["one-file-system"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("keepDirectorySymlink", [], ["keep-directory-symlink"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("copyContents", [], ["copy-contents"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("strip", [], ["strip-trailing-slashes"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("noFollow", ['P'], ["no-dereference"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("preserveLinks", ['d'], [], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("hard", ['l'], ["link"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("symbolic", ['s'], ["symbolic-link"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("remove", [], ["remove-destination"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("attributes", [], ["attributes-only"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("preserve", [], ["preserve"], CliTypes.OptArg),
+                                   CliTypes.OptionDecl("noPreserve", [], ["no-preserve"], CliTypes.ReqArg),
+                                   CliTypes.OptionDecl("parents", [], ["parents"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("backup", [], ["backup"], CliTypes.OptArg),
+                                   CliTypes.OptionDecl("backupShort", ['b'], [], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("suffix", ['S'], ["suffix"], CliTypes.ReqArg),
+                                   CliTypes.OptionDecl("older", ['u'], [], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("update", [], ["update"], CliTypes.OptArg)
+                                 ], true);
   }
 
   method ParserConfig() returns (cfg: CliTypes.ParseConfig) {
@@ -68,7 +68,7 @@ module CpSchema {
 
   function ChildCommand(raw: CpCmdRaw): CpCmdRaw {
     raw.(policy := raw.policy.(dereference := raw.policy.dereference && !raw.policy.commandLineDereference,
-                              commandLineDereference := false))
+                                              commandLineDereference := false))
   }
 
   // Optional GNU long-option arguments are attached with '='. Keep a bare
@@ -314,6 +314,6 @@ module CpSchema {
       operands := normalized;
     }
     raw := CpCmdRaw(mode, operands, target, noTarget,
-      CopyPolicy(recursive,follow,force,skip,verbose,remove,hard,symbolic,attributes,preserveMode,preserveTimes,update,commandFollow,oneFileSystem,keepDirectorySymlink,CreationPolicy(defaultMode,preserveLinks,parents,BackupSettings(backupEnabled,backupControl,backupSuffix),false)),error);
+                    CopyPolicy(recursive,follow,force,skip,verbose,remove,hard,symbolic,attributes,preserveMode,preserveTimes,update,commandFollow,oneFileSystem,keepDirectorySymlink,CreationPolicy(defaultMode,preserveLinks,parents,BackupSettings(backupEnabled,backupControl,backupSuffix),false)),error);
   }
 }

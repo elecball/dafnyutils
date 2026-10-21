@@ -303,20 +303,20 @@ module Rm {
     if err.kind == CliTypes.UnknownOption && !CliModel.HasPrefix(err.rawToken,ParseDiagnosticPart1()) && |err.rawToken| > 1 then
       ParseDiagnosticPart2() + [ProtocolEncodeChar(invalidShort)[0]] + ParseDiagnosticPart3()
     else ProtocolEncode(
-      if err.kind == CliTypes.UnknownOption then
-        if CliModel.HasPrefix(err.rawToken, ParseDiagnosticPart1()) then
-          ParseDiagnosticPart4() + err.rawToken + ParseDiagnosticPart3()
-        else ParseDiagnosticPart5()
-      else if err.kind == CliTypes.UnexpectedValue then
-        ParseDiagnosticPart6() + LongOptionName(err.rawToken) + ParseDiagnosticPart7()
-      else if err.kind == CliTypes.Ambiguous then
-        ParseDiagnosticPart6() + err.rawToken + ParseDiagnosticPart8() +
-        (if CliModel.HasPrefix(err.rawToken,ParseDiagnosticPart9()) then
-          ParseDiagnosticPart10() +
-          ParseDiagnosticPart11() +
-          ParseDiagnosticPart12()
-         else ParseDiagnosticPart13())
-      else ParseDiagnosticPart6() + err.rawToken + ParseDiagnosticPart14())
+           if err.kind == CliTypes.UnknownOption then
+             if CliModel.HasPrefix(err.rawToken, ParseDiagnosticPart1()) then
+               ParseDiagnosticPart4() + err.rawToken + ParseDiagnosticPart3()
+             else ParseDiagnosticPart5()
+           else if err.kind == CliTypes.UnexpectedValue then
+             ParseDiagnosticPart6() + LongOptionName(err.rawToken) + ParseDiagnosticPart7()
+           else if err.kind == CliTypes.Ambiguous then
+             ParseDiagnosticPart6() + err.rawToken + ParseDiagnosticPart8() +
+             (if CliModel.HasPrefix(err.rawToken,ParseDiagnosticPart9()) then
+                ParseDiagnosticPart10() +
+                ParseDiagnosticPart11() +
+                ParseDiagnosticPart12()
+              else ParseDiagnosticPart13())
+           else ParseDiagnosticPart6() + err.rawToken + ParseDiagnosticPart14())
   }
 
   function ProtocolParseErrorText(err: CliTypes.ParseError, invalidShort: char): Bytes
@@ -330,8 +330,8 @@ module Rm {
   {
     var encoded := ProtocolEncode(path);
     var trigger := exists i: int ::
-      0 <= i < |encoded| && encoded[i] != ':' &&
-      ProtocolSpecShellQuoteTriggerByte(encoded[i],i == 0,|encoded| == 1);
+                     0 <= i < |encoded| && encoded[i] != ':' &&
+                     ProtocolSpecShellQuoteTriggerByte(encoded[i],i == 0,|encoded| == 1);
     var quoted := if trigger then ProtocolSpecQuoteAfBytes(encoded) else encoded;
     HyphenSuggestionPart1() + quoted + HyphenSuggestionPart2() + ProtocolSpecQuoteAfBytes(encoded) + HyphenSuggestionPart3()
   }

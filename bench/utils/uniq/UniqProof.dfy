@@ -46,8 +46,8 @@ module UniqProof {
   lemma CoreFieldStep(line: BW.Bytes, start: nat)
     requires start < |line|
     ensures Spec.FieldStep(
-      line, start,
-      Core.SkipNonBlanks(line, Core.SkipBlanks(line, start)))
+              line, start,
+              Core.SkipNonBlanks(line, Core.SkipBlanks(line, start)))
   {
     var middle := Core.SkipBlanks(line, start);
     var end := Core.SkipNonBlanks(line, middle);
@@ -78,10 +78,10 @@ module UniqProof {
     assert start <= middle <= end;
     assert middle == end ==> end == |line|;
     assert start <= middle <= end &&
-      (forall i: nat :: start <= i < middle ==> Spec.IsFieldBlank(line[i])) &&
-      (forall i: nat :: middle <= i < end ==> !Spec.IsFieldBlank(line[i])) &&
-      (middle == end ==> end == |line|) &&
-      (end < |line| ==> Spec.IsFieldBlank(line[end]));
+           (forall i: nat :: start <= i < middle ==> Spec.IsFieldBlank(line[i])) &&
+           (forall i: nat :: middle <= i < end ==> !Spec.IsFieldBlank(line[i])) &&
+           (middle == end ==> end == |line|) &&
+           (end < |line| ==> Spec.IsFieldBlank(line[end]));
     assert Spec.FieldStepWitness(line, start, end, middle);
     assert Spec.FieldStep(line, start, end);
   }
@@ -91,7 +91,7 @@ module UniqProof {
   )
     requires start <= |line|
     ensures Spec.FieldSkipFromRelation(
-      line, start, count, Core.SkipFieldsIndex(line, start, count))
+              line, start, count, Core.SkipFieldsIndex(line, start, count))
     decreases count
   {
     reveal Spec.FieldSkipFromRelation();
@@ -108,19 +108,19 @@ module UniqProof {
         1 <= |tailCuts| <= count &&
         tailCuts[0] == end &&
         (forall i: nat :: i + 1 < |tailCuts| ==>
-          Spec.FieldStep(line, tailCuts[i], tailCuts[i + 1])) &&
+                            Spec.FieldStep(line, tailCuts[i], tailCuts[i + 1])) &&
         (|tailCuts| - 1 == count - 1 || tailCuts[|tailCuts| - 1] == |line|) &&
         Core.SkipFieldsIndex(line, end, count - 1) == tailCuts[|tailCuts| - 1];
       var cuts := [start] + tailCuts;
       assert forall i: nat :: i + 1 < |cuts| ==>
-        Spec.FieldStep(line, cuts[i], cuts[i + 1]) by {
+                                Spec.FieldStep(line, cuts[i], cuts[i + 1]) by {
         forall i: nat | i + 1 < |cuts|
           ensures Spec.FieldStep(line, cuts[i], cuts[i + 1])
         {
         }
       }
       assert Spec.FieldSkipFromRelation(
-        line, start, count, Core.SkipFieldsIndex(line, start, count));
+          line, start, count, Core.SkipFieldsIndex(line, start, count));
     }
   }
 
@@ -173,7 +173,7 @@ module UniqProof {
       1 <= |cuts| <= count + 1 &&
       cuts[0] == start &&
       (forall i: nat :: i + 1 < |cuts| ==>
-        Spec.FieldStep(line, cuts[i], cuts[i + 1])) &&
+                          Spec.FieldStep(line, cuts[i], cuts[i + 1])) &&
       (|cuts| - 1 == count || cuts[|cuts| - 1] == |line|) &&
       cut == cuts[|cuts| - 1];
     if count == 0 || start == |line| {
@@ -191,7 +191,7 @@ module UniqProof {
       var tailCuts := cuts[1..];
       assert Spec.FieldSkipFromRelation(line, end, count - 1, cut) by {
         assert forall i: nat :: i + 1 < |tailCuts| ==>
-          Spec.FieldStep(line, tailCuts[i], tailCuts[i + 1]) by {
+                                  Spec.FieldStep(line, tailCuts[i], tailCuts[i + 1]) by {
           forall i: nat | i + 1 < |tailCuts|
             ensures Spec.FieldStep(line, tailCuts[i], tailCuts[i + 1])
           {
@@ -834,9 +834,9 @@ module UniqProof {
   {
     var out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int :|
       Core.PreparedSummary(raw, io, normalExit, readResults, stdoutPart, stderrPart, hadError,
-        out, diagnostics) &&
+                           out, diagnostics) &&
       Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
     PreparedSummaryImpliesPreparedSpec(raw, io, normalExit, readResults, stdoutPart, stderrPart, hadError,
-      out, diagnostics);
+                                       out, diagnostics);
   }
 }

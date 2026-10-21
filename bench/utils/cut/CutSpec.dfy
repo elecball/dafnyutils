@@ -280,7 +280,7 @@ module CutSpec {
     preStdin: BenchWorld.Bytes,
     index: nat,
     result: BenchWorld.IOResult<BenchWorld.Bytes>,
-    preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
+                                preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult
   )
     requires index < |command.inputs|
   {
@@ -300,7 +300,7 @@ module CutSpec {
     |states| == |command.inputs| + 1 && states[0] == before && states[|command.inputs|] == after &&
     forall i: nat | i < |command.inputs| ::
       states[i + 1] == (if command.inputs[i].Stdin? then
-        IOContract.ObservedReadStdinRemainingFields(states[i], observations) else states[i])
+                          IOContract.ObservedReadStdinRemainingFields(states[i], observations) else states[i])
   }
 
   opaque ghost predicate InputTraceWitnessRelation(
@@ -312,38 +312,38 @@ module CutSpec {
     stdinStates: seq<BenchWorld.Bytes>, stdoutFragments: seq<BenchWorld.Bytes>,
     stderrFragments: seq<BenchWorld.Bytes>, stdoutCuts: seq<nat>, stderrCuts: seq<nat>)
   {
-      StdinTraceRelation(command, beforeStdin, afterStdin, observations, stdinStates) &&
-      |readResults| == |command.inputs| &&
-      |stdoutFragments| == |command.inputs| &&
-      |stderrFragments| == |command.inputs| &&
-      (forall i :: 0 <= i < |command.inputs| ==>
-                     InputReadRelation(
-                       command, preFs, stdinStates[i], i, readResults[i],
-                       observations
-                     ) &&
-                     match command.inputs[i]
-                     case Stdin =>
-                       (match readResults[i]
-                        case Ok(data) =>
-                          DataSelectionRelation(command, data, stdoutFragments[i]) &&
-                          stderrFragments[i] == []
-                        case Err(error) =>
-                          (if error.StreamFailure? then DataSelectionRelation(command, error.partial, stdoutFragments[i])
-                           else stdoutFragments[i] == []) &&
-                          stderrFragments[i] == ErrorMessage("-", error))
-                     case File(path) =>
-                       (match readResults[i]
-                        case Ok(data) =>
-                          DataSelectionRelation(command, data, stdoutFragments[i]) &&
-                          stderrFragments[i] == []
-                        case Err(err) =>
-                          stdoutFragments[i] == [] &&
-                          stderrFragments[i] == ErrorMessage(path, err))) &&
-      FragmentsConcatenate(stdoutFragments, stdoutPart, stdoutCuts) &&
-      FragmentsConcatenate(stderrFragments, stderrPart, stderrCuts) &&
-      hadError ==
-      (exists i :: 0 <= i < |command.inputs| &&
-                   readResults[i].Err?)
+    StdinTraceRelation(command, beforeStdin, afterStdin, observations, stdinStates) &&
+    |readResults| == |command.inputs| &&
+    |stdoutFragments| == |command.inputs| &&
+    |stderrFragments| == |command.inputs| &&
+    (forall i :: 0 <= i < |command.inputs| ==>
+                   InputReadRelation(
+                     command, preFs, stdinStates[i], i, readResults[i],
+                     observations
+                   ) &&
+                   match command.inputs[i]
+                   case Stdin =>
+                     (match readResults[i]
+                      case Ok(data) =>
+                        DataSelectionRelation(command, data, stdoutFragments[i]) &&
+                        stderrFragments[i] == []
+                      case Err(error) =>
+                        (if error.StreamFailure? then DataSelectionRelation(command, error.partial, stdoutFragments[i])
+                         else stdoutFragments[i] == []) &&
+                        stderrFragments[i] == ErrorMessage("-", error))
+                   case File(path) =>
+                     (match readResults[i]
+                      case Ok(data) =>
+                        DataSelectionRelation(command, data, stdoutFragments[i]) &&
+                        stderrFragments[i] == []
+                      case Err(err) =>
+                        stdoutFragments[i] == [] &&
+                        stderrFragments[i] == ErrorMessage(path, err))) &&
+    FragmentsConcatenate(stdoutFragments, stdoutPart, stdoutCuts) &&
+    FragmentsConcatenate(stderrFragments, stderrPart, stderrCuts) &&
+    hadError ==
+    (exists i :: 0 <= i < |command.inputs| &&
+                 readResults[i].Err?)
   }
 
   twostate predicate InputTraceRelation(
@@ -359,7 +359,7 @@ module CutSpec {
     exists stdinStates: seq<BenchWorld.Bytes>, stdoutFragments: seq<BenchWorld.Bytes>,
       stderrFragments: seq<BenchWorld.Bytes>, stdoutCuts: seq<nat>, stderrCuts: seq<nat> ::
       InputTraceWitnessRelation(command, old(io.fs()), old(io.stdin()), io.stdin(), old(io.trustedStreams()),
-        readResults, stdoutPart, stderrPart, hadError, stdinStates, stdoutFragments, stderrFragments, stdoutCuts, stderrCuts)
+                                readResults, stdoutPart, stderrPart, hadError, stdinStates, stdoutFragments, stderrFragments, stdoutCuts, stderrCuts)
   }
 
   twostate predicate PreparedSpec(raw: CutSchema.CutCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
@@ -407,28 +407,28 @@ module CutSpec {
   )
   {
     var stdoutResult := if out == [] then BenchWorld.StreamWriteResult(0, beforeStdout, 0)
-      else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
+                        else observations(BenchWorld.StreamWriteStdout(beforeStdout, out));
     stdoutResult.StreamWriteResult? &&
     var errors := diagnostics + (if stdoutResult.err == 0 then [] else
-      StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
+                                 StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(stdoutResult.err)));
     var stderrResult := if errors == [] then BenchWorld.StreamWriteResult(0, beforeStderr, 0)
-      else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
+                        else observations(BenchWorld.StreamWriteStderr(beforeStderr, errors));
     stderrResult.StreamWriteResult? &&
     (if out == [] then afterStdout == beforeStdout else StreamContract.WriteStdoutSpec(
-      beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
+       beforeStdout, observations, afterStdout, out, stdoutResult.committed, stdoutResult.err)) &&
     (if errors == [] then afterStderr == beforeStderr else StreamContract.WriteStderrSpec(
-      beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
+       beforeStderr, observations, afterStderr, errors, stderrResult.committed, stderrResult.err)) &&
     exit == (if stdoutResult.err != 0 || stderrResult.err != 0 then 1 else normalExit)
   }
 
   twostate predicate Emission(raw: CutSchema.CutCmdRaw, io: BenchIO.IO,
-    out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
-    normalExit: int, exit: int)
+                              out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes,
+                              normalExit: int, exit: int)
     reads io.stdoutRegion, io.stderrRegion
   {
     if Emits(raw) then
       EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
-        io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+                 io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
     else
       io.stdout() == old(io.stdout()) && io.stderr() == old(io.stderr()) &&
       exit == normalExit
@@ -439,7 +439,7 @@ module CutSpec {
   {
     exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
       PreparedSpec(raw, io, normalExit,
-        out, diagnostics) &&
+                   out, diagnostics) &&
       Emission(raw, io, out, diagnostics, normalExit, exit)
   }
 }

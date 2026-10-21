@@ -301,8 +301,8 @@ module ChmodSpec {
     ensures AccessErrorMessageSpec(path, err) ==
             "chmod: cannot access '" + path + "': " + Utf8.Encode(err) + "\n"
     ensures Utf8.Encode(err) == err ==>
-            AccessErrorMessageSpec(path, err) ==
-            "chmod: cannot access '" + path + "': " + err + "\n"
+              AccessErrorMessageSpec(path, err) ==
+              "chmod: cannot access '" + path + "': " + err + "\n"
   {
   }
 
@@ -1180,8 +1180,8 @@ module ChmodSpec {
     fs: BenchWorld.FileSystem,
     path: string,
     resolution: BenchWorld.IOResult<BenchWorld.Path>,
-    result: SpecPathResult,
-    now: int
+                                    result: SpecPathResult,
+                                    now: int
   )
   {
     var actual := MakeAbsolute(cwd, path);
@@ -1305,8 +1305,8 @@ module ChmodSpec {
                 )
               else
                 var fs2 := SpecModeSetFs(
-                  fs, true, changeTarget, desired, now
-                );
+                             fs, true, changeTarget, desired, now
+                           );
                 var after := BenchWorld.NormalizeMode(desired);
                 SpecSuccessfulChangeResultRelation(
                   cmd,
@@ -1553,7 +1553,7 @@ module ChmodSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else IOContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(IOContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else IOContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
@@ -1643,33 +1643,33 @@ module ChmodSpec {
   }
 
   ghost predicate SuccessOutputRelation(cmd: Schema.ChmodCmd, plan: SpecModePlan,
-    path: string,
-    before: bv32, requested: bv32, isDir: bool, fs: BenchWorld.FileSystem,
-    postOk: bool, postMode: bv32, postErr: int, result: SpecPathResult)
+                                        path: string,
+                                        before: bv32, requested: bv32, isDir: bool, fs: BenchWorld.FileSystem,
+                                        postOk: bool, postMode: bv32, postErr: int, result: SpecPathResult)
   {
     exists naive: bv32 :: SpecNaiveModeRelation(plan, before, isDir, naive) &&
-      if SpecPostChangeLookupNeeded(cmd, requested) then
-        if !postOk then
-          var surprise := SpecDiagnoseSurpriseForNaive(cmd, requested, naive);
-          result == SpecPathResult(fs,
-            if cmd.verbose then RetainedMessageSpec(path, requested) else [],
-            (if cmd.silent then [] else GettingNewAttributesMessageSpec(path,
-              IOContract.CLocaleErrnoTextResult(postErr))) +
-            (if surprise then SurpriseModeMessageSpec(path, requested, naive) else []),
-            !surprise, SpecPathRetained(requested))
-        else
-          var observed := postMode;
-          var surprise := SpecDiagnoseSurpriseForNaive(cmd, observed, naive);
-          result == SpecPathResult(fs, SpecSuccessStdout(cmd, path, before, observed),
-            if surprise then SurpriseModeMessageSpec(path, observed, naive) else [], !surprise,
-            if surprise then SpecPathSurprise(before, observed, naive)
-            else if before == observed then SpecPathRetained(observed) else SpecPathChanged(before, observed))
-      else
-        var surprise := SpecDiagnoseSurpriseForNaive(cmd, requested, naive);
-        result == SpecPathResult(fs, SpecSuccessStdout(cmd, path, before, requested),
-          if surprise then SurpriseModeMessageSpec(path, requested, naive) else [], !surprise,
-          if surprise then SpecPathSurprise(before, requested, naive)
-          else if before == requested then SpecPathRetained(requested) else SpecPathChanged(before, requested))
+                          if SpecPostChangeLookupNeeded(cmd, requested) then
+                            if !postOk then
+                              var surprise := SpecDiagnoseSurpriseForNaive(cmd, requested, naive);
+                              result == SpecPathResult(fs,
+                                                       if cmd.verbose then RetainedMessageSpec(path, requested) else [],
+                                                       (if cmd.silent then [] else GettingNewAttributesMessageSpec(path,
+                                                                                                                   IOContract.CLocaleErrnoTextResult(postErr))) +
+                                                       (if surprise then SurpriseModeMessageSpec(path, requested, naive) else []),
+                                                       !surprise, SpecPathRetained(requested))
+                            else
+                              var observed := postMode;
+                              var surprise := SpecDiagnoseSurpriseForNaive(cmd, observed, naive);
+                              result == SpecPathResult(fs, SpecSuccessStdout(cmd, path, before, observed),
+                                                       if surprise then SurpriseModeMessageSpec(path, observed, naive) else [], !surprise,
+                                                       if surprise then SpecPathSurprise(before, observed, naive)
+                                                       else if before == observed then SpecPathRetained(observed) else SpecPathChanged(before, observed))
+                          else
+                            var surprise := SpecDiagnoseSurpriseForNaive(cmd, requested, naive);
+                            result == SpecPathResult(fs, SpecSuccessStdout(cmd, path, before, requested),
+                                                     if surprise then SurpriseModeMessageSpec(path, requested, naive) else [], !surprise,
+                                                     if surprise then SpecPathSurprise(before, requested, naive)
+                                                     else if before == requested then SpecPathRetained(requested) else SpecPathChanged(before, requested))
   }
   function ModeNotSupported(err: int): bool
   {

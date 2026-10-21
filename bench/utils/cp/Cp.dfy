@@ -60,7 +60,7 @@ module Cp {
     }
 
     method PlanParseFailure(e: CliTypes.ParseError, argv: seq<string>)
-        returns (plan: CliTypes.CliPlan<S.CpCmdRaw>)
+      returns (plan: CliTypes.CliPlan<S.CpCmdRaw>)
     {
       if 0 < e.tokenIndex && e.tokenIndex < |argv| {
         var result := S.ParseArgs(argv[..e.tokenIndex]);

@@ -123,27 +123,27 @@ module Unlink {
   {
     var shortOptionPrefix: string := ParseErrorTextPart4();
     var text: string := if err.kind == CliTypes.UnknownOption then
-        if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
-          ParseErrorTextPart1() + err.rawToken + ParseErrorTextPart2() +
-          ParseErrorTextPart3()
-        else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
-          shortOptionPrefix + [err.rawToken[1]] + ParseErrorTextPart2() +
-          ParseErrorTextPart3()
-        else
-          ParseErrorTextPart5()
-      else if err.kind == CliTypes.UnexpectedValue then
-        ParseErrorTextPart6() + LongOptionName(err.rawToken) +
-        ParseErrorTextPart7() +
-        ParseErrorTextPart3()
-      else if err.kind == CliTypes.Ambiguous then
-        ParseErrorTextPart6() + err.rawToken + ParseErrorTextPart8() +
-        ParseErrorTextPart3()
-      else
-        ParseErrorTextPart9() +
-        (if err.kind == CliTypes.MissingValue
-        then ParseErrorTextPart10()
-        else ParseErrorTextPart11()) +
-        ParseErrorTextPart12() + err.rawToken + ParseErrorTextPart2();
+                          if |err.rawToken| > 2 && err.rawToken[0] == '-' && err.rawToken[1] == '-' then
+                            ParseErrorTextPart1() + err.rawToken + ParseErrorTextPart2() +
+                            ParseErrorTextPart3()
+                          else if |err.rawToken| > 1 && err.rawToken[0] == '-' then
+                            shortOptionPrefix + [err.rawToken[1]] + ParseErrorTextPart2() +
+                            ParseErrorTextPart3()
+                          else
+                            ParseErrorTextPart5()
+                        else if err.kind == CliTypes.UnexpectedValue then
+                          ParseErrorTextPart6() + LongOptionName(err.rawToken) +
+                          ParseErrorTextPart7() +
+                          ParseErrorTextPart3()
+                        else if err.kind == CliTypes.Ambiguous then
+                          ParseErrorTextPart6() + err.rawToken + ParseErrorTextPart8() +
+                          ParseErrorTextPart3()
+                        else
+                          ParseErrorTextPart9() +
+                          (if err.kind == CliTypes.MissingValue
+                           then ParseErrorTextPart10()
+                           else ParseErrorTextPart11()) +
+                          ParseErrorTextPart12() + err.rawToken + ParseErrorTextPart2();
     ProtocolEncode(text)
   }
 

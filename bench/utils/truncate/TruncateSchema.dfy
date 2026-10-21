@@ -18,13 +18,13 @@ module TruncateSchema {
   method Schema() returns (schema: CliTypes.CliSchema)
   {
     schema := CliTypes.CliSchema([
-      CliTypes.OptionDecl("truncate.no-create", ['c'], ["no-create"], CliTypes.NoArg),
-      CliTypes.OptionDecl("truncate.io-blocks", ['o'], ["io-blocks"], CliTypes.NoArg),
-      CliTypes.OptionDecl("truncate.reference", ['r'], ["reference"], CliTypes.ReqArg),
-      CliTypes.OptionDecl("truncate.size", ['s'], ["size"], CliTypes.ReqArg),
-      CliTypes.OptionDecl("truncate.help", [], ["help"], CliTypes.NoArg),
-      CliTypes.OptionDecl("truncate.version", [], ["version"], CliTypes.NoArg)
-    ], true);
+                                   CliTypes.OptionDecl("truncate.no-create", ['c'], ["no-create"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("truncate.io-blocks", ['o'], ["io-blocks"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("truncate.reference", ['r'], ["reference"], CliTypes.ReqArg),
+                                   CliTypes.OptionDecl("truncate.size", ['s'], ["size"], CliTypes.ReqArg),
+                                   CliTypes.OptionDecl("truncate.help", [], ["help"], CliTypes.NoArg),
+                                   CliTypes.OptionDecl("truncate.version", [], ["version"], CliTypes.NoArg)
+                                 ], true);
   }
 
   method ParserConfig() returns (config: CliTypes.ParseConfig)

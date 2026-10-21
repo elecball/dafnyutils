@@ -83,7 +83,7 @@ module RmdirSpec {
   }
 
   ghost function FailureText(parent: bool, err: int, custom: bool,
-                       quoted: Bytes, reason: string): Bytes
+                             quoted: Bytes, reason: string): Bytes
   {
     FailureTextPart1() +
     (if parent && err != Errno.ENOTDIR then FailureTextPart2() else FailureTextPart3()) + quoted +
@@ -189,12 +189,12 @@ module RmdirSpec {
     var end := CliModel.FindChar(e.rawToken, '=');
     var name := if end < 0 then e.rawToken else e.rawToken[..end];
     var full := if name in {ParseErrorTextPart1(), ParseErrorTextPart2(), ParseErrorTextPart3(), ParseErrorTextPart4()} then ParseErrorTextPart4()
-      else if CliModel.HasPrefix(ParseErrorTextPart5(), name) then ParseErrorTextPart5()
-      else if CliModel.HasPrefix(ParseErrorTextPart6(), name) then ParseErrorTextPart6()
-      else if CliModel.HasPrefix(ParseErrorTextPart7(), name) then ParseErrorTextPart7()
-      else if CliModel.HasPrefix(ParseErrorTextPart8(), name) then ParseErrorTextPart8()
-      else if CliModel.HasPrefix(ParseErrorTextPart9(), name) then ParseErrorTextPart9()
-      else name;
+                else if CliModel.HasPrefix(ParseErrorTextPart5(), name) then ParseErrorTextPart5()
+                else if CliModel.HasPrefix(ParseErrorTextPart6(), name) then ParseErrorTextPart6()
+                else if CliModel.HasPrefix(ParseErrorTextPart7(), name) then ParseErrorTextPart7()
+                else if CliModel.HasPrefix(ParseErrorTextPart8(), name) then ParseErrorTextPart8()
+                else if CliModel.HasPrefix(ParseErrorTextPart9(), name) then ParseErrorTextPart9()
+                else name;
     if e.kind == CliTypes.UnexpectedValue then
       ParseErrorTextPart10() + Utf8.Encode(full) + ParseErrorTextPart11() +
       ParseErrorTextPart12()
@@ -202,7 +202,7 @@ module RmdirSpec {
       ParseErrorTextPart10() + Utf8.Encode(e.rawToken) +
       ParseErrorTextPart13() +
       (if name == ParseErrorTextPart14() then
-        ParseErrorTextPart15()
+         ParseErrorTextPart15()
        else ParseErrorTextPart16()) +
       ParseErrorTextPart12()
     else
@@ -222,7 +222,7 @@ module RmdirSpec {
     if path == "" then trimmed == ""
     else if Path.SlashesOnly(path) then trimmed == "/"
     else exists trailing: string ::
-      Path.PathWithoutTrailingSlashes(path, trimmed, trailing)
+           Path.PathWithoutTrailingSlashes(path, trimmed, trailing)
   }
 
   ghost predicate HasParent(path: string) {
@@ -245,23 +245,23 @@ module RmdirSpec {
 
   // GNU directory_status preserves the read result across cleanup-close errors.
   ghost predicate NonemptyObservation(context: ObservationContext,
-    fs: FileSystem, path: string, nonempty: bool) {
+                                      fs: FileSystem, path: string, nonempty: bool) {
     exists linkOk: bool, link: bool, linkErr: int ::
       C.IsSymlinkSpec(fs, context.failures, path, linkOk, link, linkErr) &&
       if linkOk && link then !nonempty
       else exists openState: map<int, DirHandleState>,
-                  handle: int, openOk: bool, openErr: int ::
-        C.OpenDirSpec(fs, context.handles, context.failures, openState,
-                      path, false, openOk, handle, openErr) &&
-        (if !openOk then !nonempty else
-          exists afterRead: map<int, DirHandleState>, more: bool, name: string,
-                 kind: DirectoryEntryKind, readErr: int,
-                 closeOk: bool, closeErr: int ::
-            C.ReadDirSpec(fs, openState, context.failures, afterRead,
-                          handle, more, name, kind, readErr) &&
-            C.CloseDirSpec(afterRead, context.failures, context.handles,
-                           handle, closeOk, closeErr) &&
-            nonempty == (more && readErr == 0))
+             handle: int, openOk: bool, openErr: int ::
+             C.OpenDirSpec(fs, context.handles, context.failures, openState,
+                           path, false, openOk, handle, openErr) &&
+             (if !openOk then !nonempty else
+              exists afterRead: map<int, DirHandleState>, more: bool, name: string,
+                kind: DirectoryEntryKind, readErr: int,
+                closeOk: bool, closeErr: int ::
+                C.ReadDirSpec(fs, openState, context.failures, afterRead,
+                              handle, more, name, kind, readErr) &&
+                C.CloseDirSpec(afterRead, context.failures, context.handles,
+                               handle, closeOk, closeErr) &&
+                nonempty == (more && readErr == 0))
   }
 
   ghost predicate IgnoredFailure(context: ObservationContext, raw: S.RmdirCmdRaw, fs: FileSystem,
@@ -278,25 +278,25 @@ module RmdirSpec {
     if parent || err != Errno.ENOTDIR || !C.HasTrailingSlash(path) then
       display == path && !custom
     else exists statOk: bool, directory: bool, statErr: int ::
-      C.IsDirectorySpec(fs, context.failures, path, true, statOk, directory, statErr) &&
-      if (!statOk && statErr != Errno.ENOTDIR) || (statOk && directory) then
-        exists stripped: string, linkOk: bool, link: bool, linkErr: int ::
-          Trimmed(path, stripped) &&
-          C.IsSymlinkSpec(fs, context.failures, stripped, linkOk, link, linkErr) &&
-          custom == (linkOk && link) && display == (if custom then path else stripped)
-      else display == path && !custom
+           C.IsDirectorySpec(fs, context.failures, path, true, statOk, directory, statErr) &&
+           if (!statOk && statErr != Errno.ENOTDIR) || (statOk && directory) then
+             exists stripped: string, linkOk: bool, link: bool, linkErr: int ::
+               Trimmed(path, stripped) &&
+               C.IsSymlinkSpec(fs, context.failures, stripped, linkOk, link, linkErr) &&
+               custom == (linkOk && link) && display == (if custom then path else stripped)
+           else display == path && !custom
   }
 
   datatype Removal = Removal(path: string, parent: bool, before: FileSystem,
-    after: FileSystem, err: int, ignored: bool, display: string, custom: bool)
+                             after: FileSystem, err: int, ignored: bool, display: string, custom: bool)
 
   ghost predicate RemovalRelation(context: ObservationContext, raw: S.RmdirCmdRaw, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult, r: Removal) {
+                                  trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult, r: Removal) {
     C.RemoveDirectorySpec(r.before, now, trusted, r.after, r.path, r.err == 0, r.err) &&
     (if r.err == 0 then !r.ignored && !r.custom && r.display == r.path
      else (IgnoredFailure(context, raw, r.after, r.path, r.err, r.ignored) &&
-       (if r.ignored then !r.custom && r.display == r.path
-        else FailureDisplay(context, r.after, r.path, r.parent, r.err, r.display, r.custom))))
+           (if r.ignored then !r.custom && r.display == r.path
+            else FailureDisplay(context, r.after, r.path, r.parent, r.err, r.display, r.custom))))
   }
 
   ghost function OutputChunk(raw: S.RmdirCmdRaw, r: Removal): Bytes {
@@ -306,29 +306,29 @@ module RmdirSpec {
   ghost function ErrorChunk(r: Removal): Bytes
   {
     if r.err == 0 || r.ignored then [] else
-      FailureText(r.parent, r.err, r.custom, C.QuoteafPathResult(r.display),
-                  C.CLocaleErrnoTextResult(r.err))
+    FailureText(r.parent, r.err, r.custom, C.QuoteafPathResult(r.display),
+                C.CLocaleErrnoTextResult(r.err))
   }
 
   ghost predicate BytePartition(parts: seq<Bytes>, whole: Bytes, cuts: seq<nat>) {
     |cuts| == |parts| + 1 && cuts[0] == 0 && cuts[|parts|] == |whole| &&
     (forall i {:trigger cuts[i]} :: 0 <= i < |parts| ==>
-      cuts[i] <= cuts[i + 1] <= |whole| && whole[cuts[i]..cuts[i + 1]] == parts[i])
+                                      cuts[i] <= cuts[i + 1] <= |whole| && whole[cuts[i]..cuts[i + 1]] == parts[i])
   }
 
   ghost predicate ChainPrefix(context: ObservationContext, raw: S.RmdirCmdRaw, path: string, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult, rs: seq<Removal>) {
+                              trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult, rs: seq<Removal>) {
     (forall i :: 0 <= i < |rs| ==> RemovalRelation(context, raw, now, trusted, rs[i])) &&
     (|rs| > 0 ==> rs[0].path == path && !rs[0].parent) &&
     (forall i {:trigger rs[i]} :: 0 < i < |rs| ==>
-      rs[i].parent && rs[i - 1].err == 0 && raw.parents &&
-      ParentRelation(rs[i - 1].path, rs[i].path) && rs[i - 1].after == rs[i].before)
+                                    rs[i].parent && rs[i - 1].err == 0 && raw.parents &&
+                                    ParentRelation(rs[i - 1].path, rs[i].path) && rs[i - 1].after == rs[i].before)
   }
 
   ghost predicate {:isolate_assertions} ChainWitness(context: ObservationContext, raw: S.RmdirCmdRaw, path: string, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
-    before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool,
-    rs: seq<Removal>, outCuts: seq<nat>, errCuts: seq<nat>) {
+                                                     trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
+                                                     before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool,
+                                                     rs: seq<Removal>, outCuts: seq<nat>, errCuts: seq<nat>) {
     |rs| > 0 && ChainPrefix(context, raw, path, now, trusted, rs) &&
     rs[0].before == before && rs[|rs| - 1].after == after &&
     (rs[|rs| - 1].err != 0 || !raw.parents || !HasParent(rs[|rs| - 1].path)) &&
@@ -338,34 +338,34 @@ module RmdirSpec {
   }
 
   ghost predicate ChainEffect(context: ObservationContext, raw: S.RmdirCmdRaw, path: string, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
-    before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool) {
+                              trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
+                              before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool) {
     exists rs: seq<Removal>, outCuts: seq<nat>, errCuts: seq<nat> ::
       ChainWitness(context, raw, path, now, trusted, before, after, out, error, good,
                    rs, outCuts, errCuts)
   }
 
   ghost predicate BatchWitness(context: ObservationContext, raw: S.RmdirCmdRaw, paths: seq<string>, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
-    before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool,
-    states: seq<FileSystem>, outputs: seq<Bytes>, errors: seq<Bytes>,
-    goods: seq<bool>, outCuts: seq<nat>, errCuts: seq<nat>) {
+                               trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
+                               before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool,
+                               states: seq<FileSystem>, outputs: seq<Bytes>, errors: seq<Bytes>,
+                               goods: seq<bool>, outCuts: seq<nat>, errCuts: seq<nat>) {
     |states| == |paths| + 1 && |outputs| == |paths| && |errors| == |paths| &&
     |goods| == |paths| && states[0] == before && states[|paths|] == after &&
     (forall i :: 0 <= i < |paths| ==>
-      ChainEffect(context, raw, paths[i], now, trusted, states[i], states[i + 1],
-                  outputs[i], errors[i], goods[i])) &&
+                   ChainEffect(context, raw, paths[i], now, trusted, states[i], states[i + 1],
+                               outputs[i], errors[i], goods[i])) &&
     good == (forall i :: 0 <= i < |goods| ==> goods[i]) &&
     BytePartition(outputs, out, outCuts) && BytePartition(errors, error, errCuts)
   }
 
   ghost predicate BatchEffect(context: ObservationContext, raw: S.RmdirCmdRaw, now: int,
-    trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
-    before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool) {
+                              trusted: (TrustedFilesystemRequest) -> TrustedFilesystemResult,
+                              before: FileSystem, after: FileSystem, out: Bytes, error: Bytes, good: bool) {
     exists states: seq<FileSystem>, outputs: seq<Bytes>, errors: seq<Bytes>,
-           goods: seq<bool>, outCuts: seq<nat>, errCuts: seq<nat> ::
+      goods: seq<bool>, outCuts: seq<nat>, errCuts: seq<nat> ::
       BatchWitness(context, raw, raw.operands, now, trusted, before, after, out, error,
-                    good, states, outputs, errors, goods, outCuts, errCuts)
+                   good, states, outputs, errors, goods, outCuts, errCuts)
   }
 
   function WriteErrorTextPart1(): BenchWorld.Bytes
@@ -388,14 +388,14 @@ module RmdirSpec {
   }
 
   ghost predicate StreamResults(beforeOut: Bytes, afterOut: Bytes,
-    beforeErr: Bytes, afterErr: Bytes,
-    observations: (TrustedStreamRequest) -> TrustedStreamResult,
-    output: Bytes, diagnostics: Bytes, removalExit: int, exit: int) {
+                                beforeErr: Bytes, afterErr: Bytes,
+                                observations: (TrustedStreamRequest) -> TrustedStreamResult,
+                                output: Bytes, diagnostics: Bytes, removalExit: int, exit: int) {
     var outObservation := observations(StreamWriteStdout(beforeOut, output));
     outObservation.StreamWriteResult? &&
     var finalDiagnostic := diagnostics + (if outObservation.err == 0 then []
-      else if |diagnostics| != 0 then PriorWriteErrorText()
-      else WriteErrorText(C.CLocaleErrnoTextResult(outObservation.err)));
+                                          else if |diagnostics| != 0 then PriorWriteErrorText()
+                                          else WriteErrorText(C.CLocaleErrnoTextResult(outObservation.err)));
     var errObservation := observations(StreamWriteStderr(beforeErr, finalDiagnostic));
     errObservation.StreamWriteResult? &&
     C.WriteStdoutSpec(beforeOut, observations, afterOut, output,
@@ -420,9 +420,9 @@ module RmdirSpec {
       StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
                     io.trustedStreams(), [], MissingOperandText(), 1, exit)
     else exists out: Bytes, error: Bytes, good: bool ::
-      BatchEffect(old(ObservationContextFor(io)), raw, io.now(), io.trustedFilesystem(), old(io.fs()), io.fs(),
-                  out, error, good) &&
-      StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
-                    io.trustedStreams(), out, error, if good then 0 else 1, exit)
+           BatchEffect(old(ObservationContextFor(io)), raw, io.now(), io.trustedFilesystem(), old(io.fs()), io.fs(),
+                       out, error, good) &&
+           StreamResults(old(io.stdout()), io.stdout(), old(io.stderr()), io.stderr(),
+                         io.trustedStreams(), out, error, if good then 0 else 1, exit)
   }
 }

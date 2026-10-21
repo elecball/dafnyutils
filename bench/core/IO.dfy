@@ -527,9 +527,9 @@ module BenchIO {
     method {:extern "NativeReadFile"} {:axiom} NativeReadFile(path: Path, readContents: bool)
       returns (data: Bytes, err: int, stage: BenchWorld.FileReadStage)
       ensures readContents ==> C.ReadFileSpec(
-                old(fs()), old(trustedStreams()), path, data, err, stage)
+                  old(fs()), old(trustedStreams()), path, data, err, stage)
       ensures !readContents ==> C.OpenReadFileSpec(
-                old(fs()), old(trustedStreams()), path, data, err, stage)
+                  old(fs()), old(trustedStreams()), path, data, err, stage)
 
     method ReadFile(path: Path) returns (result: IOResult<Bytes>)
       ensures C.ReadFileSpec(
@@ -542,7 +542,7 @@ module BenchIO {
         reveal C.ReadFileSpec(), C.TrustedReadFileContractFields();
       }
       assert C.ObservedReadFileResultFields(fs(), trustedStreams(), path) ==
-        C.FileReadResultFromOutcome(data, err, stage, C.CLocaleErrnoTextResult(err)) by {
+             C.FileReadResultFromOutcome(data, err, stage, C.CLocaleErrnoTextResult(err)) by {
         hide *;
         reveal C.ReadFileSpec(), C.TrustedReadFileContractFields();
         reveal C.ObservedReadFileResultFields();
@@ -617,7 +617,7 @@ module BenchIO {
       ensures C.WriteStdoutSpec(old(stdout()), old(trustedStreams()), stdout(), b, C.WriteResultCommitted(result), C.ResultErrno(result))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
       ensures result == C.StreamWriteResultFromOutcome(C.WriteResultCommitted(result), C.ResultErrno(result),
-                                                      C.CLocaleErrnoTextResult(C.ResultErrno(result)))
+                                                       C.CLocaleErrnoTextResult(C.ResultErrno(result)))
     {
       var committed, err := NativeWriteStdout(b);
       if err == 0 {
@@ -639,7 +639,7 @@ module BenchIO {
       ensures C.WriteStderrSpec(old(stderr()), old(trustedStreams()), stderr(), b, C.WriteResultCommitted(result), C.ResultErrno(result))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
       ensures result == C.StreamWriteResultFromOutcome(C.WriteResultCommitted(result), C.ResultErrno(result),
-                                                      C.CLocaleErrnoTextResult(C.ResultErrno(result)))
+                                                       C.CLocaleErrnoTextResult(C.ResultErrno(result)))
     {
       var committed, err := NativeWriteStderr(b);
       if err == 0 {
@@ -1253,7 +1253,7 @@ module BenchIO {
       assert ok ==> err == 0;
       if !ok {
         assert C.GetFileTimesSpec(fs(), trustedFilesystem(), path, followSymlink,
-          false, 0, 0, 0, 0, false, false, 0, 0, 0, err) by {
+                                  false, 0, 0, 0, 0, false, false, 0, 0, 0, err) by {
           hide *;
           reveal C.GetFileTimesSpec();
           reveal C.TrustedFilesystemQueryContractFields();
@@ -1473,7 +1473,7 @@ module BenchIO {
       ensures directoryModel() == old(directoryModel())
       ensures C.CwdContextReadStepFields(old(cwdContext()),cwdContext())
       ensures C.GetFileStatusAtDirSpec(statusObservations(),old(trustedNativeFailures()),old(statusCursor()),statusCursor(),
-        old(fs()),old(cwdContext()),parent, path,followSymlink,ok,status,err)
+                                       old(fs()),old(cwdContext()),parent, path,followSymlink,ok,status,err)
 
     method GetFileStatusAtDir(parent: int, path: Path, followSymlink: bool) returns (result: IOResult<FileStatus>)
       requires C.DirectoryParentAnchorForContextRequestFields(fs(),cwdContext(),parent,path)
@@ -1483,7 +1483,7 @@ module BenchIO {
       ensures directoryModel() == old(directoryModel())
       ensures C.CwdContextReadStepFields(old(cwdContext()),cwdContext())
       ensures C.GetFileStatusAtDirSpec(statusObservations(),old(trustedNativeFailures()),old(statusCursor()),statusCursor(),
-        old(fs()),old(cwdContext()),parent, path,followSymlink,result.Ok?,C.ResultValue(result,DEFAULT_FILE_STATUS),C.ResultErrno(result))
+                                       old(fs()),old(cwdContext()),parent, path,followSymlink,result.Ok?,C.ResultValue(result,DEFAULT_FILE_STATUS),C.ResultErrno(result))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
     {
       var ok,status,err := NativeGetFileStatusAtDir(parent, path,followSymlink);
@@ -1506,7 +1506,7 @@ module BenchIO {
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryObservations() == old(directoryObservations())
       ensures C.SetFileModeAtDirSpec(old(fs()),old(cwdContext()),old(now()),old(trustedNativeFailures()),
-        fs(),cwdContext(),parent, path,followSymlink,mode,ok,err)
+                                     fs(),cwdContext(),parent, path,followSymlink,mode,ok,err)
 
     method SetFileModeAtDir(parent: int, path: Path, followSymlink: bool, mode: bv32) returns (result: IOResult<Unit>)
       requires C.DirectoryParentAnchorForContextRequestFields(fs(),cwdContext(),parent,path)
@@ -1514,7 +1514,7 @@ module BenchIO {
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryObservations() == old(directoryObservations())
       ensures C.SetFileModeAtDirSpec(old(fs()),old(cwdContext()),old(now()),old(trustedNativeFailures()),
-        fs(),cwdContext(),parent, path,followSymlink,mode,result.Ok?,C.ResultErrno(result))
+                                     fs(),cwdContext(),parent, path,followSymlink,mode,result.Ok?,C.ResultErrno(result))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
     {
       var ok,err := NativeSetFileModeAtDir(parent, path,followSymlink,mode);
@@ -1538,7 +1538,7 @@ module BenchIO {
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryObservations() == old(directoryObservations())
       ensures C.OpenDirAtDirSpec(old(fs()),old(cwdContext()),old(trustedNativeFailures()),
-        cwdContext(),parent, path,includeDots,ok,handle,err)
+                                 cwdContext(),parent, path,includeDots,ok,handle,err)
 
     method OpenDirAtDir(parent: int, path: Path, includeDots: bool) returns (result: IOResult<int>)
       requires C.DirectoryParentAnchorForContextRequestFields(fs(),cwdContext(),parent,path)
@@ -1546,14 +1546,14 @@ module BenchIO {
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryObservations() == old(directoryObservations())
       ensures C.OpenDirAtDirSpec(old(fs()),old(cwdContext()),old(trustedNativeFailures()),
-        cwdContext(),parent, path,includeDots,result.Ok?,C.ResultValue(result,0),C.ResultErrno(result))
+                                 cwdContext(),parent, path,includeDots,result.Ok?,C.ResultValue(result,0),C.ResultErrno(result))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
     {
       var ok,handle,err := NativeOpenDirAtDir(parent, path,includeDots);
       assert ok <==> err == 0;
       if !ok {
         assert C.OpenDirAtDirSpec(old(fs()),old(cwdContext()),old(trustedNativeFailures()),
-          cwdContext(),parent, path,includeDots,false,0,err) by {
+                                  cwdContext(),parent, path,includeDots,false,0,err) by {
           hide *;
           reveal C.OpenDirAtDirSpec(), C.OpenDirFromCwdTargetContractFields();
         }
@@ -1578,7 +1578,7 @@ module BenchIO {
       ensures directoryModel() == old(directoryModel())
       ensures C.CwdContextReadStepFields(old(cwdContext()),cwdContext())
       ensures C.GetFileStatusAtCwdSpec(statusObservations(),old(trustedNativeFailures()),old(statusCursor()),statusCursor(),
-        old(fs()),old(cwdContext()),path,followSymlink,ok,status,err)
+                                       old(fs()),old(cwdContext()),path,followSymlink,ok,status,err)
 
     method GetFileStatusAtCwd(path: Path, followSymlink: bool) returns (result: IOResult<FileStatus>)
       modifies directoryStateRegion, statusObservationsRegion
@@ -1587,7 +1587,7 @@ module BenchIO {
       ensures directoryModel() == old(directoryModel())
       ensures C.CwdContextReadStepFields(old(cwdContext()),cwdContext())
       ensures C.GetFileStatusAtCwdSpec(statusObservations(),old(trustedNativeFailures()),old(statusCursor()),statusCursor(),
-        old(fs()),old(cwdContext()),path,followSymlink,result.Ok?,C.ResultValue(result,DEFAULT_FILE_STATUS),C.ResultErrno(result))
+                                       old(fs()),old(cwdContext()),path,followSymlink,result.Ok?,C.ResultValue(result,DEFAULT_FILE_STATUS),C.ResultErrno(result))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
     {
       var ok,status,err := NativeGetFileStatusAtCwd(path,followSymlink);
@@ -1609,14 +1609,14 @@ module BenchIO {
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryObservations() == old(directoryObservations())
       ensures C.SetFileModeAtCwdSpec(old(fs()),old(cwdContext()),old(now()),old(trustedNativeFailures()),
-        fs(),cwdContext(),path,followSymlink,mode,ok,err)
+                                     fs(),cwdContext(),path,followSymlink,mode,ok,err)
 
     method SetFileModeAtCwd(path: Path, followSymlink: bool, mode: bv32) returns (result: IOResult<Unit>)
       modifies fsRegion, directoryStateRegion
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryObservations() == old(directoryObservations())
       ensures C.SetFileModeAtCwdSpec(old(fs()),old(cwdContext()),old(now()),old(trustedNativeFailures()),
-        fs(),cwdContext(),path,followSymlink,mode,result.Ok?,C.ResultErrno(result))
+                                     fs(),cwdContext(),path,followSymlink,mode,result.Ok?,C.ResultErrno(result))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
     {
       var ok,err := NativeSetFileModeAtCwd(path,followSymlink,mode);
@@ -1639,21 +1639,21 @@ module BenchIO {
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryObservations() == old(directoryObservations())
       ensures C.OpenDirAtCwdSpec(old(fs()),old(cwdContext()),old(trustedNativeFailures()),
-        cwdContext(),path,includeDots,ok,handle,err)
+                                 cwdContext(),path,includeDots,ok,handle,err)
 
     method OpenDirAtCwd(path: Path, includeDots: bool) returns (result: IOResult<int>)
       modifies directoryStateRegion
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryObservations() == old(directoryObservations())
       ensures C.OpenDirAtCwdSpec(old(fs()),old(cwdContext()),old(trustedNativeFailures()),
-        cwdContext(),path,includeDots,result.Ok?,C.ResultValue(result,0),C.ResultErrno(result))
+                                 cwdContext(),path,includeDots,result.Ok?,C.ResultValue(result,0),C.ResultErrno(result))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
     {
       var ok,handle,err := NativeOpenDirAtCwd(path,includeDots);
       assert ok <==> err == 0;
       if !ok {
         assert C.OpenDirAtCwdSpec(old(fs()),old(cwdContext()),old(trustedNativeFailures()),
-          cwdContext(),path,includeDots,false,0,err) by {
+                                  cwdContext(),path,includeDots,false,0,err) by {
           hide *;
           reveal C.OpenDirAtCwdSpec(), C.OpenDirFromCwdTargetContractFields();
         }
@@ -1711,7 +1711,7 @@ module BenchIO {
       assert ok ==> err == 0;
       if !ok {
         assert C.OpenDirSpec(fs(), old(dirHandles()), trustedNativeFailures(), dirHandles(),
-          path, includeDots, false, 0, err) by {
+                             path, includeDots, false, 0, err) by {
           hide *;
           reveal C.OpenDirSpec(), C.OpenDirContractFields();
         }
@@ -1751,25 +1751,25 @@ module BenchIO {
     method {:extern "NativeGetOpenDirectoryCapabilityStatus"} {:axiom} NativeGetOpenDirectoryCapabilityStatus(handle: int)
       returns (ok: bool, status: FileStatus, err: int)
       requires handle in directoryCapabilities() ==>
-        C.DirectoryCapabilityAnchorCurrentFields(directoryTopology(),directoryCapabilities()[handle])
+                 C.DirectoryCapabilityAnchorCurrentFields(directoryTopology(),directoryCapabilities()[handle])
       modifies directoryStateRegion, statusObservationsRegion
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryObservations() == old(directoryObservations())
       ensures directoryModel() == old(directoryModel())
       ensures C.CwdContextReadStepFields(old(cwdContext()),cwdContext())
       ensures C.GetOpenDirectoryCapabilityStatusSpec(statusObservations(),old(trustedNativeFailures()),
-        old(statusCursor()),statusCursor(),old(fs()),old(cwdContext()),handle,ok,status,err)
+                                                     old(statusCursor()),statusCursor(),old(fs()),old(cwdContext()),handle,ok,status,err)
 
     method GetOpenDirectoryCapabilityStatus(handle: int) returns (result: IOResult<FileStatus>)
       requires handle in directoryCapabilities() ==>
-        C.DirectoryCapabilityAnchorCurrentFields(directoryTopology(),directoryCapabilities()[handle])
+                 C.DirectoryCapabilityAnchorCurrentFields(directoryTopology(),directoryCapabilities()[handle])
       modifies directoryStateRegion, statusObservationsRegion
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryObservations() == old(directoryObservations())
       ensures directoryModel() == old(directoryModel())
       ensures C.CwdContextReadStepFields(old(cwdContext()),cwdContext())
       ensures C.GetOpenDirectoryCapabilityStatusSpec(statusObservations(),old(trustedNativeFailures()),
-        old(statusCursor()),statusCursor(),old(fs()),old(cwdContext()),handle,result.Ok?,C.ResultValue(result,DEFAULT_FILE_STATUS),C.ResultErrno(result))
+                                                     old(statusCursor()),statusCursor(),old(fs()),old(cwdContext()),handle,result.Ok?,C.ResultValue(result,DEFAULT_FILE_STATUS),C.ResultErrno(result))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
     {
       var ok,status,err := NativeGetOpenDirectoryCapabilityStatus(handle);
@@ -1821,9 +1821,9 @@ module BenchIO {
                 old(fs()), old(dirHandles()), old(trustedNativeFailures()), dirHandles(), handle,
                 (result.Ok? && result.v.DirectoryItem?), (if result.Ok? && result.v.DirectoryItem? then result.v.name else ""), (if result.Ok? && result.v.DirectoryItem? then result.v.kind else UnknownDirentKind), C.ResultErrno(result))
       ensures C.ReadDirInodeFields(old(fs()),old(dirHandles()),handle,
-        if result.Ok? && result.v.DirectoryItem? then result.v.name else "",
-        result.Ok? && result.v.DirectoryItem?,
-        if result.Ok? && result.v.DirectoryItem? then result.v.inode else 0)
+                                   if result.Ok? && result.v.DirectoryItem? then result.v.name else "",
+                                   result.Ok? && result.v.DirectoryItem?,
+                                   if result.Ok? && result.v.DirectoryItem? then result.v.inode else 0)
       ensures result.Ok? <==> C.ResultErrno(result) == 0
     {
       var hasMore, name, kind, inode, err := NativeReadDir(handle);
@@ -2018,7 +2018,7 @@ module BenchIO {
 
     method {:extern "NativeFchdirDirectory"} {:axiom} NativeFchdirDirectory(fd: int) returns (response: DirectoryResponse)
       requires C.DirectoryOperationCapabilitiesCurrentFields(directoryTopology(),
-        directoryCapabilities(),DirectoryFchdir,0,fd)
+                                                             directoryCapabilities(),DirectoryFchdir,0,fd)
       requires exists handle | handle in directoryCapabilities() :: directoryCapabilities()[handle].descriptor == [fd]
       requires C.DirectoryRequestFields(DirectoryRequest(DirectoryFchdir,directoryOrdinal(),fs(),directoryTopology(),directoryPosition(),directoryCapabilities(),0,fd,"",statusCursor(),cwd(),dirHandles().Keys))
       modifies directoryStateRegion, cwdRegion
@@ -2028,7 +2028,7 @@ module BenchIO {
 
     method FchdirDirectory(fd: int) returns (result: IOResult<Unit>)
       requires C.DirectoryOperationCapabilitiesCurrentFields(directoryTopology(),
-        directoryCapabilities(),DirectoryFchdir,0,fd)
+                                                             directoryCapabilities(),DirectoryFchdir,0,fd)
       requires exists handle | handle in directoryCapabilities() :: directoryCapabilities()[handle].descriptor == [fd]
       modifies directoryStateRegion, cwdRegion
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
@@ -2078,7 +2078,7 @@ module BenchIO {
 
     method {:extern "NativeFstatDirectory"} {:axiom} NativeFstatDirectory(fd: int) returns (response: DirectoryResponse)
       requires C.DirectoryOperationCapabilitiesCurrentFields(directoryTopology(),
-        directoryCapabilities(),DirectoryFstat,0,fd)
+                                                             directoryCapabilities(),DirectoryFstat,0,fd)
       requires exists handle | handle in directoryCapabilities() :: directoryCapabilities()[handle].descriptor == [fd]
       requires C.DirectoryRequestFields(DirectoryRequest(DirectoryFstat,directoryOrdinal(),fs(),directoryTopology(),directoryPosition(),directoryCapabilities(),0,fd,"",statusCursor(),cwd(),dirHandles().Keys))
       modifies directoryStateRegion, statusObservationsRegion
@@ -2088,7 +2088,7 @@ module BenchIO {
 
     method FstatDirectory(fd: int) returns (result: IOResult<FileStatus>)
       requires C.DirectoryOperationCapabilitiesCurrentFields(directoryTopology(),
-        directoryCapabilities(),DirectoryFstat,0,fd)
+                                                             directoryCapabilities(),DirectoryFstat,0,fd)
       requires exists handle | handle in directoryCapabilities() :: directoryCapabilities()[handle].descriptor == [fd]
       modifies directoryStateRegion, statusObservationsRegion
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
@@ -2113,7 +2113,7 @@ module BenchIO {
 
     method {:extern "NativeReadDirectoryCapability"} {:axiom} NativeReadDirectoryCapability(handle: int) returns (response: DirectoryResponse)
       requires C.DirectoryOperationCapabilitiesCurrentFields(directoryTopology(),
-        directoryCapabilities(),DirectoryReadNext,handle,0)
+                                                             directoryCapabilities(),DirectoryReadNext,handle,0)
       requires C.DirectoryRequestFields(DirectoryRequest(DirectoryReadNext,directoryOrdinal(),fs(),directoryTopology(),directoryPosition(),directoryCapabilities(),handle,0,"",statusCursor(),cwd(),dirHandles().Keys))
       modifies directoryStateRegion
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
@@ -2122,7 +2122,7 @@ module BenchIO {
 
     method ReadDirectoryCapability(handle: int) returns (result: IOResult<DirectoryRead>)
       requires C.DirectoryOperationCapabilitiesCurrentFields(directoryTopology(),
-        directoryCapabilities(),DirectoryReadNext,handle,0)
+                                                             directoryCapabilities(),DirectoryReadNext,handle,0)
       modifies directoryStateRegion
       ensures dirHandles() == old(dirHandles()) && directoryOrigins() == old(directoryOrigins())
       ensures directoryModel() == old(directoryModel())
@@ -2130,9 +2130,9 @@ module BenchIO {
       ensures result == C.DirectoryReadResultFields(old(directoryObservations())(DirectoryRequest(DirectoryReadNext,old(directoryOrdinal()),old(fs()),old(directoryTopology()),old(directoryPosition()),old(directoryCapabilities()),handle,0,"",old(statusCursor()),old(cwd()),old(dirHandles()).Keys)))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
       ensures C.ContextOperationSpec(old(fs()),old(cwdContext()),old(directoryObservations()),
-        DirectoryReadNext,handle,0,"",old(statusCursor()),statusCursor(),
-        old(directoryObservations())(C.DirectoryRequestForContextFields(old(fs()),old(cwdContext()),
-          DirectoryReadNext,handle,0,"",old(statusCursor()))),cwdContext())
+                                     DirectoryReadNext,handle,0,"",old(statusCursor()),statusCursor(),
+                                     old(directoryObservations())(C.DirectoryRequestForContextFields(old(fs()),old(cwdContext()),
+                                                                                                     DirectoryReadNext,handle,0,"",old(statusCursor()))),cwdContext())
     {
       C.DirectoryStateAdmitsRequest(directoryStateRegion.resources.live,fs(),DirectoryReadNext,handle,0,"",statusCursor(),cwd(),dirHandles().Keys);
       var response := NativeReadDirectoryCapability(handle);
@@ -2190,9 +2190,9 @@ module BenchIO {
       ensures result == C.DirectoryUnitResultFields(old(directoryObservations())(DirectoryRequest(DirectoryClose,old(directoryOrdinal()),old(fs()),old(directoryTopology()),old(directoryPosition()),old(directoryCapabilities()),handle,0,"",old(statusCursor()),old(cwd()),old(dirHandles()).Keys)))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
       ensures C.ContextOperationSpec(old(fs()),old(cwdContext()),old(directoryObservations()),
-        DirectoryClose,handle,0,"",old(statusCursor()),statusCursor(),
-        old(directoryObservations())(C.DirectoryRequestForContextFields(old(fs()),old(cwdContext()),
-          DirectoryClose,handle,0,"",old(statusCursor()))),cwdContext())
+                                     DirectoryClose,handle,0,"",old(statusCursor()),statusCursor(),
+                                     old(directoryObservations())(C.DirectoryRequestForContextFields(old(fs()),old(cwdContext()),
+                                                                                                     DirectoryClose,handle,0,"",old(statusCursor()))),cwdContext())
     {
       C.DirectoryStateAdmitsRequest(directoryStateRegion.resources.live,fs(),DirectoryClose,handle,0,"",statusCursor(),cwd(),dirHandles().Keys);
       var response := NativeCloseDirectoryCapability(handle);

@@ -13,14 +13,14 @@ module ChmodFollowProof {
   import Resolution = ChmodResolutionProof
 
   lemma {:isolate_assertions} RawNonlink(fs: W.FileSystem, native: W.CwdContext,
-    segments: seq<string>, index: nat, current: W.Path, seen: set<W.Path>, fuel: nat,
-    directory: bool, target: W.CwdTarget)
+                                         segments: seq<string>, index: nat, current: W.Path, seen: set<W.Path>, fuel: nat,
+                                         directory: bool, target: W.CwdTarget)
     requires C.CwdContextFields(fs, native) && index <= |segments|
     requires C.CwdNamedResultFields(fs, native,
-      C.ResolveRawSymlinkSegmentsFields(fs, segments, index, current, seen, fuel, false, false, directory)) == R.Ok(target)
+                                    C.ResolveRawSymlinkSegmentsFields(fs, segments, index, current, seen, fuel, false, false, directory)) == R.Ok(target)
     requires !C.CwdTargetRecordFields(fs, native, target).node.Symlink?
     ensures C.CwdNamedResultFields(fs, native,
-      C.ResolveRawSymlinkSegmentsFields(fs, segments, index, current, seen, fuel, true, false, directory)) == R.Ok(target)
+                                   C.ResolveRawSymlinkSegmentsFields(fs, segments, index, current, seen, fuel, true, false, directory)) == R.Ok(target)
   {
     hide *;
     reveal C.CwdNamedResultFields(), C.CwdTargetRecordFields();
@@ -35,14 +35,14 @@ module ChmodFollowProof {
   }
 
   lemma {:isolate_assertions} LiveNonlink(fs: W.FileSystem, native: W.CwdContext,
-    position: W.DirectoryPosition, segments: seq<string>, index: nat, fuel: nat,
-    directory: bool, target: W.CwdTarget)
+                                          position: W.DirectoryPosition, segments: seq<string>, index: nat, fuel: nat,
+                                          directory: bool, target: W.CwdTarget)
     requires C.CwdContextFields(fs, native) && position in native.topology.nodes && index <= |segments|
     requires C.ResolveLiveDirectorySegmentsFields(fs, native, position, segments, index,
-      fuel, false, directory) == R.Ok(target)
+                                                  fuel, false, directory) == R.Ok(target)
     requires !C.CwdTargetRecordFields(fs, native, target).node.Symlink?
     ensures C.ResolveLiveDirectorySegmentsFields(fs, native, position, segments, index,
-      fuel, true, directory) == R.Ok(target)
+                                                 fuel, true, directory) == R.Ok(target)
     decreases fuel, |segments|-index
   {
     hide *;
@@ -54,7 +54,7 @@ module ChmodFollowProof {
     } else if index < |segments| {
       if segments[index] == "." || segments[index] == ".." {
         LiveNonlink(fs, native, if segments[index] == ".." then node.parent else position,
-          segments, index+1, fuel, directory, target);
+                    segments, index+1, fuel, directory, target);
       } else {
         assert segments[index] in node.entries;
         var name := segments[index];
@@ -84,7 +84,7 @@ module ChmodFollowProof {
   }
 
   lemma {:isolate_assertions} Nonlink(fs: W.FileSystem, native: W.CwdContext,
-    operand: Operand.Operand, target: W.CwdTarget)
+                                      operand: Operand.Operand, target: W.CwdTarget)
     requires C.CwdContextFields(fs, native)
     requires Operand.ResolveTarget(fs, native, operand, false) == R.Ok(target)
     requires !C.CwdTargetRecordFields(fs, native, target).node.Symlink?
@@ -107,18 +107,18 @@ module ChmodFollowProof {
     } else if operand.CwdOperand? {
       assert native.position in native.topology.nodes by { reveal C.CwdContextFields(); }
       LiveNonlink(fs, native, native.position, C.RawPathSegmentsFields(path), 0,
-        W.SYMLINK_MAX_DEPTH, C.HasTrailingSlash(path), target);
+                  W.SYMLINK_MAX_DEPTH, C.HasTrailingSlash(path), target);
     } else if operand.parent in native.capabilities {
       assert native.capabilities[operand.parent].position in native.topology.nodes by {
         reveal C.DirectoryCapabilityAnchorCurrentFields();
       }
       LiveNonlink(fs, native, native.capabilities[operand.parent].position, C.RawPathSegmentsFields(path), 0,
-        W.SYMLINK_MAX_DEPTH, C.HasTrailingSlash(path), target);
+                  W.SYMLINK_MAX_DEPTH, C.HasTrailingSlash(path), target);
     } else {
       reveal C.ResolvePathAtDirForMetadataFields();
       assert operand.parent in native.legacyHandles;
       RawNonlink(fs, native, C.RawPathSegmentsFields(path), 0, native.legacyHandles[operand.parent].path,
-        {}, W.SYMLINK_MAX_DEPTH, C.HasTrailingSlash(path), target);
+                 {}, W.SYMLINK_MAX_DEPTH, C.HasTrailingSlash(path), target);
     }
   }
 }

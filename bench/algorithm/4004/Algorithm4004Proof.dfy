@@ -13,7 +13,7 @@ module Algorithm4004Proof {
   {
     if CliSpec.Valid(raw) {
       var out :| CliCore.AnswerSummary(raw.n, raw.a, out) &&
-        CliSpec.Output(io, CliSpec.OutputText(out), exit);
+                 CliSpec.Output(io, CliSpec.OutputText(out), exit);
       AnswerSummaryImpliesAnswer(raw.n, raw.a, out);
     }
   }

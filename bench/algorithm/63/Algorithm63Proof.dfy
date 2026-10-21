@@ -13,7 +13,7 @@ module Algorithm63Proof {
   {
     if CliSpec.Valid(raw) {
       var result :| CliCore.AnswerSummary(raw.n, raw.k, raw.a, result) &&
-        CliSpec.Output(io, CliSpec.OutputText(result), exit);
+                    CliSpec.Output(io, CliSpec.OutputText(result), exit);
       AnswerSummaryImpliesAnswer(raw.n, raw.k, raw.a, result);
     }
   }
@@ -146,16 +146,16 @@ module Algorithm63Proof {
       }
       assert row * rest == {};
       var step := (xi: int, accx: int, x: int) =>
-        Core.OuterCountStep(n, k, a, xi, accx, x);
+          Core.OuterCountStep(n, k, a, xi, accx, x);
       calc {
-        Core.FoldIFrom(startIndex, Core.Range(lo, n), acc, step);
-        == Core.FoldIFrom(startIndex + 1, Core.Range(lo + 1, n),
-             acc + Core.InnerCount(n, k, a, lo), step);
-        == {
-          OuterFoldCardinality(
-            n, k, a, lo + 1, startIndex + 1, acc + Core.InnerCount(n, k, a, lo));
-        } acc + Core.InnerCount(n, k, a, lo) + |rest|;
-        == acc + |ValidPairs(n, k, a, lo)|;
+         Core.FoldIFrom(startIndex, Core.Range(lo, n), acc, step);
+      == Core.FoldIFrom(startIndex + 1, Core.Range(lo + 1, n),
+                        acc + Core.InnerCount(n, k, a, lo), step);
+      == {
+           OuterFoldCardinality(
+             n, k, a, lo + 1, startIndex + 1, acc + Core.InnerCount(n, k, a, lo));
+         } acc + Core.InnerCount(n, k, a, lo) + |rest|;
+      == acc + |ValidPairs(n, k, a, lo)|;
       }
     }
   }

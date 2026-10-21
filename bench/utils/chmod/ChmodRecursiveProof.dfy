@@ -407,17 +407,17 @@ module ChmodRecursiveProof {
           (forall j :: 0 <= j < |children| ==>
                          Spec.VisitMatchesEntrySpec(identity, entries[j], children[j]))
     requires exists descendantsStdout: BW.Bytes,
-        descendantsStderr: BW.Bytes, descendantsOk: bool ::
-        Spec.VisitsOutcomeSpec(
-          cmd, plan, children,
-          activeResolved + {BW.PathSegments(identity.resolvedPath)},
-          parent.fs, fs2, descendantsStdout, descendantsStderr, descendantsOk, now
-        ) &&
-        stdoutChunk == parent.stdoutChunk + descendantsStdout +
-                       Spec.RecursiveReadStdoutSpec(cmd, identity.displayPath, terminal) &&
-        stderrChunk == parent.stderrChunk + descendantsStderr +
-                       Spec.RecursiveReadStderrSpec(cmd, identity.displayPath, terminal) &&
-        allOk == (parent.ok && descendantsOk && terminal.RecursiveEof?)
+               descendantsStderr: BW.Bytes, descendantsOk: bool ::
+               Spec.VisitsOutcomeSpec(
+                 cmd, plan, children,
+                 activeResolved + {BW.PathSegments(identity.resolvedPath)},
+                 parent.fs, fs2, descendantsStdout, descendantsStderr, descendantsOk, now
+               ) &&
+               stdoutChunk == parent.stdoutChunk + descendantsStdout +
+               Spec.RecursiveReadStdoutSpec(cmd, identity.displayPath, terminal) &&
+               stderrChunk == parent.stderrChunk + descendantsStderr +
+               Spec.RecursiveReadStderrSpec(cmd, identity.displayPath, terminal) &&
+               allOk == (parent.ok && descendantsOk && terminal.RecursiveEof?)
     ensures Spec.VisitOutcomeBodySpec(
               cmd, plan, Spec.RecursiveNode(identity, children, terminal),
               activeResolved, fs0, fs2, stdoutChunk, stderrChunk, allOk, now
@@ -781,17 +781,17 @@ module ChmodRecursiveProof {
             descendants.stderrChunk;
           ghost var descendantsOk := descendants.allOk;
           assert result == Core.RecursiveResult(
-              descendants.fs,
-              specParent.stdoutChunk + descendantsStdout +
-              Spec.RecursiveReadStdoutSpec(
-                cmd, specIdentity.displayPath, specTerminal
-              ),
-              specParent.stderrChunk + descendantsStderr +
-              Spec.RecursiveReadStderrSpec(
-                cmd, specIdentity.displayPath, specTerminal
-              ),
-              specParent.ok && descendantsOk && specTerminal.RecursiveEof?
-            );
+                             descendants.fs,
+                             specParent.stdoutChunk + descendantsStdout +
+                             Spec.RecursiveReadStdoutSpec(
+                               cmd, specIdentity.displayPath, specTerminal
+                             ),
+                             specParent.stderrChunk + descendantsStderr +
+                             Spec.RecursiveReadStderrSpec(
+                               cmd, specIdentity.displayPath, specTerminal
+                             ),
+                             specParent.ok && descendantsOk && specTerminal.RecursiveEof?
+                           );
         }
         IntroduceRecursiveNodeOutcome(
           cmd, specPlan, specIdentity, specChildren, specTerminal,

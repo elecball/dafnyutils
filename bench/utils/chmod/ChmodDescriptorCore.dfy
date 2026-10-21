@@ -29,7 +29,7 @@ module ChmodDescriptorCore {
   import Spec = ChmodDescriptorPrincipalSpec
 
   method {:isolate_assertions} PrepareEarly(raw: Schema.ChmodCmdRaw, io: BenchIO.IO,
-    output: Base.Output) returns (exit: int)
+                                            output: Base.Output) returns (exit: int)
     requires Spec.EarlyCase(Schema.Command(raw))
     requires output.stdout == [] && output.stderr == []
     modifies output
@@ -63,7 +63,7 @@ module ChmodDescriptorCore {
   }
 
   method {:isolate_assertions} Prepare(raw: Schema.ChmodCmdRaw, io: BenchIO.IO,
-    output: Base.Output) returns (exit: int)
+                                       output: Base.Output) returns (exit: int)
     requires output.stdout == [] && output.stderr == []
     modifies io.fsRegion, io.directoryStateRegion, io.statusObservationsRegion, output
     ensures Spec.PreparedSpec(raw, io, exit, output.stdout, output.stderr)
@@ -77,9 +77,9 @@ module ChmodDescriptorCore {
     ghost var native0 := io.cwdContext();
     ghost var directories := io.directoryObservations();
     if cmd.mode == Schema.ModeHelp || cmd.mode == Schema.ModeVersion ||
-      (cmd.recursive && cmd.dereferenceMode == 1 && cmd.traversalMode == 0) ||
-      (cmd.seenReference && cmd.diagnoseSurprises) || |cmd.files| == 0 ||
-      (!cmd.seenReference && !Mode.IsValidModeExpr(cmd.modeExpr)) {
+       (cmd.recursive && cmd.dereferenceMode == 1 && cmd.traversalMode == 0) ||
+       (cmd.seenReference && cmd.diagnoseSurprises) || |cmd.files| == 0 ||
+       (!cmd.seenReference && !Mode.IsValidModeExpr(cmd.modeExpr)) {
       assert Spec.EarlyCase(cmd) by { reveal Spec.EarlyCase(); }
       exit := PrepareEarly(raw, io, output);
       return;
@@ -93,10 +93,10 @@ module ChmodDescriptorCore {
       var reference := Dispatch.ReadStatus(Operand.CwdOperand(cmd.referenceFile), true, io);
       if reference.Err? {
         output.stderr := Base.ReferenceErrorMessageCore(cmd.referenceFile,
-          Base.NativeErrnoTextCore(C.ResultErrno(reference), io));
+                                                        Base.NativeErrnoTextCore(C.ResultErrno(reference), io));
         exit := 1;
         assert Spec.ReferenceFailureFields(cmd, fs0, context, native0,
-          io.fs(), io.cwdContext(), io.statusCursor(), output.stdout, output.stderr, exit) by {
+                                           io.fs(), io.cwdContext(), io.statusCursor(), output.stdout, output.stderr, exit) by {
           reveal Spec.ReferenceFailureFields(), Base.ReferenceErrorMessageCore();
         }
         assert Spec.PreparedSpec(raw, io, exit, output.stdout, output.stderr) by {
@@ -110,7 +110,7 @@ module ChmodDescriptorCore {
       plan := Base.CoreGeneralModePlan(cmd.modeExpr, umask);
       BaseProof.ValidModeProgramSatisfiesRelation(cmd.modeExpr);
       assert BaseSpec.SpecGeneralModePlanRelation(cmd.modeExpr, umask,
-        BaseProof.SpecModePlanOfCore(plan)) by {
+                                                  BaseProof.SpecModePlanOfCore(plan)) by {
         reveal BaseSpec.SpecGeneralModePlanRelation(), BaseProof.SpecModePlanOfCore();
         ghost var changes := BaseProof.SpecChangesOfExpr(cmd.modeExpr);
       }
@@ -119,7 +119,7 @@ module ChmodDescriptorCore {
     ghost var planNative := io.cwdContext();
     ghost var planCursor := io.statusCursor();
     assert Spec.ModePlanFields(cmd, fs0, old(io.props()), context, native0,
-      modePlan, planNative, planCursor) by {
+                               modePlan, planNative, planCursor) by {
       reveal Spec.ModePlanFields(), BaseProof.SpecModePlanOfCore(), BaseSpec.Context();
     }
     var rootGuard := Descriptor.RootUnchecked;
@@ -134,10 +134,10 @@ module ChmodDescriptorCore {
       var root := Dispatch.ReadStatus(Operand.CwdOperand("/"), false, io);
       if root.Err? {
         output.stderr := Base.ReferenceErrorMessageCore("/",
-          Base.NativeErrnoTextCore(C.ResultErrno(root), io));
+                                                        Base.NativeErrnoTextCore(C.ResultErrno(root), io));
         exit := 1;
         assert Spec.RootFailureFields(cmd, fs0, context, planNative, planCursor,
-          io.fs(), io.cwdContext(), io.statusCursor(), output.stdout, output.stderr, exit) by {
+                                      io.fs(), io.cwdContext(), io.statusCursor(), output.stdout, output.stderr, exit) by {
           reveal Spec.RootFailureFields(), Base.ReferenceErrorMessageCore();
         }
         assert Spec.PreparedSpec(raw, io, exit, output.stdout, output.stderr) by {
@@ -151,7 +151,7 @@ module ChmodDescriptorCore {
     ghost var filesCursor := io.statusCursor();
     var scope := Descriptor.Scope(context, io.cwd(), io.now(), rootGuard, directories);
     assert Spec.RootFields(cmd, fs0, context, io.now(), directories, planNative,
-      planCursor, scope, filesNative, filesCursor) by {
+                           planCursor, scope, filesNative, filesCursor) by {
       reveal Spec.RootFields(), BaseSpec.Context();
     }
     assert Entry.ScopeFields(io, scope) by {
@@ -161,16 +161,16 @@ module ChmodDescriptorCore {
     exit := if allOk then 0 else 1;
     ghost var prepared := Spec.PreparedWitness(modePlan, result, files);
     assert Spec.PreparedFields(cmd, scope, fs0, filesNative, filesCursor,
-      io.fs(), io.cwdContext(), io.statusCursor(), output.stdout, output.stderr, exit, prepared) by {
+                               io.fs(), io.cwdContext(), io.statusCursor(), output.stdout, output.stderr, exit, prepared) by {
       reveal Spec.PreparedFields();
     }
     if Descriptor.SuccessfulFiles(cmd, scope, files) && Descriptor.CompatibleFiles(cmd, scope, files) {
       if cmd.recursive {
         ghost var visits := RecursiveProof.NormalFiles(cmd, modePlan, scope, fs0, filesNative,
-          filesCursor, result, files);
+                                                       filesCursor, result, files);
       } else {
         ghost var trace := BatchProof.NormalNonrecursiveFiles(cmd, modePlan, scope, fs0, filesNative,
-          filesCursor, result, files);
+                                                              filesCursor, result, files);
       }
     }
     assert Spec.NormalOutcomeFields(cmd, scope, fs0, prepared) by {
@@ -183,7 +183,7 @@ module ChmodDescriptorCore {
 
   method RunCore(raw: Schema.ChmodCmdRaw, io: BenchIO.IO) returns (exit: int)
     modifies io.fsRegion, io.stdoutRegion, io.stderrRegion,
-      io.directoryStateRegion, io.statusObservationsRegion
+             io.directoryStateRegion, io.statusObservationsRegion
     ensures Spec.Spec(raw, io, exit)
     decreases *
   {

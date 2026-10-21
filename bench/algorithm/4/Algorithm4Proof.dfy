@@ -13,7 +13,7 @@ module Algorithm4Proof {
   {
     if CliSpec.Valid(raw) {
       var y :| CliCore.AnswerSummary(raw.x, raw.hh, raw.mm, y) &&
-        CliSpec.Output(io, CliSpec.OutputText(y), exit);
+               CliSpec.Output(io, CliSpec.OutputText(y), exit);
       AnswerSummaryImpliesAnswer(raw.x, raw.hh, raw.mm, y);
     }
   }

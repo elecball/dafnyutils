@@ -107,7 +107,7 @@ module TouchSpec {
   ghost function TouchErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     Utf8.Encode(TouchErrorMessageSpecPart1()) + QuotedPathSpec(path)
-      + Utf8.Encode(TouchErrorMessageSpecPart2() + ErrnoTextSpec(err) + TouchErrorMessageSpecPart3())
+    + Utf8.Encode(TouchErrorMessageSpecPart2() + ErrnoTextSpec(err) + TouchErrorMessageSpecPart3())
   }
 
   function ReferenceErrorMessageSpecPart1(): StreamWorld.Bytes
@@ -128,7 +128,7 @@ module TouchSpec {
   ghost function ReferenceErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     Utf8.Encode(ReferenceErrorMessageSpecPart1()) + QuotedPathSpec(path)
-      + Utf8.Encode(ReferenceErrorMessageSpecPart2() + ErrnoTextSpec(err) + ReferenceErrorMessageSpecPart3())
+    + Utf8.Encode(ReferenceErrorMessageSpecPart2() + ErrnoTextSpec(err) + ReferenceErrorMessageSpecPart3())
   }
 
   function SetTimesErrorMessageSpecPart1(): StreamWorld.Bytes
@@ -149,13 +149,13 @@ module TouchSpec {
   ghost function SetTimesErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     Utf8.Encode(SetTimesErrorMessageSpecPart1()) + QuotedPathSpec(path)
-      + Utf8.Encode(SetTimesErrorMessageSpecPart2() + ErrnoTextSpec(err) + SetTimesErrorMessageSpecPart3())
+    + Utf8.Encode(SetTimesErrorMessageSpecPart2() + ErrnoTextSpec(err) + SetTimesErrorMessageSpecPart3())
   }
 
   opaque ghost function StdoutErrorMessageSpec(err: int): BenchWorld.Bytes
   {
     Utf8.Encode("touch: setting times of ") + QuotedPathSpec("-")
-      + Utf8.Encode(": " + ErrnoTextSpec(err) + "\n")
+    + Utf8.Encode(": " + ErrnoTextSpec(err) + "\n")
   }
 
   function CloseErrorMessageSpecPart1(): StreamWorld.Bytes
@@ -176,7 +176,7 @@ module TouchSpec {
   ghost function CloseErrorMessageSpec(path: BenchWorld.Path, err: int): BenchWorld.Bytes
   {
     Utf8.Encode(CloseErrorMessageSpecPart1()) + QuotedPathSpec(path)
-      + Utf8.Encode(CloseErrorMessageSpecPart2() + ErrnoTextSpec(err) + CloseErrorMessageSpecPart3())
+    + Utf8.Encode(CloseErrorMessageSpecPart2() + ErrnoTextSpec(err) + CloseErrorMessageSpecPart3())
   }
 
   function MissingOperandMessageSpec(): BenchWorld.Bytes
@@ -203,7 +203,7 @@ module TouchSpec {
   {
     var prefix: string := MissingShortRequiredArgumentMessageSpecPart1();
     Utf8.Encode(prefix + [option] + MissingShortRequiredArgumentMessageSpecPart2() +
-    MissingShortRequiredArgumentMessageSpecPart3())
+                MissingShortRequiredArgumentMessageSpecPart3())
   }
 
   function MissingLongRequiredArgumentMessageSpecPart1(): StreamWorld.Bytes
@@ -224,7 +224,7 @@ module TouchSpec {
   ghost function MissingLongRequiredArgumentMessageSpec(option: string): BenchWorld.Bytes
   {
     Utf8.Encode(MissingLongRequiredArgumentMessageSpecPart1() + option + MissingLongRequiredArgumentMessageSpecPart2() +
-    MissingLongRequiredArgumentMessageSpecPart3())
+                MissingLongRequiredArgumentMessageSpecPart3())
   }
 
   ghost function ParseErrorMessageSpec(e: CliTypes.ParseError): BenchWorld.Bytes
@@ -279,10 +279,10 @@ module TouchSpec {
   {
     InvalidTimeMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
     Utf8.Encode(InvalidTimeMessageSpecPart2() +
-    InvalidTimeMessageSpecPart3() +
-    InvalidTimeMessageSpecPart4() +
-    InvalidTimeMessageSpecPart5() +
-    InvalidTimeMessageSpecPart6())
+                InvalidTimeMessageSpecPart3() +
+                InvalidTimeMessageSpecPart4() +
+                InvalidTimeMessageSpecPart5() +
+                InvalidTimeMessageSpecPart6())
   }
 
   function AmbiguousTimeMessageSpecPart1(): StreamWorld.Bytes
@@ -319,10 +319,10 @@ module TouchSpec {
   {
     AmbiguousTimeMessageSpecPart1() + SE.SpecLocaleQuoteBytes(Utf8.Encode(value)) +
     Utf8.Encode(AmbiguousTimeMessageSpecPart2() +
-    AmbiguousTimeMessageSpecPart3() +
-    AmbiguousTimeMessageSpecPart4() +
-    AmbiguousTimeMessageSpecPart5() +
-    AmbiguousTimeMessageSpecPart6())
+                AmbiguousTimeMessageSpecPart3() +
+                AmbiguousTimeMessageSpecPart4() +
+                AmbiguousTimeMessageSpecPart5() +
+                AmbiguousTimeMessageSpecPart6())
   }
 
   function InvalidDateMessageSpecPart1(): StreamWorld.Bytes
@@ -409,19 +409,19 @@ module TouchSpec {
   {
     match source
     case TimeSourceCurrent =>
-        IOContract.SetStdoutTimesSpec(
-          preNow, beforeTarget, nativeFailures, afterTarget,
-          if selection == Schema.TimeModify then BenchWorld.Keep else BenchWorld.Current,
-          if selection == Schema.TimeAccess then BenchWorld.Keep else BenchWorld.Current,
-          ok, err
-        )
+      IOContract.SetStdoutTimesSpec(
+        preNow, beforeTarget, nativeFailures, afterTarget,
+        if selection == Schema.TimeModify then BenchWorld.Keep else BenchWorld.Current,
+        if selection == Schema.TimeAccess then BenchWorld.Keep else BenchWorld.Current,
+        ok, err
+      )
     case TimeSourceFixed(atimeSec, atimeNsec, mtimeSec, mtimeNsec) =>
-        IOContract.SetStdoutTimesSpec(
-          preNow, beforeTarget, nativeFailures, afterTarget,
-          if selection == Schema.TimeModify then BenchWorld.Keep else BenchWorld.Exact(atimeSec, atimeNsec),
-          if selection == Schema.TimeAccess then BenchWorld.Keep else BenchWorld.Exact(mtimeSec, mtimeNsec),
-          ok, err
-        )
+      IOContract.SetStdoutTimesSpec(
+        preNow, beforeTarget, nativeFailures, afterTarget,
+        if selection == Schema.TimeModify then BenchWorld.Keep else BenchWorld.Exact(atimeSec, atimeNsec),
+        if selection == Schema.TimeAccess then BenchWorld.Keep else BenchWorld.Exact(mtimeSec, mtimeNsec),
+        ok, err
+      )
   }
 
 
@@ -449,8 +449,8 @@ module TouchSpec {
       stdout2 == preStdout &&
       exists okStdout: bool, stdoutErr: int ::
         SetStdoutTimesSpecFields(nativeFailures,
-          selection, source, preNow, preStdoutTarget, stdoutTarget2,
-          okStdout, stdoutErr
+                                 selection, source, preNow, preStdoutTarget, stdoutTarget2,
+                                 okStdout, stdoutErr
         ) &&
         hadError == !okStdout &&
         errOut == (if okStdout then [] else StdoutErrorMessageSpec(stdoutErr))
@@ -525,9 +525,9 @@ module TouchSpec {
   {
     exists stepError: bool, stepOut: BenchWorld.Bytes ::
       RunStepSpecFields(nativeFailures,
-        observations, path, noCreate, followSymlink, selection, source,
-        before.fs, preNow, before.stdout, before.stdoutTarget,
-        after.fs, after.stdout, after.stdoutTarget, stepError, stepOut
+                        observations, path, noCreate, followSymlink, selection, source,
+                        before.fs, preNow, before.stdout, before.stdoutTarget,
+                        after.fs, after.stdout, after.stdoutTarget, stepError, stepOut
       ) &&
       after.hadError == (before.hadError || stepError) &&
       after.errOut == before.errOut + stepOut
@@ -559,8 +559,8 @@ module TouchSpec {
       forall i {:trigger FileTransitionRelation(nativeFailures, observations, files[i], noCreate, followSymlink, selection, source, preNow, states[i], states[i + 1])} ::
         0 <= i < |files| ==>
           FileTransitionRelation(nativeFailures,
-            observations, files[i], noCreate, followSymlink, selection, source,
-            preNow, states[i], states[i + 1]
+                                 observations, files[i], noCreate, followSymlink, selection, source,
+                                 preNow, states[i], states[i + 1]
           )
   }
 
@@ -583,31 +583,31 @@ module TouchSpec {
     errOut: BenchWorld.Bytes
   )
     requires RunStepSpecFields(nativeFailures,
-               observations, path, noCreate, followSymlink, selection, source,
-               preFs, preNow, preStdout, preStdoutTarget,
-               fs2, stdout2, stdoutTarget2, hadError, errOut
+                               observations, path, noCreate, followSymlink, selection, source,
+                               preFs, preNow, preStdout, preStdoutTarget,
+                               fs2, stdout2, stdoutTarget2, hadError, errOut
              )
     ensures RunFilesSpecFields(nativeFailures,
-              observations, [path], noCreate, followSymlink, selection, source,
-              preFs, preNow, preStdout, preStdoutTarget,
-              fs2, stdout2, stdoutTarget2, hadError, errOut
+                               observations, [path], noCreate, followSymlink, selection, source,
+                               preFs, preNow, preStdout, preStdoutTarget,
+                               fs2, stdout2, stdoutTarget2, hadError, errOut
             )
   {
     var before := FileState(preFs, preStdout, preStdoutTarget, false, []);
     var after := FileState(fs2, stdout2, stdoutTarget2, hadError, errOut);
     assert FileTransitionRelation(nativeFailures,
-             observations, path, noCreate, followSymlink, selection, source,
-             preNow, before, after
-           ) by {
+                                  observations, path, noCreate, followSymlink, selection, source,
+                                  preNow, before, after
+      ) by {
       reveal FileTransitionRelation();
       var stepError := hadError;
       var stepOut := errOut;
     }
     assert RunFilesSpecFields(nativeFailures,
-             observations, [path], noCreate, followSymlink, selection, source,
-             preFs, preNow, preStdout, preStdoutTarget,
-             fs2, stdout2, stdoutTarget2, hadError, errOut
-           ) by {
+                              observations, [path], noCreate, followSymlink, selection, source,
+                              preFs, preNow, preStdout, preStdoutTarget,
+                              fs2, stdout2, stdoutTarget2, hadError, errOut
+      ) by {
       reveal RunFilesSpecFields();
       var states := [before, after];
     }
@@ -637,13 +637,13 @@ module TouchSpec {
   )
   {
     var observed := observations(
-      BenchWorld.FilesystemQuery(preFs, path, followSymlink)
-    );
+                      BenchWorld.FilesystemQuery(preFs, path, followSymlink)
+                    );
     observed.postFs == preFs && observed.ok &&
-      source == Schema.TimeSourceFixed(
-                  observed.atimeSec, observed.atimeNsec,
-                  observed.mtimeSec, observed.mtimeNsec
-                )
+    source == Schema.TimeSourceFixed(
+      observed.atimeSec, observed.atimeNsec,
+      observed.mtimeSec, observed.mtimeNsec
+    )
   }
 
   ghost predicate DateReferenceFields(
@@ -659,8 +659,8 @@ module TouchSpec {
       referenceSec == preNow && referenceNsec == 0
     else
       var observed := observations(
-        BenchWorld.FilesystemQuery(preFs, cmd.referenceArg, cmd.followSymlink)
-      );
+                        BenchWorld.FilesystemQuery(preFs, cmd.referenceArg, cmd.followSymlink)
+                      );
       observed.postFs == preFs && observed.ok &&
       referenceSec == observed.mtimeSec && referenceNsec == observed.mtimeNsec
   }
@@ -686,8 +686,8 @@ module TouchSpec {
       referenceSec == preNow && referenceNsec == 0
     else
       var observed := observations(
-        BenchWorld.FilesystemQuery(preFs, cmd.referenceArg, cmd.followSymlink)
-      );
+                        BenchWorld.FilesystemQuery(preFs, cmd.referenceArg, cmd.followSymlink)
+                      );
       observed.postFs == preFs && observed.ok &&
       referenceSec == observed.atimeSec && referenceNsec == observed.atimeNsec
   }
@@ -721,20 +721,20 @@ module TouchSpec {
     !SourceConflict(cmd) &&
     if cmd.hasTimestamp then
       var parsed := IOContract.TrustedTimeParseResultFields(
-        parses, BenchWorld.TimestampParseRequest(cmd.timestampArg, preNow, 0)
-      );
+                      parses, BenchWorld.TimestampParseRequest(cmd.timestampArg, preNow, 0)
+                    );
       parsed.ok &&
       source == Schema.TimeSourceFixed(
-                  parsed.sec, parsed.nsec, parsed.sec, parsed.nsec
-                )
+        parsed.sec, parsed.nsec, parsed.sec, parsed.nsec
+      )
     else if cmd.hasDate then
       exists aSec: int, aNsec: int, mSec: int, mNsec: int ::
         DateAccessReferenceFields(observations, cmd, preFs, preNow, aSec, aNsec) &&
         DateReferenceFields(observations, cmd, preFs, preNow, mSec, mNsec) &&
         var parsedA := IOContract.TrustedTimeParseResultFields(
-          parses, BenchWorld.DateParseRequest(cmd.dateArg, aSec, aNsec));
+                         parses, BenchWorld.DateParseRequest(cmd.dateArg, aSec, aNsec));
         var parsedM := IOContract.TrustedTimeParseResultFields(
-          parses, BenchWorld.DateParseRequest(cmd.dateArg, mSec, mNsec));
+                         parses, BenchWorld.DateParseRequest(cmd.dateArg, mSec, mNsec));
         var selection := RequestedSelectionValue(cmd);
         (selection != Schema.TimeModify ==> parsedA.ok) &&
         (selection != Schema.TimeAccess ==> parsedM.ok) &&
@@ -771,15 +771,15 @@ module TouchSpec {
         exit == 1
       else
         (exists hadError: bool, errOut: BenchWorld.Bytes
-          {:trigger RunFilesSpecFields(old(io.trustedNativeFailures()), old(io.trustedFilesystem()), cmd.files, cmd.noCreate, cmd.followSymlink, selection, source, old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()), io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut)} ::
-          exit == (if hadError then 1 else 0) &&
-          RunFilesSpecFields(old(io.trustedNativeFailures()),
-            old(io.trustedFilesystem()), cmd.files, cmd.noCreate,
-            cmd.followSymlink, selection, source,
-            old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-            io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
-          ) &&
-          plannedStderr == old(io.stderr()) + errOut)
+           {:trigger RunFilesSpecFields(old(io.trustedNativeFailures()), old(io.trustedFilesystem()), cmd.files, cmd.noCreate, cmd.followSymlink, selection, source, old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()), io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut)} ::
+           exit == (if hadError then 1 else 0) &&
+           RunFilesSpecFields(old(io.trustedNativeFailures()),
+                              old(io.trustedFilesystem()), cmd.files, cmd.noCreate,
+                              cmd.followSymlink, selection, source,
+                              old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
+                              io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
+           ) &&
+           plannedStderr == old(io.stderr()) + errOut)
   }
 
 
@@ -810,7 +810,7 @@ module TouchSpec {
     (if |output| == 0 then afterOut == beforeOut && committed == 0 && outErr == 0
      else StreamContract.WriteStdoutSpec(beforeOut, observations, afterOut, output, committed, outErr)) &&
     var finalDiagnostics := diagnostics +
-      (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
+                            (if outErr == 0 then [] else WriteErrorText(StreamContract.CLocaleErrnoTextResult(outErr)));
     (if |finalDiagnostics| == 0 then afterErr == beforeErr && errCommitted == 0 && errErr == 0
      else StreamContract.WriteStderrSpec(beforeErr, observations, afterErr, finalDiagnostics, errCommitted, errErr)) &&
     exit == (if outErr != 0 || errErr != 0 then 1 else normalExit)
@@ -865,9 +865,9 @@ module TouchSpec {
       plannedStderr == old(io.stderr()) + InvalidTimeMessageSpec(cmd.timeArg)
     else if cmd.hasTimestamp then
       var parsed := IOContract.TrustedTimeParseResultFields(
-        old(io.trustedTimeParses()),
-        BenchWorld.TimestampParseRequest(cmd.timestampArg, old(io.now()), 0)
-      );
+                      old(io.trustedTimeParses()),
+                      BenchWorld.TimestampParseRequest(cmd.timestampArg, old(io.now()), 0)
+                    );
       if !parsed.ok then
         io.fs() == old(io.fs()) &&
         plannedStdout == old(io.stdout()) &&
@@ -891,29 +891,29 @@ module TouchSpec {
        exit == 1) ||
       (cmd.hasReference &&
        var observed := old(io.trustedFilesystem())(
-         BenchWorld.FilesystemQuery(
-           old(io.fs()), cmd.referenceArg, cmd.followSymlink
-         )
-       );
+                         BenchWorld.FilesystemQuery(
+                           old(io.fs()), cmd.referenceArg, cmd.followSymlink
+                         )
+                       );
        observed.postFs == old(io.fs()) && !observed.ok &&
-         io.fs() == old(io.fs()) &&
-         plannedStdout == old(io.stdout()) &&
-         plannedStderr == old(io.stderr()) +
-           ReferenceErrorMessageSpec(cmd.referenceArg, observed.err) &&
-         exit == 1)
+       io.fs() == old(io.fs()) &&
+       plannedStdout == old(io.stdout()) &&
+       plannedStderr == old(io.stderr()) +
+       ReferenceErrorMessageSpec(cmd.referenceArg, observed.err) &&
+       exit == 1)
     else if cmd.hasReference then
       ResolvedRunSpecFields(cmd, io, exit, plannedStdout, plannedStderr) ||
       (var observed := old(io.trustedFilesystem())(
-         BenchWorld.FilesystemQuery(
-           old(io.fs()), cmd.referenceArg, cmd.followSymlink
-         )
-       );
+                         BenchWorld.FilesystemQuery(
+                           old(io.fs()), cmd.referenceArg, cmd.followSymlink
+                         )
+                       );
        observed.postFs == old(io.fs()) && !observed.ok &&
-         io.fs() == old(io.fs()) &&
-         plannedStdout == old(io.stdout()) &&
-         plannedStderr == old(io.stderr()) +
-           ReferenceErrorMessageSpec(cmd.referenceArg, observed.err) &&
-         exit == 1)
+       io.fs() == old(io.fs()) &&
+       plannedStdout == old(io.stdout()) &&
+       plannedStderr == old(io.stderr()) +
+       ReferenceErrorMessageSpec(cmd.referenceArg, observed.err) &&
+       exit == 1)
     else
       ResolvedRunSpecFields(cmd, io, exit, plannedStdout, plannedStderr)
   }
@@ -949,13 +949,13 @@ module TouchSpec {
              )
     requires exit == (if hadError then 1 else 0)
     requires RunStepSpecFields(old(io.trustedNativeFailures()),
-               old(io.trustedFilesystem()), Schema.Command(raw).files[0],
-               Schema.Command(raw).noCreate,
-               Schema.Command(raw).followSymlink,
-               RequestedSelectionValue(Schema.Command(raw)),
-               source,
-               old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-               io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
+                               old(io.trustedFilesystem()), Schema.Command(raw).files[0],
+                               Schema.Command(raw).noCreate,
+                               Schema.Command(raw).followSymlink,
+                               RequestedSelectionValue(Schema.Command(raw)),
+                               source,
+                               old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
+                               io.fs(), io.stdout(), io.stdoutTimestamp(), hadError, errOut
              )
     requires io.stderr() == old(io.stderr()) + errOut
     ensures PreparedSpec(raw, io, exit, plannedStdout, plannedStderr)
@@ -963,25 +963,25 @@ module TouchSpec {
     reveal PreparedSpec();
     var cmd := Schema.Command(raw);
     RunStepSpecFieldsImpliesSingletonRun(old(io.trustedNativeFailures()),
-      old(io.trustedFilesystem()), cmd.files[0], cmd.noCreate, cmd.followSymlink,
-      RequestedSelectionValue(cmd), source,
-      old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-      io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
+                                         old(io.trustedFilesystem()), cmd.files[0], cmd.noCreate, cmd.followSymlink,
+                                         RequestedSelectionValue(cmd), source,
+                                         old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
+                                         io.fs(), plannedStdout, io.stdoutTimestamp(), hadError, errOut
     );
     assert exists source0: Schema.TimeSource ::
-      RequestedSourceFields(
-        old(io.trustedFilesystem()), cmd, old(io.fs()), old(io.now()),
-        old(io.trustedTimeParses()), source0
-      ) &&
-      exists hadError0: bool, errOut0: BenchWorld.Bytes ::
-        exit == (if hadError0 then 1 else 0) &&
-        RunFilesSpecFields(old(io.trustedNativeFailures()),
-          old(io.trustedFilesystem()), cmd.files, cmd.noCreate, cmd.followSymlink,
-          RequestedSelectionValue(cmd), source0,
-          old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
-          io.fs(), plannedStdout, io.stdoutTimestamp(), hadError0, errOut0
+        RequestedSourceFields(
+          old(io.trustedFilesystem()), cmd, old(io.fs()), old(io.now()),
+          old(io.trustedTimeParses()), source0
         ) &&
-        plannedStderr == old(io.stderr()) + errOut0 by {
+        exists hadError0: bool, errOut0: BenchWorld.Bytes ::
+          exit == (if hadError0 then 1 else 0) &&
+          RunFilesSpecFields(old(io.trustedNativeFailures()),
+                             old(io.trustedFilesystem()), cmd.files, cmd.noCreate, cmd.followSymlink,
+                             RequestedSelectionValue(cmd), source0,
+                             old(io.fs()), old(io.now()), old(io.stdout()), old(io.stdoutTimestamp()),
+                             io.fs(), plannedStdout, io.stdoutTimestamp(), hadError0, errOut0
+          ) &&
+          plannedStderr == old(io.stderr()) + errOut0 by {
       var source0 := source;
       var hadError0 := hadError;
       var errOut0 := errOut;

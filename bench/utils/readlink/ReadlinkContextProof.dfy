@@ -46,10 +46,10 @@ module ReadlinkContextProof {
 
   lemma OffsetSnoc(cmd: S.ReadlinkCmd, files: seq<W.Path>, path: W.Path)
     ensures S.WithNativeReadOffset(cmd,files+[path]).nativeReads ==
-      (match S.WithNativeReadOffset(cmd,files).nativeReads
-       case UnboundNativeReads => S.UnboundNativeReads
-       case BoundNativeReads(failures,context) =>
-         S.BoundNativeReads(failures,context.(ordinal := context.ordinal+(if path == "" then 0 else 1))))
+            (match S.WithNativeReadOffset(cmd,files).nativeReads
+             case UnboundNativeReads => S.UnboundNativeReads
+             case BoundNativeReads(failures,context) =>
+               S.BoundNativeReads(failures,context.(ordinal := context.ordinal+(if path == "" then 0 else 1))))
   {
     ReadCountSnoc(files,path);
     match cmd.nativeReads
@@ -57,7 +57,7 @@ module ReadlinkContextProof {
     case BoundNativeReads(failures,context) =>
       assert context.(ordinal := context.ordinal+S.NativeReadCount(files)+
         (if path == "" then 0 else 1)) ==
-        context.(ordinal := context.ordinal+S.NativeReadCount(files)).(ordinal :=
-          context.ordinal+S.NativeReadCount(files)+(if path == "" then 0 else 1));
+             context.(ordinal := context.ordinal+S.NativeReadCount(files)).(ordinal :=
+             context.ordinal+S.NativeReadCount(files)+(if path == "" then 0 else 1));
   }
 }
