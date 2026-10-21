@@ -52,6 +52,8 @@ def test_invalid_argument(candidate: Path) -> None:
 
 # Local proof checks preserve the complete implementation and proof surface.
 @pytest.mark.dafny_verify
-@pytest.mark.parametrize("filename", ["Algorithm4Core.dfy", "Algorithm4Proof.dfy", "Algorithm4.dfy"])
+@pytest.mark.parametrize(
+    "filename", ["Algorithm4Core.dfy", "Algorithm4Proof.dfy", "Algorithm4.dfy"]
+)
 def test_verify_module(filename: str) -> None:
     run_dafny_verify(PROJECT / filename)
