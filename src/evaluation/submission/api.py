@@ -36,7 +36,9 @@ from evaluation.submission.sandbox import (
 )
 from evaluation.submission.scoring import build_scores_model
 from evaluation.submission.workspace import (
+    EvaluatorRuntimeError,
     evaluator_target_root,
+    prepare_evaluator_runtime,
     prepare_submission_workspace,
 )
 from evaluation.task.api import PreparedCandidateTask
@@ -107,12 +109,23 @@ def _evaluate_captured(
     records: list[CandidateOutputRecordModel],
     evaluator: SandboxContext | None,
 ) -> CandidateEvaluationResult:
+    blocked_reason = options.blocked_reason or capture.error
+    runtime_error = None
+    if blocked_reason is None:
+        try:
+            prepare_evaluator_runtime(
+                utility_name=task.configuration.name,
+                target_root=evaluator_target_root(task.run_directory),
+            )
+        except EvaluatorRuntimeError as error:
+            runtime_error = f"evaluator runtime infrastructure failure: {error}"
+            blocked_reason = runtime_error
     run = run_evaluations(
         run_directory=task.run_directory,
         plans=_evaluation_plans(task, options.unavailable_checks),
         environment=options.environment,
         evaluator=evaluator,
-        blocked_reason=options.blocked_reason or capture.error,
+        blocked_reason=blocked_reason,
         fail_fast=options.fail_fast,
         keep_sandbox=options.keep_sandbox,
     )
@@ -133,6 +146,7 @@ def _evaluate_captured(
         ),
         notes=[
             *run.notes,
+            *([runtime_error] if runtime_error is not None else []),
             *(
                 [options.blocked_reason]
                 if options.blocked_reason and options.blocked_reason != capture.error

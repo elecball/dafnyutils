@@ -1,10 +1,14 @@
 """Restore trusted release inputs and overlay accepted archive files per task."""
 
 import hashlib
+import os
 import shutil
+import stat
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
+from benchmarks.paths import REPO_ROOT
 from evaluation.enums import CandidateOutputEntryType
 from evaluation.models import (
     CandidateOutputCaptureResultModel,
@@ -22,6 +26,39 @@ from evaluation.task.workspace import (
     _materialize_workspace_roots,
     workspace_roots,
 )
+
+
+class EvaluatorRuntimeError(RuntimeError):
+    """A trusted runtime dependency could not be prepared for evaluator checks."""
+
+
+def prepare_evaluator_runtime(*, utility_name: str, target_root: Path) -> None:
+    """Build touch's trusted parser beside its evaluator DLL using isolated output."""
+    if utility_name != "touch":
+        return
+    helper = target_root.absolute() / "_build/bench/touch_time_parser"
+    command = [
+        "make",
+        "-C",
+        str(REPO_ROOT / "bench/utils/touch"),
+        "build-time-parser",
+        f"BUILD_DIR={REPO_ROOT / '_build'}",
+        f"TOUCH_TIME_PARSER={helper}",
+    ]
+    try:
+        subprocess.run(command, cwd=REPO_ROOT, check=True)
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise EvaluatorRuntimeError(
+            f"unable to build trusted touch time parser: {error}"
+        ) from error
+    try:
+        metadata = helper.lstat()
+    except OSError as error:
+        raise EvaluatorRuntimeError(f"trusted touch time parser is unavailable: {error}") from error
+    if not stat.S_ISREG(metadata.st_mode) or not os.access(helper, os.X_OK):
+        raise EvaluatorRuntimeError(
+            f"trusted touch time parser is not a regular executable: {helper}"
+        )
 
 
 def prepare_submission_workspace(
