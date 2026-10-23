@@ -182,9 +182,9 @@ module BenchIO {
   }
 
   class TrustedTimeParsesRegion {
-    ghost var value: map<TimeParseRequest, ParsedTimeResult>
+    ghost var value: C.ValidTimeParseObservations
 
-    ghost constructor Init(initial: map<TimeParseRequest, ParsedTimeResult>)
+    ghost constructor Init(initial: C.ValidTimeParseObservations)
       ensures value == initial
     {
       value := initial;
@@ -192,10 +192,10 @@ module BenchIO {
   }
 
   class TrustedStreamsRegion {
-    ghost var value: (TrustedStreamRequest) -> TrustedStreamResult
+    ghost var value: C.ValidStreamObservations
 
     ghost constructor Init(
-      initial: (TrustedStreamRequest) -> TrustedStreamResult
+      initial: C.ValidStreamObservations
     )
       ensures value == initial
     {
@@ -323,10 +323,10 @@ module BenchIO {
       dirHandlesRegion := new DirHandlesRegion.Init(initialDirHandlesRegion);
       ghost var initialNowRegion: int :| true;
       nowRegion := new NowRegion.Init(initialNowRegion);
-      ghost var initialTrustedTimeParses: map<TimeParseRequest, ParsedTimeResult> :| true;
+      ghost var initialTrustedTimeParses: C.ValidTimeParseObservations :| true;
       trustedTimeParsesRegion := new TrustedTimeParsesRegion.Init(initialTrustedTimeParses);
       ghost var initialTrustedStreams:
-                (TrustedStreamRequest) -> TrustedStreamResult :| true;
+                C.ValidStreamObservations :| true;
       trustedStreamsRegion := new TrustedStreamsRegion.Init(initialTrustedStreams);
       ghost var initialTrustedFilesystem:
                 C.ValidFilesystemObservations :| true;
@@ -474,15 +474,17 @@ module BenchIO {
       nowRegion.value
     }
 
-    ghost function trustedTimeParses(): map<TimeParseRequest, ParsedTimeResult>
+    ghost function trustedTimeParses(): (parses: map<TimeParseRequest, ParsedTimeResult>)
       reads trustedTimeParsesRegion
+      ensures C.TimeParseObservationsValid(parses)
     {
       trustedTimeParsesRegion.value
     }
 
     ghost function trustedStreams():
-      (TrustedStreamRequest) -> TrustedStreamResult
+      (observations: (TrustedStreamRequest) -> TrustedStreamResult)
       reads trustedStreamsRegion
+      ensures C.StreamObservationsValid(observations)
     {
       trustedStreamsRegion.value
     }

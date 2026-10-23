@@ -3,10 +3,13 @@ include "World.dfy"
 
 module IOContract {
   // Public primitive relations and model types retain their exact definitions.
-  // The provided lemmas below establish only intrinsic representation validity;
+  // Provided lemmas establish model validity and primitive contract feasibility;
   // utility compatibility proofs are candidate-owned.
   export
     provides Result, Errno, BenchWorld
+    reveals ValidStreamObservation, StreamObservationsValid, StreamFailureWitness, ValidStreamObservations
+    reveals TimeParseObservationsValid, ValidTimeParseObservations
+    provides StreamObservationAdmitsRequest, TimeParseObservationAdmitsRequest
     reveals AtCwdPathFields, AtDirPathFields, AtDirHandleAppliesFields, DirectoryParentAnchorCurrentFields, DirectoryParentAnchorForRequestFields
     reveals ResolvePathAtDirForMetadataFields, GetFileStatusAtDirResultFields, GetFileStatusAtDirStructureContractFields, OpenDirAtDirFailureErrFields, SetModeAtDirCanSucceedFields
     reveals LookupAtDirFailureErrnosFields, SetFileModeAtDirTargetContractFields, OpenDirAtDirTargetContractFields, SetModeCanSucceedFields, MetadataFailureErrnosFields
@@ -599,6 +602,29 @@ module IOContract {
       parses, DateParseRequest(date, refSec, refNsec)
     ) &&
     (ok ==> 0 <= nsec < 1000000000)
+  }
+
+  // A native successful parse always has normalized nanoseconds. Failed parses
+  // retain all observed fields, and missing requests retain the default failure.
+  ghost predicate TimeParseObservationsValid(parses: map<TimeParseRequest, ParsedTimeResult>)
+  {
+    forall request | request in parses ::
+      parses[request].ok ==> 0 <= parses[request].nsec < 1000000000
+  }
+
+  type ValidTimeParseObservations = parses: map<TimeParseRequest, ParsedTimeResult> |
+      TimeParseObservationsValid(parses)
+    witness map[]
+
+  lemma TimeParseObservationAdmitsRequest(parses: ValidTimeParseObservations, request: TimeParseRequest)
+    ensures match request
+            case TimestampParseRequest(text, sec, nsec) =>
+              var result := TrustedTimeParseResultFields(parses, request);
+              ParseTimestampSpec(parses, text, sec, nsec, result.ok, result.sec, result.nsec)
+            case DateParseRequest(text, sec, nsec) =>
+              var result := TrustedTimeParseResultFields(parses, request);
+              ParseDateSpec(parses, text, sec, nsec, result.ok, result.sec, result.nsec)
+  {
   }
 
   // Resolves a path component-by-component so symlinked directories are
@@ -1684,6 +1710,81 @@ module IOContract {
       observations(StreamWriteStderr(beforeStderr, requested)),
       beforeStderr, afterStderr, requested, committed, err
     )
+  }
+
+  // Validity is precisely the existing operation relation for the supplied
+  // request and observation. Raw request/result datatypes remain unrestricted.
+  ghost predicate ValidStreamObservation(request: TrustedStreamRequest, observed: TrustedStreamResult)
+  {
+    match request
+    case StreamReadFile(fs, path) =>
+      observed.StreamReadFileResult? &&
+      TrustedReadFileContractFields((_: TrustedStreamRequest) => observed,
+                                    fs, path, observed.data, observed.err, observed.stage)
+    case StreamOpenReadFile(fs, path) =>
+      observed.StreamReadFileResult? &&
+      TrustedOpenReadFileContractFields((_: TrustedStreamRequest) => observed,
+                                        fs, path, observed.data, observed.err, observed.stage)
+    case StreamReadStdin(before) =>
+      observed.StreamReadStdinResult? &&
+      TrustedReadStdinWithOutcomeContractFields((_: TrustedStreamRequest) => observed,
+                                                before, observed.remaining, observed.data, observed.err)
+    case StreamWriteStdout(before, requested) =>
+      observed.StreamWriteResult? &&
+      TrustedWriteWithOutcomeFields(observed, before, observed.postOutput,
+                                    requested, observed.committed, observed.err)
+    case StreamWriteStderr(before, requested) =>
+      observed.StreamWriteResult? &&
+      TrustedWriteWithOutcomeFields(observed, before, observed.postOutput,
+                                    requested, observed.committed, observed.err)
+  }
+
+  ghost predicate StreamObservationsValid(observations: (TrustedStreamRequest) -> TrustedStreamResult)
+  {
+    forall request :: ValidStreamObservation(request, observations(request))
+  }
+
+  // This witness proves inhabitance; executable adapters still report their
+  // actual data, committed prefix and errno rather than using this ghost value.
+  ghost function StreamFailureWitness(request: TrustedStreamRequest): (observed: TrustedStreamResult)
+    ensures ValidStreamObservation(request, observed)
+  {
+    match request
+    case StreamReadFile(_, _) => StreamReadFileResult([], Errno.EIO, OpenFailed)
+    case StreamOpenReadFile(_, _) => StreamReadFileResult([], Errno.EIO, OpenFailed)
+    case StreamReadStdin(before) => StreamReadStdinResult([], before, Errno.EIO)
+    case StreamWriteStdout(before, _) => StreamWriteResult(0, before, Errno.EIO)
+    case StreamWriteStderr(before, _) => StreamWriteResult(0, before, Errno.EIO)
+  }
+
+  type ValidStreamObservations = observations: ((TrustedStreamRequest) -> TrustedStreamResult) |
+      StreamObservationsValid(observations)
+    ghost witness (request: TrustedStreamRequest) => StreamFailureWitness(request)
+
+  // The observation's fields construct an outcome of each unchanged full Spec.
+  lemma StreamObservationAdmitsRequest(observations: ValidStreamObservations, request: TrustedStreamRequest)
+    ensures match request
+            case StreamReadFile(fs, path) =>
+              var observed := observations(request);
+              observed.StreamReadFileResult? &&
+              ReadFileSpec(fs, observations, path, observed.data, observed.err, observed.stage)
+            case StreamOpenReadFile(fs, path) =>
+              var observed := observations(request);
+              observed.StreamReadFileResult? &&
+              OpenReadFileSpec(fs, observations, path, observed.data, observed.err, observed.stage)
+            case StreamReadStdin(before) =>
+              var observed := observations(request);
+              observed.StreamReadStdinResult? &&
+              ReadStdinSpec(before, observations, observed.remaining, observed.data, observed.err)
+            case StreamWriteStdout(before, requested) =>
+              var observed := observations(request);
+              observed.StreamWriteResult? &&
+              WriteStdoutSpec(before, observations, observed.postOutput, requested, observed.committed, observed.err)
+            case StreamWriteStderr(before, requested) =>
+              var observed := observations(request);
+              observed.StreamWriteResult? &&
+              WriteStderrSpec(before, observations, observed.postOutput, requested, observed.committed, observed.err)
+  {
   }
 
   ghost function ReadLinkResultFields(fs: FileSystem, path: Path): IOResult<Path>

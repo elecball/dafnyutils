@@ -207,6 +207,18 @@ separate from full reads. Its result contains no data and cannot have the
 must open the source without consuming its bytes. The existing `ReadFileSpec`
 and whole-file `ReadFile` operation retain their behavior.
 
+The raw `TrustedStreamRequest` and `TrustedStreamResult` datatypes and all
+stream contract relations admit inspection of malformed observations. Actual IO
+ghost state stores `IOContract.ValidStreamObservations`: every request must have
+the matching result constructor and satisfy its full original operation relation.
+`trustedStreams()` keeps its raw function return type and guarantees
+`StreamObservationsValid`. `StreamFailureWitness` constructively proves that this
+state invariant is inhabited for every request, and
+`StreamObservationAdmitsRequest` provides the observation fields as a witness of
+the unchanged full Spec. The witness is ghost proof data; native operations report
+their actual outcomes. Utilities retain their unconditional observable Specs and
+do not gain assumptions or caller preconditions from this correction.
+
 Each utility decides what to do with partial data; `cat` prints the bytes read
 before the error. Read diagnostics come from the errno and failed stage, not a
 later metadata lookup.
@@ -248,6 +260,14 @@ later metadata lookup.
 | `Now` | `NowSpec` | `none` |
 | `ParseTimestamp` | `ParseTimestampSpec` | `none` |
 | `ParseDate` | `ParseDateSpec` | `none` |
+
+The time-parse provider similarly stores `ValidTimeParseObservations` internally;
+`trustedTimeParses()` keeps its raw map return type and guarantees
+`TimeParseObservationsValid`. Successful observations require nanoseconds in
+`[0, 1000000000)`, while failures preserve their observed fields. An empty map is
+a constructive witness, and `TimeParseObservationAdmitsRequest` proves that each
+request has an outcome of the unchanged timestamp/date Spec. Malformed raw maps
+remain expressible, but cannot inhabit the IO model state.
 
 `Now`, the environment map and the umask are supplied process-context observations.
 POSIX `umask` has no error return; its adapter observes and restores the actual
