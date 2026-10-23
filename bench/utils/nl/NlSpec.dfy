@@ -189,12 +189,12 @@ module NlSpec {
   function LineNumberText(cmd: NlSchema.NlCmd, n: int): BenchWorld.Bytes
     requires 0 <= n
   {
-    RenderNumber(cmd.numberFormat, n, 6) + cmd.separator
+    RenderNumber(cmd.numberFormat, n, 6) + Utf8.Encode(cmd.separator)
   }
 
   function BlankPrefix(cmd: NlSchema.NlCmd): BenchWorld.Bytes
   {
-    RepeatChar(' ', 6 + |cmd.separator|)
+    RepeatChar(' ', 6 + |Utf8.Encode(cmd.separator)|)
   }
 
   function LinePrefix(cmd: NlSchema.NlCmd, nonempty: bool, n: int): BenchWorld.Bytes

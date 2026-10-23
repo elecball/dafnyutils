@@ -33,10 +33,11 @@ logical-page delimiters until their section semantics are modeled:
 - `-b STYLE` / `--body-numbering=STYLE`: support `a` for all lines, `t` for
   nonempty lines, and `n` for no lines
 - `-n FORMAT` / `--number-format=FORMAT`: support `ln`, `rn`, and `rz`
-- `-s STRING` / `--number-separator=STRING`: use `STRING` after a rendered
-  number; the default separator is TAB
+- `-s STRING` / `--number-separator=STRING`: append the UTF-8 bytes of `STRING`
+  after a rendered number; the default separator is TAB
 - line numbers start at 1, increment by 1, and render in width 6
-- unnumbered lines still receive the blank prefix width used by GNU `nl`
+- unnumbered lines receive six spaces plus one space per UTF-8 byte in the
+  separator, matching GNU `nl`
 - missing file operands and other read failures: write a GNU-style diagnostic,
   continue processing later operands, and exit with status 1
 - default logical page delimiter lines (`\:\:\:`, `\:\:`, and `\:`): reject
