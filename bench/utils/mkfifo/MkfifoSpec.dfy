@@ -401,9 +401,11 @@ module MkfifoSpec {
       "mkfifo: option '" + Utf8.Encode(NoArgLongOptionName(t)) +
       "' doesn't allow an argument\n" + TryHelpText()
     else
-      // The declared long options (mode, help, version) share no prefix, so an
-      // ambiguous abbreviation cannot occur.
-      "mkfifo: option '" + Utf8.Encode(t) + "' is ambiguous\n" + TryHelpText()
+      // The declared long options (mode, help, version) share no prefix, so only an
+      // empty name ("--=", "--=x") is ambiguous; GNU then lists every long option.
+      "mkfifo: option '" + Utf8.Encode(t) +
+      "' is ambiguous; possibilities: '--context' '--mode' '--help' '--version'\n" +
+      TryHelpText()
   }
 
   // ---------------------------------------------------------------------------
