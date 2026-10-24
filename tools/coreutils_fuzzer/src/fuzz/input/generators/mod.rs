@@ -37,6 +37,7 @@ pub(crate) mod touch;
 pub(crate) mod tr;
 pub(crate) mod r#true;
 pub(crate) mod truncate;
+pub(crate) mod tsort;
 pub(crate) mod uniq;
 pub(crate) mod unlink;
 pub(crate) mod wc;

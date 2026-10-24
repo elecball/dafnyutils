@@ -8,10 +8,10 @@ module Tsort {
   import BenchWorld
   import BenchItem
   import CliTypes
+  import opened CliExtern
   import S = TsortSchema
   import Core = TsortCore
   import Spec = TsortSpec
-  import Proof = TsortProof
 
   class TsortBenchmarkItem extends BenchItem.BenchmarkItemTwostate<S.TsortCmdRaw> {
     constructor() {}
@@ -33,17 +33,34 @@ module Tsort {
     }
 
     method FormatParseError(err: CliTypes.ParseError) returns (msg: BenchWorld.Bytes) {
-      // TODO: implement and test command-line parse errors, including early exits.
-      assert false;
       msg := Spec.ParseErrorText(err);
     }
 
+    method PlanParseFailure(err: CliTypes.ParseError, argv: seq<string>)
+      returns (plan: CliTypes.CliPlan<S.TsortCmdRaw>)
+      decreases *
+    {
+      if 0 < err.tokenIndex < |argv| {
+        var schema := S.Schema();
+        var cfg := S.ParserConfig();
+        var result := Cli.Parse(argv[..err.tokenIndex], schema, cfg);
+        if result.ParseSuccess? {
+          var raw := S.Decode(result.parsed);
+          if raw.mode == S.ModeHelp || raw.mode == S.ModeVersion {
+            plan := CliTypes.CliRun(raw);
+            return;
+          }
+        }
+      }
+      plan := CliTypes.CliEarlyExit(1, [], Spec.ParseErrorText(err));
+    }
+
     method RunCore(raw: S.TsortCmdRaw, io: BenchIO.IO) returns (exit: int)
-      modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+      modifies (if raw.mode == S.ModeRun && Spec.InputPath(raw) == "-" then {io.stdinRegion} else {}),
+               io.stdoutRegion, io.stderrRegion
       ensures Spec.Spec(raw, io, exit)
     {
       exit := Core.RunCore(raw, io);
-      Proof.CoreSummaryImpliesSpec(raw, io, exit);
     }
   }
 }
