@@ -100,9 +100,11 @@ Examples with umask `022`:
   (`Parse(Render(e)) == Some(e)` for every well-formed `e`, and a successful
   parse renders back to its input). This makes the `invalid mode` decision exact
   and shows that a valid string has one meaning.
-- Frame: TODO after implementation; expected to modify only `fsRegion` and
-  `stderrRegion`, and to read `umaskRegion` and the trusted filesystem/stream
-  regions.
+- Frame: `RunCore` modifies only `fsRegion` and `stderrRegion`. Its
+  specification also reads `nowRegion`, `umaskRegion` (the umask the native
+  creation applies), `propsRegion` (the umask value `GetUmask` returns, used to
+  evaluate MODE), `trustedFilesystemRegion`, `trustedNativeFailuresRegion` and
+  `trustedStreamsRegion`. Standard output is not written outside help/version.
 - TerminationPolicy: MODE parsing and the operand loop terminate for every
   finite input. The shared CLI runner and parser keep their existing
   nontermination/trusted boundary; CLI termination is not established.
@@ -128,6 +130,29 @@ error, and creating anything after an invalid MODE.
 
 ## Contribution and review evidence
 
-TODO after the code is complete and verified: commands, versions, test
-scenarios, seeds, case counts and verified files. Keep evaluator-only regression
-inputs and reference answers outside this public description.
+Measured on commit `da69888` plus the completed `benchmark.yaml`, from base
+revision `37b35bac3d4cf84cdd8ea02eb3279e8aa49307df`, in the contributor
+container on Linux x86-64: Dafny 4.11.1+10dca3ba4a2909c11299176440401fc31413b53d,
+.NET SDK 8.0.132, Python 3.12.3, pytest 9.1.1, Ruff 0.15.12, Rust/Cargo 1.94.0,
+Z3 4.16.0.
+
+- Tests: `make -C bench/utils/mkfifo test` passes 145 runtime cases against the
+  pinned GNU build, comparing stdout, stderr, exit status and the resulting
+  filesystem, including the two `mkfifo` cases of `tests/misc/mknod.sh`.
+- Fuzzing: `python3 tools/coreutils_fuzzer/run.py fuzz mkfifo --seeds 1,7,19
+  --iterations 1000` completed 1000 matches per seed with no mismatch, timeout
+  or other error; option coverage was 4/4 singles and 6/6 pairs for each seed.
+  The fuzzer image is `dafnyutils-coreutils-fuzzer:latest`
+  (`sha256:c312109aeaec50957a8240aa7c52d6bf8b564f18d926afdcf6a672f552f2c6d5`).
+- Verification: `make -C bench/utils/mkfifo verify` verified all 85
+  declarations and 946 conditions with no failure, using the repository's
+  isolated assertions, 30-second condition limit and 100-second declaration
+  limit. Termination of MODE parsing and the operand loop is proved.
+- Final gate: `python3 -m benchmarks validate mkfifo` reports `mkfifo: valid`, and
+  `make check TASK=mkfifo` reports `mkfifo: checks passed`.
+
+The fuzzer's filesystem snapshot previously rejected FIFO nodes; this
+contribution records them from metadata only. A failed permission change after
+a successful creation is specified and proved but cannot be produced by the
+current fixtures. A maintainer still decides whether the specification is
+accepted.
