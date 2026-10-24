@@ -2,8 +2,10 @@ schema_version: benchmark.definition.v2
 task_id: "tsort"
 kind: coreutils
 source:
-  status: incomplete
-  name: TODO
+  status: verified
+  name: GNU coreutils tsort
+  url: https://www.gnu.org/software/coreutils/
+  license: GPL-3.0-or-later
 capabilities:
   gnu_reference: true
   fuzzer: true

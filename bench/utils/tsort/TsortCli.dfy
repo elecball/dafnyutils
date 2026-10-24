@@ -9,7 +9,6 @@ module TsortCli {
     modifies BenchIO.Process().Footprint()
     decreases *
   {
-    // Match the repository's .NET entry convention.
     var effectiveArgs := if |args| > 0 && args[0] == "dotnet" then args[1..] else args;
     var argv := ["tsort"] + effectiveArgs;
     var io := BenchIO.Process();

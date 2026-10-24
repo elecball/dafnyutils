@@ -341,6 +341,10 @@ pub(crate) static UTILITY_CAPABILITIES: &[UtilityCapability] = &[
         ..capability!("truncate", truncate)
     },
     capability!("true", r#true),
+    UtilityCapability {
+        stdin_policy: StdinPolicy::Stream,
+        ..capability!("tsort", tsort)
+    },
     capability!("unlink", unlink),
     UtilityCapability {
         path_operand_policy: PathOperandPolicy::First,
@@ -473,7 +477,7 @@ mod tests {
             BTreeSet::from([
                 "cat", "chmod", "comm", "cp", "csplit", "cut", "du", "expand", "head", "link",
                 "ln", "ls", "mkdir", "mv", "nl", "paste", "readlink", "rm", "rmdir", "stat",
-                "tail", "touch", "truncate", "uniq", "unlink", "wc",
+                "tail", "touch", "truncate", "tsort", "uniq", "unlink", "wc",
             ])
         );
     }
