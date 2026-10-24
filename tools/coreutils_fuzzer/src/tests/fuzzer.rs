@@ -1437,6 +1437,32 @@ fn snapshot_fs_rejects_character_device() {
     assert!(error.contains("/dev/null"));
 }
 
+// A FIFO is recorded from metadata alone; reading it would block the observer.
+#[test]
+#[cfg(unix)]
+fn snapshot_fs_records_fifo_without_opening_it() {
+    use std::ffi::CString;
+    use std::os::raw::c_char;
+    use std::os::unix::ffi::OsStrExt;
+
+    unsafe extern "C" {
+        fn mkfifo(pathname: *const c_char, mode: u32) -> i32;
+    }
+    let temp = tempfile::tempdir().expect("tempdir");
+    let fifo = temp.path().join("pipe");
+    let raw = CString::new(fifo.as_os_str().as_bytes()).expect("fifo path");
+    assert_eq!(unsafe { mkfifo(raw.as_ptr(), 0o600) }, 0);
+
+    let snapshot = snapshot_fs(temp.path()).expect("FIFO snapshot");
+    let node = snapshot
+        .iter()
+        .find(|(path, _)| path.ends_with("pipe"))
+        .map(|(_, node)| node)
+        .expect("FIFO node");
+
+    assert_eq!(node.kind, "fifo");
+}
+
 // Repeated reads preserve the modeled tree after excluding observer-induced ctime advancement.
 #[test]
 #[cfg(unix)]

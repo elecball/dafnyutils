@@ -20,6 +20,7 @@ pub(crate) mod ln;
 pub(crate) mod logname;
 pub(crate) mod ls;
 pub(crate) mod mkdir;
+pub(crate) mod mkfifo;
 pub(crate) mod mv;
 pub(crate) mod nl;
 pub(crate) mod paste;

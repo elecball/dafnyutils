@@ -102,6 +102,17 @@ fn to_string_error<T>(result: Result<T, FsCaptureError>) -> Result<T, String> {
     result.map_err(|error| error.to_string())
 }
 
+#[cfg(unix)]
+fn is_fifo(file_type: &fs::FileType) -> bool {
+    use std::os::unix::fs::FileTypeExt;
+    file_type.is_fifo()
+}
+
+#[cfg(not(unix))]
+fn is_fifo(_file_type: &fs::FileType) -> bool {
+    false
+}
+
 #[cfg(test)]
 pub(crate) fn snapshot_fs(root: &Path) -> Result<FsSnapshot, String> {
     to_string_error(snapshot_fs_checked(root))
@@ -647,6 +658,9 @@ fn snapshot_fs_with_observer_restore(
                 None => read_snapshot_handle(&mut open_snapshot_file(current)?, current)?,
             };
             ("file", String::new(), data)
+        } else if is_fifo(&file_type) {
+            // A FIFO has no contents to compare, and opening one could block.
+            ("fifo", String::new(), Vec::new())
         } else {
             return Err(format!("unsupported filesystem node `{}`", current.display()).into());
         };

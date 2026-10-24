@@ -230,6 +230,11 @@ pub(crate) static UTILITY_CAPABILITIES: &[UtilityCapability] = &[
         ..capability!("mkdir", mkdir)
     },
     UtilityCapability {
+        generated_options: Some(&["-m", "--mode", "--help", "--version"]),
+        option_value_flags: &["-m", "--mode"],
+        ..capability!("mkfifo", mkfifo)
+    },
+    UtilityCapability {
         option_value_flags: &["-t", "--target-directory", "-S", "--suffix"],
         ..capability!("mv", mv)
     },
@@ -476,8 +481,8 @@ mod tests {
             patterned,
             BTreeSet::from([
                 "cat", "chmod", "comm", "cp", "csplit", "cut", "du", "expand", "head", "link",
-                "ln", "ls", "mkdir", "mv", "nl", "paste", "readlink", "rm", "rmdir", "stat",
-                "tail", "touch", "truncate", "tsort", "uniq", "unlink", "wc",
+                "ln", "ls", "mkdir", "mkfifo", "mv", "nl", "paste", "readlink", "rm", "rmdir",
+                "stat", "tail", "touch", "truncate", "tsort", "uniq", "unlink", "wc",
             ])
         );
     }
