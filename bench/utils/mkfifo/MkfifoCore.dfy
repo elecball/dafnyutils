@@ -168,6 +168,7 @@ module MkfifoCore {
                       io.trustedFilesystem(), io.trustedNativeFailures(), diagnostics, runExit);
     ghost var runExitValue := runExit;
     exit := Flush(diagnostics, runExit, io);
+    assert io.stdout() == old(io.stdout());
     Proof.Complete(raw, io, diagnostics, runExitValue, exit);
   }
 }

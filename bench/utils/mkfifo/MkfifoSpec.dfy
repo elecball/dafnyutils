@@ -632,11 +632,14 @@ module MkfifoSpec {
     exit == (if runExit == 0 && errObservation.err == 0 then 0 else 1)
   }
 
+  // Standard output is stated unchanged: mkfifo writes it only for --help and
+  // --version, which are early exits outside this relation.
   twostate predicate Spec(raw: Schema.MkfifoCmdRaw, io: BenchIO.IO, exit: int)
-    reads io.fsRegion, io.stderrRegion,
+    reads io.fsRegion, io.stdoutRegion, io.stderrRegion,
           io.nowRegion, io.umaskRegion, io.propsRegion,
           io.trustedFilesystemRegion, io.trustedNativeFailuresRegion, io.trustedStreamsRegion
   {
+    io.stdout() == old(io.stdout()) &&
     exists diagnostics: BenchWorld.Bytes, runExit: int ::
       RunRelation(raw, old(io.fs()), io.fs(), io.now(), io.umask(), C.GetUmaskResultFields(io.props()),
                   io.trustedFilesystem(), io.trustedNativeFailures(), diagnostics, runExit) &&

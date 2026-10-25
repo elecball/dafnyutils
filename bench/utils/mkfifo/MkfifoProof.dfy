@@ -331,6 +331,7 @@ module MkfifoProof {
                               diagnostics, runExit)
     requires Spec.StderrResult(old(io.stderr()), io.stderr(), io.trustedStreams(),
                                diagnostics, runExit, exit)
+    requires io.stdout() == old(io.stdout())
     ensures Spec.Spec(raw, io, exit)
   {
     hide Spec.RunRelation();

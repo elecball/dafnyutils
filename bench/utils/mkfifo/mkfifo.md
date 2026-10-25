@@ -1,5 +1,33 @@
 # mkfifo
 
+## NL specification
+
+Source:
+- `coreutils/doc/coreutils.texi`, `@node mkfifo invocation`, lines 10848-10886
+- Implementation: `coreutils/src/mkfifo.c` at submodule commit
+  `2cf491412c199e2211880ec3f4ba387026638a33`
+- License: GPL-3.0-or-later
+
+`mkfifo` creates a FIFO, also called a named pipe, for each NAME. A FIFO is a
+special file: one process opens it for writing and another for reading, and
+data then flows between them as through an anonymous pipe.
+
+```text
+mkfifo [OPTION]... NAME...
+```
+
+- `-m MODE`, `--mode=MODE`: set the permission bits of each created FIFO to
+  MODE. MODE is octal or symbolic as in `chmod`, starts from `a=rw`, and must
+  specify only file permission bits.
+- `-Z`, `--context[=CTX]`: set an SELinux or SMACK security context. These
+  are outside this benchmark (see below).
+- `--help`, `--version`: print information and exit.
+
+Without `-m`, a FIFO gets `a=rw` minus the process umask. The exit status is
+0 when every FIFO was created and, with `-m`, received its permissions; it is
+1 after any failed operand, an option error, a missing operand or a rejected
+MODE.
+
 ## Scope
 
 This benchmark creates one FIFO per operand, in command-line order. It supports
@@ -104,7 +132,8 @@ Examples with umask `022`:
   specification also reads `nowRegion`, `umaskRegion` (the umask the native
   creation applies), `propsRegion` (the umask value `GetUmask` returns, used to
   evaluate MODE), `trustedFilesystemRegion`, `trustedNativeFailuresRegion` and
-  `trustedStreamsRegion`. Standard output is not written outside help/version.
+  `trustedStreamsRegion`. The specification states that standard output is
+  unchanged; mkfifo writes it only for help and version, which exit early.
 - TerminationPolicy: MODE parsing and the operand loop terminate for every
   finite input. The shared CLI runner and parser keep their existing
   nontermination/trusted boundary; CLI termination is not established.
