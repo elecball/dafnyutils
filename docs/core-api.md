@@ -183,11 +183,23 @@ unread suffix selected by `ObservedReadStdinRemainingFields`. Every public
 stream result is `Ok` exactly when `ResultErrno(result) == 0`; failed results
 retain the native errno and committed prefix.
 
+`ReadStdin` is a verified Dafny loop over `ReadStdinChunk` calls with a
+64 KiB limit:
+
+- There is no separate `NativeReadStdin` primitive or whole-read observation
+  request.
+- Its result is derived from a finite partition of the chunk observations that
+  ends with an empty successful read (EOF) or a failed read.
+- Lemmas prove the partition's uniqueness, byte conservation, exhaustion on
+  success and the accumulated prefix on failure. No assumption relates
+  independent whole and chunk reads.
+
 | Function | Return |
 | --- | --- |
 | `ReadFile(path)` → `IOResult<Bytes>` | `Ok`: the byte stream of whole file. `Err(ReadFailure(errno, message, partial, readStage))`: errno, message, bytes read, failed stage. |
 | `ProbeReadFile(path)` → `IOResult<Bytes>` | Opens read-only and closes without reading contents. Data is empty; the exact errno and `OpenFailed`/`CloseFailed` stage remain observable. |
 | `ReadStdin()` → `IOResult<Bytes>` | `StreamFailure` holds the bytes read; bytes read + remaining input = old stdin. |
+| `ReadStdinChunk(limit)` → `IOResult<Bytes>` | One noninterrupted bounded read; successful short prefixes are allowed. A failure consumes no bytes; an empty successful result is EOF for finite captured input. |
 | `WriteStdout(data)` → `IOResult<WriteReceipt>` | Appends exactly the committed prefix; `StreamFailure` holds the count. |
 | `WriteStderr(data)` → `IOResult<WriteReceipt>` | Same, for stderr. |
 
@@ -207,10 +219,32 @@ separate from full reads. Its result contains no data and cannot have the
 must open the source without consuming its bytes. The existing `ReadFileSpec`
 and whole-file `ReadFile` operation retain their behavior.
 
+`ReadStdinChunk` binds its result and exact unread suffix to
+`StreamReadStdinChunk(beforeStdin, limit)` through
+`ObservedReadStdinChunkResultFields` and
+`ObservedReadStdinChunkRemainingFields`. Its precondition is
+`0 < limit <= 9223372036854775806` in the fixed 64-bit Linux profile.
+The adapter uses the registered stdin capability and retries interrupted reads;
+it returns after one noninterrupted native read. The primitive does not fill
+blocks, pad input, swap bytes, count records, or select utility diagnostics.
+`dd` implements and proves those derived policies in its editable task closure.
+`ReadStdin` implements the generic whole-input policy above this primitive;
+its public result/remaining-input guarantees retain their behavior.
+
+For a failed chunk, `StreamFailure.partial` is empty and `committed` is zero.
+If earlier chunks succeeded, the upper `ReadStdin` failure contains their entire
+concatenated prefix and its length. These contracts describe read-call outcomes;
+they do not add standard-input close receipts or cover every managed-runtime
+resource-exhaustion exception.
+
 The raw `TrustedStreamRequest` and `TrustedStreamResult` datatypes and all
 stream contract relations admit inspection of malformed observations. Actual IO
-ghost state stores `IOContract.ValidStreamObservations`: every request must have
+ghost state stores `IOContract.ValidStreamObservations`: each callable request must have
 the matching result constructor and satisfy its full original operation relation.
+For `StreamReadStdinChunk`, validity uses exactly the native method's existing
+`0 < limit <= 9223372036854775806` domain; unused invalid-limit raw requests remain
+expressible and unconstrained. Whole-input `ReadStdin` remains derived from
+validated chunk observations, with no independent whole-read request.
 `trustedStreams()` keeps its raw function return type and guarantees
 `StreamObservationsValid`. `StreamFailureWitness` constructively proves that this
 state invariant is inhabited for every request, and
@@ -228,6 +262,7 @@ later metadata lookup.
 | `ReadFile` | `ReadFileSpec` | `none` |
 | `ProbeReadFile` | `OpenReadFileSpec` | `none` |
 | `ReadStdin` | `ReadStdinSpec` | `stdinRegion` |
+| `ReadStdinChunk` | `ReadStdinChunkSpec` | `stdinRegion` |
 | `WriteStdout` | `WriteStdoutSpec` | `stdoutRegion` |
 | `WriteStderr` | `WriteStderrSpec` | `stderrRegion` |
 
@@ -548,9 +583,10 @@ them.
 
 - Stream contracts fix only the consumed or committed prefix and the errno. They
   describe library results, not syscalls. `FileReadStage` is success, or an
-  open, read or close failure. There are no incremental stdin reads or public
-  standard-stream close receipts. Whole operations and utility output plans do
-  not establish every libc buffer-flush or syscall-order behavior.
+  open, read or close failure. `ReadStdinChunk` supplies bounded stdin reads;
+  block assembly remains utility-owned. There are no public standard-stream
+  close receipts. Whole operations and utility output plans do not establish
+  every libc buffer-flush or syscall-order behavior.
 - `AppendFile` results come from native observations. `AppendFile` keeps the
   file on empty input, appends exactly the bytes to the file (or symlink target)
   on success, and leaves other inodes alone; mode and timestamp effects are

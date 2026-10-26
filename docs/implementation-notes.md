@@ -220,7 +220,14 @@ exit assignment to `exit := 0` makes verification fail.
   utility specification or proof is complete.
 - Each contribution must rule out the counterexamples listed in its scope.
 - `ReadStdin` tries to read all input. Success leaves nothing unread; failure can
-  return a prefix and leave the rest. Stopping after a requested byte count is
-  not supported. Logical input consumption is modeled; GNU's kernel read-ahead
-  and a shared descriptor's final offset are not checked by this API or the
-  current stdout/stderr/filesystem comparator.
+  return a prefix and leave the rest.
+- `ReadStdinChunk(limit)` performs one noninterrupted bounded read and can
+  return a successful short prefix. A failed chunk consumes no input.
+- `ReadStdin` is a verified Dafny loop over 64 KiB chunk calls. Its whole-input
+  observations are derived from those calls, with no native whole-read axiom,
+  and its failure retains all earlier successful chunks.
+- A utility can stop at a byte count or assemble blocks by proving its own
+  consumption and error rules; the primitive supplies neither policy.
+- Logical input consumption
+  is modeled; GNU's kernel read-ahead and a shared descriptor's final offset are
+  not checked by the current stdout/stderr/filesystem comparator.

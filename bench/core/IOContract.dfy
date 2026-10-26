@@ -24,6 +24,10 @@ module IOContract {
     reveals FileReadResultFromOutcome, ResultErrno, ResultValue, ReadResultData, ReadResultStage
     reveals WriteResultCommitted, WriteResultStage, ParsedResultValue, IOErrorIsDirectory, IOErrorIsReadFailure
     reveals ReadFailureData, StreamReadResultFromOutcome, StreamWriteResultFromOutcome, ObservedReadStdinResultFields, ObservedReadStdinRemainingFields
+    reveals ReadStdinChunkSpec, ObservedReadStdinChunkResultFields, ObservedReadStdinChunkRemainingFields
+    reveals StdinReadChunkSize, ReadStdinPositiveChunkFields, ReadStdinPrefixFields, ReadStdinTerminalErrFields
+    reveals ReadStdinPartitionFields, ReadStdinOutcomeFields
+    provides ReadStdinPartitionPropertiesFields, ReadStdinPrefixAgreementFields, ReadStdinPartitionDeterministicFields, ReadStdinPrefixAppendFields, ReadStdinDerivedOutcomeFields
     reveals ObservedReadFileResultFields, TrustedReadFileContractFields, ObservedOpenReadFileResultFields, TrustedOpenReadFileContractFields, TrustedReadStdinWithOutcomeContractFields
     reveals TrustedWriteWithOutcomeFields, TrustedWriteStdoutWithOutcomeContractFields, TrustedWriteStderrWithOutcomeContractFields, ReadLinkResultFields, AfterReadStdinFields
     reveals ReadStdinAllFields, AfterAppendStdoutFields, AppendStdoutFields, AfterAppendStderrFields, AppendStderrFields
@@ -1555,15 +1559,127 @@ module IOContract {
     else Result.Err(StreamFailure(err, message, [], committed))
   }
 
+  // One bounded native read: short successes are allowed, failures consume no
+  // bytes, and an empty successful read denotes EOF for finite captured stdin.
+  ghost function ObservedReadStdinChunkResultFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    limit: nat
+  ): IOResult<Bytes>
+  {
+    match observations(StreamReadStdinChunk(beforeStdin, limit))
+    case StreamReadStdinResult(data, _, err) =>
+      StreamReadResultFromOutcome(data, err, CLocaleErrnoTextResult(err))
+    case _ => Result.Err(Other("invalid bounded stdin observation"))
+  }
+
+  ghost function ObservedReadStdinChunkRemainingFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    limit: nat
+  ): Bytes
+  {
+    match observations(StreamReadStdinChunk(beforeStdin, limit))
+    case StreamReadStdinResult(_, remaining, _) => remaining
+    case _ => beforeStdin
+  }
+
+  ghost predicate ReadStdinChunkSpec(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    afterStdin: Bytes, limit: nat, data: Bytes, err: int
+  )
+  {
+    0 < limit <= 9223372036854775806 &&
+    observations(StreamReadStdinChunk(beforeStdin, limit)) ==
+    StreamReadStdinResult(data, afterStdin, err) &&
+    0 <= err && |data| <= limit && data + afterStdin == beforeStdin &&
+    (err != 0 ==> data == []) &&
+    (err == 0 && data == [] ==> afterStdin == [])
+  }
+
+  // Whole-stdin reads are derived from exact fixed-size chunk observations.
+  // Cuts describe a finite byte partition, independent of the wrapper's loop.
+  const StdinReadChunkSize: nat := 64 * 1024
+
+  ghost predicate ReadStdinPositiveChunkFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    start: nat, stop: nat
+  )
+  {
+    start < stop <= |beforeStdin| &&
+    ReadStdinChunkSpec(beforeStdin[start..], observations, beforeStdin[stop..],
+                       StdinReadChunkSize, beforeStdin[start..stop], 0)
+  }
+
+  ghost predicate ReadStdinPrefixFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    cuts: seq<nat>
+  )
+  {
+    0 < |cuts| && cuts[0] == 0 && |cuts| <= cuts[|cuts| - 1] + 1 &&
+    (forall i: nat | i < |cuts| :: cuts[i] <= |beforeStdin|) &&
+    (forall i: nat | i + 1 < |cuts| ::
+       ReadStdinPositiveChunkFields(beforeStdin, observations, cuts[i], cuts[i + 1]))
+  }
+
+  ghost function ReadStdinTerminalErrFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    position: nat
+  ): int
+    requires position <= |beforeStdin|
+  {
+    ResultErrno(ObservedReadStdinChunkResultFields(
+                  beforeStdin[position..], observations, StdinReadChunkSize))
+  }
+
+  ghost predicate ReadStdinPartitionFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    cuts: seq<nat>
+  )
+  {
+    ReadStdinPrefixFields(beforeStdin, observations, cuts) &&
+    var position := cuts[|cuts| - 1];
+    ReadStdinChunkSpec(beforeStdin[position..], observations, beforeStdin[position..],
+                       StdinReadChunkSize, [], ReadStdinTerminalErrFields(beforeStdin, observations, position))
+  }
+
+  lemma ReadStdinPartitionPropertiesFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    cuts: seq<nat>
+  )
+    requires ReadStdinPartitionFields(beforeStdin, observations, cuts)
+    ensures 0 <= ReadStdinTerminalErrFields(beforeStdin, observations, cuts[|cuts| - 1])
+    ensures beforeStdin[..cuts[|cuts| - 1]] + beforeStdin[cuts[|cuts| - 1]..] == beforeStdin
+    ensures ReadStdinTerminalErrFields(beforeStdin, observations, cuts[|cuts| - 1]) == 0 ==>
+              beforeStdin[cuts[|cuts| - 1]..] == []
+  {
+  }
+
+  ghost function ReadStdinOutcomeFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult
+  ): (outcome: (bool, Bytes, Bytes, int))
+    ensures outcome.0 <==> exists cuts: seq<nat> :: ReadStdinPartitionFields(beforeStdin, observations, cuts)
+    ensures outcome.0 ==> exists cuts: seq<nat> ::
+                ReadStdinPartitionFields(beforeStdin, observations, cuts) &&
+                outcome == (true, beforeStdin[..cuts[|cuts| - 1]], beforeStdin[cuts[|cuts| - 1]..],
+                            ReadStdinTerminalErrFields(beforeStdin, observations, cuts[|cuts| - 1]))
+    ensures !outcome.0 ==> outcome == (false, [], beforeStdin, 0)
+  {
+    if exists cuts: seq<nat> :: ReadStdinPartitionFields(beforeStdin, observations, cuts) then
+      var cuts: seq<nat> :| ReadStdinPartitionFields(beforeStdin, observations, cuts);
+      var position := cuts[|cuts| - 1];
+      (true, beforeStdin[..position], beforeStdin[position..],
+       ReadStdinTerminalErrFields(beforeStdin, observations, position))
+    else
+      (false, [], beforeStdin, 0)
+  }
+
   ghost function ObservedReadStdinResultFields(
     beforeStdin: Bytes,
     observations: (TrustedStreamRequest) -> TrustedStreamResult
   ): IOResult<Bytes>
   {
-    match observations(StreamReadStdin(beforeStdin))
-    case StreamReadStdinResult(data, _, err) =>
-      StreamReadResultFromOutcome(data, err, CLocaleErrnoTextResult(err))
-    case _ => Result.Err(Other("invalid stdin observation"))
+    var outcome := ReadStdinOutcomeFields(beforeStdin, observations);
+    if outcome.0 then StreamReadResultFromOutcome(outcome.1, outcome.3, CLocaleErrnoTextResult(outcome.3))
+    else Result.Err(Other("invalid stdin observation"))
   }
 
   ghost function ObservedReadStdinRemainingFields(
@@ -1571,9 +1687,113 @@ module IOContract {
     observations: (TrustedStreamRequest) -> TrustedStreamResult
   ): Bytes
   {
-    match observations(StreamReadStdin(beforeStdin))
-    case StreamReadStdinResult(_, remaining, _) => remaining
-    case _ => beforeStdin
+    ReadStdinOutcomeFields(beforeStdin, observations).2
+  }
+
+  lemma ReadStdinPrefixAgreementFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    first: seq<nat>, second: seq<nat>, index: nat
+  )
+    requires ReadStdinPrefixFields(beforeStdin, observations, first)
+    requires ReadStdinPrefixFields(beforeStdin, observations, second)
+    requires index < |first| && index < |second|
+    ensures first[index] == second[index]
+    decreases index
+  {
+    if index > 0 {
+      ReadStdinPrefixAgreementFields(beforeStdin, observations, first, second, index - 1);
+      assert ReadStdinPositiveChunkFields(beforeStdin, observations, first[index - 1], first[index]);
+      assert ReadStdinPositiveChunkFields(beforeStdin, observations, second[index - 1], second[index]);
+      assert beforeStdin[first[index - 1]..first[index]] == beforeStdin[second[index - 1]..second[index]];
+      assert first[index] - first[index - 1] == second[index] - second[index - 1];
+    }
+  }
+
+  lemma ReadStdinPartitionDeterministicFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    first: seq<nat>, second: seq<nat>
+  )
+    requires ReadStdinPartitionFields(beforeStdin, observations, first)
+    requires ReadStdinPartitionFields(beforeStdin, observations, second)
+    ensures |first| == |second|
+    ensures first[|first| - 1] == second[|second| - 1]
+    ensures ReadStdinTerminalErrFields(beforeStdin, observations, first[|first| - 1]) ==
+            ReadStdinTerminalErrFields(beforeStdin, observations, second[|second| - 1])
+  {
+    var index := (if |first| <= |second| then |first| else |second|) - 1;
+    ReadStdinPrefixAgreementFields(beforeStdin, observations, first, second, index);
+    if |first| < |second| {
+      assert ReadStdinPositiveChunkFields(beforeStdin, observations, second[index], second[index + 1]);
+      assert beforeStdin[second[index]..second[index + 1]] == [];
+      assert false;
+    } else if |second| < |first| {
+      assert ReadStdinPositiveChunkFields(beforeStdin, observations, first[index], first[index + 1]);
+      assert beforeStdin[first[index]..first[index + 1]] == [];
+      assert false;
+    }
+  }
+
+  lemma ReadStdinPrefixAppendFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    cuts: seq<nat>, chunk: Bytes, remaining: Bytes
+  )
+    requires ReadStdinPrefixFields(beforeStdin, observations, cuts)
+    requires chunk != []
+    requires ReadStdinChunkSpec(beforeStdin[cuts[|cuts| - 1]..], observations,
+                                remaining, StdinReadChunkSize, chunk, 0)
+    ensures ReadStdinPrefixFields(beforeStdin, observations, cuts + [cuts[|cuts| - 1] + |chunk|])
+    ensures chunk == beforeStdin[cuts[|cuts| - 1]..cuts[|cuts| - 1] + |chunk|]
+    ensures remaining == beforeStdin[cuts[|cuts| - 1] + |chunk|..]
+  {
+    var start := cuts[|cuts| - 1];
+    var stop := start + |chunk|;
+    var next := cuts + [stop];
+    assert beforeStdin[start..] == chunk + remaining;
+    assert stop <= |beforeStdin|;
+    assert chunk == beforeStdin[start..stop];
+    assert remaining == beforeStdin[stop..];
+    assert ReadStdinPositiveChunkFields(beforeStdin, observations, start, stop);
+    forall i: nat | i < |next|
+      ensures next[i] <= |beforeStdin|
+    {
+      if i < |cuts| { assert next[i] == cuts[i]; }
+      else { assert i == |cuts|; }
+    }
+    forall i: nat | i + 1 < |next|
+      ensures ReadStdinPositiveChunkFields(beforeStdin, observations, next[i], next[i + 1])
+    {
+      if i + 1 < |cuts| {
+        assert next[i] == cuts[i] && next[i + 1] == cuts[i + 1];
+      } else {
+        assert i == |cuts| - 1;
+      }
+    }
+  }
+
+  lemma ReadStdinDerivedOutcomeFields(
+    beforeStdin: Bytes, observations: (TrustedStreamRequest) -> TrustedStreamResult,
+    cuts: seq<nat>, err: int
+  )
+    requires ReadStdinPrefixFields(beforeStdin, observations, cuts)
+    requires ReadStdinChunkSpec(beforeStdin[cuts[|cuts| - 1]..], observations,
+                                beforeStdin[cuts[|cuts| - 1]..], StdinReadChunkSize, [], err)
+    ensures ReadStdinSpec(beforeStdin, observations, beforeStdin[cuts[|cuts| - 1]..],
+                          beforeStdin[..cuts[|cuts| - 1]], err)
+    ensures ObservedReadStdinResultFields(beforeStdin, observations) ==
+            StreamReadResultFromOutcome(beforeStdin[..cuts[|cuts| - 1]], err, CLocaleErrnoTextResult(err))
+    ensures ObservedReadStdinRemainingFields(beforeStdin, observations) == beforeStdin[cuts[|cuts| - 1]..]
+  {
+    var position := cuts[|cuts| - 1];
+    assert ReadStdinTerminalErrFields(beforeStdin, observations, position) == err;
+    assert ReadStdinPartitionFields(beforeStdin, observations, cuts);
+    ReadStdinPartitionPropertiesFields(beforeStdin, observations, cuts);
+    var outcome := ReadStdinOutcomeFields(beforeStdin, observations);
+    assert outcome.0;
+    var selected: seq<nat> :| ReadStdinPartitionFields(beforeStdin, observations, selected) &&
+                              outcome == (true, beforeStdin[..selected[|selected| - 1]], beforeStdin[selected[|selected| - 1]..],
+                                          ReadStdinTerminalErrFields(beforeStdin, observations, selected[|selected| - 1]));
+    ReadStdinPartitionDeterministicFields(beforeStdin, observations, cuts, selected);
+    assert outcome == (true, beforeStdin[..position], beforeStdin[position..], err);
   }
 
   ghost function ObservedReadFileResultFields(
@@ -1646,6 +1866,7 @@ module IOContract {
     case _ => false
   }
 
+  // Compatibility name: this relation is derived entirely from chunk observations.
   ghost predicate TrustedReadStdinWithOutcomeContractFields(
     observations: (TrustedStreamRequest) -> TrustedStreamResult,
     beforeStdin: Bytes,
@@ -1654,13 +1875,10 @@ module IOContract {
     err: int
   )
   {
-    match observations(StreamReadStdin(beforeStdin))
-    case StreamReadStdinResult(observedData, observedRemaining, observedErr) =>
-      data == observedData && afterStdin == observedRemaining && err == observedErr &&
-      0 <= err && data + afterStdin == beforeStdin &&
-      (err == 0 ==> afterStdin == [])
-    case StreamReadFileResult(_, _, _) => false
-    case StreamWriteResult(_, _, _) => false
+    0 <= err && data + afterStdin == beforeStdin && (err == 0 ==> afterStdin == []) &&
+    exists cuts: seq<nat> :: ReadStdinPartitionFields(beforeStdin, observations, cuts) &&
+                             data == beforeStdin[..cuts[|cuts| - 1]] && afterStdin == beforeStdin[cuts[|cuts| - 1]..] &&
+                             err == ReadStdinTerminalErrFields(beforeStdin, observations, cuts[|cuts| - 1])
   }
 
   ghost predicate TrustedWriteWithOutcomeFields(
@@ -1725,10 +1943,11 @@ module IOContract {
       observed.StreamReadFileResult? &&
       TrustedOpenReadFileContractFields((_: TrustedStreamRequest) => observed,
                                         fs, path, observed.data, observed.err, observed.stage)
-    case StreamReadStdin(before) =>
-      observed.StreamReadStdinResult? &&
-      TrustedReadStdinWithOutcomeContractFields((_: TrustedStreamRequest) => observed,
-                                                before, observed.remaining, observed.data, observed.err)
+    case StreamReadStdinChunk(before, limit) =>
+      0 < limit <= 9223372036854775806 ==>
+        observed.StreamReadStdinResult? &&
+        ReadStdinChunkSpec(before, (_: TrustedStreamRequest) => observed,
+                           observed.remaining, limit, observed.data, observed.err)
     case StreamWriteStdout(before, requested) =>
       observed.StreamWriteResult? &&
       TrustedWriteWithOutcomeFields(observed, before, observed.postOutput,
@@ -1752,7 +1971,7 @@ module IOContract {
     match request
     case StreamReadFile(_, _) => StreamReadFileResult([], Errno.EIO, OpenFailed)
     case StreamOpenReadFile(_, _) => StreamReadFileResult([], Errno.EIO, OpenFailed)
-    case StreamReadStdin(before) => StreamReadStdinResult([], before, Errno.EIO)
+    case StreamReadStdinChunk(before, _) => StreamReadStdinResult([], before, Errno.EIO)
     case StreamWriteStdout(before, _) => StreamWriteResult(0, before, Errno.EIO)
     case StreamWriteStderr(before, _) => StreamWriteResult(0, before, Errno.EIO)
   }
@@ -1772,10 +1991,11 @@ module IOContract {
               var observed := observations(request);
               observed.StreamReadFileResult? &&
               OpenReadFileSpec(fs, observations, path, observed.data, observed.err, observed.stage)
-            case StreamReadStdin(before) =>
+            case StreamReadStdinChunk(before, limit) =>
               var observed := observations(request);
-              observed.StreamReadStdinResult? &&
-              ReadStdinSpec(before, observations, observed.remaining, observed.data, observed.err)
+              0 < limit <= 9223372036854775806 ==>
+                observed.StreamReadStdinResult? &&
+                ReadStdinChunkSpec(before, observations, observed.remaining, limit, observed.data, observed.err)
             case StreamWriteStdout(before, requested) =>
               var observed := observations(request);
               observed.StreamWriteResult? &&

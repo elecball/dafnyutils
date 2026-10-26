@@ -333,8 +333,10 @@ module CatSpec {
   ghost predicate NormalStdinObservations(before: BenchWorld.Bytes,
                                           observations: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
   {
-    observations(BenchWorld.StreamReadStdin(before)) == BenchWorld.StreamReadStdinResult(before, [], 0) &&
-    observations(BenchWorld.StreamReadStdin([])) == BenchWorld.StreamReadStdinResult([], [], 0)
+    IOContract.ObservedReadStdinResultFields(before, observations) == Result.Ok(before) &&
+    IOContract.ObservedReadStdinRemainingFields(before, observations) == [] &&
+    IOContract.ObservedReadStdinResultFields([], observations) == Result.Ok([]) &&
+    IOContract.ObservedReadStdinRemainingFields([], observations) == []
   }
 
   ghost predicate InputReadOutcomeRelation(cmd: CatSchema.CatCmd,
@@ -381,6 +383,7 @@ module CatSpec {
     ensures forall i: nat | i < |cmd.inputs| :: InputReadOutcomeRelation(cmd, preFs, observations,
                                                                          if CatSchema.Stdin in cmd.inputs[..i] then [] else before, i, results[i])
   {
+    hide IOContract.ObservedReadStdinResultFields(), IOContract.ObservedReadStdinRemainingFields();
     forall i: nat | i < |cmd.inputs|
       ensures (CatSchema.Stdin in cmd.inputs[..i + 1]) ==
               (CatSchema.Stdin in cmd.inputs[..i] || cmd.inputs[i].Stdin?)
@@ -437,6 +440,7 @@ module CatSpec {
               seq(|cmd.inputs|, i => []), seq(|cmd.inputs| + 1, i => 0))
     ensures RenderRelation(cmd, [], [], [], [0], [])
   {
+    hide IOContract.ObservedReadStdinResultFields(), IOContract.ObservedReadStdinRemainingFields();
     var results: seq<BenchWorld.IOResult<BenchWorld.Bytes>> :=
       seq(|cmd.inputs|, i => Result.Ok([]));
     forall i: nat | i < |cmd.inputs|
@@ -466,12 +470,13 @@ module CatSpec {
     ensures InputTraceRelation(cmd, preFs, preStreams, data, [], data, [], false,
                                seq(|cmd.inputs|, i => Result.Ok(if i == 0 then data else [])),
                                seq(|cmd.inputs|, i => if i == 0 then data else []),
-                               seq(|cmd.inputs| + 1, i => if i == 0 then 0 else |data|),
+                               seq(|cmd.inputs| + 1, i => (if i == 0 then 0 else |data|) as nat),
                                seq(|cmd.inputs|, i => []), seq(|cmd.inputs| + 1, i => 0))
     ensures RenderRelation(cmd, data, data,
                            seq(|data|, i requires 0 <= i < |data| => [data[i]]),
                            seq(|data| + 1, i => i), seq(|data|, i => 0))
   {
+    hide IOContract.ObservedReadStdinResultFields(), IOContract.ObservedReadStdinRemainingFields();
     var results: seq<BenchWorld.IOResult<BenchWorld.Bytes>> :=
       seq(|cmd.inputs|, i => Result.Ok(if i == 0 then data else []));
     forall i: nat {:trigger cmd.inputs[i]} | i < |cmd.inputs|
@@ -546,6 +551,7 @@ module CatSpec {
                                 hadError, readResults, dataFragments, dataCuts, errorFragments, errorCuts)
     ensures postStdin == [] && data == preStdin && errors == [] && !hadError
   {
+    hide IOContract.ObservedReadStdinResultFields(), IOContract.ObservedReadStdinRemainingFields();
     var states: seq<BenchWorld.Bytes> :| StdinTraceRelation(cmd, preStdin, postStdin, preStreams, states) &&
                                          forall i: nat | i < |cmd.inputs| :: InputReadOutcomeRelation(cmd, preFs, preStreams, states[i], i, readResults[i]);
     var normalStates := seq(|cmd.inputs| + 1, i requires 0 <= i <= |cmd.inputs| => if i == 0 then preStdin else []);
@@ -618,6 +624,7 @@ module CatSpec {
              RunRelation(cmd, preFs, preStreams, preStdin, postStdin, output, errors, exit)) ==>
               postStdin == [] && output == preStdin && errors == [] && exit == 0
   {
+    hide IOContract.ObservedReadStdinResultFields(), IOContract.ObservedReadStdinRemainingFields();
     assert (NormalStdinObservations(preStdin, preStreams) && PlainStdinCommand(cmd)) ==>
         InputTraceRelation(cmd, preFs, preStreams, preStdin, [], preStdin, [], false,
                            seq(|cmd.inputs|, i => Result.Ok(if i == 0 then preStdin else [])),
@@ -716,6 +723,7 @@ module CatSpec {
                                                                              plannedStdout == old(io.stdin()) &&
                                                                              plannedStderr == [] && exit == 0)
   {
+    hide IOContract.ObservedReadStdinResultFields(), IOContract.ObservedReadStdinRemainingFields();
     var cmd := Command(raw);
     assert (NormalStdinObservations(old(io.stdin()), old(io.trustedStreams())) && PlainStdinCommand(cmd)) ==>
         RunRelation(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()), [], old(io.stdin()), [], 0);

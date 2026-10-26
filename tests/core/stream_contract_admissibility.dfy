@@ -39,12 +39,26 @@ module StreamContractAdmissibilityRegression {
   {
   }
 
-  // A file-shaped observation cannot satisfy any stdin-read outcome.
-  lemma WrongStdinConstructor(before: Bytes, after: Bytes, data: Bytes, err: int)
-    ensures !C.ReadStdinSpec(before, (_: TrustedStreamRequest) => StreamReadFileResult([], 0, ReadSucceeded),
-                             after, data, err)
-    ensures !C.ValidStreamObservation(StreamReadStdin(before), StreamReadFileResult([], 0, ReadSucceeded))
+  // A file-shaped observation cannot satisfy a callable bounded stdin read.
+  lemma WrongStdinConstructor(before: Bytes, after: Bytes, limit: nat, data: Bytes, err: int)
+    requires 0 < limit <= 9223372036854775806
+    ensures !C.ReadStdinChunkSpec(before, (_: TrustedStreamRequest) => StreamReadFileResult([], 0, ReadSucceeded),
+                                  after, limit, data, err)
+    ensures !C.ValidStreamObservation(StreamReadStdinChunk(before, limit), StreamReadFileResult([], 0, ReadSucceeded))
     ensures !C.StreamObservationsValid((_: TrustedStreamRequest) => StreamReadFileResult([], 0, ReadSucceeded))
+  {
+  }
+
+  // A zero-size raw request has no full-contract native outcome.
+  lemma ZeroChunkLimitHasNoNativeOutcome(before: Bytes, after: Bytes, data: Bytes, err: int)
+    ensures !C.ReadStdinChunkSpec(before, (_: TrustedStreamRequest) => StreamReadStdinResult(data, after, err),
+                                  after, 0, data, err)
+  {
+  }
+
+  // Uncallable raw requests do not impose new constraints on model providers.
+  lemma UncallableChunkRequestRemainsUnconstrained()
+    ensures C.ValidStreamObservation(StreamReadStdinChunk("abc", 0), StreamWriteResult(0, [], 0))
   {
   }
 
@@ -65,20 +79,20 @@ module StreamContractAdmissibilityRegression {
   // A successful timestamp with negative nanoseconds has no full-contract outcome.
   lemma NegativeTimestampNanoseconds(ok: bool, sec: int, nsec: int)
     ensures !C.ParseTimestampSpec(map[TimestampParseRequest("202610230900", 0, 0) :=
-                                        ParsedTimeResult(true, 0, -1)],
+                                       ParsedTimeResult(true, 0, -1)],
                                   "202610230900", 0, 0, ok, sec, nsec)
     ensures !C.TimeParseObservationsValid(map[TimestampParseRequest("202610230900", 0, 0) :=
-                                                ParsedTimeResult(true, 0, -1)])
+                                                 ParsedTimeResult(true, 0, -1)])
   {
   }
 
   // A successful date with one billion nanoseconds has no full-contract outcome.
   lemma OutOfRangeDateNanoseconds(ok: bool, sec: int, nsec: int)
     ensures !C.ParseDateSpec(map[DateParseRequest("now", 0, 0) :=
-                                   ParsedTimeResult(true, 0, 1000000000)],
+                                  ParsedTimeResult(true, 0, 1000000000)],
                              "now", 0, 0, ok, sec, nsec)
     ensures !C.TimeParseObservationsValid(map[DateParseRequest("now", 0, 0) :=
-                                                ParsedTimeResult(true, 0, 1000000000)])
+                                                 ParsedTimeResult(true, 0, 1000000000)])
   {
   }
 
@@ -127,20 +141,20 @@ module StreamContractAdmissibilityRegression {
     assert C.OpenReadFileSpec(fs, observations, path, [], E.EIO, CloseFailed);
   }
 
-  // A complete stdin read is admitted by a globally valid provider.
-  lemma SuccessfulStdinRead()
+  // A successful bounded read may return a nonempty short prefix and retain input.
+  lemma ShortSuccessfulStdinChunk()
   {
-    ghost var observations := WithObservation(StreamReadStdin("abc"), StreamReadStdinResult("abc", [], 0));
-    C.StreamObservationAdmitsRequest(observations, StreamReadStdin("abc"));
-    assert C.ReadStdinSpec("abc", observations, [], "abc", 0);
+    ghost var observations := WithObservation(StreamReadStdinChunk("abc", 2), StreamReadStdinResult("a", "bc", 0));
+    C.StreamObservationAdmitsRequest(observations, StreamReadStdinChunk("abc", 2));
+    assert C.ReadStdinChunkSpec("abc", observations, "bc", 2, "a", 0);
   }
 
-  // A read error retains the consumed prefix and exact unread suffix.
-  lemma PartialStdinReadFailure()
+  // A failed bounded native read consumes no input bytes.
+  lemma StdinChunkFailureConsumesNoBytes()
   {
-    ghost var observations := WithObservation(StreamReadStdin("abc"), StreamReadStdinResult("a", "bc", E.EIO));
-    C.StreamObservationAdmitsRequest(observations, StreamReadStdin("abc"));
-    assert C.ReadStdinSpec("abc", observations, "bc", "a", E.EIO);
+    ghost var observations := WithObservation(StreamReadStdinChunk("abc", 2), StreamReadStdinResult([], "abc", E.EIO));
+    C.StreamObservationAdmitsRequest(observations, StreamReadStdinChunk("abc", 2));
+    assert C.ReadStdinChunkSpec("abc", observations, "abc", 2, [], E.EIO);
   }
 
   // A successful stdout write commits every requested byte.

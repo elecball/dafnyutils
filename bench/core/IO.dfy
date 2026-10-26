@@ -40,7 +40,7 @@ module BenchIO {
     provides IO.stdoutTimestampRegion, IO.stdoutTimestamp
     provides IO.statusObservationsRegion, IO.statusObservations, IO.statusCursor
     provides IO.credentialsRegion, IO.credentials
-    provides IO.ReadFile, IO.ProbeReadFile, IO.ReadLink, IO.ReadStdin
+    provides IO.ReadFile, IO.ProbeReadFile, IO.ReadLink, IO.ReadStdin, IO.ReadStdinChunk
     provides IO.WriteStdout, IO.WriteStderr
     provides IO.GetCLocaleErrnoText, IO.QuoteafPath, IO.QuoteArgument
     provides IO.GetCwd, IO.GetEnv, IO.GetEnvironment, IO.GetLoginName, IO.Now
@@ -587,11 +587,7 @@ module BenchIO {
       ensures C.ReadLinkAtCwdSpec(old(fs()),old(cwdContext()),old(trustedNativeFailures()),path,result)
       ensures result.Ok? <==> C.ResultErrno(result) == 0
 
-    method {:extern "NativeReadStdin"} {:axiom} NativeReadStdin()
-      returns (data: Bytes, err: int)
-      modifies stdinRegion
-      ensures C.ReadStdinSpec(old(stdin()), old(trustedStreams()), stdin(), data, err)
-
+    // Whole-input policy is verified here; the native boundary reads one chunk.
     method ReadStdin() returns (result: IOResult<Bytes>)
       modifies stdinRegion
       ensures C.ReadStdinSpec(old(stdin()), old(trustedStreams()), stdin(), C.ReadResultData(result), C.ResultErrno(result))
@@ -599,12 +595,68 @@ module BenchIO {
       ensures stdin() == C.ObservedReadStdinRemainingFields(old(stdin()), old(trustedStreams()))
       ensures result.Ok? <==> C.ResultErrno(result) == 0
     {
-      var data, err := NativeReadStdin();
+      ghost var before := stdin();
+      ghost var observations := trustedStreams();
+      ghost var cuts: seq<nat> := [0];
+      var data: Bytes := [];
+      var err := 0;
+      var done := false;
+      while !done
+        invariant C.ReadStdinPrefixFields(before, observations, cuts)
+        invariant data == before[..cuts[|cuts| - 1]]
+        invariant stdin() == before[cuts[|cuts| - 1]..]
+        invariant !done ==> err == 0
+        invariant done ==> C.ReadStdinChunkSpec(stdin(), observations, stdin(), C.StdinReadChunkSize, [], err)
+        decreases |stdin()| + (if done then 0 else 1)
+      {
+        var read := ReadStdinChunk(C.StdinReadChunkSize);
+        var chunk := C.ReadResultData(read);
+        err := C.ResultErrno(read);
+        if err != 0 || chunk == [] {
+          assert chunk == [];
+          done := true;
+        } else {
+          C.ReadStdinPrefixAppendFields(before, observations, cuts, chunk, stdin());
+          data := data + chunk;
+          cuts := cuts + [|data|];
+        }
+      }
+      C.ReadStdinDerivedOutcomeFields(before, observations, cuts, err);
+      assert C.ReadStdinSpec(before, observations, stdin(), data, err) by { hide *; }
       if err == 0 {
         result := Result.Ok(data);
       } else {
         var message := GetCLocaleErrnoText(err);
         result := Result.Err(StreamFailure(err, message, data, |data|));
+      }
+      assert C.ReadResultData(result) == data by { hide *; reveal C.ReadResultData(); }
+      assert C.ResultErrno(result) == err by { hide *; reveal C.ResultErrno(), C.IOErrorErrno(); }
+      assert C.ReadStdinSpec(before, observations, stdin(),
+                             C.ReadResultData(result), C.ResultErrno(result)) by { hide *; }
+    }
+
+    // The trusted operation is a bounded native read, with no block policy.
+    method {:extern "NativeReadStdinChunk"} {:axiom} NativeReadStdinChunk(limit: nat)
+      returns (data: Bytes, err: int)
+      requires 0 < limit <= 9223372036854775806
+      modifies stdinRegion
+      ensures C.ReadStdinChunkSpec(old(stdin()), old(trustedStreams()), stdin(), limit, data, err)
+
+    method ReadStdinChunk(limit: nat) returns (result: IOResult<Bytes>)
+      requires 0 < limit <= 9223372036854775806
+      modifies stdinRegion
+      ensures C.ReadStdinChunkSpec(old(stdin()), old(trustedStreams()), stdin(), limit,
+                                   C.ReadResultData(result), C.ResultErrno(result))
+      ensures result == C.ObservedReadStdinChunkResultFields(old(stdin()), old(trustedStreams()), limit)
+      ensures stdin() == C.ObservedReadStdinChunkRemainingFields(old(stdin()), old(trustedStreams()), limit)
+      ensures result.Ok? <==> C.ResultErrno(result) == 0
+    {
+      var data, err := NativeReadStdinChunk(limit);
+      if err == 0 {
+        result := Result.Ok(data);
+      } else {
+        var message := GetCLocaleErrnoText(err);
+        result := Result.Err(StreamFailure(err, message, [], 0));
       }
     }
 

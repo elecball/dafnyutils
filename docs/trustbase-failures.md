@@ -16,6 +16,20 @@ design; no user authorization decision is pending.
 adapter does not throw to bypass a modeled stream failure. A stdin read exposes
 its exact unread suffix. Public results are `Ok` exactly when their errno is zero.
 
+The 2026-10-23 stdin-layering maintenance shrinks the trusted base:
+
+- The trusted `NativeReadStdin` operation and its `StreamReadStdin` observation
+  request are removed.
+- `ReadStdin` is now a verified loop over public `ReadStdinChunk` calls with a
+  64 KiB limit. A finite partition derives the whole result from the chunk
+  observations.
+- Verified lemmas prove the partition is unique and preserve the old
+  nonnegative-errno, byte-conservation and exhaustion-on-success guarantees.
+  No whole/chunk coherence assumption is added.
+- An immediate chunk failure consumes no bytes. A later failure keeps every
+  earlier successful byte in the upper `StreamFailure.partial` and `committed`.
+- Block policies and utility diagnostics remain task-local obligations.
+
 Utility implementations and proofs retain their algorithms and final
 `RunCore ==> Spec(...)` obligation. A utility-owned output finalizer checks both
 write results. Its principal relation binds each actual request to the immutable
@@ -140,8 +154,11 @@ affected utility closures read the filesystem or use the typed mode operation.
 
 Primitive contracts describe library operations. They do not require a raw ABI,
 descriptor-state, or syscall-order witness. Whole-stdin reads do not implement
-Head's bounded read protocol; utility output plans do not reproduce every stdio
-flush phase or Tee's read/write interleaving. Public standard-stream operations
+Head's bounded read protocol; Head still uses the whole-input API. The bounded
+`ReadStdinChunk` primitive added for dd supports a separate task-local block
+proof. `ReadStdin` is now built and proved above that primitive, preserving
+existing utility-facing guarantees. Utility output plans
+do not reproduce every stdio flush phase or Tee's read/write interleaving. Public standard-stream operations
 do not close the standard capability or return a separate close receipt.
 These are model boundaries, not outstanding approval questions or claims of full
 libc parity. Existing file `CloseFailed` receipts do require exact partial-data
@@ -180,12 +197,28 @@ The last focused partition checks establish 35 obligations across five nonzero
 declarations; two zero-target selections are excluded. Broader ordering and
 standard-stream finalization remain separate model boundaries.
 
-The native whole-stream helpers retry `EINTR` internally
-(`IOExtern.ReadAllFromFdWithOutcome` and `WriteAllToFdWithOutcome`), while the
-existing raw capability operations preserve individual native results. This is
-a source-derived abstraction boundary, not a confirmed interruption-parity test;
-no additional EINTR fault experiment was run. Ordered native observations must
-state which layer owns retries before claiming complete interruption behavior.
+`ReadStdinChunk` retries `EINTR` internally; the remaining native whole-file
+`ReadAllFromFdWithOutcome` and `WriteAllToFdWithOutcome` helpers do likewise.
+Raw capability operations preserve individual native results. The bounded
+2026-10-23 experiment confirms one actual fd-zero EINTR retry in the rebuilt cat
+and dd candidates and in pinned GNU dd. Pinned GNU cat instead reports that
+forced EINTR: `src/cat.c:178` uses raw `read`, while `src/dd.c:1099-1118`
+explicitly retries. The old whole-stdin adapter also retried, so cat's difference
+predates the layering change. This is an existing asynchronous-fault abstraction
+boundary, not complete GNU interruption parity. Ordered native observations must
+state which layer owns retries.
+
+The same experiment passes five normal cat comparisons, including input beyond
+64 KiB and repeated stdin, and six exact GNU EIO comparisons for immediate and
+later failures in cat/dd, including dd fullblock/sync. Proof checks and these
+native observations are separate evidence. The original probe's incorrect
+GNU-cat-retry expectation and failed run are retained; the follow-up explicitly
+characterizes the difference without changing benchmark comparisons or scope.
+Scripts, bounded traces, source/artifact manifests, logs and statuses are locally
+available under `/workspace/tmp/stream-read-layering-20261023/`, with the final
+native run in tmux session `stdin-layering-native-v3-20261023` and
+`native-stream-v3.log/status`. Full current validation is summarized in
+`plan/2026-10-23-stream-read-layering.md`.
 
 Standard-stream finalization is another source-level boundary. Public whole-stream operations expose read and write
 results, but neither close the standard capability nor return a close receipt;

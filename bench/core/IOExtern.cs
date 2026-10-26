@@ -1237,29 +1237,49 @@ public static partial class IOExtern {
     }
   }
 
-  public static void ReadStdin(
-      out ISequence<Dafny.Rune> content,
-      out BigInteger err) {
+  [DllImport("libc", SetLastError = true, EntryPoint = "read")]
+  private static extern long ReadIntoNativeBuffer(int fd, IntPtr buffer, UIntPtr count);
+
+  public static void ReadStdinChunk(BigInteger limit,
+      out ISequence<Dafny.Rune> content, out BigInteger err) {
     content = Sequence<Dafny.Rune>.Empty;
     err = BigInteger.Zero;
     if (!FindCapability(BigInteger.Zero, out var capability)) {
       err = new BigInteger(EBADF);
-
       return;
     }
-    byte[] bytes;
-    int readErr;
-    lock (capability.Gate) {
-      if (capability.Closed) {
-        err = new BigInteger(EBADF);
-
-        return;
-      }
-      ReadAllFromFdWithOutcome(capability.NativeFd, out bytes, out readErr);
+    IntPtr buffer;
+    try {
+      buffer = Marshal.AllocHGlobal((IntPtr)(long)limit);
+    } catch (OutOfMemoryException) {
+      err = new BigInteger((int)Errno.ENOMEM);
+      return;
     }
-    content = Sequence<Dafny.Rune>.UnicodeFromString(Encoding.Latin1.GetString(bytes));
-    err = new BigInteger(readErr);
-
+    try {
+      lock (capability.Gate) {
+        if (capability.Closed) {
+          err = new BigInteger(EBADF);
+          return;
+        }
+        long count;
+        int readErr;
+        do {
+          count = ReadIntoNativeBuffer(capability.NativeFd, buffer, (UIntPtr)(ulong)limit);
+          readErr = count < 0 ? Marshal.GetLastPInvokeError() : 0;
+        } while (count < 0 && readErr == EINTR);
+        if (count < 0) {
+          err = new BigInteger(readErr);
+          return;
+        }
+        // Managed byte sequences, like the existing whole-stream API, require
+        // representable finite input and enough memory.
+        var bytes = new byte[checked((int)count)];
+        Marshal.Copy(buffer, bytes, 0, bytes.Length);
+        content = Sequence<Dafny.Rune>.UnicodeFromString(Encoding.Latin1.GetString(bytes));
+      }
+    } finally {
+      Marshal.FreeHGlobal(buffer);
+    }
   }
 
   private static void WriteStandardWithOutcome(
@@ -2673,10 +2693,9 @@ namespace BenchIO {
       );
     }
 
-    private void NativeReadStdin(
-          out ISequence<Dafny.Rune> data,
-        out BigInteger err) {
-      IOExtern.ReadStdin(out data, out err);
+    private void NativeReadStdinChunk(BigInteger limit,
+        out ISequence<Dafny.Rune> data, out BigInteger err) {
+      IOExtern.ReadStdinChunk(limit, out data, out err);
     }
 
     private void NativeWriteStdout(

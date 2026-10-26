@@ -15,7 +15,7 @@ module BenchWorld {
   datatype TrustedStreamRequest =
     | StreamReadFile(preFs: FileSystem, path: Path)
     | StreamOpenReadFile(preFs: FileSystem, path: Path)
-    | StreamReadStdin(preStdin: Bytes)
+    | StreamReadStdinChunk(preStdin: Bytes, limit: nat)
     | StreamWriteStdout(preStdout: Bytes, requested: Bytes)
     | StreamWriteStderr(preStderr: Bytes, requested: Bytes)
 
