@@ -11,6 +11,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from benchmarks.definition import BenchmarkDefinition
+from benchmarks.profiles import ResolvedBenchmark
 from benchmarks.repository import BenchmarkRepository
 
 
@@ -76,7 +77,9 @@ def _build(root: Path, definition: BenchmarkDefinition) -> int:
         str(bench_dir / f"{definition.task_id}_bench.dll"),
         definition.project_config_path,
     ]
-    command.append("bench/core/IOExtern.cs")
+    command.extend(
+        ResolvedBenchmark.from_definition(definition).task_profile.compiler_dependency_paths
+    )
     return _run(command, cwd=root, env=env)
 
 

@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from benchmarks import make_tasks
 from benchmarks.checks import (
     EvaluationName,
     OracleExecutionLocation,
     required_checks_for_evaluation,
 )
 from benchmarks.profiles import (
+    IMPLEMENTATION_COMPILER_DEPENDENCY_PATHS,
     IMPLEMENTATION_SUPPORT_FILES,
     ResolvedBenchmark,
+    ResolvedDafnyEntry,
+    ResolvedTaskProfile,
+    RuntimeExternExecution,
     dafny_analysis_support_files,
     required_checks_for_task,
 )
@@ -26,6 +33,7 @@ from evaluation.submission.oracles import (
     derived_oracle_commands,
 )
 from evaluation.submission.sandbox import SandboxContext
+from evaluation.task import workspace as task_workspace
 from tests.evaluation.evaluation_test_support import (
     benchmark_utility_configs,
     utility_config,
@@ -37,6 +45,83 @@ def test_analysis_support_selects_only_dafny_sources() -> None:
     selected = dafny_analysis_support_files()
 
     assert selected == tuple(path for path in IMPLEMENTATION_SUPPORT_FILES if path.endswith(".dfy"))
+
+
+# The implementation profile declares its companion and native extern policy independently.
+def test_implementation_profile_declares_runtime_companion() -> None:
+    profile = _utility_cfg("cat").task_profile
+
+    assert profile.compiler_dependency_paths == IMPLEMENTATION_COMPILER_DEPENDENCY_PATHS
+    assert profile.runtime_extern_execution is RuntimeExternExecution.NATIVE
+    assert IMPLEMENTATION_COMPILER_DEPENDENCY_PATHS == ("bench/core/IOExtern.cs",)
+
+
+# Profiles without an explicit compiler companion retain the safe draft defaults.
+def test_profile_runtime_defaults_are_empty_and_draft() -> None:
+    profile = ResolvedTaskProfile(
+        support_files=(),
+        editable_outputs=(),
+        placeholder_outputs=(),
+        required_checks=(),
+        required_outputs=(),
+        execution_entry=ResolvedDafnyEntry("Demo.dfy", "Demo.Run"),
+    )
+
+    assert profile.compiler_dependency_paths == ()
+    assert profile.runtime_extern_execution is RuntimeExternExecution.DRAFT
+
+
+# Generated ordinary build arguments reuse the implementation profile's exact companion tuple.
+def test_generated_build_args_use_profile_companions(monkeypatch: pytest.MonkeyPatch) -> None:
+    profile = _utility_cfg("cat")
+    monkeypatch.setattr(
+        task_workspace,
+        "_shell_template",
+        lambda name, values: values.get("RUNTIME_BUILD_ARGS", name),
+    )
+    monkeypatch.setattr(task_workspace, "_run_core_scaffold", lambda *_args: "scaffold")
+    monkeypatch.setattr(Path, "read_text", lambda *_args, **_kwargs: "config")
+    analysis = SimpleNamespace(
+        manifest=SimpleNamespace(
+            execution_entry=SimpleNamespace(source_path="bench/utils/cat/Cat.dfy"),
+            spec_definitions=(),
+            support_source_sha256={},
+            model_dump_json=lambda **_kwargs: "{}",
+        ),
+        source_document=object(),
+        utility_sources=(),
+        execution_source=Path("/virtual/Cat.dfy"),
+        execution=object(),
+    )
+
+    generated = task_workspace._generated_files(profile, "cat", analysis)
+
+    build_script = dict(generated)[Path("eval_support/build.sh")]
+    assert shlex.split(build_script)[-1:] == list(IMPLEMENTATION_COMPILER_DEPENDENCY_PATHS)
+
+
+# The local ordinary build invokes the same profile-declared companion through a fake process seam.
+def test_local_build_uses_profile_companions(monkeypatch: pytest.MonkeyPatch) -> None:
+    profile = _utility_cfg("cat")
+    definition = SimpleNamespace(
+        task_id="cat", project_config_path="bench/utils/cat/dfyconfig.toml"
+    )
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        make_tasks.ResolvedBenchmark, "from_definition", lambda _definition: profile
+    )
+    monkeypatch.setattr(Path, "mkdir", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(Path, "resolve", lambda path: path)
+    monkeypatch.setattr(
+        make_tasks,
+        "_run",
+        lambda command, **_kwargs: commands.append(command) or 0,
+    )
+
+    assert make_tasks._build(Path("/virtual/repo"), definition) == 0
+    assert commands[0][-len(IMPLEMENTATION_COMPILER_DEPENDENCY_PATHS) :] == list(
+        IMPLEMENTATION_COMPILER_DEPENDENCY_PATHS
+    )
 
 
 def _utility_cfg(utility_name: str) -> ResolvedBenchmark:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 
 from benchmarks.paths import REPO_ROOT
@@ -17,6 +18,7 @@ from .definition import (
 )
 from .repository import BenchmarkRepository
 
+IMPLEMENTATION_COMPILER_DEPENDENCY_PATHS = ("bench/core/IOExtern.cs",)
 IMPLEMENTATION_SUPPORT_FILES = (
     "bench/core/Result.dfy",
     "bench/core/Errno.dfy",
@@ -27,11 +29,18 @@ IMPLEMENTATION_SUPPORT_FILES = (
     "bench/core/IOContract.dfy",
     "bench/core/SecurityModel.dfy",
     "bench/core/CliTypes.dfy",
-    "bench/core/IOExtern.cs",
+    *IMPLEMENTATION_COMPILER_DEPENDENCY_PATHS,
 )
 DAFNY_ANALYSIS_SUPPORT_FILES = tuple(
     path for path in IMPLEMENTATION_SUPPORT_FILES if path.endswith(".dfy")
 )
+
+
+class RuntimeExternExecution(StrEnum):
+    """Select how an agent runtime executes declared extern callables."""
+
+    DRAFT = "draft"
+    NATIVE = "native"
 
 
 @dataclass(frozen=True)
@@ -55,6 +64,8 @@ class ResolvedTaskProfile:
     required_checks: tuple[str, ...]
     required_outputs: tuple[ResolvedOutput, ...]
     execution_entry: ResolvedDafnyEntry
+    compiler_dependency_paths: tuple[str, ...] = ()
+    runtime_extern_execution: RuntimeExternExecution = RuntimeExternExecution.DRAFT
 
 
 @dataclass(frozen=True)
@@ -197,6 +208,8 @@ def derived_task_profile(
         placeholder_outputs=(),
         execution_entry=execution_entry,
         editable_outputs=(paths["utility_dir"],),
+        compiler_dependency_paths=IMPLEMENTATION_COMPILER_DEPENDENCY_PATHS,
+        runtime_extern_execution=RuntimeExternExecution.NATIVE,
     )
 
 
@@ -208,6 +221,8 @@ def _task_profile(
     placeholder_outputs: tuple[str, ...],
     execution_entry: ResolvedDafnyEntry,
     editable_outputs: tuple[str, ...],
+    compiler_dependency_paths: tuple[str, ...] = (),
+    runtime_extern_execution: RuntimeExternExecution = RuntimeExternExecution.DRAFT,
 ) -> ResolvedTaskProfile:
     return ResolvedTaskProfile(
         support_files=support_files,
@@ -216,6 +231,8 @@ def _task_profile(
         required_checks=required_checks,
         required_outputs=required_outputs,
         execution_entry=execution_entry,
+        compiler_dependency_paths=compiler_dependency_paths,
+        runtime_extern_execution=runtime_extern_execution,
     )
 
 

@@ -90,7 +90,7 @@ def _generated_files(
         f"_build/bench/{utility_name}_bench.dll",
         project_config.as_posix(),
     ]
-    build_args.append("bench/core/IOExtern.cs")
+    build_args.extend(utility_cfg.task_profile.compiler_dependency_paths)
     script_values = {
         "BUILD_ENVIRONMENT": _shell_template(
             "build_environment.sh", {"DOTNET_HEAP_LIMIT": DAFNY_VERIFY_DOTNET_HEAP_LIMIT}

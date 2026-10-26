@@ -20,6 +20,7 @@ from typing import Generic, TypeVar
 
 import yaml
 
+from benchmarks.profiles import RuntimeExternExecution
 from evaluation.agent.container import candidate_container_plan
 from evaluation.agent.delivery import agent_prompt, write_agent_task
 from evaluation.agent.protocol import CandidateLayout, agent_command
@@ -84,6 +85,14 @@ class HarnessExecutionIdentity(StrEnum):
 
 
 @dataclass(frozen=True)
+class RuntimeDependency:
+    """Bind one owner-declared public compiler dependency to its release digest."""
+
+    path: Path
+    sha256: str
+
+
+@dataclass(frozen=True)
 class AgentPreparationContext:
     """Host staging locations and protected model inputs for a harness."""
 
@@ -96,6 +105,8 @@ class AgentPreparationContext:
     model_workspace_directory: Path
     read_only_workspace_paths: tuple[Path, ...]
     readable_tool_paths: tuple[Path, ...] = ()
+    runtime_dependencies: tuple[RuntimeDependency, ...] = ()
+    runtime_extern_execution: RuntimeExternExecution = RuntimeExternExecution.DRAFT
 
 
 @dataclass(frozen=True)
@@ -422,6 +433,31 @@ def prepare_agent_sandbox_context(
         raise
 
 
+def _runtime_dependencies(
+    dependency_paths: tuple[str, ...],
+    *,
+    manifest: TaskReleaseManifest,
+    read_only_paths: tuple[Path, ...],
+) -> tuple[RuntimeDependency, ...]:
+    """Resolve explicitly declared public dependencies without reading or hashing files."""
+
+    dependencies: list[RuntimeDependency] = []
+    for declared_path in dependency_paths:
+        path = Path(declared_path)
+        if path.is_absolute() or not path.parts or ".." in path.parts:
+            raise ValueError(f"runtime dependency path must be relative: {declared_path}")
+        release_path = path.as_posix()
+        if release_path not in manifest.files:
+            raise ValueError(f"runtime dependency is not a public release file: {release_path}")
+        digest = manifest.fixed_files.get(release_path)
+        if digest is None:
+            raise ValueError(f"runtime dependency is not fixed by the release: {release_path}")
+        if not any(path == root or root in path.parents for root in read_only_paths):
+            raise ValueError(f"runtime dependency is not read-only for the task: {release_path}")
+        dependencies.append(RuntimeDependency(path=path, sha256=digest))
+    return tuple(dependencies)
+
+
 def _prepare_agent_sandbox_context(
     *,
     prepare_agent: Callable[[AgentPreparationContext], AgentLaunchSpec],
@@ -436,6 +472,12 @@ def _prepare_agent_sandbox_context(
     run_dir = run_context.run_dir
     utility_name = run_context.utility_name
     task_spec = prepared_candidate.workspace_spec
+    task_profile = prepared_candidate.configuration.task_profile
+    runtime_dependencies = _runtime_dependencies(
+        task_profile.compiler_dependency_paths,
+        manifest=release.manifest,
+        read_only_paths=task_spec.read_only_paths,
+    )
     sandbox_root = run_dir / "sandbox"
     roots = WorkspaceRoots(
         sandbox_root=sandbox_root,
@@ -493,6 +535,8 @@ def _prepare_agent_sandbox_context(
                 Path(".codex"),
             ),
             readable_tool_paths=(Path("/opt/dafnyutils-dafny"),),
+            runtime_dependencies=runtime_dependencies,
+            runtime_extern_execution=task_profile.runtime_extern_execution,
         )
     )
     launcher = launcher_root / _LAYOUT.launcher_filename

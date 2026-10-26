@@ -316,7 +316,10 @@ def _generated_workspace(monkeypatch, public_task_id):
     )
     config = SimpleNamespace(
         task_profile=SimpleNamespace(
-            support_files=(), editable_outputs=("toy/Runner.dfy",), placeholder_outputs=()
+            support_files=(),
+            editable_outputs=("toy/Runner.dfy",),
+            placeholder_outputs=(),
+            compiler_dependency_paths=(),
         )
     )
     paths = {"utility_dir": "toy", "project_config": "toy/dfyconfig.toml"}
