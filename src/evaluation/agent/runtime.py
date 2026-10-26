@@ -306,10 +306,9 @@ def _ownership_handoff_service(
 def _ownership_handoff_targets(
     plan: ContainerWorkspacePlan,
 ) -> tuple[tuple[ContainerMount, ...], tuple[Path, ...]]:
+    # The private home also needs metadata handoff before host control cleanup.
     protected = tuple(
-        mount.source.absolute()
-        for mount in plan.mounts
-        if mount.mode is MountMode.READ_ONLY or mount.target == _LAYOUT.home_directory
+        mount.source.absolute() for mount in plan.mounts if mount.mode is MountMode.READ_ONLY
     )
     protected += tuple(
         mount.source.absolute() / "tools"

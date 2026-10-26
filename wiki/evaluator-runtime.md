@@ -59,3 +59,54 @@ benchmark proofs. Fresh independent review accepts the 17 focused fake controls
 and changed-source typing. Full-source typing retains one unchanged baseline
 return-type error at `evaluation/agent/runtime.py:834`; no diagnostic is suppressed.
 The originating plan records exact commands, hashes, versions and limits.
+
+
+## Private-control metadata cleanup — 2026-10-26
+
+Status: source independently accepted with owner unit/final-integration gates.
+Sixth cohort weekly-20261026T000458Z-48fb3c6ce74f independently observed normal
+shared-cat-r02 exit0, successful cleanup/regular archive production, and final
+success with all four evaluation sets passed (5/5 commands) at01:14Z. This is one
+live case; the user subsequently stopped the incomplete eighty-trial cohort.
+Origin: [private control cleanup plan](../plan/2026-10-26-private-control-cleanup.md).
+Sources: evaluation/agent/runtime.py::_ownership_handoff_targets,
+handoff_agent_sandbox_ownership, cleanup_sandbox_control_files,
+run_candidate_lifecycle; evaluation/agent/ownership.py.
+
+Trusted controllers can create root-owned runtime directories under private
+/run/agent_home. Excluding that home from output metadata handoff while later
+chmodding every private control directory makes host cleanup fail with EPERM.
+The lifecycle then returns before packaging, so even an agent exit0 can produce
+only blocked evaluations with zero commands. Run statusfailed alone does not
+establish that a candidate was evaluated. Operational blocked_reason must be
+checked separately without exposing evaluator outputs or private contents.
+
+The private home now participates in the existing bounded, metadata-only
+post-termination ownership handoff. Read-only mounts and trusted run/tools
+remain protected; source validation, no-follow/alias/hardlink checks and helper
+limits remain. The helper preserves modes, reads no contents, uses no network
+or forwarded credential environment, and runs only after confirmed shutdown.
+Private-home mounts and model restrictions are unchanged; home is not packaged.
+Strict cleanup failure and submission/archive/evaluation rules remain unchanged.
+
+The pre-fix fake reproduction reaches the exact EPERM before packaging. Owner
+156units/21integrations and Ruff88files pass; independent13focused cases and
+additional pure security/lifecycle probes accept the settled source. Default
+typing remains limited by host dependency discovery, recorded with exact hashes
+and commands in the plan. These checks prove no actual archive production,
+benchmark/proof success, paid performance or complete live result. Interrupted
+run results are preserved; a fresh native run is separately authorized.
+
+Native evidence is metadata-only: current source runtime.py SHA256
+f41a67d25a299594b2ac02d19e21492346900d1c467ca5cece983d60dea65d87,
+agent image df8c884cb5e22a8019afd62a729d56b1901b1b5d41befe33a242a274818468fd;
+regular result.tar.gz15169bytes, normal agent exit0/no timeout, no blocked
+evaluations and exact final status success. Archive contents, private home,
+candidate source and evaluator inputs/outputs were not read. These native
+observations separately establish this repaired lifecycle on one completed
+trial; they do not establish absence of defects in remaining trials.
+
+The user subsequently stopped the sixth cohort at01:38Z. The single complete
+live success remains valid evidence; no full-cohort completion or further
+repair/rerun is authorized. See the originating plan for preserved results,
+explicit interruptions and unreviewed stop-boundary observations.
