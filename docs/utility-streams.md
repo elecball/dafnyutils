@@ -130,6 +130,30 @@ selection argument lives beside the implementation in
 then connect those results to ordered input reads, including partial stdin data
 on a stream failure.
 
+## dd
+
+### Implementation
+
+[`ReadBlock`, `FlushFull`, and `RunCore`](../bench/utils/dd/DdCore.dfy) copy finite
+stdin to stdout with explicit `status=none`. A single bounded native read may
+return a short prefix; full-block mode accumulates these reads locally. The
+implementation applies ASCII case conversion, NUL padding and adjacent-byte
+swapping, retaining an odd byte across input records. Separate input and output
+block sizes and count limits determine when it reads and flushes. A failed
+output stops further input consumption. File descriptors, seeking and timed
+statistics are outside [this stream slice](../bench/utils/dd/dd.md).
+
+### Proof idea
+
+[`Transformed`, `InputPartition`, and `OutputPartition`](../bench/utils/dd/DdSpec.dfy)
+relate each output byte to its source position and constrain input records,
+native observations and output boundaries. They distinguish intermediate full
+blocks from the final flush, including committed prefixes and GNU's diagnostic
+choice on failure. Local append lemmas preserve those relations as blocks are
+read and written. The final `RunCore` postcondition establishes `Spec`; the
+shared `ReadStdinChunk` contract supplies only one bounded read, with no trusted
+padding, conversion or block-count policy.
+
 ## expand
 
 ### Implementation
@@ -203,6 +227,29 @@ outcomes, headers, stdout/error fragments, and failure status in operand order.
 [`RecordSelectionRelation` and `CoreInputTraceWitnessRelation`](../bench/utils/head/HeadProof.dfy)
 connect the recursive record selection and accumulated operand results to those
 cut and trace witnesses.
+
+## join
+
+### Implementation
+
+[`Records`, `Tiles`, and `Render`](../bench/utils/join/JoinDataCore.dfy) split binary
+input into records and fields, compare join keys and group equal-key runs. Each
+matched pair of runs emits its Cartesian product in GNU order; unmatched runs
+follow `-a`/`-v`, and field lists, filler, headers and NUL delimiters control the
+rendered rows. [`JoinPlanCore`](../bench/utils/join/JoinPlanCore.dfy) accounts for
+read-ahead when locating order warnings and the first fatal order error, so
+previous output and diagnostic order remain observable.
+
+### Proof idea
+
+[`RecordCuts`, `Fields`, `Tiles`, and `PrintedRow`](../bench/utils/join/JoinDataSpec.dfy)
+constrain exact input partitions, maximal key-match rectangles and every output
+field. Row coordinates prescribe Cartesian ordering; output partitions prevent
+missing or extra rows. `ReadLayout`, `FirstWarning`, and `FirstFatal` constrain
+the warning/error positions independently of the implementation's scans.
+The local algorithms construct these witnesses before the IO proof composes
+reads and writes into the principal `Spec` contract. Key comparison, field
+selection and warning policy add no native trust.
 
 ## nl
 

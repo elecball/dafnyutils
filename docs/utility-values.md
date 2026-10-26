@@ -29,6 +29,30 @@ constructs pieces and output boundaries: each operand contributes exactly its
 basename and separator, in order. `RunOutputSummaryGivesRelation` combines this
 with command selection and the error branches.
 
+## date
+
+### Implementation
+
+[`Select` and `TimeOutput`](../bench/utils/date/DateCore.dfy) select an explicit
+reference-file timestamp or a parsed instant, then convert epoch seconds into
+UTC calendar fields locally. [`DateCalendar`](../bench/utils/date/DateCalendar.dfy)
+uses 400-year Gregorian eras and bounded year/month searches. The renderer
+partitions the format into literals and supported directives, including ISO
+week dates and C-locale composite fields. GNU format modifiers, batch input,
+clock mutation and non-UTC locales are outside
+[the declared scope](../bench/utils/date/date.md).
+
+### Proof idea
+
+[`Calendar` and `NumberText`](../bench/utils/date/DateModel.dfy) characterize the
+epoch equation, leap-year/month bounds and positional decimal output. Local
+lemmas prove the era conversion and rendering against these relations.
+[`DateSpec`](../bench/utils/date/DateSpec.dfy) requires exact directive meanings,
+format/output partitions, timestamp selection and stream outcomes. The final
+entry directly ensures `Spec`. File metadata and the existing gnulib date parser
+remain trusted observations; calendar conversion and formatting are utility
+proof obligations.
+
 ## dirname
 
 ### Implementation
@@ -264,6 +288,37 @@ constructs this witness from the processed-prefix summary.
 context accounting, including empty operands that make no native call.
 The result is tied to the native readlink contract, not merely to an arbitrary
 target string.
+
+## realpath
+
+### Implementation
+
+[`InterpretPhysical`, `InterpretStrip`, and `Relative`](../bench/utils/realpath/RealpathCore.dfy)
+implement the pinned GNU default physical traversal, explicit `-P`, logical
+two-pass `-L`, and strip `-s` modes. Physical traversal expands links before
+handling `..`; logical traversal normalizes lexical parents before expanding
+links. After twenty expansions, cycle keys use parent device/inode identity
+and the entire remaining raw path, preserving the difference between cycles
+and repeated links with different suffixes. There is no global forty-link cap.
+`-m` permits missing components and retains a repeated link component;
+`-E`/`-e` apply the specified existence/directory checks and cycle errors.
+Relative-directory preparation precedes operands; ordered results and diagnostics
+preserve quiet/NUL behavior and fatal-error prefixes. See the
+[full traversal scope](../bench/utils/realpath/realpath.md).
+
+### Proof idea
+
+[`Meaning`, `PhysicalMeaning`, and `RelativePath`](../bench/utils/realpath/RealpathSpec.dfy)
+give inductive path denotations and a maximal-common-prefix relation. They bind
+raw readlink results, ordinal-sensitive parent status observations and exact
+output partitions, without a trusted canonicalization answer. A utility-local
+finite-record measure and structural descent establish termination: every new
+cycle key retains a native record, whose 24-byte size and the fixed 64-bit
+address space give a physical storage bound. Exhausting that representation
+produces GNU's global memory-fatal result, not an arbitrary traversal limit;
+earlier host allocation-failure timing remains outside the enough-memory
+environment. `RunCore` directly ensures `Spec`, with no new trusted primitive
+or termination waiver.
 
 ## seq
 

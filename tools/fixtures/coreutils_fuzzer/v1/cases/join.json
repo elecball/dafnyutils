@@ -1,0 +1,305 @@
+{
+  "schema_version": "coreutils-fuzzer.case-set.v1",
+  "util": "join",
+  "cases": [
+    {
+      "id": "signed-minimum-field-number",
+      "case": {
+        "argv": [
+          "-j",
+          "-9223372036854775808"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "duplicate-cartesian-order",
+      "case": {
+        "argv": [
+          "left",
+          "right"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [
+            {
+              "relative_path": "left",
+              "bytes": [
+                97,
+                32,
+                49,
+                10,
+                97,
+                32,
+                50,
+                10,
+                98,
+                32,
+                51,
+                10
+              ],
+              "mode": 420
+            },
+            {
+              "relative_path": "right",
+              "bytes": [
+                97,
+                32,
+                88,
+                10,
+                97,
+                32,
+                89,
+                10,
+                98,
+                32,
+                90,
+                10
+              ],
+              "mode": 420
+            }
+          ],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "check-order-before-pair-product",
+      "case": {
+        "argv": [
+          "--check-order",
+          "left",
+          "right"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [
+            {
+              "relative_path": "left",
+              "bytes": [
+                98,
+                32,
+                49,
+                10,
+                97,
+                32,
+                50,
+                10
+              ],
+              "mode": 420
+            },
+            {
+              "relative_path": "right",
+              "bytes": [
+                98,
+                32,
+                88,
+                10,
+                97,
+                32,
+                89,
+                10
+              ],
+              "mode": 420
+            }
+          ],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "binary-order-diagnostic",
+      "case": {
+        "argv": [
+          "--check-order",
+          "left",
+          "right"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [
+            {
+              "relative_path": "left",
+              "bytes": [
+                98,
+                32,
+                120,
+                10,
+                97,
+                0,
+                104,
+                105,
+                100,
+                100,
+                101,
+                110,
+                10
+              ],
+              "mode": 420
+            },
+            {
+              "relative_path": "right",
+              "bytes": [
+                98,
+                32,
+                89,
+                10
+              ],
+              "mode": 420
+            }
+          ],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "default-warning-order",
+      "case": {
+        "argv": [
+          "left",
+          "right"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [
+            {
+              "relative_path": "left",
+              "bytes": [
+                97,
+                10,
+                120,
+                10,
+                111
+              ],
+              "mode": 420
+            },
+            {
+              "relative_path": "right",
+              "bytes": [
+                98,
+                10,
+                121,
+                10,
+                112
+              ],
+              "mode": 420
+            }
+          ],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "nul-field-separator",
+      "case": {
+        "argv": [
+          "-t",
+          "\\0",
+          "left",
+          "right"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [
+            {
+              "relative_path": "left",
+              "bytes": [
+                97,
+                0,
+                76,
+                10
+              ],
+              "mode": 420
+            },
+            {
+              "relative_path": "right",
+              "bytes": [
+                97,
+                0,
+                82,
+                10
+              ],
+              "mode": 420
+            }
+          ],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "saturated-field-repeated-stdin-errno",
+      "case": {
+        "argv": [
+          "-2",
+          "9223372036854775808",
+          "-e",
+          "x:y",
+          "-",
+          "-"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "ignore-case-uppercase-punctuation-order",
+      "case": {
+        "argv": [
+          "-i",
+          "-v",
+          "1",
+          "-v",
+          "2",
+          "left",
+          "-"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [
+            {
+              "relative_path": "left",
+              "bytes": [
+                99
+              ],
+              "mode": 420
+            }
+          ],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [
+          96
+        ],
+        "cwd": "."
+      }
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": "coreutils-fuzzer.regression-suite.v1",
+  "util": "join",
+  "case_set": "../cases/join.json",
+  "expectations": [
+    {
+      "case_id": "signed-minimum-field-number",
+      "expect": "match"
+    },
+    {
+      "case_id": "duplicate-cartesian-order",
+      "expect": "match"
+    },
+    {
+      "case_id": "check-order-before-pair-product",
+      "expect": "match"
+    },
+    {
+      "case_id": "binary-order-diagnostic",
+      "expect": "match"
+    },
+    {
+      "case_id": "default-warning-order",
+      "expect": "match"
+    },
+    {
+      "case_id": "nul-field-separator",
+      "expect": "match"
+    },
+    {
+      "case_id": "saturated-field-repeated-stdin-errno",
+      "expect": "match"
+    },
+    {
+      "case_id": "ignore-case-uppercase-punctuation-order",
+      "expect": "match"
+    }
+  ]
+}

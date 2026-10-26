@@ -1,0 +1,43 @@
+{
+  "schema_version": "coreutils-fuzzer.regression-suite.v1",
+  "util": "realpath",
+  "case_set": "../cases/realpath.json",
+  "expectations": [
+    {
+      "case_id": "realpath-empty-long-option-ambiguity",
+      "expect": "match"
+    },
+    {
+      "case_id": "realpath-nondirectory-dot-parent-suffix",
+      "expect": "match"
+    },
+    {
+      "case_id": "realpath-unsearchable-dot-parent-suffix",
+      "expect": "match"
+    },
+    {
+      "case_id": "realpath-physical-link-parent",
+      "expect": "match"
+    },
+    {
+      "case_id": "realpath-logical-link-parent",
+      "expect": "match"
+    },
+    {
+      "case_id": "realpath-physical-cycle-existing",
+      "expect": "match"
+    },
+    {
+      "case_id": "realpath-physical-cycle-missing",
+      "expect": "match"
+    },
+    {
+      "case_id": "realpath-physical-48-link-chain",
+      "expect": "match"
+    },
+    {
+      "case_id": "realpath-repeated-link-distinct-suffix",
+      "expect": "match"
+    }
+  ]
+}

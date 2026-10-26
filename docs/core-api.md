@@ -344,6 +344,19 @@ to Pwd's utility implementation and proof.
   the actual `EINVAL` for an ordinary file instead of relabeling it as `ELOOP`.
   Metadata name-length failures retain `ENAMETOOLONG`.
 
+`SYMLINK_MAX_DEPTH = 40` bounds symlink following within one modeled native
+pathname lookup, matching the Linux kernel's
+[`MAXSYMLINKS` limit](https://docs.kernel.org/filesystems/path-lookup.html).
+It is not a bound on the total number of `ReadLink` calls a utility may perform.
+The repository's pinned GNU `realpath` walks and expands links in user space,
+so it can resolve finite chains longer than forty links. Library implementations
+and other revisions may impose different cumulative limits. The realpath
+utility implements and proves its pinned traversal and cycle rules locally;
+the bounded metadata resolver cannot replace that algorithm. The existing
+`Symlink` node, `ReadLink` primitive and ordinal-sensitive parent `GetFileStatus`
+contract supply the individual observations. No shared canonicalization
+primitive or global utility traversal bound is added.
+
 ### Authenticated relative paths
 
 The following methods pass the raw operand unchanged and start resolution at the

@@ -47,12 +47,12 @@ def _pytest_args() -> list[str]:
 
 
 def _build(root: Path, definition: BenchmarkDefinition) -> int:
-    if definition.task_id == "touch":
+    if definition.task_id in {"touch", "date"}:
         status = _run(
             [
                 "make",
                 "-C",
-                "bench/utils/touch",
+                f"bench/utils/{definition.task_id}",
                 "build-time-parser",
                 f"BUILD_DIR={_build_dir(root)}",
             ],

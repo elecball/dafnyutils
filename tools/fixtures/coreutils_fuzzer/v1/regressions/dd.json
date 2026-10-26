@@ -1,0 +1,19 @@
+{
+  "schema_version": "coreutils-fuzzer.regression-suite.v1",
+  "util": "dd",
+  "case_set": "../cases/dd.json",
+  "expectations": [
+    {
+      "case_id": "scan-conversion-before-delayed-output-fullblock-error",
+      "expect": "match"
+    },
+    {
+      "case_id": "overflow-unit-before-invalid-suffix",
+      "expect": "match"
+    },
+    {
+      "case_id": "zero-cancels-overflow-before-invalid-suffix",
+      "expect": "match"
+    }
+  ]
+}

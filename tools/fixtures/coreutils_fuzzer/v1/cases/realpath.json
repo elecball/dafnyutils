@@ -1,0 +1,427 @@
+{
+  "schema_version": "coreutils-fuzzer.case-set.v1",
+  "util": "realpath",
+  "cases": [
+    {
+      "id": "realpath-empty-long-option-ambiguity",
+      "case": {
+        "argv": [
+          "-s",
+          "--=x"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "realpath-nondirectory-dot-parent-suffix",
+      "case": {
+        "argv": [
+          "-s",
+          "plain/./../missing"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [
+            {
+              "relative_path": "plain",
+              "bytes": [
+                100,
+                97,
+                116,
+                97
+              ],
+              "mode": 420
+            }
+          ],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "realpath-unsearchable-dot-parent-suffix",
+      "case": {
+        "argv": [
+          "-s",
+          "blocked/./../missing"
+        ],
+        "fixture": {
+          "directories": [
+            {
+              "relative_path": "blocked",
+              "mode": 0
+            }
+          ],
+          "files": [],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "realpath-physical-link-parent",
+      "case": {
+        "argv": [
+          "-P",
+          "link/.."
+        ],
+        "fixture": {
+          "directories": [
+            {
+              "relative_path": "parent",
+              "mode": 493
+            },
+            {
+              "relative_path": "parent/child",
+              "mode": 493
+            }
+          ],
+          "files": [],
+          "symlinks": [
+            {
+              "relative_path": "link",
+              "target": "parent/child"
+            }
+          ],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "realpath-logical-link-parent",
+      "case": {
+        "argv": [
+          "-L",
+          "link/.."
+        ],
+        "fixture": {
+          "directories": [
+            {
+              "relative_path": "parent",
+              "mode": 493
+            },
+            {
+              "relative_path": "parent/child",
+              "mode": 493
+            }
+          ],
+          "files": [],
+          "symlinks": [
+            {
+              "relative_path": "link",
+              "target": "parent/child"
+            }
+          ],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "realpath-physical-cycle-existing",
+      "case": {
+        "argv": [
+          "-eP",
+          "loop"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [],
+          "symlinks": [
+            {
+              "relative_path": "loop",
+              "target": "loop"
+            }
+          ],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "realpath-physical-cycle-missing",
+      "case": {
+        "argv": [
+          "-mP",
+          "loop/child"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [],
+          "symlinks": [
+            {
+              "relative_path": "loop",
+              "target": "loop"
+            }
+          ],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "realpath-physical-48-link-chain",
+      "case": {
+        "argv": [
+          "-eP",
+          "chain-00"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [
+            {
+              "relative_path": "target",
+              "bytes": [
+                120
+              ],
+              "mode": 420
+            }
+          ],
+          "symlinks": [
+            {
+              "relative_path": "chain-00",
+              "target": "chain-01"
+            },
+            {
+              "relative_path": "chain-01",
+              "target": "chain-02"
+            },
+            {
+              "relative_path": "chain-02",
+              "target": "chain-03"
+            },
+            {
+              "relative_path": "chain-03",
+              "target": "chain-04"
+            },
+            {
+              "relative_path": "chain-04",
+              "target": "chain-05"
+            },
+            {
+              "relative_path": "chain-05",
+              "target": "chain-06"
+            },
+            {
+              "relative_path": "chain-06",
+              "target": "chain-07"
+            },
+            {
+              "relative_path": "chain-07",
+              "target": "chain-08"
+            },
+            {
+              "relative_path": "chain-08",
+              "target": "chain-09"
+            },
+            {
+              "relative_path": "chain-09",
+              "target": "chain-10"
+            },
+            {
+              "relative_path": "chain-10",
+              "target": "chain-11"
+            },
+            {
+              "relative_path": "chain-11",
+              "target": "chain-12"
+            },
+            {
+              "relative_path": "chain-12",
+              "target": "chain-13"
+            },
+            {
+              "relative_path": "chain-13",
+              "target": "chain-14"
+            },
+            {
+              "relative_path": "chain-14",
+              "target": "chain-15"
+            },
+            {
+              "relative_path": "chain-15",
+              "target": "chain-16"
+            },
+            {
+              "relative_path": "chain-16",
+              "target": "chain-17"
+            },
+            {
+              "relative_path": "chain-17",
+              "target": "chain-18"
+            },
+            {
+              "relative_path": "chain-18",
+              "target": "chain-19"
+            },
+            {
+              "relative_path": "chain-19",
+              "target": "chain-20"
+            },
+            {
+              "relative_path": "chain-20",
+              "target": "chain-21"
+            },
+            {
+              "relative_path": "chain-21",
+              "target": "chain-22"
+            },
+            {
+              "relative_path": "chain-22",
+              "target": "chain-23"
+            },
+            {
+              "relative_path": "chain-23",
+              "target": "chain-24"
+            },
+            {
+              "relative_path": "chain-24",
+              "target": "chain-25"
+            },
+            {
+              "relative_path": "chain-25",
+              "target": "chain-26"
+            },
+            {
+              "relative_path": "chain-26",
+              "target": "chain-27"
+            },
+            {
+              "relative_path": "chain-27",
+              "target": "chain-28"
+            },
+            {
+              "relative_path": "chain-28",
+              "target": "chain-29"
+            },
+            {
+              "relative_path": "chain-29",
+              "target": "chain-30"
+            },
+            {
+              "relative_path": "chain-30",
+              "target": "chain-31"
+            },
+            {
+              "relative_path": "chain-31",
+              "target": "chain-32"
+            },
+            {
+              "relative_path": "chain-32",
+              "target": "chain-33"
+            },
+            {
+              "relative_path": "chain-33",
+              "target": "chain-34"
+            },
+            {
+              "relative_path": "chain-34",
+              "target": "chain-35"
+            },
+            {
+              "relative_path": "chain-35",
+              "target": "chain-36"
+            },
+            {
+              "relative_path": "chain-36",
+              "target": "chain-37"
+            },
+            {
+              "relative_path": "chain-37",
+              "target": "chain-38"
+            },
+            {
+              "relative_path": "chain-38",
+              "target": "chain-39"
+            },
+            {
+              "relative_path": "chain-39",
+              "target": "chain-40"
+            },
+            {
+              "relative_path": "chain-40",
+              "target": "chain-41"
+            },
+            {
+              "relative_path": "chain-41",
+              "target": "chain-42"
+            },
+            {
+              "relative_path": "chain-42",
+              "target": "chain-43"
+            },
+            {
+              "relative_path": "chain-43",
+              "target": "chain-44"
+            },
+            {
+              "relative_path": "chain-44",
+              "target": "chain-45"
+            },
+            {
+              "relative_path": "chain-45",
+              "target": "chain-46"
+            },
+            {
+              "relative_path": "chain-46",
+              "target": "chain-47"
+            },
+            {
+              "relative_path": "chain-47",
+              "target": "target"
+            }
+          ],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "realpath-repeated-link-distinct-suffix",
+      "case": {
+        "argv": [
+          "-eP",
+          "dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/dot/target"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [
+            {
+              "relative_path": "target",
+              "bytes": [
+                120
+              ],
+              "mode": 420
+            }
+          ],
+          "symlinks": [
+            {
+              "relative_path": "dot",
+              "target": "."
+            }
+          ],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    }
+  ]
+}

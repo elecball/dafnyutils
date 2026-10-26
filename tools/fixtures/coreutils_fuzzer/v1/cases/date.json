@@ -1,0 +1,54 @@
+{
+  "schema_version": "coreutils-fuzzer.case-set.v1",
+  "util": "date",
+  "cases": [
+    {
+      "id": "locale-negative-short-year-seed1-264",
+      "case": {
+        "argv": ["-d", "@-3187056888438.630696753", "+%V|%b|%b|%x|%p|%P"],
+        "fixture": {"directories": [], "files": [], "symlinks": [], "hardlinks": []},
+        "stdin": [], "cwd": "."
+      }
+    },
+    {
+      "id": "locale-negative-full-year",
+      "case": {
+        "argv": ["-d", "@-62198755200", "+%D|%x|%y|%c|%Y"],
+        "fixture": {"directories": [], "files": [], "symlinks": [], "hardlinks": []},
+        "stdin": [], "cwd": "."
+      }
+    },
+    {
+      "id": "locale-small-positive-full-year",
+      "case": {
+        "argv": ["-d", "@-62135596800", "+%c|%Y"],
+        "fixture": {"directories": [], "files": [], "symlinks": [], "hardlinks": []},
+        "stdin": [], "cwd": "."
+      }
+    },
+    {
+      "id": "empty-iso-precision-is-ambiguous",
+      "case": {
+        "argv": ["--iso-8601="],
+        "fixture": {"directories": [], "files": [], "symlinks": [], "hardlinks": []},
+        "stdin": [], "cwd": "."
+      }
+    },
+    {
+      "id": "empty-rfc-precision-is-ambiguous",
+      "case": {
+        "argv": ["--rfc-3339="],
+        "fixture": {"directories": [], "files": [], "symlinks": [], "hardlinks": []},
+        "stdin": [], "cwd": "."
+      }
+    },
+    {
+      "id": "reference-error-conditional-filename-quoting",
+      "case": {
+        "argv": ["--reference=missing", "+%s"],
+        "fixture": {"directories": [], "files": [], "symlinks": [], "hardlinks": []},
+        "stdin": [], "cwd": "."
+      }
+    }
+  ]
+}

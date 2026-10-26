@@ -1,0 +1,77 @@
+{
+  "schema_version": "coreutils-fuzzer.case-set.v1",
+  "util": "dd",
+  "cases": [
+    {
+      "id": "scan-conversion-before-delayed-output-fullblock-error",
+      "case": {
+        "argv": [
+          "status=none",
+          "oflag=fullblock",
+          "conv="
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "overflow-unit-before-invalid-suffix",
+      "case": {
+        "argv": [
+          "status=none",
+          "count=9223372036854775808bad"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [],
+        "cwd": "."
+      }
+    },
+    {
+      "id": "zero-cancels-overflow-before-invalid-suffix",
+      "case": {
+        "argv": [
+          "status=none",
+          "count=0x9223372036854775808bad"
+        ],
+        "fixture": {
+          "directories": [],
+          "files": [],
+          "symlinks": [],
+          "hardlinks": []
+        },
+        "stdin": [
+          109,
+          117,
+          115,
+          116,
+          32,
+          114,
+          101,
+          109,
+          97,
+          105,
+          110,
+          32,
+          117,
+          110,
+          114,
+          101,
+          97,
+          100
+        ],
+        "cwd": "."
+      }
+    }
+  ]
+}

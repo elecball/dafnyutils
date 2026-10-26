@@ -152,6 +152,36 @@ pub(crate) static UTILITY_CAPABILITIES: &[UtilityCapability] = &[
         ]),
         ..capability!("cp", cp)
     },
+    UtilityCapability {
+        generated_options: Some(&[
+            "-d",
+            "--date",
+            "-r",
+            "--reference",
+            "-u",
+            "--uct",
+            "--utc",
+            "--universal",
+            "-I",
+            "--iso-8601",
+            "-R",
+            "--rfc-email",
+            "--rfc-822",
+            "--rfc-2822",
+            "--rfc-3339",
+            "--help",
+            "--version",
+        ]),
+        option_value_flags: &["-d", "--date", "-r", "--reference", "--rfc-3339"],
+        extra_runtime_files: &["touch_time_parser"],
+        controlled_fixture_times: true,
+        ..capability!("date", date)
+    },
+    UtilityCapability {
+        stdin_policy: StdinPolicy::Always,
+        generated_options: Some(&["--help", "--version"]),
+        ..capability!("dd", dd)
+    },
     capability!("dirname", dirname),
     UtilityCapability {
         option_value_flags: &["-B", "--block-size"],
@@ -187,6 +217,11 @@ pub(crate) static UTILITY_CAPABILITIES: &[UtilityCapability] = &[
         stdin_policy: StdinPolicy::Stream,
         option_value_flags: &["-c", "--bytes", "-n", "--lines"],
         ..capability!("head", head)
+    },
+    UtilityCapability {
+        stdin_policy: StdinPolicy::Comm,
+        option_value_flags: &["-1", "-2", "-j", "-t", "-a", "-v", "-e", "-o"],
+        ..capability!("join", join)
     },
     capability!("link", link),
     capability!("ln", ln),
@@ -259,6 +294,33 @@ pub(crate) static UTILITY_CAPABILITIES: &[UtilityCapability] = &[
     capability!("printf", printf),
     capability!("pwd", pwd),
     capability!("readlink", readlink),
+    UtilityCapability {
+        option_value_flags: &["--relative-to", "--relative-base"],
+        generated_options: Some(&[
+            "-E",
+            "-e",
+            "-m",
+            "-L",
+            "-P",
+            "-s",
+            "-q",
+            "-z",
+            "--canonicalize",
+            "--canonicalize-existing",
+            "--canonicalize-missing",
+            "--logical",
+            "--physical",
+            "--strip",
+            "--no-symlinks",
+            "--quiet",
+            "--zero",
+            "--relative-to",
+            "--relative-base",
+            "--help",
+            "--version",
+        ]),
+        ..capability!("realpath", realpath)
+    },
     UtilityCapability {
         requires_root_cwd: true,
         generated_options: Some(&[
@@ -480,9 +542,10 @@ mod tests {
         assert_eq!(
             patterned,
             BTreeSet::from([
-                "cat", "chmod", "comm", "cp", "csplit", "cut", "du", "expand", "head", "link",
-                "ln", "ls", "mkdir", "mkfifo", "mv", "nl", "paste", "readlink", "rm", "rmdir",
-                "stat", "tail", "touch", "truncate", "tsort", "uniq", "unlink", "wc",
+                "cat", "chmod", "comm", "cp", "csplit", "cut", "date", "dd", "du", "expand",
+                "head", "join", "link", "ln", "ls", "mkdir", "mkfifo", "mv", "nl", "paste",
+                "readlink", "realpath", "rm", "rmdir", "stat", "tail", "touch", "truncate", "tsort",
+                "uniq", "unlink", "wc",
             ])
         );
     }

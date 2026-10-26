@@ -1,0 +1,13 @@
+{
+  "schema_version": "coreutils-fuzzer.regression-suite.v1",
+  "util": "date",
+  "case_set": "../cases/date.json",
+  "expectations": [
+    {"case_id": "locale-negative-short-year-seed1-264", "expect": "match"},
+    {"case_id": "locale-negative-full-year", "expect": "match"},
+    {"case_id": "locale-small-positive-full-year", "expect": "match"},
+    {"case_id": "empty-iso-precision-is-ambiguous", "expect": "match"},
+    {"case_id": "empty-rfc-precision-is-ambiguous", "expect": "match"},
+    {"case_id": "reference-error-conditional-filename-quoting", "expect": "match"}
+  ]
+}
