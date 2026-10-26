@@ -206,7 +206,11 @@ def write_compose_override(
     agent_launch: AgentLaunchSpec,
     launch_command: tuple[str, ...],
     container_labels: dict[str, str] | None = None,
+    staging_image: str | None = None,
 ) -> None:
+    """Write candidate services with the selected public-workspace staging image."""
+    if staging_image is not None and not staging_image.strip():
+        raise ValueError("staging image must not be empty")
     labels = container_labels or {}
     agent_service: dict[str, object] = {
         "container_name": agent_container_name,
@@ -240,7 +244,7 @@ def write_compose_override(
         "image": (
             agent_launch.image
             if agent_launch.controller_identity is HarnessExecutionIdentity.TRUSTED_ROOT
-            else "dafnyutils-task:latest"
+            else (staging_image if staging_image is not None else "dafnyutils-task:latest")
         ),
         "command": ["sleep", "infinity"],
         "network_mode": "none",
@@ -405,7 +409,11 @@ def prepare_agent_sandbox_context(
     run_context: CandidateRunContext,
     prepared_candidate: PreparedReleaseTask,
     release: PreparedRelease,
+    staging_image: str | None = None,
 ) -> AgentSandboxContext:
+    """Prepare an isolated candidate with an optional public-workspace staging image."""
+    if staging_image is not None and not staging_image.strip():
+        raise ValueError("staging image must not be empty")
     if not docker_runtime_available():
         raise RuntimeError(
             "docker compose sandbox is required for agent execution, but Docker is unavailable"
@@ -426,6 +434,7 @@ def prepare_agent_sandbox_context(
             prepared_candidate=prepared_candidate,
             release=release,
             control_dir=control_dir,
+            staging_image=staging_image,
         )
     except BaseException:
         shutil.rmtree(control_dir, ignore_errors=True)
@@ -467,7 +476,10 @@ def _prepare_agent_sandbox_context(
     prepared_candidate: PreparedReleaseTask,
     release: PreparedRelease,
     control_dir: Path,
+    staging_image: str | None = None,
 ) -> AgentSandboxContext:
+    if staging_image is not None and not staging_image.strip():
+        raise ValueError("staging image must not be empty")
     run_dir = run_context.run_dir
     utility_name = run_context.utility_name
     task_spec = prepared_candidate.workspace_spec
@@ -569,6 +581,7 @@ def _prepare_agent_sandbox_context(
         staged_workspace_dir=staged_workspace,
         agent_launch=agent_launch,
         launch_command=launch_command,
+        staging_image=staging_image,
         container_labels={
             _DOCKER_EVAL_RUN_LABEL: cleanup_label,
             _DOCKER_EVAL_TASK_LABEL: _docker_name_component(

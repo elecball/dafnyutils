@@ -141,6 +141,7 @@ def build_evaluations(
 def derived_oracle_commands(
     utility_cfg: ResolvedBenchmark,
 ) -> dict[str, str]:
+    """Derive required commands with an overridable official fuzzer container image."""
     utility_name = utility_cfg.name
     paths = utility_paths(utility_cfg, utility_name)
     bench_test = f'"${{EVAL_REPO_ROOT:-.}}/{utility_cfg.evaluation.test_path}"'
@@ -163,7 +164,8 @@ def derived_oracle_commands(
     if utility_cfg.evaluation.fuzzer_target is not None:
         commands["fuzzer"] = (
             f'python3 "${{EVAL_REPO_ROOT:-.}}/tools/coreutils_fuzzer/run.py" '
-            f"fuzz {utility_cfg.evaluation.fuzzer_target}"
+            f"fuzz {utility_cfg.evaluation.fuzzer_target} "
+            '--container-image "${COREUTILS_FUZZER_IMAGE:-dafnyutils-coreutils-fuzzer:latest}"'
         )
     return commands
 

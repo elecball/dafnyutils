@@ -150,7 +150,14 @@ def test_coreutils_oracles_use_generated_entry_gates() -> None:
 def test_coreutils_fuzzer_command_checks_stderr() -> None:
     command = derived_oracle_commands(_utility_cfg("cat"))["fuzzer"]
 
-    assert command.endswith("fuzz cat")
+    assert shlex.split(command) == [
+        "python3",
+        "${EVAL_REPO_ROOT:-.}/tools/coreutils_fuzzer/run.py",
+        "fuzz",
+        "cat",
+        "--container-image",
+        "${COREUTILS_FUZZER_IMAGE:-dafnyutils-coreutils-fuzzer:latest}",
+    ]
 
 
 # Coreutils evaluation assigns all five mandatory commands to the four evaluation types.
