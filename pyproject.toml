@@ -35,6 +35,7 @@ testpaths = ["tests"]
 norecursedirs = ["bench", "tools"]
 markers = [
     "dafny_verify: runs Dafny verification for benchmark source",
+    "integration: process, native-tool, or multi-component tests for final validation",
 ]
 
 [tool.ruff]
