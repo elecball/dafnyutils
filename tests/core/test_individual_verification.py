@@ -14,7 +14,13 @@ import pytest
 import verification
 from analysis.models import DefinitionVerificationTarget
 from benchmarks import generated_profile
-from benchmarks.task import PublicCheck, PublicRule, TaskProfile
+from benchmarks.task import (
+    ProofReuseCapability,
+    ProofReuseProtocolVersion,
+    PublicCheck,
+    PublicRule,
+    TaskProfile,
+)
 from entry_contract import EntryContractCheckSession, EntryValidationFailure, ValidatedEntryContract
 from evaluation.task import release, workspace
 from runtime.process import CapturedProcess
@@ -346,10 +352,15 @@ def test_helper_generation_and_protection(monkeypatch, public_task_id):
     spec = _generated_workspace(monkeypatch, public_task_id)
     support = Path("eval_support") / public_task_id if public_task_id else Path("eval_support")
     helper = support / "verify-target.sh"
+    verifier = dict(spec.generated_files)[support / "verify.sh"]
     assert helper in dict(spec.generated_files)
     assert helper in spec.read_only_paths
     assert helper not in spec.editable_paths
     assert "@{SCRIPT_PARENT}" not in dict(spec.generated_files)[helper]
+    assert "--describe-proof-scope" in verifier
+    assert "--compile-only" in verifier
+    assert "--build-arg=--no-verify" in verifier
+    assert "${common_args[@]}" in verifier
 
 
 # Released guidance receives the same namespaced directory as the generated protected helper.
@@ -363,7 +374,21 @@ def test_release_guidance_matches_delivered_directory(monkeypatch):
     profile = TaskProfile.model_construct(
         public_rules=(rule, other_rule),
         public_checks=(
-            PublicCheck(check_id="verify", title="Complete", argv=("./eval_support/verify.sh",)),
+            PublicCheck(
+                check_id="verify",
+                title="Complete",
+                argv=("./eval_support/verify.sh",),
+                proof_reuse=ProofReuseCapability(
+                    protocol=ProofReuseProtocolVersion.V1,
+                    proof_roots=("toy/Runner.dfy",),
+                    verification_options=("--standard-libraries:false",),
+                    describe_argv=(
+                        "./eval_support/verify.sh",
+                        "--describe-proof-scope",
+                    ),
+                    compile_argv=("./eval_support/verify.sh", "--compile-only"),
+                ),
+            ),
         ),
     )
 
@@ -385,10 +410,19 @@ def test_release_guidance_matches_delivered_directory(monkeypatch):
     )
     assert public.public_rules[1] == other_rule
     assert public.public_checks[0].argv == ("./eval_support/algorithm-1/verify.sh",)
+    assert public.public_checks[0].proof_reuse is not None
+    assert public.public_checks[0].proof_reuse.describe_argv == (
+        "./eval_support/algorithm-1/verify.sh",
+        "--describe-proof-scope",
+    )
+    assert public.public_checks[0].proof_reuse.compile_argv == (
+        "./eval_support/algorithm-1/verify.sh",
+        "--compile-only",
+    )
 
 
-# Optional feedback guidance adds no mandatory check and keeps the existing full command.
-def test_public_check_contract_unchanged(monkeypatch):
+# Generated tasks publish one optional capability without adding another mandatory check.
+def test_public_check_contract_includes_proof_reuse(monkeypatch):
     paths = {
         "core": "toy/Core.dfy",
         "proof": "toy/Proof.dfy",
@@ -420,6 +454,25 @@ def test_public_check_contract_unchanged(monkeypatch):
             "title": "Build, boundary, and Dafny verification gate",
             "argv": ["./eval_support/verify.sh"],
             "working_directory": None,
+            "proof_reuse": {
+                "protocol": "benchmark.dafny-proof-reuse.v1",
+                "proof_roots": ["toy/Runner.dfy"],
+                "verification_options": [
+                    "--standard-libraries:false",
+                    "--library:bench/core",
+                    "--allow-warnings",
+                    "--boogie=/randomSeed:42",
+                    "--verify-included-files",
+                    "--isolate-assertions",
+                    "--verification-time-limit:30",
+                    "--allow-external-contracts",
+                ],
+                "describe_argv": [
+                    "./eval_support/verify.sh",
+                    "--describe-proof-scope",
+                ],
+                "compile_argv": ["./eval_support/verify.sh", "--compile-only"],
+            },
         }
     ]
     assert "individual-verification" in {rule["rule_id"] for rule in payload["public_rules"]}

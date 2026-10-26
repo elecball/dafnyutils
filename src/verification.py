@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -13,12 +15,19 @@ from pathlib import Path
 
 from analysis.kinds import DefinitionKind
 from analysis.models import DefinitionVerificationTarget
+from benchmarks.task import (
+    ProofReuseProtocolVersion,
+    ProofReuseScope,
+    ProofReuseTarget,
+)
 from dafny_cli import dafny_command
 from entry_contract import (
     EntryContractCheckSession,
     EntryContractManifest,
+    EntryContractSourceSnapshot,
     EntryValidationFailure,
     ValidatedEntryContract,
+    entry_contract_source_snapshot,
 )
 from runtime.process import CapturedProcess, run_process_capture_bytes
 from standard_library import (
@@ -33,6 +42,30 @@ from standard_library import (
 DAFNY_VERIFICATION_TIME_LIMIT_SEC = 30
 DAFNY_VERIFICATION_TARGET_TIMEOUT_SEC = 100
 DAFNY_VERIFICATION_RANDOM_SEED = 42
+
+_FORBIDDEN_BODYLESS_KINDS = frozenset(
+    {
+        DefinitionKind.METHOD,
+        DefinitionKind.CONSTRUCTOR,
+        DefinitionKind.CONSTANT,
+        DefinitionKind.FUNCTION,
+        DefinitionKind.PREDICATE,
+        DefinitionKind.TWOSTATE_FUNCTION,
+        DefinitionKind.TWOSTATE_PREDICATE,
+        DefinitionKind.ITERATOR,
+        DefinitionKind.FUNCTION_BY_METHOD,
+        DefinitionKind.LEAST_PREDICATE,
+        DefinitionKind.GREATEST_PREDICATE,
+    }
+)
+
+
+class _BodylessProofDeclaration(EntryValidationFailure):
+    pass
+
+
+class _EmptyProofScope(EntryValidationFailure):
+    pass
 
 
 def _verification_options(workspace_root: Path) -> tuple[str, ...]:
@@ -63,6 +96,10 @@ def _emit_outcome(outcome: str, phase: str) -> None:
 
 def _emit_target_outcome(outcome: str, phase: str) -> None:
     print(f"DAFNY_TARGET_VERIFICATION_OUTCOME={outcome} phase={phase}")
+
+
+def _emit_compile_outcome(outcome: str, phase: str) -> None:
+    print(f"DAFNY_COMPILE_OUTCOME={outcome} phase={phase}")
 
 
 def _run_verification_command(
@@ -167,28 +204,12 @@ def _verify_sources(
     verification_options: tuple[str, ...],
     libraries: tuple[Path, ...] = (),
 ) -> tuple[int, int] | None:
-    if any(
-        definition.body_start is None
-        and definition.kind
-        in {
-            DefinitionKind.METHOD,
-            DefinitionKind.CONSTRUCTOR,
-            DefinitionKind.CONSTANT,
-            DefinitionKind.FUNCTION,
-            DefinitionKind.PREDICATE,
-            DefinitionKind.TWOSTATE_FUNCTION,
-            DefinitionKind.TWOSTATE_PREDICATE,
-            DefinitionKind.ITERATOR,
-            DefinitionKind.FUNCTION_BY_METHOD,
-            DefinitionKind.LEAST_PREDICATE,
-            DefinitionKind.GREATEST_PREDICATE,
-        }
-        for definition in contract.verification_definitions
-    ):
+    try:
+        targets = _verification_targets(contract)
+    except _BodylessProofDeclaration:
         _emit_outcome("verification_failure", "verify")
         return None
-    targets = contract.verification_targets
-    if not targets:
+    except EntryValidationFailure:
         _emit_outcome("infrastructure_failure", "evidence")
         return None
     total = 0
@@ -219,22 +240,160 @@ def _verify_sources(
     return total, failed
 
 
+def _verification_targets(
+    contract: ValidatedEntryContract,
+) -> tuple[DefinitionVerificationTarget, ...]:
+    if any(
+        definition.body_start is None and definition.kind in _FORBIDDEN_BODYLESS_KINDS
+        for definition in contract.verification_definitions
+    ):
+        raise _BodylessProofDeclaration(
+            "verification scope contains a forbidden bodyless declaration"
+        )
+    targets = contract.verification_targets
+    if not targets:
+        raise _EmptyProofScope("verification scope has no native targets")
+    return targets
+
+
+def _validated_proof_targets(
+    contract: ValidatedEntryContract, workspace_root: Path
+) -> tuple[DefinitionVerificationTarget, ...]:
+    _verification_targets(contract)
+    targets = individual_targets(contract, workspace_root)
+    for target in targets:
+        _select_individual_target(
+            contract,
+            targets,
+            Path(target.source_path).resolve(),
+            target.full_name,
+        )
+    return targets
+
+
+def _source_identity(snapshot: EntryContractSourceSnapshot) -> str:
+    payload = {
+        "files": snapshot.files,
+        "manifest_sha256": snapshot.manifest_sha256,
+        "utility_sources": snapshot.utility_sources,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _validated_source_identity(
+    session: EntryContractCheckSession,
+    contract: ValidatedEntryContract,
+) -> str:
+    snapshot = entry_contract_source_snapshot(
+        session.workspace_root,
+        session.utility_root,
+        session.manifest,
+        additional_sources=contract.analysis_sources,
+    )
+    session.validate()
+    return _source_identity(snapshot)
+
+
+def _validated_session_contract(
+    session: EntryContractCheckSession,
+    dafny: str,
+) -> tuple[ValidatedEntryContract, tuple[str, ...]]:
+    options = _verification_options(session.workspace_root)
+    if session.tool_identity is not None and session.tool_identity != dafny:
+        raise EntryValidationFailure("contract session Dafny tool does not match verifier tool")
+    if session.verification_options and session.verification_options != options:
+        raise EntryValidationFailure("contract session verifier options do not match")
+    return session.validate(), options
+
+
 def verify_session(session: EntryContractCheckSession, dafny: str) -> int:
     """Verify one already-bound contract session using one explicit Dafny tool."""
-    verification_options = _verification_options(session.workspace_root)
     try:
-        if session.tool_identity is not None and session.tool_identity != dafny:
-            raise EntryValidationFailure("contract session Dafny tool does not match verifier tool")
-        if session.verification_options and session.verification_options != verification_options:
-            raise EntryValidationFailure("contract session verifier options do not match")
-        contract = session.validate()
+        contract, options = _validated_session_contract(session, dafny)
     except (EntryValidationFailure, OSError, ValueError):
         _emit_outcome("infrastructure_failure", "evidence")
         return 1
 
     return verify_contract(
-        contract, session.workspace_root, dafny, verification_options, validate=session.validate
+        contract, session.workspace_root, dafny, options, validate=session.validate
     )
+
+
+def proof_reuse_scope(
+    session: EntryContractCheckSession,
+    dafny: str,
+) -> ProofReuseScope:
+    """Return the exact validated native proof scope for trusted-host reuse."""
+    contract, options = _validated_session_contract(session, dafny)
+    targets = _validated_proof_targets(contract, session.workspace_root)
+    identity = _validated_source_identity(session, contract)
+    return ProofReuseScope(
+        protocol=ProofReuseProtocolVersion.V1,
+        source_identity=identity,
+        targets=tuple(
+            ProofReuseTarget(
+                source_path=Path(target.source_path).relative_to(session.workspace_root).as_posix(),
+                symbol=target.full_name,
+            )
+            for target in targets
+        ),
+        proof_roots=(contract.execution_source.relative_to(session.workspace_root).as_posix(),),
+        verification_options=options,
+    )
+
+
+def describe_proof_scope_session(session: EntryContractCheckSession, dafny: str) -> int:
+    """Write one JSON proof-scope descriptor and no other standard output."""
+    try:
+        scope = proof_reuse_scope(session, dafny)
+    except (EntryValidationFailure, OSError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    print(scope.model_dump_json())
+    return 0
+
+
+def compile_only_session(
+    session: EntryContractCheckSession,
+    dafny: str,
+    build_command: Sequence[str],
+) -> int:
+    """Compile once between matching validated source identities without proving."""
+    try:
+        if (
+            len(build_command) < 6
+            or build_command[0] != dafny
+            or tuple(build_command[1:4]) != ("build", "--no-verify", "--output")
+            or any(
+                not argument or argument.startswith(("-", "/", "@"))
+                for argument in build_command[4:]
+            )
+        ):
+            raise EntryValidationFailure("compile command must match the fixed no-verify shape")
+        contract, _ = _validated_session_contract(session, dafny)
+        before = _validated_source_identity(session, contract)
+    except (EntryValidationFailure, OSError, ValueError):
+        _emit_compile_outcome("infrastructure_failure", "evidence")
+        return 1
+    try:
+        build_result = _run_build_command(build_command, cwd=session.workspace_root)
+    except OSError:
+        _emit_compile_outcome("infrastructure_failure", "build")
+        return 1
+    if build_result.returncode != 0:
+        _emit_compile_outcome("compile_failure", "build")
+        return 1
+    try:
+        contract = session.validate()
+        after = _validated_source_identity(session, contract)
+        if before != after:
+            raise EntryValidationFailure("workspace source identity changed during compilation")
+    except (EntryValidationFailure, OSError, ValueError):
+        _emit_compile_outcome("infrastructure_failure", "evidence")
+        return 1
+    _emit_compile_outcome("compiled", "build")
+    return 0
 
 
 def verify_contract(
@@ -357,6 +516,37 @@ def run_full(
         _emit_outcome("infrastructure_failure", "build")
         return 1
     return run_full_session(session, dafny, build_command)
+
+
+def describe_proof_scope(
+    workspace_root: Path,
+    utility_root: Path,
+    manifest_path: Path,
+    dafny: str,
+) -> int:
+    """Load a public contract and print its validated proof-reuse scope."""
+    try:
+        session = _load_session(workspace_root, utility_root, manifest_path, dafny)
+    except (OSError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    return describe_proof_scope_session(session, dafny)
+
+
+def run_compile_only(
+    workspace_root: Path,
+    utility_root: Path,
+    manifest_path: Path,
+    dafny: str,
+    build_command: Sequence[str],
+) -> int:
+    """Load a public contract and run its declared compile-only command."""
+    try:
+        session = _load_session(workspace_root, utility_root, manifest_path, dafny)
+    except (OSError, ValueError):
+        _emit_compile_outcome("infrastructure_failure", "evidence")
+        return 1
+    return compile_only_session(session, dafny, build_command)
 
 
 def individual_targets(
@@ -493,23 +683,10 @@ def _verify_individual_target(
     return 0
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Dispatch full verification or separately scoped candidate feedback."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--workspace-root", default=".", type=Path)
-    parser.add_argument("--utility-root", required=True, type=Path)
-    parser.add_argument("--manifest", required=True, type=Path)
-    parser.add_argument("--dafny", default=dafny_command())
-    parser.add_argument("--full", action="store_true")
-    parser.add_argument("--build-arg", action="append", default=[])
-    parser.add_argument("--individual", action="store_true")
-    parser.add_argument("--list", action="store_true")
-    parser.add_argument("--source", type=Path)
-    parser.add_argument("--symbol")
-    arguments = parser.parse_args(argv)
-    scoped = arguments.list or arguments.source is not None or arguments.symbol is not None
-    if scoped and not arguments.individual:
-        parser.error("target selectors require --individual and cannot scope the full gate")
+def _dispatch_explicit_mode(
+    parser: argparse.ArgumentParser,
+    arguments: argparse.Namespace,
+) -> int | None:
     if arguments.individual:
         if arguments.full or arguments.build_arg:
             parser.error(
@@ -528,6 +705,60 @@ def main(argv: Sequence[str] | None = None) -> int:
             source=arguments.source,
             symbol=arguments.symbol,
         )
+    if arguments.describe_proof_scope:
+        if arguments.build_arg:
+            parser.error("--describe-proof-scope cannot be combined with build arguments")
+        return describe_proof_scope(
+            arguments.workspace_root,
+            arguments.utility_root,
+            arguments.manifest,
+            arguments.dafny,
+        )
+    if arguments.compile_only:
+        if not arguments.build_arg:
+            parser.error("--compile-only requires at least one --build-arg")
+        return run_compile_only(
+            arguments.workspace_root,
+            arguments.utility_root,
+            arguments.manifest,
+            arguments.dafny,
+            arguments.build_arg,
+        )
+    return None
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Dispatch full verification or separately scoped candidate feedback."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--workspace-root", default=".", type=Path)
+    parser.add_argument("--utility-root", required=True, type=Path)
+    parser.add_argument("--manifest", required=True, type=Path)
+    parser.add_argument("--dafny", default=dafny_command())
+    parser.add_argument("--full", action="store_true")
+    parser.add_argument("--build-arg", action="append", default=[])
+    parser.add_argument("--individual", action="store_true")
+    parser.add_argument("--describe-proof-scope", action="store_true")
+    parser.add_argument("--compile-only", action="store_true")
+    parser.add_argument("--list", action="store_true")
+    parser.add_argument("--source", type=Path)
+    parser.add_argument("--symbol")
+    arguments = parser.parse_args(argv)
+    scoped = arguments.list or arguments.source is not None or arguments.symbol is not None
+    modes = sum(
+        (
+            arguments.full,
+            arguments.individual,
+            arguments.describe_proof_scope,
+            arguments.compile_only,
+        )
+    )
+    if modes > 1:
+        parser.error("verification modes cannot be combined")
+    if scoped and not arguments.individual:
+        parser.error("target selectors require --individual and cannot scope the full gate")
+    selected = _dispatch_explicit_mode(parser, arguments)
+    if selected is not None:
+        return selected
     if arguments.full:
         if not arguments.build_arg:
             parser.error("--full requires at least one --build-arg")

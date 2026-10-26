@@ -91,6 +91,7 @@ def _generated_files(
         project_config.as_posix(),
     ]
     build_args.extend(utility_cfg.task_profile.compiler_dependency_paths)
+    compile_args = [build_args[0], "--no-verify", *build_args[1:]]
     script_values = {
         "BUILD_ENVIRONMENT": _shell_template(
             "build_environment.sh", {"DOTNET_HEAP_LIMIT": DAFNY_VERIFY_DOTNET_HEAP_LIMIT}
@@ -100,6 +101,7 @@ def _generated_files(
         "MANIFEST_PATH": shlex.quote((support_dir / "entry_contract.json").as_posix()),
         "RUNTIME_BUILD_ARGS": shlex.join(build_args),
         "FULL_BUILD_ARGS": shlex.join(f"--build-arg={arg}" for arg in build_args),
+        "COMPILE_BUILD_ARGS": shlex.join(f"--build-arg={arg}" for arg in compile_args),
     }
     symbols_by_source: dict[Path, set[str]] = {}
     for definition in manifest.spec_definitions:

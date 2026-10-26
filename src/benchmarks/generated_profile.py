@@ -15,10 +15,15 @@ from benchmarks.definition import BenchmarkDefinition
 from benchmarks.profiles import ResolvedBenchmark, utility_paths
 from benchmarks.task import PublicRule, TaskProfile
 from entry_contract import EntryContractAnalysis
+from standard_library import (
+    DAFNY_ALLOW_WARNINGS_OPTION,
+    DAFNY_BENCH_CORE_LIBRARY_OPTION,
+)
 from verification import (
     DAFNY_VERIFICATION_RANDOM_SEED,
     DAFNY_VERIFICATION_TARGET_TIMEOUT_SEC,
     DAFNY_VERIFICATION_TIME_LIMIT_SEC,
+    verification_options,
 )
 
 
@@ -43,7 +48,10 @@ def individual_verification_rule(support_directory: Path = Path("eval_support"))
             "one listed source and symbol. Quote symbols containing shell metacharacters. "
             "This uses the same fixed verification policy and reports only that target; "
             "ambiguous native filters fail closed, and targets without verification obligations "
-            f"return a no_obligations outcome. Run the complete {full_gate} gate before finishing."
+            "return a no_obligations outcome. The trusted host may use the public, versioned "
+            "proof-reuse capability to establish the complete final target scope, reuse only "
+            "matching conclusive native results, and run its declared compile check. Otherwise, "
+            f"run the complete {full_gate} gate before finishing."
         ),
     )
 
@@ -87,6 +95,9 @@ def _profile_payload(
         for index, path in enumerate(formal_paths, start=1)
     ]
     execution_path = str(contract["execution_entry"]["source_path"])
+    proof_options = verification_options(
+        (DAFNY_BENCH_CORE_LIBRARY_OPTION, DAFNY_ALLOW_WARNINGS_OPTION)
+    )
     required_outputs = [
         {
             "kind": "implementation",
@@ -185,6 +196,16 @@ def _profile_payload(
                 "title": "Build, boundary, and Dafny verification gate",
                 "argv": ["./eval_support/verify.sh"],
                 "working_directory": None,
+                "proof_reuse": {
+                    "protocol": "benchmark.dafny-proof-reuse.v1",
+                    "proof_roots": [execution_path],
+                    "verification_options": list(proof_options),
+                    "describe_argv": [
+                        "./eval_support/verify.sh",
+                        "--describe-proof-scope",
+                    ],
+                    "compile_argv": ["./eval_support/verify.sh", "--compile-only"],
+                },
             }
         ],
         "dafny": {

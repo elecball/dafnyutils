@@ -218,24 +218,36 @@ def publish_release(task_ids: tuple[str, ...], directory: Path) -> TaskReleaseMa
         return manifest
 
 
+def _released_argv(argv: tuple[str, ...], task_id: str) -> tuple[str, ...]:
+    return tuple(argument.replace("eval_support/", f"eval_support/{task_id}/") for argument in argv)
+
+
 def _public_profile(profile: TaskProfile, task_id: str) -> TaskProfile:
-    checks = tuple(
-        check.model_copy(
-            update={
-                "argv": tuple(
-                    arg.replace("eval_support/", f"eval_support/{task_id}/") for arg in check.argv
-                )
-            }
+    checks = []
+    for check in profile.public_checks:
+        proof_reuse = check.proof_reuse
+        if proof_reuse is not None:
+            proof_reuse = proof_reuse.model_copy(
+                update={
+                    "describe_argv": _released_argv(proof_reuse.describe_argv, task_id),
+                    "compile_argv": _released_argv(proof_reuse.compile_argv, task_id),
+                }
+            )
+        checks.append(
+            check.model_copy(
+                update={
+                    "argv": _released_argv(check.argv, task_id),
+                    "proof_reuse": proof_reuse,
+                }
+            )
         )
-        for check in profile.public_checks
-    )
     rules = tuple(
         individual_verification_rule(Path("eval_support") / task_id)
         if rule.rule_id == "individual-verification"
         else rule
         for rule in profile.public_rules
     )
-    return profile.model_copy(update={"public_checks": checks, "public_rules": rules})
+    return profile.model_copy(update={"public_checks": tuple(checks), "public_rules": rules})
 
 
 def _public_file(path: Path, content: bytes) -> _PublicFile:

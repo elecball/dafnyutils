@@ -17,6 +17,46 @@ Each copy is read without following links and checked against the manifest hash.
 Delivery never rewrites the release. The `submission` field tells the receiver
 which workspace roots to collect. Agents do not package an archive.
 
+## Trusted-host Dafny proof reuse
+
+A public check may include the optional `proof_reuse` object with protocol
+`benchmark.dafny-proof-reuse.v1`. Its `proof_roots` identify the
+workspace-relative source paths passed as native Dafny roots,
+`verification_options` is the ordered native policy, and `describe_argv` and
+`compile_argv` are explicit command vectors. An absent object preserves the
+older public-check JSON shape and execution behavior. Unknown protocol versions,
+absolute or traversing roots, empty options, and empty command vectors are
+invalid task payloads.
+
+The describe command writes exactly one JSON object to standard output. It repeats
+the protocol, proof roots and verification options, adds a lowercase SHA-256
+`source_identity`, and lists every final native target as an exact
+`source_path`/`symbol` pair. The owner derives that data through
+`EntryContractCheckSession.validate()` and the same `verification_targets` and
+native ambiguity checks as full verification. The identity binds the manifest,
+project configuration, candidate Dafny sources, and analyzed immutable support
+dependencies. Empty scopes, duplicate or ambiguous targets, forbidden bodyless
+declarations, and source changes fail closed without a partial descriptor.
+
+This capability authorizes only a trusted runtime host to reuse conclusive native
+proof results whose source, target and complete ordered option identities match
+the final descriptor. The trusted Cosyn runtime selects the native proof producer;
+this authorization does not claim that its producer is equivalent to the
+benchmark owner's independent verifier. The host retains its own native proof
+provenance and repeats the source and scope checks after compilation. A target
+may have zero obligations, but
+the complete reused scope must still contain at least one conclusive obligation,
+matching the full verifier's nonvacuous-success rule. Candidate output and
+candidate-created receipts never establish proof success.
+
+After complete proof coverage, the host may run `compile_argv`. The owner validates
+the same source identity before and after one explicitly no-verify build and does
+not call proof verification in this mode. Compilation has its own
+`DAFNY_COMPILE_OUTCOME` records and cannot be interpreted as proof evidence. The
+ordinary public check and independent benchmark evaluator remain unchanged: they
+build and natively verify the complete target scope rather than trusting reused
+agent results.
+
 `evaluation.agent.protocol.AgentReport` is the `benchmark.agent-result.v7` JSON
 contract. It records run, comparison, task, agent and backend identity labels;
 status, exit code, timing and observed turn/token usage; public resource/rule/check

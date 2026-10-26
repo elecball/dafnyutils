@@ -153,6 +153,12 @@ class TaskProfileSchemaVersion(StrEnum):
     V2 = "benchmark.task-profile.v2"
 
 
+class ProofReuseProtocolVersion(StrEnum):
+    """Identify a supported trusted-host proof-reuse contract."""
+
+    V1 = "benchmark.dafny-proof-reuse.v1"
+
+
 class TaskResource(TaskModel):
     resource_id: StrictStr
     kind: TaskResourceKind
@@ -201,11 +207,113 @@ class PublicRule(TaskModel):
         return value
 
 
+def _validate_command_argv(value: tuple[str, ...], *, label: str) -> tuple[str, ...]:
+    if not value or any(not argument or "\x00" in argument for argument in value):
+        raise ValueError(f"{label} must contain non-empty, NUL-free arguments")
+    return value
+
+
+class ProofReuseCapability(TaskModel):
+    """Declare owner-authorized proof reuse and final compilation commands."""
+
+    protocol: ProofReuseProtocolVersion
+    proof_roots: tuple[StrictStr, ...]
+    verification_options: tuple[StrictStr, ...]
+    describe_argv: tuple[StrictStr, ...]
+    compile_argv: tuple[StrictStr, ...]
+
+    @field_validator("proof_roots")
+    @classmethod
+    def _validate_proof_roots(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if not value:
+            raise ValueError("proof_roots must not be empty")
+        validated = tuple(validate_relative_path(path, label="proof root") for path in value)
+        return require_unique(validated, label="proof_roots")
+
+    @field_validator("verification_options")
+    @classmethod
+    def _validate_verification_options(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if not value or any(not option or "\x00" in option for option in value):
+            raise ValueError("verification_options must contain non-empty, NUL-free values")
+        return require_unique(value, label="verification_options")
+
+    @field_validator("describe_argv", "compile_argv")
+    @classmethod
+    def _validate_argv(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return _validate_command_argv(value, label="proof-reuse argv")
+
+
+class ProofReuseTarget(TaskModel):
+    """Name one exact native declaration in a proof-reuse scope."""
+
+    source_path: StrictStr
+    symbol: StrictStr
+
+    @field_validator("source_path")
+    @classmethod
+    def _validate_source_path(cls, value: str) -> str:
+        value = validate_relative_path(value, label="proof target source_path")
+        if not value.endswith(".dfy"):
+            raise ValueError("proof target source_path must name a .dfy file")
+        return value
+
+    @field_validator("symbol")
+    @classmethod
+    def _validate_symbol(cls, value: str) -> str:
+        if not value or value != value.strip() or "\x00" in value:
+            raise ValueError("proof target symbol must be non-empty and NUL-free")
+        return value
+
+
+class ProofReuseScope(TaskModel):
+    """Describe a validated final native proof scope and its source identity."""
+
+    protocol: ProofReuseProtocolVersion
+    source_identity: StrictStr
+    targets: tuple[ProofReuseTarget, ...]
+    proof_roots: tuple[StrictStr, ...]
+    verification_options: tuple[StrictStr, ...]
+
+    @field_validator("source_identity")
+    @classmethod
+    def _validate_source_identity(cls, value: str) -> str:
+        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+            raise ValueError("source_identity must be a lowercase SHA-256 hex digest")
+        return value
+
+    @field_validator("targets")
+    @classmethod
+    def _validate_targets(cls, value: tuple[ProofReuseTarget, ...]) -> tuple[ProofReuseTarget, ...]:
+        if not value:
+            raise ValueError("targets must not be empty")
+        identities = tuple((target.source_path, target.symbol) for target in value)
+        require_unique(identities, label="proof targets")
+        return value
+
+    @field_validator("proof_roots")
+    @classmethod
+    def _validate_proof_roots(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if not value:
+            raise ValueError("proof_roots must not be empty")
+        validated = tuple(validate_relative_path(path, label="proof root") for path in value)
+        return require_unique(validated, label="proof_roots")
+
+    @field_validator("verification_options")
+    @classmethod
+    def _validate_verification_options(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if not value or any(not option or "\x00" in option for option in value):
+            raise ValueError("verification_options must contain non-empty, NUL-free values")
+        return require_unique(value, label="verification_options")
+
+
 class PublicCheck(TaskModel):
     check_id: StrictStr
     title: StrictStr
     argv: tuple[StrictStr, ...]
     working_directory: StrictStr | None = None
+    proof_reuse: ProofReuseCapability | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @field_validator("check_id")
     @classmethod
@@ -222,9 +330,7 @@ class PublicCheck(TaskModel):
     @field_validator("argv")
     @classmethod
     def _validate_argv(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        if not value or any(not argument or "\x00" in argument for argument in value):
-            raise ValueError("public check argv must contain non-empty, NUL-free arguments")
-        return value
+        return _validate_command_argv(value, label="public check argv")
 
     @field_validator("working_directory")
     @classmethod

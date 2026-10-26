@@ -114,12 +114,12 @@ def test_each_target_gets_topdown_policy(monkeypatch: pytest.MonkeyPatch) -> Non
         assert "--filter-position=toy/Implementation.dfy" in command
         assert kwargs["timeout_sec"] == 100
         assert kwargs["start_new_session"] is True
-    assert {
+    assert [
         arg for command, _ in calls for arg in command if arg.startswith("--filter-symbol=")
-    } == {
+    ] == [
         "--filter-symbol=Runner.RunCore.",
         "--filter-symbol=Runner.Helper.",
-    }
+    ]
 
 
 # A failed obligation rejects the candidate even if the native process exits successfully.
