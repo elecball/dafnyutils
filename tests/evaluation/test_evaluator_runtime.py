@@ -166,15 +166,17 @@ def _runtime_boundaries(
     monkeypatch.setattr(os, "access", lambda path, mode: executable)
 
 
-# The parser is built from trusted inputs at the exact isolated DLL sibling.
-def test_touch_runtime_uses_trusted_make_and_exact_isolated_output(
+# Each time utility deploys the parser from trusted inputs beside its isolated DLL.
+@pytest.mark.parametrize("utility_name", ("touch", "date"))
+def test_time_parser_runtime_uses_trusted_make_and_exact_isolated_output(
     monkeypatch: pytest.MonkeyPatch,
+    utility_name: str,
 ) -> None:
     events: list[object] = []
     _runtime_boundaries(monkeypatch, events)
 
     workspace.prepare_evaluator_runtime(
-        utility_name="touch", target_root=Path("/evaluation/target")
+        utility_name=utility_name, target_root=Path("/evaluation/target")
     )
 
     assert events == [
@@ -183,7 +185,7 @@ def test_touch_runtime_uses_trusted_make_and_exact_isolated_output(
             [
                 "make",
                 "-C",
-                "/trusted/benchmark/bench/utils/touch",
+                f"/trusted/benchmark/bench/utils/{utility_name}",
                 "build-time-parser",
                 "BUILD_DIR=/trusted/benchmark/_build",
                 "TOUCH_TIME_PARSER=/evaluation/target/_build/bench/touch_time_parser",
