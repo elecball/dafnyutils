@@ -385,6 +385,12 @@ module TsortSpec {
       var path := InputPath(raw);
       var result := if path == "-" then C.ObservedReadStdinResultFields(old(io.stdin()), io.trustedStreams())
                     else C.ObservedReadFileResultFields(io.fs(), io.trustedStreams(), path);
+      (if path == "-" then
+         C.ReadStdinSpec(old(io.stdin()), io.trustedStreams(), io.stdin(),
+                         C.ReadResultData(result), C.ResultErrno(result))
+       else
+         C.ReadFileSpec(io.fs(), io.trustedStreams(), path,
+                        C.ReadResultData(result), C.ResultErrno(result), C.ReadResultStage(result))) &&
       (path != "-" || io.stdin() == C.ObservedReadStdinRemainingFields(old(io.stdin()), io.trustedStreams())) &&
       var quoted := FilenameText(path, C.QuoteafPathResult(path));
       if result.Err? && C.ReadResultStage(result) != BenchWorld.CloseFailed then
