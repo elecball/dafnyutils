@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dafnyutils"
 version = "0.1.0"
-description = "Dafny benchmarks and isolated evaluation APIs"
+description = "Dafny benchmark problems, specifications and task definitions"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic",
@@ -19,15 +19,8 @@ contributor = ["click"]
 [project.scripts]
 dafnyutils-benchmarks = "benchmarks.__main__:main"
 
-[tool.setuptools]
-py-modules = ["dafny_cli", "entry_contract", "standard_library", "verification"]
-
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.package-data]
-"evaluation.submission" = ["*.sh"]
-"evaluation.task" = ["scripts/*.sh"]
 
 [tool.pytest.ini_options]
 addopts = "-n 16"

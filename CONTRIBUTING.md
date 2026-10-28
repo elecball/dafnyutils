@@ -39,9 +39,10 @@ commands for checking both the proof and the executable.
 
 ### Set up your checkout
 
-Follow [Setup](README.md#setup), including
-`make check-environment`. Run the commands below from `/workspace/dafnyutils`
-inside that container, with `.venv/bin` on `PATH`.
+Follow the integration [setup](README.md#build-verify-and-evaluate-tasks), including
+`make -C ../../.. check-contributor-env`. Run the commands below from
+`/workspace/bench/dafny/dafnyutils` inside the integration container, with its Python
+environment on `PATH`. The standalone data container supports only data checks.
 
 ### Find the right files
 
@@ -51,9 +52,11 @@ inside that container, with `.venv/bin` on `PATH`.
 | `bench/core/` | System model, native contracts, protocol types and trusted runtime adapters |
 | `bench/*/<item>/CliSupport.dfy` | Fixed task-local parser and process runner protocol |
 | `coreutils/` | Pinned upstream GNU source and tests; keep its revision fixed |
+| `tools/scaffold.py` | Create incomplete contributions from the adjacent templates |
 | `tools/benchmark_templates/common/` | Common incomplete Dafny layout used by both scaffold kinds |
 | `tools/coreutils_fuzzer/` | Differential runner, generators and comparison logic |
-| `src/benchmarks/` | Discovery, validation, builds and contribution checks |
+| `src/benchmarks/` | Definitions, paths, discovery and selection |
+| `../../../src/evaluation/` | Root-owned validation, builds and contribution checks |
 | `_build/` | Generated binaries and reports, created by build/check commands |
 
 Read [bench rules](bench/AGENTS.md) and [Dafny style](DAFNYSTYLE.md) before editing Dafny.
@@ -70,8 +73,14 @@ read the [implementation notes](docs/implementation-notes.md) and the
 Create the scaffold **before** creating its directory or scope document:
 
 ```sh
-python3 -m benchmarks init --kind coreutils --id base32
+python3 tools/scaffold.py --kind coreutils --id base32
 ```
+
+The command uses this tool's repository as its default root, even from another
+working directory. Pass `--root <checkout>` to use another checkout and its
+templates. It copies the common templates and the selected kind's templates;
+`--kind algorithm --id algorithm-123` creates `bench/algorithm/123`.
+Expected duration: less than a second for the current templates.
 
 Expected output, exit 0:
 
@@ -80,8 +89,8 @@ bench/utils/base32
 scaffold is incomplete; replace TODO content and source status before validation
 ```
 
-If the directory already exists, inspect it and continue that contribution; init will
-not overwrite it. Do not delete someone else's work to rerun this command.
+If the directory already exists, inspect it and continue that contribution; the
+tool refuses to overwrite it. Do not delete someone else's work to rerun this command.
 
 #### Define the observable behavior
 
@@ -233,7 +242,7 @@ or empty fixed case set is an error, not an inapplicable test stage.
 ```sh
 # Expected duration: Unknown; depends on source analysis and the completed utility.
 # Success criteria: Exit 0 and base32: valid.
-python3 -m benchmarks validate base32
+make -C ../../.. validate-task TASK=base32
 ```
 
 Expected output for a completed utility, exit 0:
@@ -254,7 +263,7 @@ must fail with `source details are incomplete`; that is an expected unfinished s
 ```sh
 # Expected duration: Unknown; requires the completed item and Dafny analysis.
 # Success criteria: Exit 0 and _build/profile-review/base32/task.json exists.
-python3 -m tools.generate_task_profiles --utility base32 --output-dir _build/profile-review
+python3 -m evaluation.contribution.generate_task_profiles --utility base32 --output-dir _build/profile-review
 ```
 
 Expected result, exit 0:
@@ -279,7 +288,7 @@ Expected output, exit 0 (paths and build steps vary):
 
 ```text
 ...
-make[1]: Leaving directory '/workspace/dafnyutils/_build/coreutils'
+make[1]: Leaving directory '/workspace/bench/dafny/dafnyutils/_build/coreutils'
 ```
 
 This builds the pinned original utilities. It may need network access for build inputs.
@@ -294,7 +303,7 @@ Expected output, exit 0:
 
 ```text
 Dafny program verifier did not attempt verification
-make: Leaving directory '/workspace/dafnyutils/bench/utils/base32'
+make: Leaving directory '/workspace/bench/dafny/dafnyutils/bench/utils/base32'
 ```
 
 ```sh
@@ -309,7 +318,7 @@ Expected output shape, exit 0 (names and counts depend on your cases):
 Base32Tests.<case>: PASSED
 ...
 <count> passed, <count> deselected in <seconds>s
-make: Leaving directory '/workspace/dafnyutils/bench/utils/base32'
+make: Leaving directory '/workspace/bench/dafny/dafnyutils/bench/utils/base32'
 ```
 
 ```sh
@@ -337,7 +346,7 @@ guidance before considering a larger time limit.
 ```sh
 # Expected duration: Unknown; includes builds, runtime tests, 20 fuzz cases and proofs.
 # Success criteria: Exit 0 and base32: checks passed; every required check completes.
-make check TASK=base32
+make -C ../../.. check-task TASK=base32
 ```
 
 Expected final output after all required stages, exit 0:
@@ -362,7 +371,7 @@ Follow [the contribution guidelines below](#prepare-the-change) and use the
 [pull request template](.github/pull_request_template.md).
 
 Submit the pull request only when the code is complete and verified: every
-required stage of `make check TASK=base32` passes and, for a coreutils utility,
+required stage of `make -C ../../.. check-task TASK=base32` passes and, for a coreutils utility,
 each fuzzing campaign below completes without errors on the same revision.
 A failed, skipped or unrun required check means the utility is not ready to
 submit; fix it and rerun the affected checks first.
@@ -529,7 +538,13 @@ For example, a one-case differential run should identify its case ID and complet
 
 See [validation commands](#validate-and-submit) and [Collect PR evidence](docs/fuzzing.md#collect-pr-evidence). Paste the output directly into the PR; no file attachments are needed. Never include credentials or restricted evaluator payloads.
 
-Algorithm tasks require the build/layout and Dafny verification checks. Testcase and fuzzing evaluations are `not_applicable`; retained `cases.json` files are versioned task data, not an active evaluator. Use `make check TASK=algorithm-<number>` for the contributor gate. `make test TASK=algorithm-<number>` is unsupported. For documentation-only changes, record link/content checks and explain why runtime verification and fuzzing were not run.
+Algorithm tasks require build/layout checks, runtime cases and Dafny verification.
+Their `cases.json` files remain benchmark data; the root evaluator runs those
+cases with the declared output contract. Fuzzing is required only when the task
+declares a fuzzer capability. Use `make -C ../../.. check-task TASK=algorithm-<number>`
+for the contributor gate. `make -C ../../.. test-task TASK=algorithm-<number>` runs
+the runtime cases. For documentation-only changes, record link/content checks
+and explain why runtime verification and fuzzing were not run.
 
 ## Open the pull request
 

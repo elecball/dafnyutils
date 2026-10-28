@@ -8,7 +8,7 @@ exec > >(tee "$setup_log") 2>&1
 trap 'printf "Setup failed at line %s. Log: %s\nRetry: bash .devcontainer/post-create.sh\n" "$LINENO" "$setup_log" >&2' ERR
 printf 'Setup log: %s\n' "$setup_log"
 python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[dev,contributor]'
+.venv/bin/python -m pip install -e '.[dev]'
 git submodule update --init --recursive
 # Ignore only this known GNU bootstrap output, without changing the pinned source.
 exclude_file=$(git -C coreutils rev-parse --path-format=absolute --git-path info/exclude)
@@ -17,14 +17,8 @@ if [[ ! -f "$exclude_file" ]] || ! grep -Fxq '/m4/extern-inline.m4' "$exclude_fi
     printf '\n/m4/extern-inline.m4\n' >> "$exclude_file"
 fi
 export PATH="/workspace/dafnyutils/.venv/bin:$PATH"
-mkdir -p /workspace/tmp/update-z3-rebuild
-solver_setup_directory=$(mktemp -d /workspace/tmp/update-z3-rebuild/dafnyutils-devcontainer-XXXXXX)
-(
-    cd "$solver_setup_directory"
-    make -f /workspace/dafnyutils/dafny/Makefile z3-ubuntu
-)
-make build-dafny
-make check-environment
+python3 -m benchmarks --help
+make test
 
 versions_log="${setup_log%.log}-versions.txt"
 {
@@ -33,15 +27,6 @@ versions_log="${setup_log%.log}-versions.txt"
     printf '\nRepository revision\n'
     git rev-parse HEAD
     git submodule status --recursive
-    printf '\nDafny\n'
-    dafny-benchmark --version
-    printf '\nZ3\n'
-    z3 --version
-    dafny/Binaries/z3/bin/z3-4.16.0 --version
-    dafny/Binaries/z3/bin/z3-4.12.1 --version
-    printf '\n.NET SDKs and runtimes\n'
-    dotnet --list-sdks
-    dotnet --list-runtimes
     printf '\nRust toolchain\n'
     rustup show active-toolchain
     rustc --version

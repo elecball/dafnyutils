@@ -1,6 +1,0 @@
-pydantic
-PyYAML
-pytest
-pytest-xdist
-ruff
-click

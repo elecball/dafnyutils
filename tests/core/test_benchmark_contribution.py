@@ -1,21 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
-from benchmarks import checks as benchmark_checks
-from benchmarks.checks import EvaluationName
-from benchmarks.contribution import (
-    check_commands,
-    run_benchmark_checks,
-)
 from benchmarks.definition import BenchmarkDefinition, BenchmarkKind, BenchmarkSource
 from benchmarks.repository import BenchmarkRepository
 from benchmarks.selection import affected_task_ids
-from benchmarks.validation import load_validated_benchmark
-from benchmarks.verify import local_verification_contract
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -136,8 +127,7 @@ def test_affected_selection_includes_all_tasks_for_shared_benchmark_helpers() ->
     (
         "src/analysis/client.py",
         "src/dafny_cli.py",
-        "dafny",
-        "dafny/Source/DafnyCore/AST/Expressions/Expression.cs",
+        "dafny-version.toml",
     ),
 )
 def test_affected_selection_includes_all_tasks_for_shared_execution(path: str) -> None:
@@ -158,107 +148,3 @@ def test_affected_selection_retains_missing_deleted_or_renamed_ids() -> None:
             "bench/algorithm/999/benchmark.yaml",
         ),
     ) == ("algorithm-999", "deleted", "replacement")
-
-
-# Every CLI task runs runtime and proof checks with its optional oracle capabilities.
-@pytest.mark.parametrize("task_id", ("cat", "algorithm-1"))
-def test_check_plan_keeps_required_capability_checks(task_id: str) -> None:
-    repository = BenchmarkRepository.open(ROOT)
-    commands = check_commands(ROOT, repository.load_definition(task_id))
-
-    expected = (
-        (
-            "build",
-            "coreutils-reference",
-            "implementation-tests",
-            "fuzzer",
-            "dafny-verify",
-            "benchmark-proof-tests",
-        )
-        if task_id == "cat"
-        else ("build", "implementation-tests", "dafny-verify", "benchmark-proof-tests")
-    )
-    assert tuple(command.name for command in commands) == expected
-    proof = next(command for command in commands if command.name == "dafny-verify")
-    assert proof.argv == (
-        "make",
-        "-C",
-        repository.load_definition(task_id).item_directory,
-        "verify",
-    )
-    if task_id == "cat":
-        assert commands[-1].argv[1:] == (
-            "-m",
-            "pytest",
-            "-q",
-            "-n0",
-            "--import-mode=importlib",
-            "-m",
-            "dafny_verify",
-            "bench/utils/cat/Tests.py",
-        )
-
-
-# A newly required check cannot silently disappear from contributor validation.
-def test_check_plan_rejects_unimplemented_required_check(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    repository = BenchmarkRepository.open(ROOT)
-    monkeypatch.setattr(
-        benchmark_checks,
-        "MANDATORY_CHECKS",
-        (
-            *benchmark_checks.MANDATORY_CHECKS,
-            benchmark_checks.MandatoryCheck("security_scan", EvaluationName.VERIFICATION),
-        ),
-    )
-
-    with pytest.raises(ValueError, match="missing contributor commands.*security_scan"):
-        check_commands(ROOT, repository.load_definition("cat"))
-
-
-# The verification gate enumerates included Core and Proof files, not only the wrapper entry.
-@pytest.mark.integration
-def test_verification_session_includes_algorithm_core_and_proof() -> None:
-    contract = local_verification_contract(ROOT / "bench/algorithm/1")
-
-    sources = {path.name for path in contract.verification_sources}
-
-    assert {"Algorithm1.dfy", "Algorithm1Core.dfy", "Algorithm1Proof.dfy"} <= sources
-
-
-# Runtime path helpers enter the proof gate even when the fixed CLI also normalizes paths.
-@pytest.mark.integration
-def test_cp_verification_includes_runtime_path_helpers() -> None:
-    contract = local_verification_contract(ROOT / "bench/utils/cp", (ROOT / "bench/core",))
-
-    assert {
-        ROOT / "bench/utils/cp/CpPathCore.dfy",
-        ROOT / "bench/utils/cp/CpPathBridge.dfy",
-    } <= set(contract.verification_sources)
-    assert {
-        "CpPathCore.TrimTrailingSlashes",
-        "CpPathBridge.BasenameValueSummaryGivesRelation",
-    } <= {target.full_name for target in contract.verification_targets}
-
-
-# A failed mandatory command stops the check and is never reported as success.
-@pytest.mark.integration
-def test_check_fails_on_first_failed_mandatory_command(monkeypatch: pytest.MonkeyPatch) -> None:
-    repository = BenchmarkRepository.open(ROOT)
-    validated = load_validated_benchmark(repository, "cat")
-    monkeypatch.setattr(
-        "benchmarks.contribution.load_validated_benchmark",
-        lambda _repository, _task_id: validated,
-    )
-    calls: list[tuple[str, ...]] = []
-
-    def failed_run(argv: tuple[str, ...], **_kwargs: object) -> SimpleNamespace:
-        calls.append(argv)
-        return SimpleNamespace(returncode=7)
-
-    monkeypatch.setattr("benchmarks.contribution.subprocess.run", failed_run)
-
-    with pytest.raises(RuntimeError, match="build.*exit code 7"):
-        run_benchmark_checks(repository, "cat")
-    assert len(calls) == 1

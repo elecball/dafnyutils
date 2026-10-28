@@ -5,10 +5,10 @@ LOCAL_TASK := realpath
 .PHONY: build verify test
 
 build:
-	python3 -m benchmarks.make_tasks build --root "$(REPO_ROOT)" --task "$(LOCAL_TASK)"
+	python3 -m evaluation.contribution.make_tasks build --root "$(REPO_ROOT)" --task "$(LOCAL_TASK)"
 
 verify:
-	python3 -m benchmarks.verify --project "$(PROJECT_DIR)" --library "$(PROJECT_DIR)/../../core"
+	python3 -m evaluation.contribution.verify --project "$(PROJECT_DIR)" --library "$(PROJECT_DIR)/../../core"
 
 test:
-	python3 -m benchmarks.make_tasks test --root "$(REPO_ROOT)" --task "$(LOCAL_TASK)"
+	python3 -m evaluation.contribution.make_tasks test --root "$(REPO_ROOT)" --task "$(LOCAL_TASK)"

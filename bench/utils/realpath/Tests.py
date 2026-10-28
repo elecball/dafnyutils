@@ -4,9 +4,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
-from evaluation.submission.candidate_execution import run_candidate
-from tools.bench_test_support import (
+from evaluation.benchmark_test_support import (
     assert_result_matches_reference,
     bench_dll_path,
     coreutils_binary_path,
@@ -16,6 +14,7 @@ from tools.bench_test_support import (
     run_coreutils_utility,
     run_dafny_verify,
 )
+from evaluation.submission.candidate_execution import run_candidate
 
 ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 UTILITY = "realpath"

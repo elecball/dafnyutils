@@ -1,5 +1,11 @@
 # Run the coreutils fuzzer
 
+The complete fuzzer is Dafnyutils benchmark-construction tooling. Its Rust
+engine, Python launcher and Docker support remain in `tools/coreutils_fuzzer`.
+Root owns submission grading and the policy for fuzzer checks, budgets and score
+treatment. The benchmark definition supplies the target, and the root evaluator
+invokes this launcher.
+
 The fuzzer runs the **pinned GNU executable** and **your Dafny executable** on
 the same generated inputs and reports any difference in output, exit status or
 filesystem effects.
@@ -214,7 +220,7 @@ and every error count is zero.
 
 **Things that do not count**
 
-- The automatic `make check` gate (only 20 cases, seed 1).
+- The fuzzer check inside root `make check-task TASK=<utility>` (20 cases, seed 1).
 - A fixed JSON case set or regression suite. Those are separate checks.
 - Picking three favorable seeds while leaving out failing ones.
 - Missing output. A setup failure may stop before any Results section appears;

@@ -38,13 +38,12 @@ def affected_task_ids(
             or raw_path == "src/standard_library.py"
             or raw_path == "src/dafny_cli.py"
             or raw_path == "src/verification.py"
-            or raw_path.startswith("dafny/")
             or raw_path
             in {
                 ".gitmodules",
                 "Makefile",
                 "pyproject.toml",
-                "dafny",
+                "dafny-version.toml",
                 "tools/generate_task_profiles.py",
             }
         ):

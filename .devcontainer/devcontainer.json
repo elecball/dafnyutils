@@ -1,10 +1,7 @@
 {
-  "name": "Dafnyutils contributors (Ubuntu 24.04)",
+  "name": "Dafnyutils problem data (Ubuntu 24.04)",
   "build": {
     "dockerfile": "Dockerfile"
-  },
-  "features": {
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
   "remoteUser": "vscode",
   "containerUser": "vscode",
@@ -17,18 +14,18 @@
     "LC_ALL": "C.UTF-8",
     "TZ": "Etc/UTC"
   },
-  "privileged": true,
-  "runArgs": ["--name=${localEnv:USER}-dafnyutils"],
+  "runArgs": [
+    "--name=${localEnv:USER}-dafnyutils"
+  ],
   "customizations": {
     "vscode": {
       "settings": {
         "terminal.integrated.defaultProfile.linux": "zsh",
-        "dafny.version": "custom",
-        "dafny.cliPath": "/workspace/dafnyutils/dafny/Binaries/Dafny",
         "python.defaultInterpreterPath": "/workspace/dafnyutils/.venv/bin/python",
         "python.testing.pytestEnabled": true,
         "python.testing.pytestArgs": [
-          "tests"
+          "-c",
+          "pytest-dev.ini"
         ],
         "files.watcherExclude": {
           "**/_build/**": true,

@@ -1,4 +1,4 @@
-"""Keep public benchmark authoring independent of evaluator orchestration."""
+"""Keep benchmark problem data independent of evaluator, analysis and harness code."""
 
 import ast
 from pathlib import Path
@@ -8,11 +8,26 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2] / "src"
 
 
-# A lower layer must remain importable without pulling in higher-level implementation policy.
-@pytest.mark.parametrize(
-    ("package", "forbidden"),
-    [("benchmarks", {"evaluation"}), ("runtime", {"benchmarks", "evaluation", "analysis"})],
-)
+# Evaluator, analysis and harness modules are root- or Cosyn-owned and never imported here.
+FORBIDDEN = {
+    "agent",
+    "analysis",
+    "cosyn",
+    "dafny_analysis",
+    "dafny_cli",
+    "entry_contract",
+    "evaluation",
+    "execution",
+    "experiment_analysis",
+    "runtime",
+    "standard_library",
+    "utils",
+    "verification",
+}
+
+
+# Benchmark data packages stay importable without evaluator or harness code.
+@pytest.mark.parametrize(("package", "forbidden"), [("benchmarks", FORBIDDEN)])
 def test_package_dependencies_follow_ownership(package: str, forbidden: set[str]) -> None:
     violations = []
     for source in sorted((ROOT / package).rglob("*.py")):

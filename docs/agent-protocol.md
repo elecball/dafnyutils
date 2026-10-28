@@ -1,8 +1,9 @@
 # Benchmark agent protocol v1
 
-Dafnyutils defines the task delivered to an agent, the report received from it,
-candidate filesystem layout, container lifecycle, host-side workspace collection,
-and acceptance rules.
+The root integration evaluator defines the task delivered to an agent, the
+report received from it, candidate filesystem layout, container lifecycle,
+host-side workspace collection and acceptance rules in `src/evaluation`.
+Dafnyutils retains problem definitions, specifications and test material.
 `AgentProtocolVersion.V1` identifies this contract. The JSON payload versions are
 `benchmark.agent-task.v2` and `benchmark.agent-result.v7`. Any incompatible wire
 change must bump the corresponding version and update conformance tests in the
@@ -74,10 +75,10 @@ are writable bind mounts. Public task and fixed inputs are read-only mounts.
 The private run directory, artifact directory, runtime bundle, home and temporary
 directory remain outside the model's permitted file view, while the harness may
 execute tools from them. The evaluator's oracle executable is blocked by the candidate
-mount plan. Dafnyutils owns container staging, Compose rendering, candidate
-termination and cleanup. The integration supplies image/provider configuration,
-the conforming launcher and command observation callbacks. Dafnyutils imports
-neither a harness nor the integration package.
+mount plan. The root evaluator owns container staging, Compose rendering,
+candidate termination and cleanup. The integration execution layer supplies
+image/provider configuration, the conforming launcher and command observation
+callbacks. The evaluator does not import that execution policy or a harness.
 
 The benchmark lifecycle owns the sequence from preparation through execution,
 confirmed container termination and host collection. A preparation failure,
@@ -118,6 +119,6 @@ Unexpected execution exceptions propagate after cleanup; they do not collect an
 archive. The caller supplies `manifest` and a host-only `archive_path`.
 
 The integration repository composes this protocol with a harness such as Cosyn.
-Neither Dafnyutils nor Cosyn imports the other. Local checks use controlled
-filesystems and fake providers; a passing local check is not a paid experiment
-or a Dafny proof result.
+The installed Dafnyutils data package and Cosyn remain independent. Local checks
+use controlled filesystems and fake providers; a passing local check is not a
+paid experiment or a Dafny proof result.

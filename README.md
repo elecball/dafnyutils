@@ -21,91 +21,78 @@ Follow [repository instructions](AGENTS.md), [bench rules](bench/AGENTS.md) and 
 
 ## Setup
 
-### Prerequisites
+Dafnyutils owns problem data, specifications, hidden tests, reference material
+and benchmark-construction tooling. It retains the complete
+`tools/coreutils_fuzzer`, including its Rust engine, Python launcher and Docker
+support. Root owns submission grading and the policy for fuzzer applicability,
+budgets and score treatment. Its evaluator uses the benchmark definition's target
+and invokes the retained launcher.
+The installed `benchmarks` package provides definitions, paths, profiles,
+discovery and selection, and remains data-only. The repository's
+[`tools/scaffold.py`](tools/scaffold.py) creates incomplete contributions from
+the adjacent templates. Cosyn owns agent harnesses.
+Benchmark `Tests.py` files are test material consumed by that evaluator; their
+execution helpers live in the integration package. The installed `benchmarks`
+package does not import the evaluator or a harness.
 
-Install these tools on your host before you start:
+### Edit problem data
 
-- Git.
-- Docker, with the Docker engine running.
-- VS Code with the Dev Containers extension, or the Dev Container CLI for terminal use.
+Use the [standalone development container](.devcontainer/devcontainer.json) to
+edit data and run Python checks. It requires Git, Docker and VS Code with the
+Dev Containers extension. Open this checkout in VS Code and select **Dev
+Containers: Reopen in Container**. Setup installs the data package and development
+tools, initializes GNU reference sources and runs the serial data checks.
+It does not provision the evaluator or a Dafny toolchain.
 
-Use the [development container](.devcontainer/devcontainer.json) included in this
-repository. The container has been tested on Linux x86-64 (Ubuntu 24.04).
-Other architectures have not been tested.
-
-We use a version of Dafny changed for dafnyutils. Its source is pinned in the
-`dafny/` submodule from `git@github.com:prosyslab/dafny.git` (`expecto` branch).
-You must use the Dafny built inside the development container, available
-at `/usr/bin/dafny-benchmark` in the container.
-
-### Start the container
-
-In VS Code, open this checkout and select **Dev Containers: Reopen in Container**.
-Wait for setup to finish.
-
-For terminal use, run:
-
-```sh
-# On the host, from this repository's root:
-devcontainer up --workspace-folder .
-```
-
-Expected final output (after build/setup logs; IDs vary):
-
-```text
-{"outcome":"success","containerId":"<container-id>","remoteUser":"vscode","remoteWorkspaceFolder":"/workspace/dafnyutils"}
-```
+For an existing Python 3.12 environment, install the data package from this
+repository's root. Initial installation needs network access for dependencies;
+duration depends on downloads.
 
 ```sh
-devcontainer exec --workspace-folder . zsh
+python3 -m pip install -e '.[dev]'
 ```
 
-Expected result: an interactive shell in the container. The prompt style varies:
-
-```text
-<container prompt> /workspace/dafnyutils $
-```
-
-The CLI uses the same configuration and setup script as VS Code.
-The container name is `<USER>-dafnyutils`, where `<USER>` is the value of `USER`
-on your host. For example, if `USER` is `duncan`, the name is `duncan-dafnyutils`.
-Inside the container, the repository is `/workspace/dafnyutils`.
-
-Setup installs Python 3.12, .NET 8, Rust, Z3 4.16.0, tmux and native build tools.
-Before building Dafny, setup runs its native `z3-ubuntu` target from a fresh directory
-under `/workspace/tmp/update-z3-rebuild/`, installing bundled Z3 4.16.0 and compatibility
-4.12.1 beside the owner executable. The setup version record includes all three solver commands.
-Budget 10–30 minutes for initial downloads and compilation.
-A clean Linux x86-64 setup used up to about 10 GiB of memory, excluding the image build.
-
-Run repository commands inside the container to check environment setup:
+Expected result: pip installs `dafnyutils` and its development tools, then exits 0.
+Check the data CLI after installation; this takes less than a second in the
+current Python 3.12 environment.
 
 ```sh
-cd /workspace/dafnyutils
-source .venv/bin/activate
-make check-environment
+python3 -m benchmarks --help
 ```
 
-Expected output:
+Expected output (excerpt), exit 0:
 
 ```text
-Checking: python3 --version
-Python 3.12.<patch>
-...
-No broken requirements found.
-...
-Checking: tmux -V
-tmux <version>
-...
-Dafny program verifier finished with 4 verified, 0 errors
+usage: python -m benchmarks [-h] [--root ROOT] {list} ...
+```
 
+### Build, verify and evaluate tasks
+
+Use the integration repository's development container for executable checks.
+Follow its [setup instructions](../../../README.md) in an integration checkout,
+where this repository lives at `/workspace/bench/dafny/dafnyutils`. The root owns
+`dafny-version.toml`, `make build-dafny` and `/usr/bin/dafny-benchmark`; native
+Dafny development uses a separate checkout at `/workspace/dafny`.
+
+From `/workspace`, run the root environment check after setup. It checks Python,
+Docker/Compose, Rust, Z3, tmux and the pinned Dafny build; duration depends on
+Docker access and native verification.
+
+```sh
+make check-contributor-env
+```
+
+Expected final output (from source; not executed for this migration), exit 0:
+
+```text
 Environment ready. The StreamCopy result checks the verifier, not a utility proof.
 ```
 
-`make check-environment` checks Python dependencies, Docker/Compose access, Rust,
-Z3, tmux and the bundled `dafny-benchmark`. It verifies the [StreamCopy client](tools/fixtures/contributor/StreamCopy.dfy). Success ends with
-`Environment ready` and a verifier result of `4 verified, 0 errors`. This checks
-the tools. Setup runs the same check automatically.
+The root contributor targets are `build-task`, `test-task`, `validate-task` and
+`check-task`, each with `TASK=<task-id>`. For example, from this repository use
+`make -C ../../.. check-task TASK=cat` after installing the integration package. Task-local
+Makefiles use the same root execution modules. Native builds and proofs are
+separate from the data checks below.
 
 ## Developer test tiers
 
@@ -133,8 +120,9 @@ make test-final
 ```
 
 Benchmark oracle tests remain task-scoped and separate from development tiers.
-For example, `make test TASK=cat` keeps the benchmark runner's existing selection
-of `bench/utils/cat/Tests.py` and its scoring semantics.
+For example, `make -C ../../.. test-task TASK=cat` selects
+`bench/utils/cat/Tests.py` through the root evaluator. Required checks and scoring
+semantics are unchanged.
 
 ## Repository structure
 
@@ -149,17 +137,12 @@ dafnyutils/
 │   ├── core/              # Shared system models, IO contracts and native adapters
 │   └── utils/             # GNU coreutils task specifications, implementations and proofs
 ├── coreutils/             # Pinned upstream GNU coreutils submodule
-├── dafny/                 # Pinned Dafny submodule customized for this project
-├── docker/                # Task and evaluation container build definitions
 ├── docs/                  # Contributor guides and API documentation
 ├── example/               # Worked examples
 │   └── copy/              # Stream-copy specification, implementation and proof
-├── src/                   # Python authoring, verification and evaluation tooling
-│   ├── analysis/          # Evaluation result analysis
-│   ├── benchmarks/        # Task discovery, scaffolding, builds and validation
-│   ├── evaluation/        # Evaluation environments, task preparation and scoring
-│   └── runtime/           # Runtime support for evaluation
+├── src/benchmarks/        # Problem definitions, schemas, paths and discovery
 ├── tools/                 # Build scripts and repository maintenance tools
+│   ├── scaffold.py        # Create incomplete benchmark contributions
 │   ├── benchmark_templates/ # Templates for new utility and algorithm tasks
 │   └── coreutils_fuzzer/  # Generated-input comparison with GNU coreutils
 └── _build/                # Generated build artifacts
@@ -172,8 +155,9 @@ Spec → Core → Proof → entry structure as a utility contribution, with only
 IO calls. The complete files are in
 [`example/copy/`](example/copy).
 
-Use the [development container](#setup). Run the commands below
-from `/workspace/dafnyutils` with `.venv/bin` on `PATH`.
+Use the integration [development container](#build-verify-and-evaluate-tasks).
+Run the commands below from `/workspace/bench/dafny/dafnyutils` with the integration
+Python environment on `PATH`. The standalone data container cannot run them.
 
 ### 1. Choose the behavior
 

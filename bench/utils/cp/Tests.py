@@ -7,9 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-
-from evaluation.submission.candidate_execution import run_candidate
-from tools.bench_test_support import (
+from evaluation.benchmark_test_support import (
     assert_result_matches_reference,
     bench_dll_path,
     build_bench_utility,
@@ -21,6 +19,7 @@ from tools.bench_test_support import (
     run_coreutils_utility,
     run_dafny_verify,
 )
+from evaluation.submission.candidate_execution import run_candidate
 
 ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 UTILITY = "cp"

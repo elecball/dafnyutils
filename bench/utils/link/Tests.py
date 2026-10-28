@@ -3,8 +3,7 @@
 from pathlib import Path
 
 import pytest
-
-from tools.bench_test_support import (
+from evaluation.benchmark_test_support import (
     assert_result_matches_reference,
     bench_dll_path,
     build_bench_utility,

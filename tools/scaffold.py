@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .definition import (
+from benchmarks.definition import (
     BenchmarkKind,
     benchmark_item_directory,
     class_name_for_task_id,
@@ -16,6 +17,8 @@ from .definition import (
 
 @dataclass(frozen=True)
 class ScaffoldResult:
+    """Describe the generated contribution directory and its files."""
+
     task_id: str
     directory: Path
     files: tuple[Path, ...]
@@ -26,6 +29,7 @@ def _class_name(task_id: str) -> str:
 
 
 def scaffold_benchmark(*, root: Path, kind: BenchmarkKind, task_id: str) -> ScaffoldResult:
+    """Copy and specialize templates without replacing an existing contribution."""
     root = root.resolve()
     validate_task_id(task_id)
     directory = _scaffold_directory(root, kind, task_id)
@@ -81,3 +85,38 @@ def _specialize_files(directory: Path, task_id: str) -> tuple[Path, ...]:
         path.write_text(text, encoding="utf-8")
         created.append(path)
     return tuple(created)
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path(__file__).resolve().parents[1],
+        help="benchmark repository root (default: this tool's repository)",
+    )
+    parser.add_argument(
+        "--kind",
+        type=BenchmarkKind,
+        choices=tuple(kind.value for kind in BenchmarkKind),
+        required=True,
+    )
+    parser.add_argument("--id", required=True, dest="task_id")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Create an incomplete contribution and report expected authoring errors."""
+    args = _parser().parse_args(argv)
+    try:
+        result = scaffold_benchmark(root=args.root, kind=args.kind, task_id=args.task_id)
+    except (OSError, ValueError) as exc:
+        print(f"scaffold failed: {exc}")
+        return 1
+    print(result.directory.relative_to(args.root.resolve()).as_posix())
+    print("scaffold is incomplete; replace TODO content and source status before validation")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

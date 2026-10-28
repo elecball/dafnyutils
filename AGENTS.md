@@ -8,6 +8,22 @@ a model of system state as well as program logic. This model lets us specify and
 verify effects on the system. We check the model through differential testing:
 we compare its behavior with the original GNU coreutils binaries.
 
+Dafnyutils owns problem data, specifications, hidden tests, reference material
+and benchmark-construction tooling. It retains the complete
+`tools/coreutils_fuzzer`, including its Rust engine, Python launcher and Docker
+support. The root integration repository owns compilation, analysis, submission
+grading, candidate isolation, oracle execution and scoring policy. Its evaluator
+invokes the retained fuzzer when the benchmark definition requires it, uses the
+definition's target and applies root-owned budgets. Cosyn owns
+reusable agent harnesses. The installed `benchmarks` package remains data-only
+and must not import the root package, evaluator, analysis client or Cosyn. Compose
+these packages only in the root integration repository. The evaluator must not
+import experiment policy or Cosyn. This ownership split records the explicitly
+authorized evaluator migration; benchmark behavior and integrity rules remain.
+Benchmark `Tests.py` files and their scaffold templates are test material run by
+the root evaluator; they may import its execution helpers. This exception does
+not apply to the installed `benchmarks` data package.
+
 ## Instruction scope
 
 - Follow applicable repository and directory-level instructions, subject to
@@ -16,20 +32,21 @@ we compare its behavior with the original GNU coreutils binaries.
 - Subdirectory instructions may specialize this workflow, but must not silently
   weaken its evidence or benchmark-integrity requirements.
 - Do not modify instructions merely to bypass a restriction on the current task.
-- Reserve every `plan/` and `wiki/` tree, including nested directories and
-  submodules, for Markdown (`.md`) documents only. Do not create or store generated
-  evidence, logs, JSON/JSONL/CSV outputs, images, archives, scripts, source probes,
-  binaries, caches, or artifact symlinks there, even temporarily or when ignored
-  by Git. Renaming an artifact to `.md` does not make it a document.
+- Do not create or maintain repository-owned `plan/` or `wiki/` directories,
+  including nested tool directories. The user explicitly removed these local
+  agent records. Keep temporary working plans under
+  `/workspace/tmp/<task-slug>/`; maintain reusable documentation in `README.md`,
+  `CONTRIBUTING.md` or the relevant `docs/` page. Integration-wide coordination
+  records follow the integration repository's instructions outside this repository.
 - Put non-sensitive maintenance scratch and generated artifacts in
   `/workspace/tmp/<task-slug>/`, and simple experiment artifacts in
   `/workspace/tmp/experiment/<run-id>/`. Benchmark and private evidence must use
-  the protocol-authorized location and existing isolation rules. Plan/wiki
-  documents summarize commands and results and reference external artifacts with
-  their availability; they do not serve as artifact storage.
-- Before finishing, inspect `plan/` and `wiki/` recursively for non-Markdown
-  files. Remove violations created by the current task; preserve pre-existing
-  files unless their cleanup is explicitly authorized.
+  the protocol-authorized location and existing isolation rules. Maintained
+  documentation summarizes commands and results and references external artifacts
+  with their availability; it does not serve as artifact storage.
+- Before finishing, confirm that repository-owned `plan/` and `wiki/` directories
+  were not recreated and that `.gitignore` covers them at every depth. Independent
+  submodules and generated vendor checkouts retain their own record policies.
 
 ## Required workflow: inspect -> implement -> verify -> document
 
@@ -186,8 +203,9 @@ we compare its behavior with the original GNU coreutils binaries.
 - From the Dafnyutils root, `make test` without `TASK` and `make test-unit` run
   the development unit tier serially. Run `make test-integration` only for final
   validation after implementation and routine checks; `make test-final` runs
-  unit and integration tiers sequentially. `make test TASK=<utility>` keeps its
-  existing benchmark oracle selection and scoring behavior.
+  unit and integration tiers sequentially. Task execution belongs to root:
+  `make -C ../../.. test-task TASK=<utility>` runs the existing benchmark oracle
+  selection. `build-task`, `validate-task` and `check-task` also run from root.
 - If no Dafny source file changes, exclude `tests/bench` from routine regression
   testing. This does not excuse skipping checks affected by changes to generated
   specifications, verifier invocation, toolchains, or evaluation code. Use focused

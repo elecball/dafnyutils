@@ -3,16 +3,16 @@
 from pathlib import Path
 
 import pytest
-
-from benchmarks.definition import BenchmarkDefinition
-from benchmarks.runtime_cases import RuntimeCase, assert_runtime_observation, load_runtime_cases
-from tools.bench_test_support import (
+from evaluation.benchmark_test_support import (
     bench_dll_path,
     build_bench_utility,
     evaluation_target_root,
     run_bench_utility,
     run_dafny_verify,
 )
+
+from benchmarks.definition import BenchmarkDefinition
+from benchmarks.runtime_cases import RuntimeCase, assert_runtime_observation, load_runtime_cases
 
 SOURCE = Path(__file__).resolve().parent
 ROOT = evaluation_target_root(SOURCE.parents[2])
