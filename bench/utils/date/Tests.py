@@ -275,14 +275,14 @@ def test_full_stdout(executables: tuple[Path, Path]) -> None:
 @pytest.mark.parametrize(
     "filename",
     [
-        "DateCore.dfy",
-        "DateProof.dfy",
-        "Date.dfy",
-        "DateCalendar.dfy",
-        "DateFormat.dfy",
-        "DateModel.dfy",
-        "DateSpec.dfy",
-        "DateSchema.dfy",
+        "Impl/DateCore.dfy",
+        "Proof/DateProof.dfy",
+        "Impl/Date.dfy",
+        "Proof/DateCalendar.dfy",
+        "Proof/DateFormat.dfy",
+        "Spec/DateModel.dfy",
+        "Spec/DateSpec.dfy",
+        "Spec/DateSchema.dfy",
     ],
 )
 def test_verify_module(filename: str) -> None:

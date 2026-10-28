@@ -55,7 +55,8 @@ def test_gnu_parity() -> None:
 # Check each proof module as well as the entry contract required by make check.
 @pytest.mark.dafny_verify
 @pytest.mark.parametrize(
-    "filename", ["{{CLASS_NAME}}Core.dfy", "{{CLASS_NAME}}Proof.dfy", "{{CLASS_NAME}}.dfy"]
+    "filename",
+    ["Impl/{{CLASS_NAME}}Core.dfy", "Proof/{{CLASS_NAME}}Proof.dfy", "Impl/{{CLASS_NAME}}.dfy"],
 )
 def test_verify_module(filename: str) -> None:
     # upstream: none - Checks the Dafny proof surface, not GNU runtime behavior.

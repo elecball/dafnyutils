@@ -269,7 +269,7 @@ def test_option_like_paths_match_coreutils(executables: tuple[Path, Path], tmp_p
 
 # Check each proof module as well as the entry contract required by make check.
 @pytest.mark.dafny_verify
-@pytest.mark.parametrize("filename", ["LinkCore.dfy", "LinkProof.dfy", "Link.dfy"])
+@pytest.mark.parametrize("filename", ["Impl/LinkCore.dfy", "Proof/LinkProof.dfy", "Impl/Link.dfy"])
 def test_verify_module(filename: str) -> None:
     # upstream: none - Checks the Dafny proof surface, not GNU runtime behavior.
     run_dafny_verify(PROJECT / filename)

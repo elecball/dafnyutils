@@ -48,7 +48,7 @@ environment on `PATH`. The standalone data container supports only data checks.
 
 | Path | Purpose |
 | --- | --- |
-| `bench/utils/<utility>/` | Utility definition, description, Dafny modules and local Makefile |
+| `bench/utils/<utility>/` | Utility definition, description, oracle tests and local Makefile; Dafny sources under `Spec/`, `Impl/` and `Proof/` |
 | `bench/core/` | System model, native contracts, protocol types and trusted runtime adapters |
 | `bench/*/<item>/CliSupport.dfy` | Fixed task-local parser and process runner protocol |
 | `coreutils/` | Pinned upstream GNU source and tests; keep its revision fixed |
@@ -170,12 +170,12 @@ Complete these generated files:
 | File | What to put there |
 | --- | --- |
 | `base32.md` | The scope you defined: input, option, environment, output and error behavior; scope decisions with evidence; options left out due to IO.dfy; examples, source revision, and license |
-| `Base32Schema.dfy` | CLI schema/configuration, raw command types and decode behavior |
-| `Base32Spec.dfy` | Declarative observable relation and fixed help/version/error text |
-| `Base32Core.dfy` | Executable algorithms and the values they construct to satisfy the specification |
-| `Base32Proof.dfy` | Lemmas connecting the implementation summary to the specification |
-| `Base32.dfy` | Shared runner hooks; `RunCore` directly ensures the main `Spec(...)` |
-| `Base32Cli.dfy` | Process entry using `BenchIO.Process()`, the shared runner and `BenchIO.Exit` |
+| `Spec/Base32Schema.dfy` | CLI schema/configuration, raw command types and decode behavior |
+| `Spec/Base32Spec.dfy` | Declarative observable relation and fixed help/version/error text |
+| `Impl/Base32Core.dfy` | Executable algorithms and the values they construct to satisfy the specification |
+| `Proof/Base32Proof.dfy` | Lemmas connecting the implementation summary to the specification |
+| `Impl/Base32.dfy` | Shared runner hooks; `RunCore` directly ensures the main `Spec(...)` |
+| `Impl/Base32Cli.dfy` | Process entry using `BenchIO.Process()`, the shared runner and `BenchIO.Exit` |
 | `Tests.py` | Evaluator-owned observable behavior and differential cases |
 | `dfyconfig.toml`, `Makefile` | Existing project/build conventions from the scaffold |
 
@@ -186,7 +186,8 @@ Replace the raw-command wrapper and parser TODOs with the utility's actual rules
 Use only the IO regions it reads or changes; the supplied stream regions are a
 starting point, not permission to widen an existing task's frame.
 
-Algorithm items use this same class-prefixed file layout, `BenchmarkItem`
+Utility sources use `Spec/`, `Impl/` and `Proof/` inside each task directory.
+Algorithm sources retain their flat class-prefixed layout and the same `BenchmarkItem`
 interface, build target, runtime test stage and verification gate. Their CLI
 reads the problem input from standard input and parses it before calling
 `RunCore(raw, io)`. Keep the original mathematical answer relation in Spec and
@@ -440,7 +441,7 @@ applicable validation described in this guide and include its evidence in PRs.
 
 Read [DAFNYSTYLE.md](DAFNYSTYLE.md) and [bench/AGENTS.md](bench/AGENTS.md). Use the existing two-space indentation and write the contract before the implementation.
 
-Keep declarative behavior and fixed user-facing text in `*Spec.dfy`, algorithms in `*Core.dfy`, and connecting lemmas in `*Proof.dfy`. Spec must not import Core, Proof or CLI. The entry `RunCore` must directly ensure its main specification, `Spec(...)`; a helper lemma alone is insufficient.
+Keep utility schemas, declarative behavior and fixed user-facing text in `Spec/`, algorithms and entry points in `Impl/`, and connecting lemmas in `Proof/`. Keep the existing class-prefixed file and module names. Spec must not import Core, Proof or CLI. The entry `RunCore` must directly ensure its main specification, `Spec(...)`; a helper lemma alone is insufficient.
 
 - List only the objects or fields needed in `reads` and `modifies`. Fields outside
   `modifies` already stay unchanged; do not repeat that fact as old/new equalities.

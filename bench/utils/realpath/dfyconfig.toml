@@ -1,4 +1,4 @@
-includes = ["RealpathCli.dfy"]
+includes = ["Impl/RealpathCli.dfy"]
 
 [options]
 target = "cs"

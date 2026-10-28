@@ -24,11 +24,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_COMM_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "comm_bench.dll")
 COREUTILS_COMM = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "comm")
 COMM_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "comm" / "CommSchema.dfy",
-    ROOT / "bench" / "utils" / "comm" / "CommCore.dfy",
-    ROOT / "bench" / "utils" / "comm" / "CommSpec.dfy",
-    ROOT / "bench" / "utils" / "comm" / "CommProof.dfy",
-    ROOT / "bench" / "utils" / "comm" / "Comm.dfy",
+    ROOT / "bench" / "utils" / "comm" / "Spec/CommSchema.dfy",
+    ROOT / "bench" / "utils" / "comm" / "Impl/CommCore.dfy",
+    ROOT / "bench" / "utils" / "comm" / "Spec/CommSpec.dfy",
+    ROOT / "bench" / "utils" / "comm" / "Proof/CommProof.dfy",
+    ROOT / "bench" / "utils" / "comm" / "Impl/Comm.dfy",
 ]
 
 

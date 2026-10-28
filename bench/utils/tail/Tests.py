@@ -24,11 +24,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_TAIL_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "tail_bench.dll")
 COREUTILS_TAIL = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "tail")
 TAIL_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "tail" / "TailSchema.dfy",
-    ROOT / "bench" / "utils" / "tail" / "TailCore.dfy",
-    ROOT / "bench" / "utils" / "tail" / "TailSpec.dfy",
-    ROOT / "bench" / "utils" / "tail" / "TailProof.dfy",
-    ROOT / "bench" / "utils" / "tail" / "Tail.dfy",
+    ROOT / "bench" / "utils" / "tail" / "Spec/TailSchema.dfy",
+    ROOT / "bench" / "utils" / "tail" / "Impl/TailCore.dfy",
+    ROOT / "bench" / "utils" / "tail" / "Spec/TailSpec.dfy",
+    ROOT / "bench" / "utils" / "tail" / "Proof/TailProof.dfy",
+    ROOT / "bench" / "utils" / "tail" / "Impl/Tail.dfy",
 ]
 
 

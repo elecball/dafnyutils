@@ -47,7 +47,7 @@ def scaffold_benchmark(*, root: Path, kind: BenchmarkKind, task_id: str) -> Scaf
     for source in sources:
         for template in sorted(source.iterdir()):
             shutil.copyfile(template, directory / template.name)
-    created = _specialize_files(directory, task_id)
+    created = _specialize_files(directory, task_id, kind)
     return ScaffoldResult(task_id=task_id, directory=directory, files=created)
 
 
@@ -55,11 +55,17 @@ def _scaffold_directory(root: Path, kind: BenchmarkKind, task_id: str) -> Path:
     return root / benchmark_item_directory(kind, task_id)
 
 
-def _specialize_files(directory: Path, task_id: str) -> tuple[Path, ...]:
+def _specialize_files(directory: Path, task_id: str, kind: BenchmarkKind) -> tuple[Path, ...]:
     class_name = _class_name(task_id)
+    separated = kind is BenchmarkKind.COREUTILS
     replacements = {
         "{{TASK_ID}}": task_id,
         "{{CLASS_NAME}}": class_name,
+        "{{CORE_PREFIX}}": "../../../core/" if separated else "../../core/",
+        "{{SPEC_PREFIX}}": "../Spec/" if separated else "",
+        "{{IMPL_PREFIX}}": "../Impl/" if separated else "",
+        "{{PROOF_PREFIX}}": "../Proof/" if separated else "",
+        "{{ENTRY_PREFIX}}": "Impl/" if separated else "",
     }
     rename_map = {
         "Description.md": f"{task_id}.md",
@@ -70,21 +76,31 @@ def _specialize_files(directory: Path, task_id: str) -> tuple[Path, ...]:
         "Utility.dfy": f"{class_name}.dfy",
         "UtilityCli.dfy": f"{class_name}Cli.dfy",
     }
-    for source_name, destination_name in rename_map.items():
-        source = directory / source_name
-        if source.exists():
-            source.rename(directory / destination_name)
-
     created: list[Path] = []
     for path in sorted(directory.iterdir()):
         if not path.is_file():
             continue
+        destination_name = rename_map.get(path.name, path.name)
+        destination = directory / destination_name
+        if separated and path.suffix == ".dfy":
+            if path.stem.endswith(("Schema", "Spec")):
+                role = "Spec"
+            elif path.stem.endswith("Proof"):
+                role = "Proof"
+            else:
+                role = "Impl"
+            target_dir = directory / role
+            if not target_dir.exists():
+                target_dir.mkdir(parents=True)
+            destination = target_dir / destination_name
+        if path != destination:
+            path = path.rename(destination)
         text = path.read_text(encoding="utf-8")
         for marker, replacement in replacements.items():
             text = text.replace(marker, replacement)
         path.write_text(text, encoding="utf-8")
         created.append(path)
-    return tuple(created)
+    return tuple(sorted(created))
 
 
 def _parser() -> argparse.ArgumentParser:

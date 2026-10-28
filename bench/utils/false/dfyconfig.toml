@@ -1,4 +1,4 @@
-includes = ["FalseCli.dfy"]
+includes = ["Impl/FalseCli.dfy"]
 
 [options]
 target = "cs"

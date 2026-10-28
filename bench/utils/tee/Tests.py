@@ -24,11 +24,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_TEE_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "tee_bench.dll")
 COREUTILS_TEE = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "tee")
 TEE_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "tee" / "TeeSchema.dfy",
-    ROOT / "bench" / "utils" / "tee" / "TeeCore.dfy",
-    ROOT / "bench" / "utils" / "tee" / "TeeSpec.dfy",
-    ROOT / "bench" / "utils" / "tee" / "TeeProof.dfy",
-    ROOT / "bench" / "utils" / "tee" / "Tee.dfy",
+    ROOT / "bench" / "utils" / "tee" / "Spec/TeeSchema.dfy",
+    ROOT / "bench" / "utils" / "tee" / "Impl/TeeCore.dfy",
+    ROOT / "bench" / "utils" / "tee" / "Spec/TeeSpec.dfy",
+    ROOT / "bench" / "utils" / "tee" / "Proof/TeeProof.dfy",
+    ROOT / "bench" / "utils" / "tee" / "Impl/Tee.dfy",
 ]
 
 

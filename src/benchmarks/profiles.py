@@ -167,7 +167,12 @@ def derived_dafny_entries(
 ) -> ResolvedDafnyEntry:
     class_name = utility_class_name(utility_cfg)
     return ResolvedDafnyEntry(
-        f"{class_name}.dfy", f"{class_name}.{class_name}BenchmarkItem.RunCore"
+        str(
+            Path(utility_paths(utility_cfg, utility_name)["wrapper"]).relative_to(
+                utility_cfg.item_directory
+            )
+        ),
+        f"{class_name}.{class_name}BenchmarkItem.RunCore",
     )
 
 
@@ -176,18 +181,21 @@ def utility_paths(utility_cfg: ResolvedBenchmark, utility_name: str) -> dict[str
     if utility_name != utility_cfg.name:
         raise ValueError("benchmark name does not match the resolved configuration")
     utility_dir = utility_cfg.item_directory
-    base = f"{utility_dir}/{class_name}"
+    separated = not utility_name.startswith("algorithm-")
+    spec_dir = f"{utility_dir}/Spec" if separated else utility_dir
+    impl_dir = f"{utility_dir}/Impl" if separated else utility_dir
+    proof_dir = f"{utility_dir}/Proof" if separated else utility_dir
     return {
         "utility_dir": utility_dir,
         "project_config": f"{utility_dir}/dfyconfig.toml",
-        "schema": f"{base}Schema.dfy",
+        "schema": f"{spec_dir}/{class_name}Schema.dfy",
         "nl_spec": f"{utility_dir}/{utility_name}.md",
-        "spec": f"{base}Spec.dfy",
-        "core": f"{base}Core.dfy",
-        "proof": f"{base}Proof.dfy",
-        "wrapper": f"{base}.dfy",
-        "cli": f"{base}Cli.dfy",
-        "cli_support": f"{utility_dir}/CliSupport.dfy",
+        "spec": f"{spec_dir}/{class_name}Spec.dfy",
+        "core": f"{impl_dir}/{class_name}Core.dfy",
+        "proof": f"{proof_dir}/{class_name}Proof.dfy",
+        "wrapper": f"{impl_dir}/{class_name}.dfy",
+        "cli": f"{impl_dir}/{class_name}Cli.dfy",
+        "cli_support": f"{impl_dir}/CliSupport.dfy",
     }
 
 

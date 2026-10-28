@@ -1,4 +1,4 @@
-includes = ["CatCli.dfy"]
+includes = ["Impl/CatCli.dfy"]
 
 [options]
 target = "cs"

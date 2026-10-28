@@ -1,4 +1,4 @@
-includes = ["EchoCli.dfy"]
+includes = ["Impl/EchoCli.dfy"]
 
 [options]
 target = "cs"

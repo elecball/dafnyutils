@@ -778,7 +778,14 @@ def test_verbose_stdout_full(executables: tuple[Path, Path], tmp_path: Path) -> 
 # Verify the implementation, connecting proof, and required direct entry postcondition separately.
 @pytest.mark.dafny_verify
 @pytest.mark.parametrize(
-    "filename", ["CpSpec.dfy", "CpCore.dfy", "CpPathProof.dfy", "CpProof.dfy", "Cp.dfy"]
+    "filename",
+    [
+        "Spec/CpSpec.dfy",
+        "Impl/CpCore.dfy",
+        "Proof/CpPathProof.dfy",
+        "Proof/CpProof.dfy",
+        "Impl/Cp.dfy",
+    ],
 )
 def test_verify_module(filename: str) -> None:
     # upstream: none - Checks the fixed Dafny proof contract rather than GNU runtime output.

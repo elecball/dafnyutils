@@ -24,11 +24,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_CUT_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "cut_bench.dll")
 COREUTILS_CUT = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "cut")
 CUT_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "cut" / "CutSchema.dfy",
-    ROOT / "bench" / "utils" / "cut" / "CutCore.dfy",
-    ROOT / "bench" / "utils" / "cut" / "CutSpec.dfy",
-    ROOT / "bench" / "utils" / "cut" / "CutProof.dfy",
-    ROOT / "bench" / "utils" / "cut" / "Cut.dfy",
+    ROOT / "bench" / "utils" / "cut" / "Spec/CutSchema.dfy",
+    ROOT / "bench" / "utils" / "cut" / "Impl/CutCore.dfy",
+    ROOT / "bench" / "utils" / "cut" / "Spec/CutSpec.dfy",
+    ROOT / "bench" / "utils" / "cut" / "Proof/CutProof.dfy",
+    ROOT / "bench" / "utils" / "cut" / "Impl/Cut.dfy",
 ]
 
 

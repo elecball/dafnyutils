@@ -24,9 +24,9 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_WC_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "wc_bench.dll")
 COREUTILS_WC = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "wc")
 WC_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "wc" / "WcCore.dfy",
-    ROOT / "bench" / "utils" / "wc" / "WcProof.dfy",
-    ROOT / "bench" / "utils" / "wc" / "Wc.dfy",
+    ROOT / "bench" / "utils" / "wc" / "Impl/WcCore.dfy",
+    ROOT / "bench" / "utils" / "wc" / "Proof/WcProof.dfy",
+    ROOT / "bench" / "utils" / "wc" / "Impl/Wc.dfy",
 ]
 
 

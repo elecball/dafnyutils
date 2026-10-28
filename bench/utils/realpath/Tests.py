@@ -243,7 +243,13 @@ def test_stdout_failure(executables: tuple[Path, Path]) -> None:
 @pytest.mark.integration
 @pytest.mark.dafny_verify
 @pytest.mark.parametrize(
-    "filename", ["RealpathPathProof.dfy", "RealpathCore.dfy", "RealpathProof.dfy", "Realpath.dfy"]
+    "filename",
+    [
+        "Proof/RealpathPathProof.dfy",
+        "Impl/RealpathCore.dfy",
+        "Proof/RealpathProof.dfy",
+        "Impl/Realpath.dfy",
+    ],
 )
 def test_verify_module(filename: str) -> None:
     # upstream: none - Checks the complete Dafny utility proof surface.

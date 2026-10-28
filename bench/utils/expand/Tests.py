@@ -452,35 +452,35 @@ def test_version_exit_successfully_matches_coreutils() -> None:
 @pytest.mark.dafny_verify
 def test_expand_schema_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "expand" / "ExpandSchema.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "expand" / "Spec/ExpandSchema.dfy")
 
 
 # The expand executable core module verifies independently.
 @pytest.mark.dafny_verify
 def test_expand_core_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "expand" / "ExpandCore.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "expand" / "Impl/ExpandCore.dfy")
 
 
 # The expand world-transition spec module verifies independently.
 @pytest.mark.dafny_verify
 def test_expand_spec_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "expand" / "ExpandSpec.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "expand" / "Spec/ExpandSpec.dfy")
 
 
 # The expand proof bridge module verifies independently.
 @pytest.mark.dafny_verify
 def test_expand_proof_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "expand" / "ExpandProof.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "expand" / "Proof/ExpandProof.dfy")
 
 
 # The expand benchmark item module verifies independently.
 @pytest.mark.dafny_verify
 def test_expand_benchmark_item_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "expand" / "Expand.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "expand" / "Impl/Expand.dfy")
 
 
 # Invalid tab operands escape their UTF-8 bytes in C-locale style.

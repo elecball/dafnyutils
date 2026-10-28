@@ -35,6 +35,11 @@ Benchmark `Tests.py` files are test material consumed by that evaluator; their
 execution helpers live in the integration package. The installed `benchmarks`
 package does not import the evaluator or a harness.
 
+Utility Dafny sources live under `bench/utils/<utility>/Spec/`, `Impl/` and
+`Proof/`. The task directory retains its manifest, description, tests, Makefile
+and project configuration. Algorithm sources retain their flat layout. See the
+[source responsibilities](docs/benchmark-layout.md) for details.
+
 ### Edit problem data
 
 Use the [standalone development container](.devcontainer/devcontainer.json) to

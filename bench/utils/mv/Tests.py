@@ -27,11 +27,11 @@ DEFAULT_COREUTILS_MV = ROOT / "_build" / "coreutils" / "src" / "mv"
 BENCH_MV_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "mv_bench.dll")
 COREUTILS_MV = coreutils_binary_path(ROOT, DEFAULT_COREUTILS_MV)
 MV_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "mv" / "MvSchema.dfy",
-    ROOT / "bench" / "utils" / "mv" / "MvCore.dfy",
-    ROOT / "bench" / "utils" / "mv" / "MvSpec.dfy",
-    ROOT / "bench" / "utils" / "mv" / "MvProof.dfy",
-    ROOT / "bench" / "utils" / "mv" / "Mv.dfy",
+    ROOT / "bench" / "utils" / "mv" / "Spec/MvSchema.dfy",
+    ROOT / "bench" / "utils" / "mv" / "Impl/MvCore.dfy",
+    ROOT / "bench" / "utils" / "mv" / "Spec/MvSpec.dfy",
+    ROOT / "bench" / "utils" / "mv" / "Proof/MvProof.dfy",
+    ROOT / "bench" / "utils" / "mv" / "Impl/Mv.dfy",
 ]
 
 

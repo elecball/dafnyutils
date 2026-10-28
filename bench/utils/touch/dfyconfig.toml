@@ -1,4 +1,4 @@
-includes = ["TouchCli.dfy"]
+includes = ["Impl/TouchCli.dfy"]
 
 [options]
 target = "cs"

@@ -24,11 +24,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_HEAD_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "head_bench.dll")
 COREUTILS_HEAD = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "head")
 HEAD_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "head" / "HeadSchema.dfy",
-    ROOT / "bench" / "utils" / "head" / "HeadCore.dfy",
-    ROOT / "bench" / "utils" / "head" / "HeadSpec.dfy",
-    ROOT / "bench" / "utils" / "head" / "HeadProof.dfy",
-    ROOT / "bench" / "utils" / "head" / "Head.dfy",
+    ROOT / "bench" / "utils" / "head" / "Spec/HeadSchema.dfy",
+    ROOT / "bench" / "utils" / "head" / "Impl/HeadCore.dfy",
+    ROOT / "bench" / "utils" / "head" / "Spec/HeadSpec.dfy",
+    ROOT / "bench" / "utils" / "head" / "Proof/HeadProof.dfy",
+    ROOT / "bench" / "utils" / "head" / "Impl/Head.dfy",
 ]
 
 

@@ -1,4 +1,4 @@
-include "../../core/CliTypes.dfy"
+include "{{CORE_PREFIX}}CliTypes.dfy"
 
 module {{CLASS_NAME}}Schema {
   import CliTypes

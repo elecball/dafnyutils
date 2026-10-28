@@ -155,7 +155,7 @@ exact diagnostics
 and the final exit status.
 
 Give filesystem-processing loops their own narrow `modifies` clause. For example,
-[`MkdirCore.RunCore`](../bench/utils/mkdir/MkdirCore.dfy) gathers diagnostic bytes
+[`MkdirCore.RunCore`](../bench/utils/mkdir/Impl/MkdirCore.dfy) gathers diagnostic bytes
 while its loop modifies only `io.fsRegion`; it flushes the streams afterwards.
 Without that loop clause, Dafny inherits the enclosing method's broader stream
 frame, so the final output relation loses its starting stream values. State this

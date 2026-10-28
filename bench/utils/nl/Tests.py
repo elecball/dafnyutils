@@ -24,11 +24,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_NL_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "nl_bench.dll")
 COREUTILS_NL = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "nl")
 NL_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "nl" / "NlSchema.dfy",
-    ROOT / "bench" / "utils" / "nl" / "NlCore.dfy",
-    ROOT / "bench" / "utils" / "nl" / "NlSpec.dfy",
-    ROOT / "bench" / "utils" / "nl" / "NlProof.dfy",
-    ROOT / "bench" / "utils" / "nl" / "Nl.dfy",
+    ROOT / "bench" / "utils" / "nl" / "Spec/NlSchema.dfy",
+    ROOT / "bench" / "utils" / "nl" / "Impl/NlCore.dfy",
+    ROOT / "bench" / "utils" / "nl" / "Spec/NlSpec.dfy",
+    ROOT / "bench" / "utils" / "nl" / "Proof/NlProof.dfy",
+    ROOT / "bench" / "utils" / "nl" / "Impl/Nl.dfy",
 ]
 
 

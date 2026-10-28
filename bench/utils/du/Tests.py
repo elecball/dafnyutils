@@ -25,11 +25,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_DU_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "du_bench.dll")
 COREUTILS_DU = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "du")
 DU_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "du" / "DuSchema.dfy",
-    ROOT / "bench" / "utils" / "du" / "DuCore.dfy",
-    ROOT / "bench" / "utils" / "du" / "DuSpec.dfy",
-    ROOT / "bench" / "utils" / "du" / "DuProof.dfy",
-    ROOT / "bench" / "utils" / "du" / "Du.dfy",
+    ROOT / "bench" / "utils" / "du" / "Spec/DuSchema.dfy",
+    ROOT / "bench" / "utils" / "du" / "Impl/DuCore.dfy",
+    ROOT / "bench" / "utils" / "du" / "Spec/DuSpec.dfy",
+    ROOT / "bench" / "utils" / "du" / "Proof/DuProof.dfy",
+    ROOT / "bench" / "utils" / "du" / "Impl/Du.dfy",
 ]
 
 

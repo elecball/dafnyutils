@@ -376,7 +376,8 @@ def test_verbose_write_error_keeps_directories(
 # Check specification well-formedness, helpers and the entry obligation separately.
 @pytest.mark.dafny_verify
 @pytest.mark.parametrize(
-    "filename", ["MkdirSpec.dfy", "MkdirCore.dfy", "MkdirProof.dfy", "Mkdir.dfy"]
+    "filename",
+    ["Spec/MkdirSpec.dfy", "Impl/MkdirCore.dfy", "Proof/MkdirProof.dfy", "Impl/Mkdir.dfy"],
 )
 def test_verify_module(filename: str) -> None:
     # upstream: none - Checks proof obligations rather than GNU runtime behavior.

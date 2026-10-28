@@ -1,4 +1,4 @@
-includes = ["ReadlinkCli.dfy"]
+includes = ["Impl/ReadlinkCli.dfy"]
 
 [options]
 target = "cs"

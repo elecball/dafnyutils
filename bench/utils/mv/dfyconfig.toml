@@ -1,4 +1,4 @@
-includes = ["MvCli.dfy"]
+includes = ["Impl/MvCli.dfy"]
 
 [options]
 target = "cs"

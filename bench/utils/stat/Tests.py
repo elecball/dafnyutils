@@ -24,11 +24,11 @@ BENCH_STAT_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "stat_bench.dl
 COREUTILS_STAT = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "stat")
 COREUTILS_CP = COREUTILS_STAT.with_name("cp")
 STAT_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "stat" / "StatSchema.dfy",
-    ROOT / "bench" / "utils" / "stat" / "StatCore.dfy",
-    ROOT / "bench" / "utils" / "stat" / "StatSpec.dfy",
-    ROOT / "bench" / "utils" / "stat" / "StatProof.dfy",
-    ROOT / "bench" / "utils" / "stat" / "Stat.dfy",
+    ROOT / "bench" / "utils" / "stat" / "Spec/StatSchema.dfy",
+    ROOT / "bench" / "utils" / "stat" / "Impl/StatCore.dfy",
+    ROOT / "bench" / "utils" / "stat" / "Spec/StatSpec.dfy",
+    ROOT / "bench" / "utils" / "stat" / "Proof/StatProof.dfy",
+    ROOT / "bench" / "utils" / "stat" / "Impl/Stat.dfy",
 ]
 
 

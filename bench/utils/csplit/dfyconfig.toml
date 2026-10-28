@@ -1,4 +1,4 @@
-includes = ["CsplitCli.dfy"]
+includes = ["Impl/CsplitCli.dfy"]
 
 [options]
 target = "cs"

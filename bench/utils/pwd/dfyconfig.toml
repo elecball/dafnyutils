@@ -1,4 +1,4 @@
-includes = ["PwdCli.dfy"]
+includes = ["Impl/PwdCli.dfy"]
 
 [options]
 target = "cs"

@@ -1,4 +1,4 @@
-includes = ["UniqCli.dfy"]
+includes = ["Impl/UniqCli.dfy"]
 
 [options]
 target = "cs"

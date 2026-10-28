@@ -12,22 +12,23 @@ checks select registry paths, list filters, scaffold provenance, GNU manual
 extraction, or display labels/manual references. Execution, workspace generation,
 principal contracts, verification and scoring use the common interface.
 
-| Source | Responsibility |
+Utilities use `bench/utils/<task>/{Spec,Impl,Proof}/`, matching Leanutils' per-utility separation. Task IDs and file/module base names stay unchanged. Descriptions, manifests, oracle tests, Makefiles and project configuration stay at the task root. Algorithm tasks retain their existing flat source layout and the same runner interface.
+
+| Utility source | Responsibility |
 | --- | --- |
-| `<Name>Schema.dfy` | Raw command datatype and input parsing |
-| `<Name>Spec.dfy` | Declarative observable relation and fixed diagnostic text |
-| `<Name>Core.dfy` | Executable implementation and its summary |
-| `<Name>Proof.dfy` | Lemmas connecting the summary to Spec |
-| `<Name>.dfy` | BenchmarkItem class; RunCore directly ensures Spec(raw, io, exit) |
-| `<Name>Cli.dfy` | Native process entry and shared runner call |
-| `CliSupport.dfy` | Fixed task-local parser, stream checks and process runner |
-| `dfyconfig.toml` | Builds `<Name>Cli.dfy` with the common native IO adapter |
+| `Spec/<Name>Schema.dfy` | Raw command datatype and input parsing |
+| `Spec/<Name>Spec.dfy` | Declarative observable relation and fixed diagnostic text |
+| `Impl/<Name>Core.dfy` | Executable implementation and its summary |
+| `Proof/<Name>Proof.dfy` | Lemmas connecting the summary to Spec |
+| `Impl/<Name>.dfy` | BenchmarkItem class; RunCore directly ensures Spec(raw, io, exit) |
+| `Impl/<Name>Cli.dfy` | Native process entry and shared runner call |
+| `Impl/CliSupport.dfy` | Fixed task-local parser, stream checks and process runner |
+| `dfyconfig.toml` | Builds `Impl/<Name>Cli.dfy` with the common native IO adapter |
 | `Tests.py` | Evaluator-owned executable behavior checks and proof probes |
 
-The common scaffold is in `tools/benchmark_templates/common`. Category overlays
-provide provenance, natural-language scope and oracle examples. They supply no
-alternative Dafny layout. All supported item Makefiles expose `build`, `test`
-and `verify` through the existing repository modules.
+Auxiliary Spec modules and shared mathematical models stay in `Spec/`. Auxiliary implementation modules stay in `Impl/`. Connecting lemmas stay in `Proof/`, including `DateCalendar.dfy`, `DateFormat.dfy` and `CpPathBridge.dfy`. Existing dependencies and proof obligations are preserved; directory placement does not change their trust status.
+
+The common scaffold is in `tools/benchmark_templates/common`. Category overlays provide provenance, natural-language scope and oracle examples. The generator specializes source prefixes for nested utilities and flat algorithms. All supported item Makefiles expose `build`, `test` and `verify` through the existing repository modules.
 
 ## Algorithm migration
 

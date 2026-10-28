@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import tomllib
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from posixpath import normpath
 
 import pytest
 
@@ -134,6 +136,23 @@ def test_generation_specializes_common_and_kind_templates(
         "Tests.py",
         "benchmark.yaml",
     } | extra
+    source_root = result.directory
+    if kind is BenchmarkKind.COREUTILS:
+        assert {
+            path.relative_to(source_root).as_posix()
+            for path in result.files
+            if path.suffix == ".dfy"
+        } == {
+            f"Spec/{class_name}Schema.dfy",
+            f"Spec/{class_name}Spec.dfy",
+            f"Impl/{class_name}.dfy",
+            f"Impl/{class_name}Cli.dfy",
+            f"Impl/{class_name}Core.dfy",
+            "Impl/CliSupport.dfy",
+            f"Proof/{class_name}Proof.dfy",
+        }
+    else:
+        assert all(path.parent == source_root for path in result.files)
     assert result.files == tuple(sorted(result.files))
     assert memory.files[result.directory / "Makefile"] == f"common: {task_id} {class_name}\n"
     assert memory.files[result.directory / f"{task_id}.md"] == (
@@ -144,6 +163,33 @@ def test_generation_specializes_common_and_kind_templates(
     )
     assert all("{{" not in memory.files[path] for path in result.files)
     assert all(memory.files[path] == text for path, text in original_templates.items())
+
+
+# Real templates resolve all generated includes and the CLI entry in either source layout.
+@pytest.mark.parametrize("kind", (BenchmarkKind.COREUTILS, BenchmarkKind.ALGORITHM))
+def test_template_source_closure_resolves_in_generated_layout(
+    monkeypatch: pytest.MonkeyPatch, kind: BenchmarkKind
+) -> None:
+    memory = _MemoryFiles()
+    template_root = Path(__file__).resolve().parents[2] / "tools/benchmark_templates"
+    for path in tuple(memory.files):
+        relative = path.relative_to(memory.root / "tools/benchmark_templates")
+        memory.files[path] = (template_root / relative).read_text(encoding="utf-8")
+    task_id = "sample-tool" if kind is BenchmarkKind.COREUTILS else "algorithm-123"
+    with memory.patched(monkeypatch):
+        result = scaffold.scaffold_benchmark(root=memory.root, kind=kind, task_id=task_id)
+
+    for path in result.files:
+        if path.suffix != ".dfy":
+            continue
+        for line in memory.files[path].splitlines():
+            if not line.startswith('include "'):
+                continue
+            target = Path(normpath(str(path.parent / line.split('"')[1])))
+            assert target in memory.files or target.parent == memory.root / "bench/core"
+    config = tomllib.loads(memory.files[result.directory / "dfyconfig.toml"])
+    assert len(config["includes"]) == 1
+    assert result.directory / config["includes"][0] in memory.files
 
 
 # The command uses the tool's checkout by default and reports the unfinished contribution.
@@ -161,7 +207,7 @@ def test_command_uses_tool_repository_default(
         "bench/utils/base32\n"
         "scaffold is incomplete; replace TODO content and source status before validation\n"
     )
-    assert memory.root / "bench/utils/base32/Base32.dfy" in memory.files
+    assert memory.root / "bench/utils/base32/Impl/Base32.dfy" in memory.files
 
 
 # An existing contribution remains byte-for-byte unchanged when generation is refused.

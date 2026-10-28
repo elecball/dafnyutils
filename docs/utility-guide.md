@@ -22,10 +22,10 @@ Each utility has three main responsibilities:
 The public entry point in `<Utility>.dfy` must directly ensure `Spec(raw, io,
 exit)`. A helper's `CoreSummary` is an intermediate result, not a replacement
 for this final obligation. For a concrete example, read
-[`Head.HeadBenchmarkItem.RunCore`](../bench/utils/head/Head.dfy), then
-[`HeadCore`](../bench/utils/head/HeadCore.dfy),
-[`HeadSpec`](../bench/utils/head/HeadSpec.dfy) and
-[`HeadProof`](../bench/utils/head/HeadProof.dfy).
+[`Head.HeadBenchmarkItem.RunCore`](../bench/utils/head/Impl/Head.dfy), then
+[`HeadCore`](../bench/utils/head/Impl/HeadCore.dfy),
+[`HeadSpec`](../bench/utils/head/Spec/HeadSpec.dfy) and
+[`HeadProof`](../bench/utils/head/Proof/HeadProof.dfy).
 The fixed CLI parser and process runner sit outside this principal proof
 boundary; see [the ownership boundary](trustbase-boundary.md#fixed-command-line-protocol).
 

@@ -27,11 +27,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_LN_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "ln_bench.dll")
 COREUTILS_LN = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "ln")
 LN_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "ln" / "LnSchema.dfy",
-    ROOT / "bench" / "utils" / "ln" / "LnCore.dfy",
-    ROOT / "bench" / "utils" / "ln" / "LnSpec.dfy",
-    ROOT / "bench" / "utils" / "ln" / "LnProof.dfy",
-    ROOT / "bench" / "utils" / "ln" / "Ln.dfy",
+    ROOT / "bench" / "utils" / "ln" / "Spec/LnSchema.dfy",
+    ROOT / "bench" / "utils" / "ln" / "Impl/LnCore.dfy",
+    ROOT / "bench" / "utils" / "ln" / "Spec/LnSpec.dfy",
+    ROOT / "bench" / "utils" / "ln" / "Proof/LnProof.dfy",
+    ROOT / "bench" / "utils" / "ln" / "Impl/Ln.dfy",
 ]
 
 

@@ -242,14 +242,14 @@ def test_write_failure(executables):
 @pytest.mark.parametrize(
     "filename",
     [
-        "JoinDataSpec.dfy",
-        "JoinDataProof.dfy",
-        "JoinDataCore.dfy",
-        "JoinPlanCore.dfy",
-        "JoinSpec.dfy",
-        "JoinCore.dfy",
-        "JoinProof.dfy",
-        "Join.dfy",
+        "Spec/JoinDataSpec.dfy",
+        "Proof/JoinDataProof.dfy",
+        "Impl/JoinDataCore.dfy",
+        "Impl/JoinPlanCore.dfy",
+        "Spec/JoinSpec.dfy",
+        "Impl/JoinCore.dfy",
+        "Proof/JoinProof.dfy",
+        "Impl/Join.dfy",
     ],
 )
 def test_verify_module(filename):

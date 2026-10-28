@@ -1,4 +1,4 @@
-includes = ["DuCli.dfy"]
+includes = ["Impl/DuCli.dfy"]
 
 [options]
 target = "cs"

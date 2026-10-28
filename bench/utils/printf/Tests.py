@@ -24,10 +24,10 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_PRINTF_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "printf_bench.dll")
 COREUTILS_PRINTF = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "printf")
 PRINTF_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "printf" / "PrintfSchema.dfy",
-    ROOT / "bench" / "utils" / "printf" / "PrintfCore.dfy",
-    ROOT / "bench" / "utils" / "printf" / "PrintfProof.dfy",
-    ROOT / "bench" / "utils" / "printf" / "Printf.dfy",
+    ROOT / "bench" / "utils" / "printf" / "Spec/PrintfSchema.dfy",
+    ROOT / "bench" / "utils" / "printf" / "Impl/PrintfCore.dfy",
+    ROOT / "bench" / "utils" / "printf" / "Proof/PrintfProof.dfy",
+    ROOT / "bench" / "utils" / "printf" / "Impl/Printf.dfy",
 ]
 
 

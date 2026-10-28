@@ -273,7 +273,13 @@ def test_stdout_failure(executables: tuple[Path, Path], tmp_path: Path, option: 
 # Verify the complete candidate modules, including the entry's direct Spec postcondition.
 @pytest.mark.dafny_verify
 @pytest.mark.parametrize(
-    "filename", ["TruncateSpec.dfy", "TruncateCore.dfy", "TruncateProof.dfy", "Truncate.dfy"]
+    "filename",
+    [
+        "Spec/TruncateSpec.dfy",
+        "Impl/TruncateCore.dfy",
+        "Proof/TruncateProof.dfy",
+        "Impl/Truncate.dfy",
+    ],
 )
 def test_verify_module(filename: str) -> None:
     # upstream: none - Checks the declared proof surface, not GNU runtime behavior.

@@ -28,9 +28,9 @@ COREUTILS_PRINTENV = coreutils_binary_path(
     ROOT / "_build" / "coreutils" / "src" / "printenv",
 )
 PRINTENV_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "printenv" / "PrintenvCore.dfy",
-    ROOT / "bench" / "utils" / "printenv" / "PrintenvProof.dfy",
-    ROOT / "bench" / "utils" / "printenv" / "Printenv.dfy",
+    ROOT / "bench" / "utils" / "printenv" / "Impl/PrintenvCore.dfy",
+    ROOT / "bench" / "utils" / "printenv" / "Proof/PrintenvProof.dfy",
+    ROOT / "bench" / "utils" / "printenv" / "Impl/Printenv.dfy",
 ]
 
 

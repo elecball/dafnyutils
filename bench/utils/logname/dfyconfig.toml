@@ -1,4 +1,4 @@
-includes = ["LognameCli.dfy"]
+includes = ["Impl/LognameCli.dfy"]
 
 [options]
 target = "cs"

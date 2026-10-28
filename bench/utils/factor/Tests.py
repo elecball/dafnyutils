@@ -24,9 +24,9 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_FACTOR_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "factor_bench.dll")
 COREUTILS_FACTOR = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "factor")
 FACTOR_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "factor" / "FactorCore.dfy",
-    ROOT / "bench" / "utils" / "factor" / "FactorProof.dfy",
-    ROOT / "bench" / "utils" / "factor" / "Factor.dfy",
+    ROOT / "bench" / "utils" / "factor" / "Impl/FactorCore.dfy",
+    ROOT / "bench" / "utils" / "factor" / "Proof/FactorProof.dfy",
+    ROOT / "bench" / "utils" / "factor" / "Impl/Factor.dfy",
 ]
 
 
@@ -44,7 +44,7 @@ def latest_bench_factor_source_mtime() -> float:
         ROOT / "bench" / "core" / "IOExtern.cs",
     ]
     sources.extend((ROOT / "bench" / "core").glob("*.dfy"))
-    sources.extend((ROOT / "bench" / "utils" / "factor").glob("*.dfy"))
+    sources.extend((ROOT / "bench" / "utils" / "factor").rglob("*.dfy"))
     newest = 0.0
     for source in sources:
         try:

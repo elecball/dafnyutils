@@ -24,11 +24,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_UNIQ_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "uniq_bench.dll")
 COREUTILS_UNIQ = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "uniq")
 UNIQ_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "uniq" / "UniqSchema.dfy",
-    ROOT / "bench" / "utils" / "uniq" / "UniqCore.dfy",
-    ROOT / "bench" / "utils" / "uniq" / "UniqSpec.dfy",
-    ROOT / "bench" / "utils" / "uniq" / "UniqProof.dfy",
-    ROOT / "bench" / "utils" / "uniq" / "Uniq.dfy",
+    ROOT / "bench" / "utils" / "uniq" / "Spec/UniqSchema.dfy",
+    ROOT / "bench" / "utils" / "uniq" / "Impl/UniqCore.dfy",
+    ROOT / "bench" / "utils" / "uniq" / "Spec/UniqSpec.dfy",
+    ROOT / "bench" / "utils" / "uniq" / "Proof/UniqProof.dfy",
+    ROOT / "bench" / "utils" / "uniq" / "Impl/Uniq.dfy",
 ]
 
 

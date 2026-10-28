@@ -29,9 +29,9 @@ COREUTILS_BASENAME = coreutils_binary_path(
     ROOT / "_build" / "coreutils" / "src" / "basename",
 )
 BASENAME_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "basename" / "BasenameCore.dfy",
-    ROOT / "bench" / "utils" / "basename" / "BasenameProof.dfy",
-    ROOT / "bench" / "utils" / "basename" / "Basename.dfy",
+    ROOT / "bench" / "utils" / "basename" / "Impl/BasenameCore.dfy",
+    ROOT / "bench" / "utils" / "basename" / "Proof/BasenameProof.dfy",
+    ROOT / "bench" / "utils" / "basename" / "Impl/Basename.dfy",
 ]
 
 
@@ -49,7 +49,7 @@ def latest_bench_basename_source_mtime() -> float:
         ROOT / "bench" / "core" / "IOExtern.cs",
     ]
     sources.extend((ROOT / "bench" / "core").glob("*.dfy"))
-    sources.extend((ROOT / "bench" / "utils" / "basename").glob("*.dfy"))
+    sources.extend((ROOT / "bench" / "utils" / "basename").rglob("*.dfy"))
     newest = 0.0
     for source in sources:
         try:

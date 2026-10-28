@@ -1,4 +1,4 @@
-includes = ["RmdirCli.dfy"]
+includes = ["Impl/RmdirCli.dfy"]
 
 [options]
 target = "cs"

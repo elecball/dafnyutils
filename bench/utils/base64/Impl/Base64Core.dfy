@@ -1,0 +1,1627 @@
+include "../Spec/Base64Spec.dfy"
+include "../../../core/World.dfy"
+include "../../../core/IO.dfy"
+include "../../../core/IOContract.dfy"
+include "../../../core/CliTypes.dfy"
+include "../Spec/Base64Schema.dfy"
+
+module Base64Core {
+  import StreamContract = IOContract
+
+  import BenchIO
+  import BenchWorld
+  import IOContract
+  import CliTypes
+  import Schema = Base64Schema
+  import Spec = Base64Spec
+
+  datatype TransformResult = TransformResult(out: BenchWorld.Bytes, ok: bool)
+  datatype NatParse = NatOk(value: nat) | NatErr
+  datatype WrapParse = WrapParse(
+    hasInvalid: bool,
+    invalidText: string,
+    invalidTokenIndex: int,
+    width: nat
+  )
+
+  function IsDigit(ch: char): bool
+  {
+    '0' <= ch <= '9'
+  }
+
+  function DigitValue(ch: char): nat
+    requires IsDigit(ch)
+  {
+    ((ch as int) - ('0' as int)) as nat
+  }
+
+  function ParseNatFrom(text: string, i: nat, acc: nat): NatParse
+    requires i <= |text|
+    decreases |text| - i
+  {
+    if i == |text| then
+      NatOk(acc)
+    else if !IsDigit(text[i]) then
+      NatErr
+    else
+      ParseNatFrom(text, i + 1, acc * 10 + DigitValue(text[i]))
+  } by method {
+    var j: nat := i;
+    var value: nat := acc;
+    while j < |text|
+      invariant i <= j <= |text|
+      invariant ParseNatFrom(text, j, value) ==
+                ParseNatFrom(text, i, acc)
+      decreases |text| - j
+    {
+      if !IsDigit(text[j]) {
+        return NatErr;
+      }
+      value := value * 10 + DigitValue(text[j]);
+      j := j + 1;
+    }
+    return NatOk(value);
+  }
+
+  function ParseNat(text: string): NatParse
+  {
+    if |text| == 0 then NatErr else ParseNatFrom(text, 0, 0)
+  }
+
+  function ParseWrapArgs(
+    args: seq<Schema.WidthArg>,
+    width: nat
+  ): WrapParse
+    decreases |args|
+  {
+    if |args| == 0 then
+      WrapParse(false, "", -1, width)
+    else
+      match ParseNat(args[0].text)
+      case NatErr =>
+        WrapParse(true, args[0].text, args[0].tokenIndex, width)
+      case NatOk(nextWidth) =>
+        ParseWrapArgs(args[1..], nextWidth)
+  } by method {
+    var remaining: seq<Schema.WidthArg> := args;
+    var currentWidth: nat := width;
+    while |remaining| > 0
+      invariant ParseWrapArgs(remaining, currentWidth) ==
+                ParseWrapArgs(args, width)
+      decreases |remaining|
+    {
+      match ParseNat(remaining[0].text) {
+        case NatErr =>
+          return WrapParse(
+              true,
+              remaining[0].text,
+              remaining[0].tokenIndex,
+              currentWidth
+            );
+        case NatOk(nextWidth) =>
+          currentWidth := nextWidth;
+          remaining := remaining[1..];
+      }
+    }
+    return WrapParse(false, "", -1, currentWidth);
+  }
+
+  method PlanParseFailure(
+    e: CliTypes.ParseError,
+    argv: seq<string>
+  ) returns (plan: CliTypes.CliPlan<Schema.Base64CmdRaw>)
+    decreases *
+  {
+    var seenHelp := false;
+    var seenVersion := false;
+    var helpTokenIndex := -1;
+    var versionTokenIndex := -1;
+    var wrapArgs: seq<Schema.WidthArg> := [];
+
+    var i := 0;
+    while i < |argv| && i < e.tokenIndex
+      decreases |argv| - i
+    {
+      var token := argv[i];
+      var consumedNext := false;
+      if token == "--help" {
+        seenHelp := true;
+        if helpTokenIndex == -1 {
+          helpTokenIndex := i;
+        }
+      } else if token == "--version" {
+        seenVersion := true;
+        if versionTokenIndex == -1 {
+          versionTokenIndex := i;
+        }
+      } else if token == "-w" || token == "--wrap" {
+        if i + 1 < |argv| && i + 1 < e.tokenIndex {
+          wrapArgs :=
+            wrapArgs + [Schema.WidthArg(argv[i + 1], i)];
+          consumedNext := true;
+        }
+      } else if 7 <= |token| && token[..7] == "--wrap=" {
+        wrapArgs := wrapArgs + [Schema.WidthArg(token[7..], i)];
+      } else if |token| > 2 &&
+                token[0] == '-' &&
+                token[1] == 'w' {
+        wrapArgs := wrapArgs + [Schema.WidthArg(token[2..], i)];
+      }
+
+      if consumedNext {
+        i := i + 2;
+      } else {
+        i := i + 1;
+      }
+    }
+
+    var raw := Schema.Base64CmdRaw(
+      false,
+      false,
+      seenHelp,
+      seenVersion,
+      helpTokenIndex,
+      versionTokenIndex,
+      wrapArgs,
+      []
+    );
+    var wrapPlan := ParseWrapArgs(wrapArgs, 76);
+    if seenHelp &&
+       (!seenVersion || helpTokenIndex <= versionTokenIndex) &&
+       (!wrapPlan.hasInvalid ||
+        helpTokenIndex <= wrapPlan.invalidTokenIndex) {
+      plan := CliTypes.CliRun(raw);
+      return;
+    }
+    if seenVersion &&
+       (!wrapPlan.hasInvalid ||
+        versionTokenIndex <= wrapPlan.invalidTokenIndex) {
+      plan := CliTypes.CliRun(raw);
+      return;
+    }
+    if wrapPlan.hasInvalid {
+      plan := CliTypes.CliRun(raw);
+      return;
+    }
+
+    var msg := Schema.Base64FormatParseError(e);
+    plan := CliTypes.CliEarlyExit(1, [], msg);
+  }
+
+  ghost predicate StrictlyIncreasing(indices: seq<nat>)
+  {
+    forall i, j ::
+      0 <= i < j < |indices| ==> indices[i] < indices[j]
+  }
+
+  ghost predicate KeptInputRelation(
+    data: BenchWorld.Bytes,
+    ignoreGarbage: bool,
+    kept: BenchWorld.Bytes,
+    indices: seq<nat>
+  )
+  {
+    |indices| == |kept| &&
+    StrictlyIncreasing(indices) &&
+    (forall k :: 0 <= k < |indices| ==>
+                   indices[k] < |data| && kept[k] == data[indices[k]]) &&
+    (forall i :: 0 <= i < |data| ==>
+                   ((i in indices) ==
+                    (if ignoreGarbage
+                     then Spec.Valid64(data[i]) || data[i] == '='
+                     else data[i] != '\n')))
+  }
+
+  ghost predicate EncodeBlockRelation(
+    data: BenchWorld.Bytes,
+    encoded: BenchWorld.Bytes,
+    block: nat
+  )
+    requires block < (|data| + 2) / 3
+    requires |encoded| == 4 * ((|data| + 2) / 3)
+  {
+    var input := 3 * block;
+    var output := 4 * block;
+    var b0 := Spec.ByteValue(data[input]);
+    encoded[output] == Spec.Alphabet(b0 / 4) &&
+    encoded[output + 1] ==
+    Spec.Alphabet(
+      (b0 % 4) * 16 +
+      (if input + 1 < |data|
+       then Spec.ByteValue(data[input + 1]) / 16
+       else 0)
+    ) &&
+    encoded[output + 2] ==
+    (if input + 1 < |data|
+     then Spec.Alphabet(
+               (Spec.ByteValue(data[input + 1]) % 16) * 4 +
+               (if input + 2 < |data|
+                then Spec.ByteValue(data[input + 2]) / 64
+                else 0)
+             )
+     else '=') &&
+    encoded[output + 3] ==
+    (if input + 2 < |data|
+     then Spec.Alphabet(Spec.ByteValue(data[input + 2]) % 64)
+     else '=')
+  }
+
+  ghost predicate EncodeRelation(
+    data: BenchWorld.Bytes,
+    encoded: BenchWorld.Bytes
+  )
+  {
+    |encoded| == 4 * ((|data| + 2) / 3) &&
+    forall block :: 0 <= block < (|data| + 2) / 3 ==>
+                      EncodeBlockRelation(data, encoded, block)
+  }
+
+  ghost predicate WrappedWitnessRelation(
+    encoded: BenchWorld.Bytes,
+    width: nat,
+    output: BenchWorld.Bytes,
+    chunks: seq<BenchWorld.Bytes>,
+    cuts: seq<nat>
+  )
+    requires width > 0
+  {
+    ((|encoded| == 0) == (|chunks| == 0)) &&
+    (forall line {:trigger chunks[line]} ::
+       0 <= line < |chunks| ==>
+         var start := line * width;
+         var end :=
+           if (line + 1) * width < |encoded|
+           then (line + 1) * width
+           else |encoded|;
+         start < |encoded| &&
+         start < end <= |encoded| &&
+         chunks[line] == encoded[start..end] + ['\n'] &&
+         (line + 1 < |chunks| ==>
+            (line + 1) * width < |encoded|) &&
+         (line + 1 == |chunks| ==>
+            (line + 1) * width >= |encoded|)) &&
+    FragmentsConcatenate(chunks, output, cuts)
+  }
+
+  ghost predicate WrappedRelation(
+    encoded: BenchWorld.Bytes,
+    width: nat,
+    output: BenchWorld.Bytes
+  )
+  {
+    if width == 0 then
+      output == encoded
+    else
+      exists chunks: seq<BenchWorld.Bytes>, cuts: seq<nat> ::
+        WrappedWitnessRelation(
+          encoded, width, output, chunks, cuts
+        )
+  }
+
+  ghost predicate DecodeFullBlockRelation(
+    data: BenchWorld.Bytes,
+    start: nat,
+    output: BenchWorld.Bytes
+  )
+    requires start + 4 <= |data|
+  {
+    var c0 := data[start];
+    var c1 := data[start + 1];
+    var c2 := data[start + 2];
+    var c3 := data[start + 3];
+    Spec.Valid64(c0) && Spec.Valid64(c1) &&
+    ((Spec.Valid64(c2) && Spec.Valid64(c3) &&
+      output == [
+        Spec.ByteChar(
+          (Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat
+        ),
+        Spec.ByteChar(
+          (((Spec.DecodeValue(c1) % 16) * 16 +
+            Spec.DecodeValue(c2) / 4) as nat)
+        ),
+        Spec.ByteChar(
+          ((((Spec.DecodeValue(c2) % 4) * 64) +
+            Spec.DecodeValue(c3)) as nat)
+        )
+      ]) ||
+     (c2 == '=' && c3 == '=' &&
+      Spec.DecodeValue(c1) % 16 == 0 &&
+      output == [
+        Spec.ByteChar(
+          (Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat
+        )
+      ]) ||
+     (Spec.Valid64(c2) && c3 == '=' &&
+      Spec.DecodeValue(c2) % 4 == 0 &&
+      output == [
+        Spec.ByteChar(
+          (Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat
+        ),
+        Spec.ByteChar(
+          (((Spec.DecodeValue(c1) % 16) * 16 +
+            Spec.DecodeValue(c2) / 4) as nat)
+        )
+      ]))
+  }
+
+  ghost predicate DecodeTerminalRelation(
+    data: BenchWorld.Bytes,
+    output: BenchWorld.Bytes,
+    ok: bool
+  )
+  {
+    var remaining := |data|;
+    (remaining >= 4 ==>
+       !(exists fullOutput: BenchWorld.Bytes ::
+           DecodeFullBlockRelation(data, 0, fullOutput))) &&
+    if remaining == 0 then
+      output == [] && ok
+    else if remaining == 1 then
+      output == [] && !ok
+    else
+      var c0 := data[0];
+      var c1 := data[1];
+      if !Spec.Valid64(c0) || !Spec.Valid64(c1) then
+        output == [] && !ok
+      else if remaining == 2 then
+        output == [
+          Spec.ByteChar(
+            (Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat
+          )
+        ] &&
+        (ok == (Spec.DecodeValue(c1) % 16 == 0))
+      else
+        var c2 := data[2];
+        if c2 == '=' then
+          output == [
+            Spec.ByteChar(
+              (Spec.DecodeValue(c0) * 4 +
+               Spec.DecodeValue(c1) / 16) as nat
+            )
+          ] &&
+          !ok
+        else if !Spec.Valid64(c2) then
+          output == [Spec.ByteChar((Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat)] && !ok
+        else if remaining == 3 then
+          output == [
+            Spec.ByteChar(
+              (Spec.DecodeValue(c0) * 4 +
+               Spec.DecodeValue(c1) / 16) as nat
+            ),
+            Spec.ByteChar(
+              (((Spec.DecodeValue(c1) % 16) * 16 +
+                Spec.DecodeValue(c2) / 4) as nat)
+            )
+          ] &&
+          (ok == (Spec.DecodeValue(c2) % 4 == 0))
+        else
+          var c3 := data[3];
+          if c3 == '=' then
+            output == [
+              Spec.ByteChar(
+                (Spec.DecodeValue(c0) * 4 +
+                 Spec.DecodeValue(c1) / 16) as nat
+              ),
+              Spec.ByteChar(
+                (((Spec.DecodeValue(c1) % 16) * 16 +
+                  Spec.DecodeValue(c2) / 4) as nat)
+              )
+            ] &&
+            !ok
+          else
+            output == [
+              Spec.ByteChar((Spec.DecodeValue(c0) * 4 + Spec.DecodeValue(c1) / 16) as nat),
+              Spec.ByteChar((((Spec.DecodeValue(c1) % 16) * 16 + Spec.DecodeValue(c2) / 4) as nat))
+            ] && !ok
+  }
+
+  ghost predicate FragmentsConcatenate(
+    fragments: seq<BenchWorld.Bytes>,
+    combined: BenchWorld.Bytes,
+    cuts: seq<nat>
+  )
+  {
+    |cuts| == |fragments| + 1 &&
+    cuts[0] == 0 &&
+    cuts[|cuts| - 1] == |combined| &&
+    forall i {:trigger cuts[i]} ::
+      0 <= i < |fragments| ==>
+        cuts[i] <= cuts[i + 1] &&
+        cuts[i + 1] <= |combined| &&
+        cuts[i + 1] == cuts[i] + |fragments[i]| &&
+        combined[cuts[i]..cuts[i + 1]] == fragments[i]
+  }
+
+  ghost predicate DecodeWitnessRelation(
+    data: BenchWorld.Bytes,
+    output: BenchWorld.Bytes,
+    ok: bool,
+    blocks: nat,
+    fragments: seq<BenchWorld.Bytes>,
+    cuts: seq<nat>
+  )
+  {
+    4 * blocks <= |data| &&
+    |fragments| == blocks + 1 &&
+    (forall block :: 0 <= block < blocks ==>
+                       DecodeFullBlockRelation(
+                         data, 4 * block, fragments[block]
+                       )) &&
+    DecodeTerminalRelation(
+      data[4 * blocks..], fragments[blocks], ok
+    ) &&
+    FragmentsConcatenate(fragments, output, cuts)
+  }
+
+  ghost predicate DecodeRelation(
+    data: BenchWorld.Bytes,
+    output: BenchWorld.Bytes,
+    ok: bool
+  )
+  {
+    exists blocks: nat,
+      fragments: seq<BenchWorld.Bytes>,
+      cuts: seq<nat> ::
+      DecodeWitnessRelation(
+        data, output, ok, blocks, fragments, cuts
+      )
+  }
+
+  ghost predicate CompleteBufferPrefixRelation(
+    source: BenchWorld.Bytes, buffered: BenchWorld.Bytes
+  )
+  {
+    |buffered| <= |source| && buffered == source[..|buffered|] &&
+    |buffered| % Spec.DECODE_INPUT_BUFFER_BYTES == 0 &&
+    |source| - |buffered| < Spec.DECODE_INPUT_BUFFER_BYTES
+  }
+
+  ghost predicate CompletedInputBuffersRelation(
+    data: BenchWorld.Bytes, ignoreGarbage: bool, buffered: BenchWorld.Bytes
+  )
+  {
+    if ignoreGarbage then
+      exists source: BenchWorld.Bytes, indices: seq<nat> ::
+        KeptInputRelation(data, true, source, indices) &&
+        CompleteBufferPrefixRelation(source, buffered)
+    else CompleteBufferPrefixRelation(data, buffered)
+  }
+
+  ghost predicate InterruptedDecodeRelation(
+    data: BenchWorld.Bytes, ignoreGarbage: bool, output: BenchWorld.Bytes, ok: bool
+  )
+  {
+    exists buffered: BenchWorld.Bytes, kept: BenchWorld.Bytes, indices: seq<nat> ::
+      CompletedInputBuffersRelation(data, ignoreGarbage, buffered) &&
+      KeptInputRelation(buffered, false, kept, indices) &&
+      DecodeRelation(kept[..4 * (|kept| / 4)], output, ok)
+  }
+
+  ghost predicate TransformAfterReadRelation(
+    cmd: Schema.Base64Cmd, data: BenchWorld.Bytes, stage: BenchWorld.FileReadStage,
+    output: BenchWorld.Bytes, ok: bool
+  )
+  {
+    if cmd.decode && stage == BenchWorld.ReadFailed then
+      InterruptedDecodeRelation(data, cmd.ignoreGarbage, output, ok)
+    else TransformRelation(cmd, data, output, ok)
+  }
+
+  ghost predicate TransformRelation(
+    cmd: Schema.Base64Cmd,
+    data: BenchWorld.Bytes,
+    output: BenchWorld.Bytes,
+    ok: bool
+  )
+  {
+    if cmd.decode then
+      exists kept: BenchWorld.Bytes, indices: seq<nat> ::
+        KeptInputRelation(
+          data, cmd.ignoreGarbage, kept, indices
+        ) &&
+        DecodeRelation(kept, output, ok)
+    else
+      exists encoded: BenchWorld.Bytes ::
+        EncodeRelation(data, encoded) &&
+        WrappedRelation(encoded, cmd.wrapWidth, output) &&
+        ok
+  }
+
+  ghost function ShiftIndices(indices: seq<nat>): seq<nat>
+    decreases |indices|
+  {
+    if |indices| == 0 then
+      []
+    else
+      [indices[0] + 1] + ShiftIndices(indices[1..])
+  }
+
+  lemma ShiftIndicesFacts(indices: seq<nat>)
+    requires StrictlyIncreasing(indices)
+    ensures |ShiftIndices(indices)| == |indices|
+    ensures StrictlyIncreasing(ShiftIndices(indices))
+    ensures forall k :: 0 <= k < |indices| ==>
+                          ShiftIndices(indices)[k] == indices[k] + 1
+  {
+    reveal StrictlyIncreasing();
+    if |indices| > 0 {
+      ShiftIndicesFacts(indices[1..]);
+    }
+  }
+
+  lemma ShiftIndicesMembership(indices: seq<nat>, value: nat)
+    ensures (value in ShiftIndices(indices)) ==
+            (0 < value && value - 1 in indices)
+    decreases |indices|
+  {
+    if |indices| > 0 {
+      ShiftIndicesMembership(indices[1..], value);
+    }
+  }
+
+  method FilterInputMethod(
+    data: BenchWorld.Bytes,
+    ignoreGarbage: bool
+  ) returns (
+      kept: BenchWorld.Bytes,
+      ghost indices: seq<nat>
+    )
+    ensures KeptInputRelation(
+              data, ignoreGarbage, kept, indices
+            )
+    decreases |data|
+  {
+    if |data| == 0 {
+      kept := [];
+      indices := [];
+      reveal KeptInputRelation();
+      reveal StrictlyIncreasing();
+    } else {
+      var tailKept, tailIndices :=
+        FilterInputMethod(data[1..], ignoreGarbage);
+      ShiftIndicesFacts(tailIndices);
+      var keep :=
+        if ignoreGarbage
+        then Spec.Valid64(data[0]) || data[0] == '='
+        else data[0] != '\n';
+      kept := (if keep then [data[0]] else []) + tailKept;
+      indices :=
+        (if keep then [0] else []) + ShiftIndices(tailIndices);
+      reveal KeptInputRelation();
+      if keep {
+        assert StrictlyIncreasing([0] + ShiftIndices(tailIndices));
+      }
+      assert forall k :: 0 <= k < |indices| ==>
+                           indices[k] < |data| && kept[k] == data[indices[k]] by {
+        forall k | 0 <= k < |indices|
+          ensures indices[k] < |data| &&
+                  kept[k] == data[indices[k]]
+        {
+          if keep && k > 0 {
+            assert indices[k] == tailIndices[k - 1] + 1;
+            assert kept[k] == tailKept[k - 1];
+            assert data[tailIndices[k - 1] + 1] ==
+                   data[1..][tailIndices[k - 1]];
+          } else if !keep {
+            assert indices[k] == tailIndices[k] + 1;
+            assert kept[k] == tailKept[k];
+            assert data[tailIndices[k] + 1] ==
+                   data[1..][tailIndices[k]];
+          }
+        }
+      }
+      assert forall i :: 0 <= i < |data| ==>
+                           ((i in indices) ==
+                            (if ignoreGarbage
+                             then Spec.Valid64(data[i]) || data[i] == '='
+                             else data[i] != '\n')) by {
+        forall i | 0 <= i < |data|
+          ensures
+            ((i in indices) ==
+             (if ignoreGarbage
+              then Spec.Valid64(data[i]) || data[i] == '='
+              else data[i] != '\n'))
+        {
+          ShiftIndicesMembership(tailIndices, i);
+          if i > 0 {
+            assert data[i] == data[1..][i - 1];
+          }
+        }
+      }
+    }
+  }
+
+  method EncodeDataMethod(
+    data: BenchWorld.Bytes
+  ) returns (encoded: BenchWorld.Bytes)
+    ensures EncodeRelation(data, encoded)
+    decreases |data|
+  {
+    var headEncoded: BenchWorld.Bytes := [];
+    var tailEncoded: BenchWorld.Bytes := [];
+    if |data| == 0 {
+      encoded := [];
+    } else if |data| == 1 {
+      var b0 := Spec.ByteValue(data[0]);
+      encoded := [
+        Spec.Alphabet(b0 / 4),
+        Spec.Alphabet((b0 % 4) * 16),
+        '=',
+        '='
+      ];
+    } else if |data| == 2 {
+      var b0 := Spec.ByteValue(data[0]);
+      var b1 := Spec.ByteValue(data[1]);
+      encoded := [
+        Spec.Alphabet(b0 / 4),
+        Spec.Alphabet((b0 % 4) * 16 + b1 / 16),
+        Spec.Alphabet((b1 % 16) * 4),
+        '='
+      ];
+    } else if |data| == 3 {
+      var b0 := Spec.ByteValue(data[0]);
+      var b1 := Spec.ByteValue(data[1]);
+      var b2 := Spec.ByteValue(data[2]);
+      encoded := [
+        Spec.Alphabet(b0 / 4),
+        Spec.Alphabet((b0 % 4) * 16 + b1 / 16),
+        Spec.Alphabet((b1 % 16) * 4 + b2 / 64),
+        Spec.Alphabet(b2 % 64)
+      ];
+    } else {
+      headEncoded := EncodeDataMethod(data[..3]);
+      tailEncoded := EncodeDataMethod(data[3..]);
+      encoded := headEncoded + tailEncoded;
+      assert |headEncoded| == 4;
+    }
+    reveal EncodeRelation();
+    if |data| <= 3 {
+      forall block | 0 <= block < (|data| + 2) / 3
+        ensures EncodeBlockRelation(data, encoded, block)
+      {
+        assert block == 0;
+        reveal EncodeBlockRelation();
+      }
+    } else {
+      forall block | 0 <= block < (|data| + 2) / 3
+        ensures EncodeBlockRelation(data, encoded, block)
+      {
+        reveal EncodeBlockRelation();
+        if block == 0 {
+          assert EncodeBlockRelation(
+              data[..3], headEncoded, 0
+            );
+          reveal EncodeBlockRelation();
+          assert data[..3][0] == data[0];
+          assert data[..3][1] == data[1];
+          assert data[..3][2] == data[2];
+          assert encoded[0] == headEncoded[0];
+          assert encoded[1] == headEncoded[1];
+          assert encoded[2] == headEncoded[2];
+          assert encoded[3] == headEncoded[3];
+        } else {
+          var tailBlock := block - 1;
+          assert tailBlock < (|data[3..]| + 2) / 3;
+          assert EncodeBlockRelation(
+              data[3..], tailEncoded, tailBlock
+            );
+          reveal EncodeBlockRelation();
+          assert 3 * block == 3 + 3 * tailBlock;
+          assert 4 * block == 4 + 4 * tailBlock;
+          assert data[3 * block] == data[3..][3 * tailBlock];
+          assert encoded[4 * block] ==
+                 tailEncoded[4 * tailBlock];
+        }
+      }
+    }
+  }
+
+  ghost function ShiftCuts(
+    cuts: seq<nat>,
+    amount: nat
+  ): seq<nat>
+  {
+    seq(|cuts|, i requires 0 <= i < |cuts| => cuts[i] + amount)
+  }
+
+  lemma ShiftCutsIndex(
+    cuts: seq<nat>,
+    amount: nat,
+    index: nat
+  )
+    requires index < |cuts|
+    ensures ShiftCuts(cuts, amount)[index] == cuts[index] + amount
+  {
+  }
+
+  lemma PrependSlice<T>(
+    head: seq<T>,
+    tail: seq<T>,
+    start: nat,
+    end: nat
+  )
+    requires start <= end <= |tail|
+    ensures (head + tail)[
+            |head| + start..|head| + end
+            ] == tail[start..end]
+  {
+  }
+
+  lemma {:isolate_assertions} PrependFragment(
+    head: BenchWorld.Bytes,
+    tailFragments: seq<BenchWorld.Bytes>,
+    tail: BenchWorld.Bytes,
+    tailCuts: seq<nat>
+  )
+    requires FragmentsConcatenate(
+               tailFragments, tail, tailCuts
+             )
+    ensures FragmentsConcatenate(
+              [head] + tailFragments,
+              head + tail,
+              [0] + ShiftCuts(tailCuts, |head|)
+            )
+  {
+    reveal FragmentsConcatenate();
+    forall i: nat {:trigger ([0] + ShiftCuts(
+      tailCuts, |head|
+      ))[i]} | i < |[head] + tailFragments|
+      ensures ([0] + ShiftCuts(tailCuts, |head|))[i] <=
+              ([0] + ShiftCuts(tailCuts, |head|))[i + 1] &&
+              ([0] + ShiftCuts(tailCuts, |head|))[i + 1] <=
+              |head + tail| &&
+              ([0] + ShiftCuts(tailCuts, |head|))[i + 1] ==
+              ([0] + ShiftCuts(tailCuts, |head|))[i] +
+              |([head] + tailFragments)[i]| &&
+              (head + tail)[
+              ([0] + ShiftCuts(tailCuts, |head|))[i]..
+              ([0] + ShiftCuts(tailCuts, |head|))[i + 1]
+              ] == ([head] + tailFragments)[i]
+    {
+      ShiftCutsIndex(tailCuts, |head|, i);
+      if i == 0 {
+        assert ([0] + ShiftCuts(tailCuts, |head|))[1] == |head|;
+      } else {
+        ShiftCutsIndex(tailCuts, |head|, i - 1);
+        var k := i - 1;
+        PrependSlice(
+          head, tail, tailCuts[k], tailCuts[k + 1]
+        );
+      }
+    }
+  }
+
+  lemma ShiftWrappedLine(
+    text: BenchWorld.Bytes,
+    width: nat,
+    tailOutput: BenchWorld.Bytes,
+    tailChunks: seq<BenchWorld.Bytes>,
+    tailCuts: seq<nat>,
+    tailLine: nat
+  )
+    requires width > 0
+    requires width < |text|
+    requires WrappedWitnessRelation(
+               text[width..], width, tailOutput, tailChunks, tailCuts
+             )
+    requires tailLine < |tailChunks|
+    ensures
+      var line := tailLine + 1;
+      var chunks := [text[..width] + ['\n']] + tailChunks;
+      var start := line * width;
+      var end :=
+        if (line + 1) * width < |text|
+        then (line + 1) * width
+        else |text|;
+      start < |text| &&
+      start < end <= |text| &&
+      chunks[line] == text[start..end] + ['\n'] &&
+      (line + 1 < |chunks| ==>
+         (line + 1) * width < |text|) &&
+      (line + 1 == |chunks| ==>
+         (line + 1) * width >= |text|)
+  {
+    var tail := text[width..];
+    reveal WrappedWitnessRelation();
+    var tailStart := tailLine * width;
+    var tailEnd :=
+      if (tailLine + 1) * width < |tail|
+      then (tailLine + 1) * width
+      else |tail|;
+    assert tailChunks[tailLine] == tailChunks[tailLine];
+    assert tailStart < |tail|;
+    assert tailStart < tailEnd <= |tail|;
+    assert tailChunks[tailLine] ==
+           tail[tailStart..tailEnd] + ['\n'];
+    assert (tailLine + 1 < |tailChunks| ==>
+              (tailLine + 1) * width < |tail|);
+    assert (tailLine + 1 == |tailChunks| ==>
+              (tailLine + 1) * width >= |tail|);
+    var line := tailLine + 1;
+    assert line * width == width + tailLine * width;
+    var end :=
+      if (line + 1) * width < |text|
+      then (line + 1) * width
+      else |text|;
+    assert |text| == width + |tail|;
+    if (tailLine + 1) * width < |tail| {
+      assert (line + 1) * width < |text|;
+      assert tailEnd == (tailLine + 1) * width;
+      assert end == (line + 1) * width;
+      assert end == width + tailEnd;
+    } else {
+      assert (line + 1) * width >= |text|;
+      assert tailEnd == |tail|;
+      assert end == |text|;
+      assert end == width + tailEnd;
+    }
+    assert line * width < |text|;
+    assert line * width < end <= |text|;
+    assert text == text[..width] + tail;
+    PrependSlice(
+      text[..width], tail, tailStart, tailEnd
+    );
+    assert text[line * width..end] ==
+           tail[tailStart..tailEnd];
+  }
+
+  lemma PrependWrappedWitness(
+    text: BenchWorld.Bytes,
+    width: nat,
+    tailOutput: BenchWorld.Bytes,
+    tailChunks: seq<BenchWorld.Bytes>,
+    tailCuts: seq<nat>
+  )
+    requires width > 0
+    requires width < |text|
+    requires WrappedWitnessRelation(
+               text[width..], width, tailOutput, tailChunks, tailCuts
+             )
+    ensures WrappedWitnessRelation(
+              text,
+              width,
+              text[..width] + ['\n'] + tailOutput,
+              [text[..width] + ['\n']] + tailChunks,
+              [0] + ShiftCuts(tailCuts, width + 1)
+            )
+  {
+    hide *;
+    reveal WrappedWitnessRelation();
+    reveal FragmentsConcatenate();
+    reveal ShiftCuts();
+    var tail := text[width..];
+    var head := text[..width] + ['\n'];
+    var chunks := [head] + tailChunks;
+    forall line | 0 <= line < |chunks|
+      ensures
+        var start := line * width;
+        var end :=
+          if (line + 1) * width < |text|
+          then (line + 1) * width
+          else |text|;
+        start < |text| &&
+        start < end <= |text| &&
+        chunks[line] == text[start..end] + ['\n'] &&
+        (line + 1 < |chunks| ==>
+           (line + 1) * width < |text|) &&
+        (line + 1 == |chunks| ==>
+           (line + 1) * width >= |text|)
+    {
+      if line > 0 {
+        var tailLine := line - 1;
+        assert tailLine < |tailChunks|;
+        ShiftWrappedLine(
+          text, width, tailOutput, tailChunks, tailCuts,
+          tailLine
+        );
+        assert line == tailLine + 1;
+      }
+    }
+    assert FragmentsConcatenate(
+        chunks, head + tailOutput,
+        [0] + ShiftCuts(tailCuts, width + 1)
+      ) by {
+      PrependFragment(head, tailChunks, tailOutput, tailCuts);
+    }
+  }
+
+  method WrapEncodedMethod(
+    text: BenchWorld.Bytes,
+    width: nat
+  ) returns (
+      output: BenchWorld.Bytes,
+      ghost chunks: seq<BenchWorld.Bytes>,
+      ghost cuts: seq<nat>
+    )
+    ensures width > 0 ==> WrappedWitnessRelation(
+                text, width, output, chunks, cuts
+              )
+    ensures WrappedRelation(text, width, output)
+    decreases |text|
+  {
+    if width == 0 {
+      output := text;
+      chunks := [];
+      cuts := [0];
+      reveal WrappedRelation();
+    } else if |text| == 0 {
+      output := [];
+      chunks := [];
+      cuts := [0];
+      reveal WrappedWitnessRelation();
+      reveal FragmentsConcatenate();
+    } else if |text| <= width {
+      output := text + ['\n'];
+      chunks := [output];
+      cuts := [0, |output|];
+      reveal WrappedWitnessRelation();
+      reveal FragmentsConcatenate();
+    } else {
+      var tail := text[width..];
+      var head := text[..width] + ['\n'];
+      var tailOutput, tailChunks, tailCuts :=
+        WrapEncodedMethod(tail, width);
+      output := head + tailOutput;
+      chunks := [head] + tailChunks;
+      cuts := [0] + ShiftCuts(tailCuts, |head|);
+      assert |head| == width + 1;
+      PrependWrappedWitness(
+        text, width, tailOutput, tailChunks, tailCuts
+      );
+    }
+    reveal WrappedRelation();
+  }
+
+  method DecodeTerminalMethod(
+    data: BenchWorld.Bytes
+  ) returns (result: TransformResult)
+    requires !(|data| >= 4 &&
+               exists blockOutput: BenchWorld.Bytes ::
+                 DecodeFullBlockRelation(data, 0, blockOutput))
+    ensures DecodeTerminalRelation(
+              data, result.out, result.ok
+            )
+  {
+    if |data| == 0 {
+      result := TransformResult([], true);
+    } else if |data| == 1 {
+      result := TransformResult([], false);
+    } else if !Spec.Valid64(data[0]) || !Spec.Valid64(data[1]) {
+      result := TransformResult([], false);
+    } else {
+      var v0 := Spec.DecodeValue(data[0]);
+      var v1 := Spec.DecodeValue(data[1]);
+      if |data| == 2 {
+        result := TransformResult(
+          [Spec.ByteChar((v0 * 4 + v1 / 16) as nat)],
+          v1 % 16 == 0
+        );
+      } else if data[2] == '=' {
+        result := TransformResult(
+          [Spec.ByteChar((v0 * 4 + v1 / 16) as nat)],
+          false
+        );
+      } else if !Spec.Valid64(data[2]) {
+        result := TransformResult([Spec.ByteChar((v0 * 4 + v1 / 16) as nat)], false);
+      } else {
+        var v2 := Spec.DecodeValue(data[2]);
+        var out := [
+          Spec.ByteChar((v0 * 4 + v1 / 16) as nat),
+          Spec.ByteChar((((v1 % 16) * 16 + v2 / 4) as nat))
+        ];
+        if |data| == 3 {
+          result := TransformResult(out, v2 % 4 == 0);
+        } else if data[3] == '=' {
+          result := TransformResult(out, false);
+        } else {
+          result := TransformResult(out, false);
+        }
+      }
+    }
+    reveal DecodeTerminalRelation();
+  }
+
+  lemma ShiftDecodeFullBlock(
+    data: BenchWorld.Bytes,
+    start: nat,
+    output: BenchWorld.Bytes
+  )
+    requires |data| >= 4
+    requires start + 4 <= |data[4..]|
+    requires DecodeFullBlockRelation(
+               data[4..], start, output
+             )
+    ensures DecodeFullBlockRelation(
+              data, start + 4, output
+            )
+  {
+    reveal DecodeFullBlockRelation();
+  }
+
+  method DecodeRestMethod(
+    data: BenchWorld.Bytes
+  ) returns (
+      result: TransformResult,
+      ghost blocks: nat,
+      ghost fragments: seq<BenchWorld.Bytes>,
+      ghost cuts: seq<nat>
+    )
+    ensures DecodeWitnessRelation(
+              data,
+              result.out,
+              result.ok,
+              blocks,
+              fragments,
+              cuts
+            )
+    decreases |data|
+  {
+    var full := false;
+    var blockOutput: BenchWorld.Bytes := [];
+    if |data| >= 4 &&
+       Spec.Valid64(data[0]) && Spec.Valid64(data[1]) {
+      var v0 := Spec.DecodeValue(data[0]);
+      var v1 := Spec.DecodeValue(data[1]);
+      if data[2] == '=' {
+        if data[3] == '=' && v1 % 16 == 0 {
+          blockOutput := [
+            Spec.ByteChar((v0 * 4 + v1 / 16) as nat)
+          ];
+          full := true;
+        }
+      } else if Spec.Valid64(data[2]) {
+        var v2 := Spec.DecodeValue(data[2]);
+        if data[3] == '=' {
+          if v2 % 4 == 0 {
+            blockOutput := [
+              Spec.ByteChar((v0 * 4 + v1 / 16) as nat),
+              Spec.ByteChar((((v1 % 16) * 16 + v2 / 4) as nat))
+            ];
+            full := true;
+          }
+        } else if Spec.Valid64(data[3]) {
+          var v3 := Spec.DecodeValue(data[3]);
+          blockOutput := [
+            Spec.ByteChar((v0 * 4 + v1 / 16) as nat),
+            Spec.ByteChar((((v1 % 16) * 16 + v2 / 4) as nat)),
+            Spec.ByteChar(((((v2 % 4) * 64) + v3) as nat))
+          ];
+          full := true;
+        }
+      }
+    }
+    if full {
+      assert DecodeFullBlockRelation(
+          data, 0, blockOutput
+        ) by {
+        reveal DecodeFullBlockRelation();
+      }
+      var tailResult, tailBlocks, tailFragments, tailCuts :=
+        DecodeRestMethod(data[4..]);
+      result := TransformResult(
+        blockOutput + tailResult.out, tailResult.ok
+      );
+      blocks := tailBlocks + 1;
+      fragments := [blockOutput] + tailFragments;
+      cuts := [0] + ShiftCuts(tailCuts, |blockOutput|);
+      reveal DecodeWitnessRelation();
+      PrependFragment(
+        blockOutput,
+        tailFragments,
+        tailResult.out,
+        tailCuts
+      );
+      forall block | 0 <= block < blocks
+        ensures DecodeFullBlockRelation(
+                  data, 4 * block, fragments[block]
+                )
+      {
+        if block > 0 {
+          var tailBlock := block - 1;
+          assert DecodeFullBlockRelation(
+              data[4..],
+              4 * tailBlock,
+              tailFragments[tailBlock]
+            );
+          ShiftDecodeFullBlock(
+            data, 4 * tailBlock, tailFragments[tailBlock]
+          );
+          assert 4 * block == 4 * tailBlock + 4;
+        }
+      }
+      assert data[4 * blocks..] ==
+             data[4..][4 * tailBlocks..];
+    } else {
+      assert !(|data| >= 4 &&
+               exists fullOutput: BenchWorld.Bytes ::
+                 DecodeFullBlockRelation(
+                   data, 0, fullOutput
+                 )) by {
+        reveal DecodeFullBlockRelation();
+      }
+      result := DecodeTerminalMethod(data);
+      blocks := 0;
+      fragments := [result.out];
+      cuts := [0, |result.out|];
+      reveal DecodeWitnessRelation();
+      reveal FragmentsConcatenate();
+    }
+  }
+
+  function InputsFromOperands(operands: seq<string>): seq<Schema.Input>
+    decreases |operands|
+  {
+    if |operands| == 0 then
+      []
+    else
+      [(if operands[0] == "-" then Schema.Stdin else Schema.File(operands[0]))] +
+      InputsFromOperands(operands[1..])
+  } by method {
+    var inputs: seq<Schema.Input> := [];
+    var i := |operands|;
+    while 0 < i
+      invariant 0 <= i <= |operands|
+      invariant inputs == InputsFromOperands(operands[i..])
+      decreases i
+    {
+      i := i - 1;
+      var head :=
+        if operands[i] == "-"
+        then Schema.Stdin
+        else Schema.File(operands[i]);
+      assert operands[i..] == [operands[i]] + operands[i + 1..];
+      inputs := [head] + inputs;
+    }
+    return inputs;
+  }
+
+  function HelpBeforeInvalid(raw: Schema.Base64CmdRaw): bool
+  {
+    var wrapPlan := ParseWrapArgs(raw.wrapArgs, 76);
+    raw.seenHelp &&
+    (!raw.seenVersion || raw.helpTokenIndex <= raw.versionTokenIndex) &&
+    (!wrapPlan.hasInvalid || raw.helpTokenIndex <= wrapPlan.invalidTokenIndex)
+  }
+
+  function VersionBeforeInvalid(raw: Schema.Base64CmdRaw): bool
+  {
+    var wrapPlan := ParseWrapArgs(raw.wrapArgs, 76);
+    raw.seenVersion &&
+    (!wrapPlan.hasInvalid || raw.versionTokenIndex <= wrapPlan.invalidTokenIndex)
+  }
+
+  function Command(raw: Schema.Base64CmdRaw): Schema.Base64Cmd
+  {
+    var wrapPlan := ParseWrapArgs(raw.wrapArgs, 76);
+    var mode :=
+      if HelpBeforeInvalid(raw) then
+        Schema.ModeHelp
+      else if VersionBeforeInvalid(raw) then
+        Schema.ModeVersion
+      else
+        Schema.ModeRun;
+    if mode != Schema.ModeRun then
+      Schema.Base64Cmd(mode, raw.seenDecode, false, 76, "", [])
+    else if |raw.wrapArgs| == 0 then
+      if |raw.operands| > 1 then
+        Schema.Base64Cmd(
+          Schema.ModeExtraOperand(raw.operands[1]),
+          raw.seenDecode,
+          false,
+          76,
+          "",
+          []
+        )
+      else
+        Schema.Base64Cmd(
+          Schema.ModeRun,
+          raw.seenDecode,
+          raw.seenIgnoreGarbage,
+          76,
+          "",
+          if |raw.operands| == 0
+          then [Schema.Stdin]
+          else InputsFromOperands(raw.operands)
+        )
+    else if wrapPlan.hasInvalid then
+      Schema.Base64Cmd(
+        Schema.ModeInvalidWrap,
+        raw.seenDecode,
+        false,
+        76,
+        wrapPlan.invalidText,
+        []
+      )
+    else if |raw.operands| > 1 then
+      Schema.Base64Cmd(
+        Schema.ModeExtraOperand(raw.operands[1]),
+        raw.seenDecode,
+        false,
+        wrapPlan.width,
+        "",
+        []
+      )
+    else
+      Schema.Base64Cmd(
+        Schema.ModeRun,
+        raw.seenDecode,
+        raw.seenIgnoreGarbage,
+        wrapPlan.width,
+        "",
+        if |raw.operands| == 0
+        then [Schema.Stdin]
+        else InputsFromOperands(raw.operands)
+      )
+  }
+
+  lemma CommandRunHasOneInput(raw: Schema.Base64CmdRaw)
+    ensures Command(raw).mode == Schema.ModeRun ==>
+              |Command(raw).inputs| == 1
+  {
+    if |raw.operands| == 1 {
+      assert |InputsFromOperands(raw.operands)| == 1;
+    }
+  }
+
+  twostate predicate InputTraceRelation(
+    cmd: Schema.Base64Cmd,
+    io: BenchIO.IO,
+    data: BenchWorld.Bytes,
+    errorOutput: BenchWorld.Bytes,
+    hadReadError: bool,
+    stage: BenchWorld.FileReadStage
+  )
+    reads io.stdinRegion
+  {
+    |cmd.inputs| == 1 &&
+    match cmd.inputs[0]
+    case Stdin =>
+      var read := IOContract.ObservedReadStdinResultFields(old(io.stdin()), old(io.trustedStreams()));
+      data == IOContract.ReadResultData(read) &&
+      errorOutput == (if read.Err? then Spec.StdinReadErrorMessage(read.e) else []) &&
+      hadReadError == read.Err? &&
+      stage == (if read.Err? then BenchWorld.ReadFailed else BenchWorld.ReadSucceeded)
+    case File(path) =>
+      match IOContract.ObservedReadFileResultFields(
+          old(io.fs()), old(io.trustedStreams()), path
+        )
+      case Ok(fileData) =>
+        data == fileData &&
+        errorOutput == [] &&
+        !hadReadError && stage == BenchWorld.ReadSucceeded
+      case Err(err) =>
+        data == IOContract.ReadFailureData(err) &&
+        errorOutput == Spec.ErrorMessage(path, err) &&
+        hadReadError && stage == (if err.ReadFailure? then err.readStage else BenchWorld.ReadSucceeded)
+  }
+
+  twostate predicate PreparedSummary(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
+  {
+    var cmd := Command(raw);
+    if cmd.mode == Schema.ModeHelp then
+      io.stdin() == old(io.stdin()) &&
+      plannedStdout == old(io.stdout()) + Spec.HelpText() &&
+      plannedStderr == old(io.stderr()) &&
+      exit == 0
+    else if cmd.mode == Schema.ModeVersion then
+      io.stdin() == old(io.stdin()) &&
+      plannedStdout == old(io.stdout()) + Spec.VersionText() &&
+      plannedStderr == old(io.stderr()) &&
+      exit == 0
+    else if cmd.mode == Schema.ModeInvalidWrap then
+      io.stdin() == old(io.stdin()) &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr ==
+      old(io.stderr()) +
+      Spec.InvalidWrapMessage(cmd.invalidWrapValue) &&
+      exit == 1
+    else if cmd.mode != Schema.ModeRun then
+      match cmd.mode
+      case ModeExtraOperand(operand) =>
+        io.stdin() == old(io.stdin()) &&
+        plannedStdout == old(io.stdout()) &&
+        plannedStderr ==
+        old(io.stderr()) + Spec.ExtraOperandMessage(operand) &&
+        exit == 1
+      case _ => false
+    else
+      exists data: BenchWorld.Bytes,
+        errorOutput: BenchWorld.Bytes,
+        hadReadError: bool,
+        stage: BenchWorld.FileReadStage,
+        output: BenchWorld.Bytes,
+        ok: bool ::
+        InputTraceRelation(
+          cmd, io, data, errorOutput, hadReadError, stage
+        ) &&
+        TransformAfterReadRelation(
+          cmd, data, stage, output, ok
+        ) &&
+        io.stdin() ==
+        (if cmd.inputs[0].Stdin?
+         then IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams()))
+         else old(io.stdin())) &&
+        plannedStdout ==
+        old(io.stdout()) + output &&
+        plannedStderr ==
+        old(io.stderr()) +
+        (if cmd.decode && !ok then Spec.InvalidInputMessage() else errorOutput) &&
+        exit ==
+        (if hadReadError || !ok
+         then 1
+         else 0)
+  }
+
+  method ProcessInput(
+    cmd: Schema.Base64Cmd,
+    io: BenchIO.IO
+  ) returns (data: BenchWorld.Bytes, errOut: BenchWorld.Bytes, hadReadError: bool, stage: BenchWorld.FileReadStage)
+    modifies io.stdinRegion
+    requires |cmd.inputs| == 1
+    ensures io.stdin() ==
+            (if cmd.inputs[0].Stdin? then IOContract.ObservedReadStdinRemainingFields(old(io.stdin()), old(io.trustedStreams())) else old(io.stdin()))
+    ensures InputTraceRelation(
+              cmd, io, data, errOut, hadReadError, stage
+            )
+  {
+    match cmd.inputs[0]
+    case Stdin =>
+      var read := io.ReadStdin();
+      data := IOContract.ReadResultData(read);
+      errOut := if read.Err? then Spec.StdinReadErrorMessage(read.e) else [];
+      hadReadError := read.Err?;
+      stage := if read.Err? then BenchWorld.ReadFailed else BenchWorld.ReadSucceeded;
+    case File(path) =>
+      var res := io.ReadFile(path);
+      stage := IOContract.ReadResultStage(res);
+      match res
+      case Ok(chunk) =>
+        data := chunk;
+        errOut := [];
+        hadReadError := false;
+      case Err(err) =>
+        data := IOContract.ReadFailureData(err);
+        errOut := Spec.ErrorMessage(path, err);
+        hadReadError := true;
+  }
+
+  method TransformMethod(
+    cmd: Schema.Base64Cmd,
+    data: BenchWorld.Bytes
+  ) returns (result: TransformResult)
+    ensures TransformRelation(
+              cmd, data, result.out, result.ok
+            )
+  {
+    reveal TransformRelation();
+    if cmd.decode {
+      var kept, indices :=
+        FilterInputMethod(data, cmd.ignoreGarbage);
+      var decoded, blocks, fragments, cuts :=
+        DecodeRestMethod(kept);
+      result := decoded;
+      reveal DecodeRelation();
+    } else {
+      var encoded := EncodeDataMethod(data);
+      var output, chunks, cuts :=
+        WrapEncodedMethod(encoded, cmd.wrapWidth);
+      result := TransformResult(output, true);
+    }
+  }
+
+  method CompletedInputBuffersMethod(data: BenchWorld.Bytes, ignoreGarbage: bool)
+    returns (buffered: BenchWorld.Bytes)
+    ensures CompletedInputBuffersRelation(data, ignoreGarbage, buffered)
+  {
+    hide *;
+    reveal Spec.DECODE_INPUT_BUFFER_BYTES;
+    reveal CompletedInputBuffersRelation(), CompleteBufferPrefixRelation();
+    var source := data;
+    ghost var indices: seq<nat> := [];
+    if ignoreGarbage {
+      var filtered, keptIndices := FilterInputMethod(data, true);
+      source := filtered;
+      indices := keptIndices;
+    }
+    var completed := Spec.DECODE_INPUT_BUFFER_BYTES * (|source| / Spec.DECODE_INPUT_BUFFER_BYTES);
+    buffered := source[..completed];
+    assert if ignoreGarbage then KeptInputRelation(data, true, source, indices) else source == data;
+    assert |buffered| == completed;
+    assert |buffered| % Spec.DECODE_INPUT_BUFFER_BYTES == 0;
+    assert |source| - |buffered| < Spec.DECODE_INPUT_BUFFER_BYTES;
+    assert CompleteBufferPrefixRelation(source, buffered);
+    if ignoreGarbage {
+      assert exists input: BenchWorld.Bytes, selection: seq<nat> ::
+          input == source && selection == indices &&
+          KeptInputRelation(data, true, input, selection) &&
+          CompleteBufferPrefixRelation(input, buffered);
+    }
+  }
+
+  method TransformAfterReadMethod(cmd: Schema.Base64Cmd, data: BenchWorld.Bytes, stage: BenchWorld.FileReadStage)
+    returns (result: TransformResult)
+    ensures TransformAfterReadRelation(cmd, data, stage, result.out, result.ok)
+  {
+    if cmd.decode && stage == BenchWorld.ReadFailed {
+      var buffered := CompletedInputBuffersMethod(data, cmd.ignoreGarbage);
+      var kept, indices := FilterInputMethod(buffered, false);
+      var completeQuartets := 4 * (|kept| / 4);
+      var decoded, blocks, fragments, cuts := DecodeRestMethod(kept[..completeQuartets]);
+      result := decoded;
+      assert DecodeRelation(kept[..completeQuartets], result.out, result.ok) by {
+        reveal DecodeRelation();
+      }
+      assert exists input: BenchWorld.Bytes, retained: BenchWorld.Bytes, selection: seq<nat> ::
+          input == buffered && retained == kept && selection == indices &&
+          CompletedInputBuffersRelation(data, cmd.ignoreGarbage, input) &&
+          KeptInputRelation(input, false, retained, selection) &&
+          DecodeRelation(retained[..4 * (|retained| / 4)], result.out, result.ok);
+    } else {
+      result := TransformMethod(cmd, data);
+    }
+  }
+
+  method Prepare(raw: Schema.Base64CmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr)
+    decreases *
+  {
+    hide *;
+    reveal PreparedSummary();
+    plannedOut := [];
+    plannedErr := [];
+    ghost var initialStdout := io.stdout();
+    ghost var initialStderr := io.stderr();
+
+    ghost var preStdin := io.stdin();
+    ghost var preStdout := (initialStdout + plannedOut);
+    ghost var preStderr := (initialStderr + plannedErr);
+    var cmd := Command(raw);
+    if cmd.mode == Schema.ModeHelp {
+      plannedOut := plannedOut + Spec.HelpText();
+      exit := 0;
+      assert io.stdin() == preStdin;
+      assert (initialStderr + plannedErr) == preStderr;
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
+      return;
+    }
+    if cmd.mode == Schema.ModeVersion {
+      plannedOut := plannedOut + Spec.VersionText();
+      exit := 0;
+      assert io.stdin() == preStdin;
+      assert (initialStderr + plannedErr) == preStderr;
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
+      return;
+    }
+    if cmd.mode == Schema.ModeInvalidWrap {
+      plannedErr := plannedErr + Spec.InvalidWrapMessage(cmd.invalidWrapValue);
+      exit := 1;
+      assert io.stdin() == preStdin;
+      assert (initialStdout + plannedOut) == preStdout;
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
+      return;
+    }
+    if cmd.mode.ModeExtraOperand? {
+      plannedErr := plannedErr + Spec.ExtraOperandMessage(cmd.mode.operand);
+      exit := 1;
+      assert io.stdin() == preStdin;
+      assert (initialStdout + plannedOut) == preStdout;
+      assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr);
+      return;
+    }
+
+    CommandRunHasOneInput(raw);
+    var data: BenchWorld.Bytes;
+    var errOut: BenchWorld.Bytes;
+    var hadReadError: bool;
+    var stage: BenchWorld.FileReadStage;
+    assert |cmd.inputs| == 1;
+    data, errOut, hadReadError, stage := ProcessInput(cmd, io);
+    var transform := TransformAfterReadMethod(cmd, data, stage);
+    plannedOut := plannedOut + transform.out;
+    assert (initialStdout + plannedOut) == preStdout + transform.out;
+    if cmd.decode && !transform.ok {
+      plannedErr := plannedErr + Spec.InvalidInputMessage();
+    } else {
+      plannedErr := plannedErr + errOut;
+    }
+    exit := if hadReadError || !transform.ok then 1 else 0;
+    assert InputTraceRelation(
+        cmd, io, data, errOut, hadReadError, stage
+      );
+    assert io.stdin() ==
+           (if cmd.inputs[0].Stdin? then IOContract.ObservedReadStdinRemainingFields(preStdin, old(io.trustedStreams())) else preStdin);
+    assert (initialStdout + plannedOut) == preStdout + transform.out;
+    assert (initialStderr + plannedErr) ==
+           preStderr + (if cmd.decode && !transform.ok then Spec.InvalidInputMessage() else errOut);
+    assert PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr) by {
+      reveal PreparedSummary();
+      assert exists traceData: BenchWorld.Bytes,
+          errorOutput: BenchWorld.Bytes,
+          traceHadReadError: bool,
+          traceStage: BenchWorld.FileReadStage,
+          output: BenchWorld.Bytes,
+          ok: bool ::
+          traceData == data &&
+          errorOutput == errOut &&
+          traceHadReadError == hadReadError &&
+          traceStage == stage &&
+          output == transform.out &&
+          ok == transform.ok &&
+          InputTraceRelation(
+            cmd, io, traceData, errorOutput, traceHadReadError, traceStage
+          ) &&
+          TransformAfterReadRelation(
+            cmd, traceData, traceStage, output, ok
+          ) &&
+          io.stdin() ==
+          (if cmd.inputs[0].Stdin?
+           then IOContract.ObservedReadStdinRemainingFields(preStdin, old(io.trustedStreams()))
+           else preStdin) &&
+          (initialStdout + plannedOut) ==
+          preStdout + output &&
+          (initialStderr + plannedErr) ==
+          preStderr + (if cmd.decode && !ok then Spec.InvalidInputMessage() else errorOutput) &&
+          exit ==
+          (if traceHadReadError ||
+              !ok
+           then 1
+           else 0);
+    }
+  }
+
+  twostate predicate CoreSummary(raw: Schema.Base64CmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+                      old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: Schema.Base64CmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+  }
+}

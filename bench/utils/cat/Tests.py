@@ -25,9 +25,9 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_CAT_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "cat_bench.dll")
 COREUTILS_CAT = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "cat")
 CAT_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "cat" / "CatCore.dfy",
-    ROOT / "bench" / "utils" / "cat" / "CatProof.dfy",
-    ROOT / "bench" / "utils" / "cat" / "Cat.dfy",
+    ROOT / "bench" / "utils" / "cat" / "Impl/CatCore.dfy",
+    ROOT / "bench" / "utils" / "cat" / "Proof/CatProof.dfy",
+    ROOT / "bench" / "utils" / "cat" / "Impl/Cat.dfy",
 ]
 
 
@@ -45,7 +45,7 @@ def latest_bench_cat_source_mtime() -> float:
         ROOT / "bench" / "core" / "IOExtern.cs",
     ]
     sources.extend((ROOT / "bench" / "core").glob("*.dfy"))
-    sources.extend((ROOT / "bench" / "utils" / "cat").glob("*.dfy"))
+    sources.extend((ROOT / "bench" / "utils" / "cat").rglob("*.dfy"))
     newest = 0.0
     for source in sources:
         try:

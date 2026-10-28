@@ -393,7 +393,9 @@ def test_verbose_write_failure(executables: tuple[Path, Path], tmp_path: Path) -
 
 # Check the entry, implementation and all proof declarations independently.
 @pytest.mark.dafny_verify
-@pytest.mark.parametrize("filename", ["RmSpec.dfy", "RmCore.dfy", "RmProof.dfy", "Rm.dfy"])
+@pytest.mark.parametrize(
+    "filename", ["Spec/RmSpec.dfy", "Impl/RmCore.dfy", "Proof/RmProof.dfy", "Impl/Rm.dfy"]
+)
 def test_verify_module(filename: str) -> None:
     # upstream: none - Checks the required Dafny proof surface.
     # upstream-reason: verification.

@@ -27,11 +27,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_CSPLIT_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "csplit_bench.dll")
 COREUTILS_CSPLIT = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "csplit")
 CSPLIT_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "csplit" / "CsplitSchema.dfy",
-    ROOT / "bench" / "utils" / "csplit" / "CsplitCore.dfy",
-    ROOT / "bench" / "utils" / "csplit" / "CsplitSpec.dfy",
-    ROOT / "bench" / "utils" / "csplit" / "CsplitProof.dfy",
-    ROOT / "bench" / "utils" / "csplit" / "Csplit.dfy",
+    ROOT / "bench" / "utils" / "csplit" / "Spec/CsplitSchema.dfy",
+    ROOT / "bench" / "utils" / "csplit" / "Impl/CsplitCore.dfy",
+    ROOT / "bench" / "utils" / "csplit" / "Spec/CsplitSpec.dfy",
+    ROOT / "bench" / "utils" / "csplit" / "Proof/CsplitProof.dfy",
+    ROOT / "bench" / "utils" / "csplit" / "Impl/Csplit.dfy",
 ]
 
 

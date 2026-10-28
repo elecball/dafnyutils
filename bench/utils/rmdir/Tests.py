@@ -420,7 +420,8 @@ def test_verbose_write_failure(executables: tuple[Path, Path], tmp_path: Path) -
 # Verify the candidate proof closure separately from runtime oracle comparisons.
 @pytest.mark.dafny_verify
 @pytest.mark.parametrize(
-    "filename", ["RmdirCore.dfy", "RmdirSpec.dfy", "RmdirProof.dfy", "Rmdir.dfy"]
+    "filename",
+    ["Impl/RmdirCore.dfy", "Spec/RmdirSpec.dfy", "Proof/RmdirProof.dfy", "Impl/Rmdir.dfy"],
 )
 def test_verify_module(filename: str) -> None:
     # upstream: none - Checks the entry contract and proof surface, not runtime behavior.

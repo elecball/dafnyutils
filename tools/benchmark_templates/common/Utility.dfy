@@ -1,7 +1,7 @@
 include "CliSupport.dfy"
-include "{{CLASS_NAME}}Spec.dfy"
-include "{{CLASS_NAME}}Core.dfy"
-include "{{CLASS_NAME}}Proof.dfy"
+include "{{SPEC_PREFIX}}{{CLASS_NAME}}Spec.dfy"
+include "{{IMPL_PREFIX}}{{CLASS_NAME}}Core.dfy"
+include "{{PROOF_PREFIX}}{{CLASS_NAME}}Proof.dfy"
 
 module {{CLASS_NAME}} {
   import BenchIO

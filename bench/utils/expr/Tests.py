@@ -27,10 +27,10 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_EXPR_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "expr_bench.dll")
 COREUTILS_EXPR = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "expr")
 EXPR_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "expr" / "ExprSpec.dfy",
-    ROOT / "bench" / "utils" / "expr" / "ExprCore.dfy",
-    ROOT / "bench" / "utils" / "expr" / "ExprProof.dfy",
-    ROOT / "bench" / "utils" / "expr" / "Expr.dfy",
+    ROOT / "bench" / "utils" / "expr" / "Spec/ExprSpec.dfy",
+    ROOT / "bench" / "utils" / "expr" / "Impl/ExprCore.dfy",
+    ROOT / "bench" / "utils" / "expr" / "Proof/ExprProof.dfy",
+    ROOT / "bench" / "utils" / "expr" / "Impl/Expr.dfy",
 ]
 
 

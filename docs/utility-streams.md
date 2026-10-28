@@ -9,7 +9,7 @@ trust boundary. These are source-reading notes, not a new verification result.
 
 ### Implementation
 
-[`TransformMethod`](../bench/utils/base64/Base64Core.dfy) either encodes groups of
+[`TransformMethod`](../bench/utils/base64/Impl/Base64Core.dfy) either encodes groups of
 three bytes into four alphabet characters with padding, then wraps the encoded
 text, or filters the input and decodes groups of four characters. Without
 ignore-garbage mode the filter removes newlines; with it, only alphabet characters
@@ -20,12 +20,12 @@ that every available partial byte is decoded.
 
 ### Proof idea
 
-[`EncodeRelation`, `WrappedRelation`, and `DecodeRelation`](../bench/utils/base64/Base64Spec.dfy)
+[`EncodeRelation`, `WrappedRelation`, and `DecodeRelation`](../bench/utils/base64/Spec/Base64Spec.dfy)
 describe block arithmetic, line fragments, and valid blocks followed by a terminal
 fragment. `KeptInputRelation` requires an ordered selection containing exactly the
 bytes permitted by the filter. These relations specify both output and success,
 including partial terminal output. In
-[`TransformRelationImpliesSpec`](../bench/utils/base64/Base64Proof.dfy), separate
+[`TransformRelationImpliesSpec`](../bench/utils/base64/Proof/Base64Proof.dfy), separate
 encoding, wrapping, filtering, and decoding refinements establish the appropriate
 branch. The interrupted-read bridge adds the buffer-prefix restriction before
 the input observation and command relations are composed.
@@ -34,7 +34,7 @@ the input observation and command relations are composed.
 
 ### Implementation
 
-[`Prepare`](../bench/utils/cat/CatCore.dfy) reads operands in order and concatenates
+[`Prepare`](../bench/utils/cat/Impl/CatCore.dfy) reads operands in order and concatenates
 the returned bytes, including data carried by read failures, while collecting
 diagnostics. It then renders that combined stream once. `ProcessBytesMethod`
 tracks the next line number, whether the current byte starts a line, and the
@@ -44,11 +44,11 @@ concatenation lets line state span operand boundaries.
 
 ### Proof idea
 
-[`KeptAt`, `NumberedAt`, and `LineNumberRelation`](../bench/utils/cat/CatSpec.dfy)
+[`KeptAt`, `NumberedAt`, and `LineNumberRelation`](../bench/utils/cat/Spec/CatSpec.dfy)
 classify source positions directly: a numbered position receives one plus the
 number of earlier numbered positions. `RenderRelation` assigns a fragment to
 every byte and partitions the final output into exactly those fragments.
-[`RenderWitnessRefines`](../bench/utils/cat/CatProof.dfy) connects the rendering
+[`RenderWitnessRefines`](../bench/utils/cat/Proof/CatProof.dfy) connects the rendering
 state to these position and cardinality properties. The input-trace refinement
 separately establishes operand order, returned data, diagnostics, and stdin
 consumption; together they establish `RunRelation`, including output retained when
@@ -58,32 +58,32 @@ an input fails.
 
 ### Implementation
 
-[`CommRenderCore`](../bench/utils/comm/CommRenderCore.dfy) splits both inputs into
+[`CommRenderCore`](../bench/utils/comm/Impl/CommRenderCore.dfy) splits both inputs into
 newline- or NUL-delimited records and compares records lexicographically by byte.
 Its merge consumes the smaller leading record, or both equal records, and renders
 the first-only, second-only, or common column. Suppressed columns change the
 prefix delimiters; an optional totals row counts all three categories.
-[`Prepare`](../bench/utils/comm/CommCore.dfy) reads the operands in order, rejects
+[`Prepare`](../bench/utils/comm/Impl/CommCore.dfy) reads the operands in order, rejects
 unsorted successful inputs with no comparison output, and has a separate plan for
 read failures that can preserve output from complete records before the failure.
 
 ### Proof idea
 
-[`RecordPartition`, `BytesLess`, and `OutputRelation`](../bench/utils/comm/CommRenderSpec.dfy)
+[`RecordPartition`, `BytesLess`, and `OutputRelation`](../bench/utils/comm/Spec/CommRenderSpec.dfy)
 specify record boundaries, the first differing byte or proper-prefix ordering,
 and the resulting merge fragments. A merge witness accounts for every consumed
 record and its category count.
-[`MergeWitnessForCore` and `OutputRelationForCore`](../bench/utils/comm/CommProof.dfy)
+[`MergeWitnessForCore` and `OutputRelationForCore`](../bench/utils/comm/Proof/CommProof.dfy)
 build those witnesses from the recursive merge and connect the comparison result
 to byte ordering. Sortedness and failed-read lemmas establish the alternatives in
-[`SpecCmd`](../bench/utils/comm/CommSpec.dfy), including its early-abort and partial
+[`SpecCmd`](../bench/utils/comm/Spec/CommSpec.dfy), including its early-abort and partial
 output cases.
 
 ## csplit
 
 ### Implementation
 
-[`AnalyzeNumbers` and `SplitPlanFor`](../bench/utils/csplit/CsplitCore.dfy) validate
+[`AnalyzeNumbers` and `SplitPlanFor`](../bench/utils/csplit/Impl/CsplitCore.dfy) validate
 numeric line patterns and locate the corresponding byte cuts. The resulting
 pieces are written in order to generated `xx` names, with byte counts on stdout
 for successful writes. `WritePieces` stops on a write failure and attempts cleanup
@@ -95,12 +95,12 @@ expressions or repeat syntax.
 
 ### Proof idea
 
-[`LineCutRelation` and `PiecePartitionRelation`](../bench/utils/csplit/CsplitSpec.dfy)
+[`LineCutRelation` and `PiecePartitionRelation`](../bench/utils/csplit/Spec/CsplitSpec.dfy)
 describe cuts by newline counts and require pieces to partition the input.
 `SplitPlanRelation` identifies the first out-of-range cut. `WriteTraceRelation`
 adds ordered write attempts, byte-count output, and cleanup observations through
 intermediate filesystem states, retaining partial-write effects.
-[`SplitPlanRefines` and `WriteTraceSummaryRefines`](../bench/utils/csplit/CsplitProof.dfy)
+[`SplitPlanRefines` and `WriteTraceSummaryRefines`](../bench/utils/csplit/Proof/CsplitProof.dfy)
 connect the computed cuts and recursive writes to these witnesses. Separate
 read-failure reasoning restricts partial stdin processing to complete input
 records before the write/cleanup relation is applied.
@@ -109,7 +109,7 @@ records before the write/cleanup relation is applied.
 
 ### Implementation
 
-[`CutData`](../bench/utils/cut/CutCore.dfy) divides input into newline- or
+[`CutData`](../bench/utils/cut/Impl/CutCore.dfy) divides input into newline- or
 NUL-delimited records. It scans each record's one-based positions, retains those
 in the range union or its complement, and optionally inserts output delimiters at
 the specified selection-group boundaries. Every output record receives a record
@@ -119,14 +119,14 @@ multibyte handling are outside this slice.
 
 ### Proof idea
 
-[`SelectedIndexSequence`](../bench/utils/cut/CutSpec.dfy) requires strictly
+[`SelectedIndexSequence`](../bench/utils/cut/Spec/CutSpec.dfy) requires strictly
 increasing indices that contain every selected position and no others.
 `RecordSelectionWitnessRelation` relates each retained byte and any preceding
 output delimiter to its fragment. `DataSelectionRelation` combines that relation
 with an input record partition and terminated output fragments. Much of the
 selection argument lives beside the implementation in
-[`SelectRecordSatisfiesRelation` and `DataSelectionSatisfiesRelation`](../bench/utils/cut/CutCore.dfy).
-[`OutputPieceRefines` and `InputTraceCoreRefines`](../bench/utils/cut/CutProof.dfy)
+[`SelectRecordSatisfiesRelation` and `DataSelectionSatisfiesRelation`](../bench/utils/cut/Impl/CutCore.dfy).
+[`OutputPieceRefines` and `InputTraceCoreRefines`](../bench/utils/cut/Proof/CutProof.dfy)
 then connect those results to ordered input reads, including partial stdin data
 on a stream failure.
 
@@ -134,7 +134,7 @@ on a stream failure.
 
 ### Implementation
 
-[`ReadBlock`, `FlushFull`, and `RunCore`](../bench/utils/dd/DdCore.dfy) copy finite
+[`ReadBlock`, `FlushFull`, and `RunCore`](../bench/utils/dd/Impl/DdCore.dfy) copy finite
 stdin to stdout with explicit `status=none`. A single bounded native read may
 return a short prefix; full-block mode accumulates these reads locally. The
 implementation applies ASCII case conversion, NUL padding and adjacent-byte
@@ -145,7 +145,7 @@ statistics are outside [this stream slice](../bench/utils/dd/dd.md).
 
 ### Proof idea
 
-[`Transformed`, `InputPartition`, and `OutputPartition`](../bench/utils/dd/DdSpec.dfy)
+[`Transformed`, `InputPartition`, and `OutputPartition`](../bench/utils/dd/Spec/DdSpec.dfy)
 relate each output byte to its source position and constrain input records,
 native observations and output boundaries. They distinguish intermediate full
 blocks from the final flush, including committed prefixes and GNU's diagnostic
@@ -158,7 +158,7 @@ padding, conversion or block-count policy.
 
 ### Implementation
 
-[`ExpandDataFromMethod`](../bench/utils/expand/ExpandCore.dfy) walks the bytes while
+[`ExpandDataFromMethod`](../bench/utils/expand/Impl/ExpandCore.dfy) walks the bytes while
 tracking the display column and whether it is still in the initial blank region.
 A tab becomes spaces up to the next explicit stop or the configured repeating
 stop; after a nonrepeating list ends it becomes one space. Newline resets the
@@ -169,11 +169,11 @@ diagnostics alongside any output from partial stdin data.
 
 ### Proof idea
 
-[`TabStopRelation`](../bench/utils/expand/ExpandSpec.dfy) selects the first future
+[`TabStopRelation`](../bench/utils/expand/Spec/ExpandSpec.dfy) selects the first future
 stop or constrains the repeating distance arithmetically. `ByteExpansionRelation`
 specifies each byte's output piece and column/leading-state effects;
 `DataExpansionWitnessRelation` quantifies over a full sequence of these pieces and
-states. [`TabStopRelationHolds` and `DataExpansionWitnessSummaryImpliesRelation`](../bench/utils/expand/ExpandProof.dfy)
+states. [`TabStopRelationHolds` and `DataExpansionWitnessSummaryImpliesRelation`](../bench/utils/expand/Proof/ExpandProof.dfy)
 connect the stop search and byte loop to those properties. The input-trace bridge
 composes these witnesses across operands, preserving both state continuity and
 the recorded read failures.
@@ -182,7 +182,7 @@ the recorded read failures.
 
 ### Implementation
 
-[`FittingPrefixMethod`](../bench/utils/fold/FoldCore.dfy) scans a line until the
+[`FittingPrefixMethod`](../bench/utils/fold/Impl/FoldCore.dfy) scans a line until the
 next byte would exceed the width, retaining at least one byte and remembering the
 last blank. `BreakPrefixMethod`
 uses that blank when space mode calls for it; `FoldLineMethod` repeats on the
@@ -195,13 +195,13 @@ can still contribute folded partial data alongside its diagnostic.
 
 ### Proof idea
 
-[`FittingEndRelation` and `BreakPointRelation`](../bench/utils/fold/FoldSpec.dfy)
+[`FittingEndRelation` and `BreakPointRelation`](../bench/utils/fold/Spec/FoldSpec.dfy)
 characterize the width boundary and, when applicable, the last blank within the
 fitting prefix. `LinePartitionRelation` requires nonempty segments whose join is
 the original line and whose ends satisfy those break conditions.
 `DataFoldRelation` adds the effective-prefix restriction and preserves original
 record termination. The Core methods establish these relations directly while
-constructing segments. [`FoldProof`](../bench/utils/fold/FoldProof.dfy) principally
+constructing segments. [`FoldProof`](../bench/utils/fold/Proof/FoldProof.dfy) principally
 connects width parsing and command selection to the specification and carries the
 already established input/output relation into the final contract.
 
@@ -209,7 +209,7 @@ already established input/output relation into the final contract.
 
 ### Implementation
 
-[`RenderData`](../bench/utils/head/HeadCore.dfy) selects a byte prefix or a record
+[`RenderData`](../bench/utils/head/Impl/HeadCore.dfy) selects a byte prefix or a record
 prefix, either keeping the requested count or removing that many units from the
 end. `Prepare` processes operands in order, adds headers according to the command
 and earlier header-producing reads, and collects diagnostics while continuing to
@@ -218,13 +218,13 @@ file close failures; an ordinary failed file read contributes no output.
 
 ### Proof idea
 
-[`RecordCountRelation` and `RecordSelectionRelation`](../bench/utils/head/HeadRecordSpec.dfy)
+[`RecordCountRelation` and `RecordSelectionRelation`](../bench/utils/head/Spec/HeadRecordSpec.dfy)
 count delimiters plus a possible unterminated final record, then choose a cut
 whose prefix has exactly the required number of records. Byte selection is a
 direct length-bounded prefix relation in
-[`HeadSpec`](../bench/utils/head/HeadSpec.dfy). The input trace specifies read
+[`HeadSpec`](../bench/utils/head/Spec/HeadSpec.dfy). The input trace specifies read
 outcomes, headers, stdout/error fragments, and failure status in operand order.
-[`RecordSelectionRelation` and `CoreInputTraceWitnessRelation`](../bench/utils/head/HeadProof.dfy)
+[`RecordSelectionRelation` and `CoreInputTraceWitnessRelation`](../bench/utils/head/Proof/HeadProof.dfy)
 connect the recursive record selection and accumulated operand results to those
 cut and trace witnesses.
 
@@ -232,17 +232,17 @@ cut and trace witnesses.
 
 ### Implementation
 
-[`Records`, `Tiles`, and `Render`](../bench/utils/join/JoinDataCore.dfy) split binary
+[`Records`, `Tiles`, and `Render`](../bench/utils/join/Impl/JoinDataCore.dfy) split binary
 input into records and fields, compare join keys and group equal-key runs. Each
 matched pair of runs emits its Cartesian product in GNU order; unmatched runs
 follow `-a`/`-v`, and field lists, filler, headers and NUL delimiters control the
-rendered rows. [`JoinPlanCore`](../bench/utils/join/JoinPlanCore.dfy) accounts for
+rendered rows. [`JoinPlanCore`](../bench/utils/join/Impl/JoinPlanCore.dfy) accounts for
 read-ahead when locating order warnings and the first fatal order error, so
 previous output and diagnostic order remain observable.
 
 ### Proof idea
 
-[`RecordCuts`, `Fields`, `Tiles`, and `PrintedRow`](../bench/utils/join/JoinDataSpec.dfy)
+[`RecordCuts`, `Fields`, `Tiles`, and `PrintedRow`](../bench/utils/join/Spec/JoinDataSpec.dfy)
 constrain exact input partitions, maximal key-match rectangles and every output
 field. Row coordinates prescribe Cartesian ordering; output partitions prevent
 missing or extra rows. `ReadLayout`, `FirstWarning`, and `FirstFatal` constrain
@@ -255,7 +255,7 @@ selection and warning policy add no native trust.
 
 ### Implementation
 
-[`Prepare`](../bench/utils/nl/NlCore.dfy) normalizes each nonempty input by adding a
+[`Prepare`](../bench/utils/nl/Impl/NlCore.dfy) normalizes each nonempty input by adding a
 missing final newline, combines the inputs, and splits them into lines. It rejects
 logical-page delimiter lines before rendering. `RenderLinesMethod` starts at one,
 numbers lines selected by the body style, increments only for numbered lines,
@@ -265,11 +265,11 @@ unsupported in this slice.
 
 ### Proof idea
 
-[`LinePartitionRelation`, `LineNumberRelation`, and `OutputWitnessRelation`](../bench/utils/nl/NlSpec.dfy)
+[`LinePartitionRelation`, `LineNumberRelation`, and `OutputWitnessRelation`](../bench/utils/nl/Spec/NlSpec.dfy)
 describe the combined input's line partition, successive numbering values, and
 one rendered fragment per line. `NormalizedInputRelation` separately captures
 the newline added at each input boundary.
-[`OutputWitnessRefines` and `InputTraceRefines`](../bench/utils/nl/NlProof.dfy)
+[`OutputWitnessRefines` and `InputTraceRefines`](../bench/utils/nl/Proof/NlProof.dfy)
 connect the line-rendering witnesses and ordered read observations to these
 relations. `PreparedSpecFromTrace` distinguishes normal rendering from the
 delimiter-rejection branch, which retains input diagnostics but emits no numbered
@@ -279,7 +279,7 @@ output. The entrypoint passes the Core's ghost trace witnesses into that proof.
 
 ### Implementation
 
-[`RenderParallel` and `RenderSerial`](../bench/utils/paste/PasteCore.dfy) render a
+[`RenderParallel` and `RenderSerial`](../bench/utils/paste/Impl/PasteCore.dfy) render a
 table of input records in two ways: parallel mode joins equal-index records from
 all operands, substituting empty fields when an input is shorter; serial mode
 joins each input's records into one output record. Delimiter escapes are decoded
@@ -291,11 +291,11 @@ partial records available and produce a failing status.
 
 ### Proof idea
 
-[`EntriesForOutputRelation`](../bench/utils/paste/PasteSpec.dfy) specifies how
+[`EntriesForOutputRelation`](../bench/utils/paste/Spec/PasteSpec.dfy) specifies how
 records are assigned to operands, including the stdin distribution.
 `ParallelOutputRelation` and `SerialOutputRelation` use inductive column and
 record assembly witnesses to describe fields, cyclic delimiters, and terminators.
-[`EntriesForOutputRefines` and `OutputRefines`](../bench/utils/paste/PasteProof.dfy)
+[`EntriesForOutputRefines` and `OutputRefines`](../bench/utils/paste/Proof/PasteProof.dfy)
 establish those assignments and construct the assembly witnesses for the recursive
 renderers. The input-trace proof also preserves the distinction between blocking
 and nonblocking failures and the corresponding visible diagnostics.
@@ -304,9 +304,9 @@ and nonblocking failures and the corresponding visible diagnostics.
 
 ### Implementation
 
-[`RenderData`](../bench/utils/tail/TailCore.dfy) selects a suffix containing the
+[`RenderData`](../bench/utils/tail/Impl/TailCore.dfy) selects a suffix containing the
 last requested bytes or records, or drops the units preceding a requested
-one-based start position. [`RecordCuts`](../bench/utils/tail/TailRecordCore.dfy)
+one-based start position. [`RecordCuts`](../bench/utils/tail/Impl/TailRecordCore.dfy)
 builds the record boundary list used to choose that suffix. The operand loop adds
 headers and diagnostics, retains data from stream and file-close failures, and
 handles zero-length trailing selections and directory-error headers separately.
@@ -315,12 +315,12 @@ outside the modeled slice.
 
 ### Proof idea
 
-[`DropFirstRecordsRelation` and `TakeLastRecordsRelation`](../bench/utils/tail/TailRecordSpec.dfy)
+[`DropFirstRecordsRelation` and `TakeLastRecordsRelation`](../bench/utils/tail/Spec/TailRecordSpec.dfy)
 describe a complete record partition and the boundary where the retained suffix
-begins. [`RenderDataRelation`](../bench/utils/tail/TailSpec.dfy) selects the byte or
+begins. [`RenderDataRelation`](../bench/utils/tail/Spec/TailSpec.dfy) selects the byte or
 record relation and accounts for the one-based start convention. The input trace
 then relates observations, header counts, fragments, and status.
-[`RecordCutsGiveRelation`, `RenderDataGivesRelation`, and `BuildPrefixWitness`](../bench/utils/tail/TailProof.dfy)
+[`RecordCutsGiveRelation`, `RenderDataGivesRelation`, and `BuildPrefixWitness`](../bench/utils/tail/Proof/TailProof.dfy)
 connect the computed boundaries and operand accumulators to these partition and
 trace properties, including failure-dependent output.
 
@@ -328,7 +328,7 @@ trace properties, including failure-dependent output.
 
 ### Implementation
 
-[`Prepare`](../bench/utils/tee/TeeCore.dfy) reads stdin, then passes the returned
+[`Prepare`](../bench/utils/tee/Impl/TeeCore.dfy) reads stdin, then passes the returned
 bytes to each output path in operand order. `WriteOne` chooses overwrite/create
 or append; `WriteOutputs` continues after a failed write and combines diagnostics
 and failure status. The same input bytes are planned for stdout, including bytes
@@ -338,11 +338,11 @@ earlier successful writes likewise remain observable.
 
 ### Proof idea
 
-[`WriteOneSpecFields`](../bench/utils/tee/TeeSpec.dfy) uses the file write/append
+[`WriteOneSpecFields`](../bench/utils/tee/Spec/TeeSpec.dfy) uses the file write/append
 contracts to constrain each filesystem result, including failed partial writes.
 `WriteOutputsSpecFields` requires intermediate `WriteState` values: every adjacent
 pair accounts for one output path, cumulative diagnostics, and an accumulated
-failure status. [`WriteOutputsSummaryFieldsImpliesSpec`](../bench/utils/tee/TeeProof.dfy)
+failure status. [`WriteOutputsSummaryFieldsImpliesSpec`](../bench/utils/tee/Proof/TeeProof.dfy)
 constructs that state sequence from the recursive writes. `PreparedSpec` combines
 it with the stdin observation and the planned stdout copy; emission then accounts
 for the stream result without claiming transactional file effects.
@@ -351,7 +351,7 @@ for the stream result without claiming transactional file effects.
 
 ### Implementation
 
-[`DecodeSet`](../bench/utils/tr/TrCore.dfy) expands the supported literals,
+[`DecodeSet`](../bench/utils/tr/Impl/TrCore.dfy) expands the supported literals,
 escapes, and ascending byte ranges, rejecting unsupported set constructs.
 `Command` separately collects escape warnings. `DeleteAndTranslate` removes
 selected bytes or translates them;
@@ -363,12 +363,12 @@ read diagnostic.
 
 ### Proof idea
 
-[`TranslationRelation`](../bench/utils/tr/TrSpec.dfy) specifies the last matching
+[`TranslationRelation`](../bench/utils/tr/Spec/TrSpec.dfy) specifies the last matching
 set position and its clamped replacement index. `DeleteTranslateRelation` uses
 strictly increasing kept indices containing exactly the undeleted positions.
 `SqueezeRelation` similarly selects exactly the bytes that begin a relevant run
 or lie outside the squeeze set. `OutputRelation` existentially connects the two
-stages. [`CoreTranslationSatisfiesRelation` and `CoreOutputSatisfiesRelation`](../bench/utils/tr/TrProof.dfy)
+stages. [`CoreTranslationSatisfiesRelation` and `CoreOutputSatisfiesRelation`](../bench/utils/tr/Proof/TrProof.dfy)
 establish these properties from the candidate scan and retained-index witnesses.
 Separate set-decoding and command proofs account for validation, expansion, and
 warnings before the output relation is applied.
@@ -377,7 +377,7 @@ warnings before the output relation is applied.
 
 ### Implementation
 
-[`GroupsFrom`](../bench/utils/uniq/UniqCore.dfy) forms consecutive runs of equal
+[`GroupsFrom`](../bench/utils/uniq/Impl/UniqCore.dfy) forms consecutive runs of equal
 lines, keeping each run's first original line and its count. Equality can skip a
 specified number of blank-separated fields and compare the remaining bytes with
 ASCII case folding. `RenderGroups` selects singleton and/or repeated runs and
@@ -387,12 +387,12 @@ groups. A stdin stream failure can still supply partial data for rendering.
 
 ### Proof idea
 
-[`RunPartitionWitnessRelation`](../bench/utils/uniq/UniqSpec.dfy) requires nonempty
+[`RunPartitionWitnessRelation`](../bench/utils/uniq/Spec/UniqSpec.dfy) requires nonempty
 runs that concatenate to the input records, records each run's exact length and
 first line, and requires neighboring run representatives to differ under the
 chosen comparison. `GroupRenderRelation` constrains filtering and count prefixes;
 `OutputRelation` combines the record, run, and output partitions.
-[`GroupsWitness` and `OutputRelationForCore`](../bench/utils/uniq/UniqProof.dfy)
+[`GroupsWitness` and `OutputRelationForCore`](../bench/utils/uniq/Proof/UniqProof.dfy)
 construct those partitions and rendering fragments. Field-skip canonicality
 lemmas connect the executable comparison to the specified field boundaries before
 the grouping argument uses it.
@@ -401,7 +401,7 @@ the grouping argument uses it.
 
 ### Implementation
 
-[`CountDataMethod`](../bench/utils/wc/WcCore.dfy) scans bytes once, tracking newline
+[`CountDataMethod`](../bench/utils/wc/Impl/WcCore.dfy) scans bytes once, tracking newline
 count, word starts, byte/character count, current display column, and maximum
 column. This model makes character count equal byte count; word whitespace and
 display-width behavior are the explicit rules in `IsWordSpace` and `NextLineLen`.
@@ -413,11 +413,11 @@ zero-count directory case.
 
 ### Proof idea
 
-[`CountRelation`](../bench/utils/wc/WcSpec.dfy) equates counts to input length and
+[`CountRelation`](../bench/utils/wc/Spec/WcSpec.dfy) equates counts to input length and
 the cardinalities of newline and word-start index sets. A column trace and
 `MaximumRelation` characterize the maximum width. The scan maintains those sets
 and column witnesses rather than relying only on matching an executable counter.
-[`CountWitnessImpliesRelation`](../bench/utils/wc/WcProof.dfy) projects them into
+[`CountWitnessImpliesRelation`](../bench/utils/wc/Proof/WcProof.dfy) projects them into
 the specification. `RunOutputRelationForCore` separately supplies total-count,
 field-width, decimal-rendering, and output-fragment witnesses; the ordered input
 trace then ties the rendered entries and diagnostics to actual read outcomes.

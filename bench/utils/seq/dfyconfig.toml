@@ -1,4 +1,4 @@
-includes = ["SeqCli.dfy"]
+includes = ["Impl/SeqCli.dfy"]
 
 [options]
 target = "cs"

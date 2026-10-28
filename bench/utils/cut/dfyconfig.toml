@@ -1,4 +1,4 @@
-includes = ["CutCli.dfy"]
+includes = ["Impl/CutCli.dfy"]
 
 [options]
 target = "cs"

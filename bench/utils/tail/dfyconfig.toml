@@ -1,4 +1,4 @@
-includes = ["TailCli.dfy"]
+includes = ["Impl/TailCli.dfy"]
 
 [options]
 target = "cs"

@@ -24,9 +24,9 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_SEQ_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "seq_bench.dll")
 COREUTILS_SEQ = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "seq")
 SEQ_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "seq" / "SeqCore.dfy",
-    ROOT / "bench" / "utils" / "seq" / "SeqProof.dfy",
-    ROOT / "bench" / "utils" / "seq" / "Seq.dfy",
+    ROOT / "bench" / "utils" / "seq" / "Impl/SeqCore.dfy",
+    ROOT / "bench" / "utils" / "seq" / "Proof/SeqProof.dfy",
+    ROOT / "bench" / "utils" / "seq" / "Impl/Seq.dfy",
 ]
 
 

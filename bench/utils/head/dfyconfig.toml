@@ -1,4 +1,4 @@
-includes = ["HeadCli.dfy"]
+includes = ["Impl/HeadCli.dfy"]
 
 [options]
 target = "cs"

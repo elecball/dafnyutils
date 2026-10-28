@@ -30,9 +30,9 @@ COREUTILS_TOUCH = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "s
 TOUCH_TIME_PARSER = ROOT / "_build" / "bench" / "touch_time_parser"
 TOUCH_TIME_PARSER_PROTOCOL = "dafnyutils-touch-time-parser-v1"
 TOUCH_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "touch" / "TouchCore.dfy",
-    ROOT / "bench" / "utils" / "touch" / "TouchProof.dfy",
-    ROOT / "bench" / "utils" / "touch" / "Touch.dfy",
+    ROOT / "bench" / "utils" / "touch" / "Impl/TouchCore.dfy",
+    ROOT / "bench" / "utils" / "touch" / "Proof/TouchProof.dfy",
+    ROOT / "bench" / "utils" / "touch" / "Impl/Touch.dfy",
 ]
 INITIAL_ATIME_NS = 946_684_800_123_456_789
 INITIAL_MTIME_NS = 946_684_801_987_654_321
@@ -62,7 +62,7 @@ def latest_bench_touch_source_mtime() -> float:
         ROOT / "bench" / "core" / "TouchTimeParser.c",
     ]
     sources.extend((ROOT / "bench" / "core").glob("*.dfy"))
-    sources.extend((ROOT / "bench" / "utils" / "touch").glob("*.dfy"))
+    sources.extend((ROOT / "bench" / "utils" / "touch").rglob("*.dfy"))
     newest = 0.0
     for source in sources:
         try:

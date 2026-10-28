@@ -23,11 +23,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_BASE64_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "base64_bench.dll")
 COREUTILS_BASE64 = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "base64")
 BASE64_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "base64" / "Base64Schema.dfy",
-    ROOT / "bench" / "utils" / "base64" / "Base64Core.dfy",
-    ROOT / "bench" / "utils" / "base64" / "Base64Spec.dfy",
-    ROOT / "bench" / "utils" / "base64" / "Base64Proof.dfy",
-    ROOT / "bench" / "utils" / "base64" / "Base64.dfy",
+    ROOT / "bench" / "utils" / "base64" / "Spec/Base64Schema.dfy",
+    ROOT / "bench" / "utils" / "base64" / "Impl/Base64Core.dfy",
+    ROOT / "bench" / "utils" / "base64" / "Spec/Base64Spec.dfy",
+    ROOT / "bench" / "utils" / "base64" / "Proof/Base64Proof.dfy",
+    ROOT / "bench" / "utils" / "base64" / "Impl/Base64.dfy",
 ]
 
 

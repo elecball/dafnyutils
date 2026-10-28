@@ -1,4 +1,4 @@
-includes = ["StatCli.dfy"]
+includes = ["Impl/StatCli.dfy"]
 
 [options]
 target = "cs"

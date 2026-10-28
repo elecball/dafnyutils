@@ -1,4 +1,4 @@
-includes = ["CpCli.dfy"]
+includes = ["Impl/CpCli.dfy"]
 
 [options]
 target = "cs"

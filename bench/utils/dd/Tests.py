@@ -181,7 +181,7 @@ def test_full_output(executables: tuple[Path, Path], operands: list[str], payloa
 
 # Verify every task-local module needed for the direct RunCore specification.
 @pytest.mark.dafny_verify
-@pytest.mark.parametrize("filename", ["DdCore.dfy", "DdProof.dfy", "Dd.dfy"])
+@pytest.mark.parametrize("filename", ["Impl/DdCore.dfy", "Proof/DdProof.dfy", "Impl/Dd.dfy"])
 def test_verify_module(filename: str) -> None:
     # upstream: none - Checks the proof surface independently of GNU parity.
     run_dafny_verify(PROJECT / filename)

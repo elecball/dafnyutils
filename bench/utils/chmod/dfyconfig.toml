@@ -1,4 +1,4 @@
-includes = ["ChmodCli.dfy"]
+includes = ["Impl/ChmodCli.dfy"]
 
 [options]
 target = "cs"

@@ -1,4 +1,4 @@
-includes = ["TeeCli.dfy"]
+includes = ["Impl/TeeCli.dfy"]
 
 [options]
 target = "cs"

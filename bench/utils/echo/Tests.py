@@ -24,9 +24,9 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_ECHO_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "echo_bench.dll")
 COREUTILS_ECHO = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "echo")
 ECHO_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "echo" / "EchoCore.dfy",
-    ROOT / "bench" / "utils" / "echo" / "EchoProof.dfy",
-    ROOT / "bench" / "utils" / "echo" / "Echo.dfy",
+    ROOT / "bench" / "utils" / "echo" / "Impl/EchoCore.dfy",
+    ROOT / "bench" / "utils" / "echo" / "Proof/EchoProof.dfy",
+    ROOT / "bench" / "utils" / "echo" / "Impl/Echo.dfy",
 ]
 
 

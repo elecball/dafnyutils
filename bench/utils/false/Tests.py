@@ -25,9 +25,9 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_FALSE_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "false_bench.dll")
 COREUTILS_FALSE = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "false")
 FALSE_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "false" / "FalseCore.dfy",
-    ROOT / "bench" / "utils" / "false" / "FalseProof.dfy",
-    ROOT / "bench" / "utils" / "false" / "False.dfy",
+    ROOT / "bench" / "utils" / "false" / "Impl/FalseCore.dfy",
+    ROOT / "bench" / "utils" / "false" / "Proof/FalseProof.dfy",
+    ROOT / "bench" / "utils" / "false" / "Impl/False.dfy",
 ]
 
 
@@ -45,7 +45,7 @@ def latest_bench_false_source_mtime() -> float:
         ROOT / "bench" / "core" / "IOExtern.cs",
     ]
     sources.extend((ROOT / "bench" / "core").glob("*.dfy"))
-    sources.extend((ROOT / "bench" / "utils" / "false").glob("*.dfy"))
+    sources.extend((ROOT / "bench" / "utils" / "false").rglob("*.dfy"))
     newest = 0.0
     for source in sources:
         try:

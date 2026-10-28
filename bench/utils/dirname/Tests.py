@@ -30,9 +30,9 @@ COREUTILS_DIRNAME = coreutils_binary_path(
     ROOT / "_build" / "coreutils" / "src" / "dirname",
 )
 DIRNAME_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "dirname" / "DirnameCore.dfy",
-    ROOT / "bench" / "utils" / "dirname" / "DirnameProof.dfy",
-    ROOT / "bench" / "utils" / "dirname" / "Dirname.dfy",
+    ROOT / "bench" / "utils" / "dirname" / "Impl/DirnameCore.dfy",
+    ROOT / "bench" / "utils" / "dirname" / "Proof/DirnameProof.dfy",
+    ROOT / "bench" / "utils" / "dirname" / "Impl/Dirname.dfy",
 ]
 
 
@@ -50,7 +50,7 @@ def latest_bench_dirname_source_mtime() -> float:
         ROOT / "bench" / "core" / "IOExtern.cs",
     ]
     sources.extend((ROOT / "bench" / "core").glob("*.dfy"))
-    sources.extend((ROOT / "bench" / "utils" / "dirname").glob("*.dfy"))
+    sources.extend((ROOT / "bench" / "utils" / "dirname").rglob("*.dfy"))
     newest = 0.0
     for source in sources:
         try:

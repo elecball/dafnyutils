@@ -1,0 +1,509 @@
+include "../Spec/HeadSpec.dfy"
+include "../../../core/World.dfy"
+include "../../../core/IO.dfy"
+include "../../../core/IOContract.dfy"
+include "../Spec/HeadSchema.dfy"
+include "HeadRecordCore.dfy"
+
+module HeadCore {
+  import StreamContract = IOContract
+
+  import Result = Results
+  import BenchIO
+  import BenchWorld
+  import IOContract
+  import HeadSchema
+  import HeadRecordCore
+  import HeadRecordSpec
+  import Spec = HeadSpec
+
+  ghost function PrefixStdinCore(cmd: HeadSchema.HeadCmd, preStdin: BenchWorld.Bytes, i: nat, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult): BenchWorld.Bytes
+    requires i <= |cmd.inputs|
+    decreases i
+  {
+    if i == 0 then
+      preStdin
+    else
+      match cmd.inputs[i - 1]
+      case Stdin(_) => IOContract.ObservedReadStdinRemainingFields(PrefixStdinCore(cmd, preStdin, i - 1, preStreams), preStreams)
+      case File(_) => PrefixStdinCore(cmd, preStdin, i - 1, preStreams)
+  }
+
+  ghost function ReadResultCore(
+    cmd: HeadSchema.HeadCmd,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes,
+    i: nat
+  ): BenchWorld.IOResult<BenchWorld.Bytes>
+    requires i < |cmd.inputs|
+  {
+    match cmd.inputs[i]
+    case Stdin(_) => IOContract.ObservedReadStdinResultFields(PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
+    case File(path) => IOContract.ObservedReadFileResultFields(preFs, preStreams, path)
+  }
+
+  function TakeFirstBytes(data: BenchWorld.Bytes, count: nat): BenchWorld.Bytes
+  {
+    if |data| <= count then data else data[..count]
+  } by method {
+    return if |data| <= count then data else data[..count];
+  }
+
+  function TakeAllButLastBytes(data: BenchWorld.Bytes, count: nat): BenchWorld.Bytes
+  {
+    if |data| <= count then [] else data[..|data| - count]
+  } by method {
+    return if |data| <= count then [] else data[..|data| - count];
+  }
+
+  function RenderData(cmd: HeadSchema.HeadCmd, data: BenchWorld.Bytes): BenchWorld.Bytes
+  {
+    if cmd.selection.unit == HeadSchema.CountBytes then
+      if cmd.selection.fromEnd then TakeAllButLastBytes(data, cmd.selection.amount) else TakeFirstBytes(data, cmd.selection.amount)
+    else
+      var delimiter := HeadRecordSpec.RecordDelimiter(cmd.zeroTerminated);
+      if cmd.selection.fromEnd then
+        HeadRecordCore.TakeAllButLastRecords(data, cmd.selection.amount, delimiter)
+      else
+        HeadRecordCore.TakeFirstRecords(data, cmd.selection.amount, delimiter)
+  } by method {
+    if cmd.selection.unit == HeadSchema.CountBytes {
+      if cmd.selection.fromEnd {
+        return TakeAllButLastBytes(data, cmd.selection.amount);
+      } else {
+        return TakeFirstBytes(data, cmd.selection.amount);
+      }
+    } else {
+      var delimiter := HeadRecordSpec.RecordDelimiter(cmd.zeroTerminated);
+      if cmd.selection.fromEnd {
+        return HeadRecordCore.TakeAllButLastRecords(
+            data, cmd.selection.amount, delimiter
+          );
+      } else {
+        return HeadRecordCore.TakeFirstRecords(
+            data, cmd.selection.amount, delimiter
+          );
+      }
+    }
+  }
+
+  function IsSuccessfulRead(result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
+  {
+    match result
+    case Ok(_) => true
+    case Err(error) => (error.StreamFailure? || (error.ReadFailure? && error.readStage == BenchWorld.CloseFailed))
+  } by method {
+    return
+      match result
+      case Ok(_) => true
+      case Err(error) => (error.StreamFailure? || (error.ReadFailure? && error.readStage == BenchWorld.CloseFailed));
+  }
+
+  function OutputPiece(
+    cmd: HeadSchema.HeadCmd,
+    input: HeadSchema.Input,
+    result: BenchWorld.IOResult<BenchWorld.Bytes>,
+                                printedHeaders: int
+  ): BenchWorld.Bytes
+  {
+    match result
+    case Ok(data) => Spec.HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, data)
+    case Err(error) => if (error.StreamFailure? || (error.ReadFailure? && error.readStage == BenchWorld.CloseFailed)) then Spec.HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, error.partial) else []
+  } by method {
+    match result
+    case Ok(data) =>
+      return Spec.HeaderForInput(cmd, input, printedHeaders) +
+        RenderData(cmd, data);
+    case Err(error) =>
+      return if (error.StreamFailure? || (error.ReadFailure? && error.readStage == BenchWorld.CloseFailed)) then Spec.HeaderForInput(cmd, input, printedHeaders) + RenderData(cmd, error.partial) else [];
+  }
+
+  function ErrorPiece(input: HeadSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): BenchWorld.Bytes
+  {
+    match input
+    case Stdin(_) => if result.Err? then Spec.StdinReadErrorMessage(result.e) else []
+    case File(path) =>
+      match result
+      case Ok(_) => []
+      case Err(err) => Spec.ErrorMessage(path, err)
+  } by method {
+    match input
+    case Stdin(_) =>
+      return if result.Err? then Spec.StdinReadErrorMessage(result.e) else [];
+    case File(path) =>
+      match result
+      case Ok(_) =>
+        return [];
+      case Err(err) =>
+        return Spec.ErrorMessage(path, err);
+  }
+
+  function HadErrorPiece(input: HeadSchema.Input, result: BenchWorld.IOResult<BenchWorld.Bytes>): bool
+  {
+    match input
+    case Stdin(_) => result.Err?
+    case File(_) =>
+      match result
+      case Ok(_) => false
+      case Err(_) => true
+  } by method {
+    return
+      match input
+      case Stdin(_) => result.Err?
+      case File(_) =>
+        match result
+        case Ok(_) => false
+        case Err(_) => true;
+  }
+
+  ghost function PrefixSuccessCountCore(
+    cmd: HeadSchema.HeadCmd,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes,
+    i: nat
+  ): nat
+    requires i <= |cmd.inputs|
+    decreases i
+  {
+    if i == 0 then
+      0
+    else
+      PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i - 1) +
+      (if IsSuccessfulRead(ReadResultCore(cmd, preFs, preStreams, preStdin, i - 1)) then 1 else 0)
+  }
+
+  ghost function PrefixOutputCore(
+    cmd: HeadSchema.HeadCmd,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes,
+    i: nat
+  ): BenchWorld.Bytes
+    requires i <= |cmd.inputs|
+    decreases i
+  {
+    if i == 0 then
+      []
+    else
+      PrefixOutputCore(cmd, preFs, preStreams, preStdin, i - 1) +
+      OutputPiece(
+        cmd,
+        cmd.inputs[i - 1],
+        ReadResultCore(cmd, preFs, preStreams, preStdin, i - 1),
+        PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i - 1)
+      )
+  }
+
+  ghost function PrefixErrorOutputCore(
+    cmd: HeadSchema.HeadCmd,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes,
+    i: nat
+  ): BenchWorld.Bytes
+    requires i <= |cmd.inputs|
+    decreases i
+  {
+    if i == 0 then
+      []
+    else
+      PrefixErrorOutputCore(cmd, preFs, preStreams, preStdin, i - 1) +
+      ErrorPiece(cmd.inputs[i - 1], ReadResultCore(cmd, preFs, preStreams, preStdin, i - 1))
+  }
+
+  ghost function PrefixHadErrorCore(
+    cmd: HeadSchema.HeadCmd,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes,
+    i: nat
+  ): bool
+    requires i <= |cmd.inputs|
+    decreases i
+  {
+    if i == 0 then
+      false
+    else
+      PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, i - 1) ||
+      HadErrorPiece(cmd.inputs[i - 1], ReadResultCore(cmd, preFs, preStreams, preStdin, i - 1))
+  }
+
+  ghost function RunOutputCore(
+    cmd: HeadSchema.HeadCmd,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes
+  ): BenchWorld.Bytes
+  {
+    PrefixOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|)
+  }
+
+  twostate predicate PreparedSummary(raw: HeadSchema.HeadCmdRaw, io: BenchIO.IO, exit: int, plannedStdout: BenchWorld.Bytes, plannedStderr: BenchWorld.Bytes)
+    reads io.stdinRegion
+  {
+    var cmd := Spec.Command(raw);
+    if cmd.mode == HeadSchema.ModeHelp then
+      io.stdin() == old(io.stdin()) &&
+      plannedStdout == old(io.stdout()) + Spec.HelpText() &&
+      plannedStderr == old(io.stderr()) &&
+      exit == 0
+    else if cmd.mode == HeadSchema.ModeVersion then
+      io.stdin() == old(io.stdin()) &&
+      plannedStdout == old(io.stdout()) + Spec.VersionText() &&
+      plannedStderr == old(io.stderr()) &&
+      exit == 0
+    else if cmd.mode == HeadSchema.ModeInvalidCount then
+      io.stdin() == old(io.stdin()) &&
+      plannedStdout == old(io.stdout()) &&
+      plannedStderr == old(io.stderr()) + Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue) &&
+      exit == 1
+    else
+      io.stdin() == PrefixStdinCore(cmd, old(io.stdin()), |cmd.inputs|, old(io.trustedStreams())) &&
+      plannedStdout == old(io.stdout()) + RunOutputCore(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin())) &&
+      plannedStderr == old(io.stderr()) + PrefixErrorOutputCore(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()), |cmd.inputs|) &&
+      exit == (if PrefixHadErrorCore(cmd, old(io.fs()), old(io.trustedStreams()), old(io.stdin()), |cmd.inputs|) then 1 else 0)
+  }
+
+  lemma PrefixStdinCoreStep(cmd: HeadSchema.HeadCmd, preStdin: BenchWorld.Bytes, i: nat, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult)
+    requires i < |cmd.inputs|
+    ensures PrefixStdinCore(cmd, preStdin, i + 1, preStreams) ==
+            match cmd.inputs[i]
+            case Stdin(_) => IOContract.ObservedReadStdinRemainingFields(PrefixStdinCore(cmd, preStdin, i, preStreams), preStreams)
+            case File(_) => PrefixStdinCore(cmd, preStdin, i, preStreams)
+  {
+  }
+
+  lemma PrefixSuccessCountCoreStep(
+    cmd: HeadSchema.HeadCmd,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes,
+    i: nat
+  )
+    requires i < |cmd.inputs|
+    ensures PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i + 1) ==
+            PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i) +
+            (if IsSuccessfulRead(ReadResultCore(cmd, preFs, preStreams, preStdin, i)) then 1 else 0)
+  {
+  }
+
+  lemma PrefixOutputCoreStep(
+    cmd: HeadSchema.HeadCmd,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes,
+    i: nat
+  )
+    requires i < |cmd.inputs|
+    ensures PrefixOutputCore(cmd, preFs, preStreams, preStdin, i + 1) ==
+            PrefixOutputCore(cmd, preFs, preStreams, preStdin, i) +
+            OutputPiece(
+              cmd,
+              cmd.inputs[i],
+              ReadResultCore(cmd, preFs, preStreams, preStdin, i),
+              PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i)
+            )
+  {
+  }
+
+  lemma PrefixErrorOutputCoreStep(
+    cmd: HeadSchema.HeadCmd,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes,
+    i: nat
+  )
+    requires i < |cmd.inputs|
+    ensures PrefixErrorOutputCore(cmd, preFs, preStreams, preStdin, i + 1) ==
+            PrefixErrorOutputCore(cmd, preFs, preStreams, preStdin, i) +
+            ErrorPiece(cmd.inputs[i], ReadResultCore(cmd, preFs, preStreams, preStdin, i))
+  {
+  }
+
+  lemma PrefixHadErrorCoreStep(
+    cmd: HeadSchema.HeadCmd,
+    preFs: BenchWorld.FileSystem, preStreams: (BenchWorld.TrustedStreamRequest) -> BenchWorld.TrustedStreamResult,
+    preStdin: BenchWorld.Bytes,
+    i: nat
+  )
+    requires i < |cmd.inputs|
+    ensures PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, i + 1) ==
+            (PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, i) ||
+             HadErrorPiece(cmd.inputs[i], ReadResultCore(cmd, preFs, preStreams, preStdin, i)))
+  {
+  }
+
+  method {:isolate_assertions} Prepare(raw: HeadSchema.HeadCmdRaw, io: BenchIO.IO) returns (exit: int, plannedOut: BenchWorld.Bytes, plannedErr: BenchWorld.Bytes)
+    modifies io.stdinRegion
+    ensures PreparedSummary(raw, io, exit, old(io.stdout()) + plannedOut, old(io.stderr()) + plannedErr)
+    decreases *
+  {
+    hide *;
+    reveal PreparedSummary(), PrefixStdinCore(), PrefixOutputCore(), PrefixErrorOutputCore();
+    reveal PrefixHadErrorCore(), PrefixSuccessCountCore(), RunOutputCore(), ReadResultCore();
+    plannedOut := [];
+    plannedErr := [];
+    ghost var initialStdout := io.stdout();
+    ghost var initialStderr := io.stderr();
+
+    ghost var preFs := io.fs();
+    ghost var preStreams := io.trustedStreams();
+    ghost var preStdin := io.stdin();
+    ghost var preStdout := (initialStdout + plannedOut);
+    ghost var preStderr := (initialStderr + plannedErr);
+    var cmd := Spec.Command(raw);
+
+    if cmd.mode == HeadSchema.ModeHelp {
+      var help := Spec.HelpText();
+      plannedOut := plannedOut + help;
+      exit := 0;
+      assert io.stdin() == preStdin;
+      assert (initialStderr + plannedErr) == preStderr;
+      assert (initialStdout + plannedOut) == preStdout + Spec.HelpText();
+      return;
+    }
+
+    if cmd.mode == HeadSchema.ModeVersion {
+      var version := Spec.VersionText();
+      plannedOut := plannedOut + version;
+      exit := 0;
+      assert io.stdin() == preStdin;
+      assert (initialStderr + plannedErr) == preStderr;
+      assert (initialStdout + plannedOut) == preStdout + Spec.VersionText();
+      return;
+    }
+
+    if cmd.mode == HeadSchema.ModeInvalidCount {
+      var invalid :=
+        Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
+      plannedErr := plannedErr + invalid;
+      exit := 1;
+      assert io.stdin() == preStdin;
+      assert (initialStdout + plannedOut) == preStdout;
+      assert (initialStderr + plannedErr) == preStderr + Spec.InvalidCountMessage(cmd.invalidCountUnit, cmd.invalidCountValue);
+      return;
+    }
+
+    var out: BenchWorld.Bytes := [];
+    var err: BenchWorld.Bytes := [];
+    var hadError := false;
+    var successes := 0;
+
+    var i := 0;
+    while i < |cmd.inputs|
+      invariant 0 <= i <= |cmd.inputs|
+      invariant io.stdin() == PrefixStdinCore(cmd, preStdin, i, preStreams)
+      invariant (initialStdout + plannedOut) == preStdout
+      invariant (initialStderr + plannedErr) == preStderr
+      invariant out == PrefixOutputCore(cmd, preFs, preStreams, preStdin, i)
+      invariant err == PrefixErrorOutputCore(cmd, preFs, preStreams, preStdin, i)
+      invariant hadError == PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, i)
+      invariant successes == PrefixSuccessCountCore(cmd, preFs, preStreams, preStdin, i)
+      decreases |cmd.inputs| - i
+    {
+      var input := cmd.inputs[i];
+      var readResult: BenchWorld.IOResult<BenchWorld.Bytes>;
+      match input {
+        case Stdin(_) =>
+          ghost var beforeStdin := io.stdin();
+          readResult := io.ReadStdin();
+          PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
+          PrefixSuccessCountCoreStep(cmd, preFs, preStreams, preStdin, i);
+          PrefixOutputCoreStep(cmd, preFs, preStreams, preStdin, i);
+          PrefixErrorOutputCoreStep(cmd, preFs, preStreams, preStdin, i);
+          PrefixHadErrorCoreStep(cmd, preFs, preStreams, preStdin, i);
+          assert beforeStdin == PrefixStdinCore(cmd, preStdin, i, preStreams);
+          assert readResult == IOContract.ObservedReadStdinResultFields(beforeStdin, preStreams);
+        case File(path) =>
+          readResult := io.ReadFile(path);
+      }
+      if input.File? {
+        PrefixStdinCoreStep(cmd, preStdin, i, preStreams);
+        PrefixSuccessCountCoreStep(cmd, preFs, preStreams, preStdin, i);
+        PrefixOutputCoreStep(cmd, preFs, preStreams, preStdin, i);
+        PrefixErrorOutputCoreStep(cmd, preFs, preStreams, preStdin, i);
+        PrefixHadErrorCoreStep(cmd, preFs, preStreams, preStdin, i);
+      }
+      assert readResult == ReadResultCore(cmd, preFs, preStreams, preStdin, i);
+
+      var piece := OutputPiece(cmd, input, readResult, successes);
+      var errorPiece := ErrorPiece(input, readResult);
+      var inputHadError := HadErrorPiece(input, readResult);
+      var ok := IsSuccessfulRead(readResult);
+
+      out := out + piece;
+      err := err + errorPiece;
+      hadError := hadError || inputHadError;
+      successes := successes + (if ok then 1 else 0);
+      i := i + 1;
+    }
+
+    if |out| > 0 {
+      plannedOut := plannedOut + out;
+    } else {
+      assert out == [];
+      assert (initialStdout + plannedOut) == preStdout + out;
+    }
+    if |err| > 0 {
+      plannedErr := plannedErr + err;
+    } else {
+      assert err == [];
+      assert (initialStderr + plannedErr) == preStderr + err;
+    }
+    exit := if hadError then 1 else 0;
+
+    assert out == RunOutputCore(cmd, preFs, preStreams, preStdin);
+    assert err == PrefixErrorOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|);
+    assert hadError == PrefixHadErrorCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|);
+    assert io.stdin() == PrefixStdinCore(cmd, preStdin, |cmd.inputs|, preStreams);
+    assert (initialStdout + plannedOut) == preStdout + RunOutputCore(cmd, preFs, preStreams, preStdin);
+    assert (initialStderr + plannedErr) == preStderr + PrefixErrorOutputCore(cmd, preFs, preStreams, preStdin, |cmd.inputs|);
+  }
+
+  twostate predicate CoreSummary(raw: HeadSchema.HeadCmdRaw, io: BenchIO.IO, exit: int)
+    reads io.stdinRegion, io.stdoutRegion, io.stderrRegion
+  {
+    exists out: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int ::
+      PreparedSummary(raw, io, normalExit,
+                      old(io.stdout()) + out, old(io.stderr()) + diagnostics) &&
+      Spec.Emission(raw, io, out, diagnostics, normalExit, exit)
+  }
+
+  method Flush(io: BenchIO.IO, out: BenchWorld.Bytes,
+               diagnostics: BenchWorld.Bytes, normalExit: int) returns (exit: int)
+    modifies io.stdoutRegion, io.stderrRegion
+    ensures Spec.EmitFields(old(io.trustedStreams()), old(io.stdout()), old(io.stderr()),
+                            io.stdout(), io.stderr(), out, diagnostics, normalExit, exit)
+  {
+    var outErr := 0;
+    if out != [] {
+      var written := io.WriteStdout(out);
+      outErr := StreamContract.ResultErrno(written);
+    }
+    var errors := diagnostics;
+    if outErr != 0 {
+      var message := io.GetCLocaleErrnoText(outErr);
+      errors := errors + Spec.StreamWriteErrorMessage(message);
+    }
+    assert errors == diagnostics + (if outErr == 0 then [] else
+                                    Spec.StreamWriteErrorMessage(StreamContract.CLocaleErrnoTextResult(outErr)));
+    var errErr := 0;
+    if errors != [] {
+      var diagnosed := io.WriteStderr(errors);
+      errErr := StreamContract.ResultErrno(diagnosed);
+      assert StreamContract.WriteStderrSpec(old(io.stderr()), io.trustedStreams(), io.stderr(),
+                                            errors, StreamContract.WriteResultCommitted(diagnosed), errErr);
+    }
+    exit := if outErr != 0 || errErr != 0 then 1 else normalExit;
+  }
+
+  method RunCore(raw: HeadSchema.HeadCmdRaw, io: BenchIO.IO) returns (exit: int)
+    modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+    ensures CoreSummary(raw, io, exit)
+    decreases *
+  {
+    var normalExit, out, diagnostics := Prepare(raw, io);
+
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    if Spec.Emits(raw) {
+      exit := Flush(io, out, diagnostics, normalExit);
+    } else {
+      exit := normalExit;
+    }
+    assert PreparedSummary(raw, io, normalExit, old(io.stdout()) + out, old(io.stderr()) + diagnostics);
+    assert Spec.Emission(raw, io, out, diagnostics, normalExit, exit);
+  }
+}

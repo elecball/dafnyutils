@@ -1,5 +1,5 @@
-include "{{CLASS_NAME}}Spec.dfy"
-include "{{CLASS_NAME}}Core.dfy"
+include "{{SPEC_PREFIX}}{{CLASS_NAME}}Spec.dfy"
+include "{{IMPL_PREFIX}}{{CLASS_NAME}}Core.dfy"
 
 module {{CLASS_NAME}}Proof {
   import BenchIO

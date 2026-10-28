@@ -253,32 +253,32 @@ def test_version_exit_successfully_matches_coreutils() -> None:
 @pytest.mark.dafny_verify
 def test_fold_schema_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "fold" / "FoldSchema.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "fold" / "Spec/FoldSchema.dfy")
 
 
 # The fold executable core module verifies independently.
 @pytest.mark.dafny_verify
 def test_fold_core_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "fold" / "FoldCore.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "fold" / "Impl/FoldCore.dfy")
 
 
 # The fold world-transition spec module verifies independently.
 @pytest.mark.dafny_verify
 def test_fold_spec_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "fold" / "FoldSpec.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "fold" / "Spec/FoldSpec.dfy")
 
 
 # The fold proof bridge module verifies independently.
 @pytest.mark.dafny_verify
 def test_fold_proof_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "fold" / "FoldProof.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "fold" / "Proof/FoldProof.dfy")
 
 
 # The fold benchmark item module verifies independently.
 @pytest.mark.dafny_verify
 def test_fold_benchmark_item_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "fold" / "Fold.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "fold" / "Impl/Fold.dfy")

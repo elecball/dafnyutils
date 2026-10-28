@@ -362,7 +362,9 @@ def test_no_permission_matches_coreutils(executables: tuple[Path, Path], tmp_pat
 
 # Check each proof module as well as the entry contract required by make check.
 @pytest.mark.dafny_verify
-@pytest.mark.parametrize("filename", ["UnlinkCore.dfy", "UnlinkProof.dfy", "Unlink.dfy"])
+@pytest.mark.parametrize(
+    "filename", ["Impl/UnlinkCore.dfy", "Proof/UnlinkProof.dfy", "Impl/Unlink.dfy"]
+)
 def test_verify_module(filename: str) -> None:
     # upstream: none - Checks the Dafny proof surface.
     # upstream-reason: verification.

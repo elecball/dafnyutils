@@ -1,4 +1,4 @@
-includes = ["{{CLASS_NAME}}Cli.dfy"]
+includes = ["{{ENTRY_PREFIX}}{{CLASS_NAME}}Cli.dfy"]
 
 [options]
 target = "cs"

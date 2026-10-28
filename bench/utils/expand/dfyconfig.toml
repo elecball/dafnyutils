@@ -1,4 +1,4 @@
-includes = ["ExpandCli.dfy"]
+includes = ["Impl/ExpandCli.dfy"]
 
 [options]
 target = "cs"

@@ -1,4 +1,4 @@
-includes = ["PrintenvCli.dfy"]
+includes = ["Impl/PrintenvCli.dfy"]
 
 [options]
 target = "cs"

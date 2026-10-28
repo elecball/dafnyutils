@@ -313,35 +313,35 @@ def test_deferred_tr_regressions_inventory() -> None:
 @pytest.mark.dafny_verify
 def test_tr_schema_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "tr" / "TrSchema.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "tr" / "Spec/TrSchema.dfy")
 
 
 # The tr executable core module verifies independently.
 @pytest.mark.dafny_verify
 def test_tr_core_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "tr" / "TrCore.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "tr" / "Impl/TrCore.dfy")
 
 
 # The tr world-transition spec module verifies independently.
 @pytest.mark.dafny_verify
 def test_tr_spec_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "tr" / "TrSpec.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "tr" / "Spec/TrSpec.dfy")
 
 
 # The tr proof bridge module verifies independently.
 @pytest.mark.dafny_verify
 def test_tr_proof_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "tr" / "TrProof.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "tr" / "Proof/TrProof.dfy")
 
 
 # The tr benchmark item module verifies independently.
 @pytest.mark.dafny_verify
 def test_tr_benchmark_item_verifies() -> None:
     # upstream: none - Verifies the Dafny proof surface rather than an upstream runtime script.
-    run_dafny_verify(ROOT / "bench" / "utils" / "tr" / "Tr.dfy")
+    run_dafny_verify(ROOT / "bench" / "utils" / "tr" / "Impl/Tr.dfy")
 
 
 # Extra set operands use GNU's C-locale byte escapes.

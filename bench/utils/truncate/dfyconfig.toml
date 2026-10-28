@@ -1,4 +1,4 @@
-includes = ["TruncateCli.dfy"]
+includes = ["Impl/TruncateCli.dfy"]
 
 [options]
 target = "cs"

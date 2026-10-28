@@ -2250,16 +2250,16 @@ def test_upstream_directory_setgid_rows(mode: str, expected_mode: int) -> None:
 @pytest.mark.parametrize(
     "source_name",
     (
-        "ChmodSpec.dfy",
-        "ChmodCore.dfy",
-        "ChmodProof.dfy",
-        "ChmodRecursiveSpec.dfy",
-        "ChmodRecursiveCore.dfy",
-        "ChmodRecursiveProof.dfy",
+        "Spec/ChmodSpec.dfy",
+        "Impl/ChmodCore.dfy",
+        "Proof/ChmodProof.dfy",
+        "Spec/ChmodRecursiveSpec.dfy",
+        "Impl/ChmodRecursiveCore.dfy",
+        "Proof/ChmodRecursiveProof.dfy",
         "ChmodRecursiveLeafRuntime.dfy",
         "ChmodRecursiveRuntime.dfy",
-        "Chmod.dfy",
-        "ChmodCli.dfy",
+        "Impl/Chmod.dfy",
+        "Impl/ChmodCli.dfy",
     ),
 )
 def test_chmod_source_verifies(source_name: str) -> None:

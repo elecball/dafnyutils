@@ -1,4 +1,4 @@
-include "../../bench/utils/nl/NlSpec.dfy"
+include "../../bench/utils/nl/Spec/NlSpec.dfy"
 
 module NlUtf8SeparatorRegression {
   import S = NlSchema

@@ -1,4 +1,4 @@
-includes = ["LinkCli.dfy"]
+includes = ["Impl/LinkCli.dfy"]
 
 [options]
 target = "cs"

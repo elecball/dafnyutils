@@ -29,9 +29,9 @@ COREUTILS_LOGNAME = coreutils_binary_path(
     ROOT / "_build" / "coreutils" / "src" / "logname",
 )
 LOGNAME_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "logname" / "LognameCore.dfy",
-    ROOT / "bench" / "utils" / "logname" / "LognameProof.dfy",
-    ROOT / "bench" / "utils" / "logname" / "Logname.dfy",
+    ROOT / "bench" / "utils" / "logname" / "Impl/LognameCore.dfy",
+    ROOT / "bench" / "utils" / "logname" / "Proof/LognameProof.dfy",
+    ROOT / "bench" / "utils" / "logname" / "Impl/Logname.dfy",
 ]
 
 
@@ -49,7 +49,7 @@ def latest_bench_logname_source_mtime() -> float:
         ROOT / "bench" / "core" / "IOExtern.cs",
     ]
     sources.extend((ROOT / "bench" / "core").glob("*.dfy"))
-    sources.extend((ROOT / "bench" / "utils" / "logname").glob("*.dfy"))
+    sources.extend((ROOT / "bench" / "utils" / "logname").rglob("*.dfy"))
     newest = 0.0
     for source in sources:
         try:

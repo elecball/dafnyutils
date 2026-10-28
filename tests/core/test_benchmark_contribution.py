@@ -5,10 +5,48 @@ from pathlib import Path
 import pytest
 
 from benchmarks.definition import BenchmarkDefinition, BenchmarkKind, BenchmarkSource
+from benchmarks.profiles import ResolvedBenchmark, utility_paths
 from benchmarks.repository import BenchmarkRepository
 from benchmarks.selection import affected_task_ids
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+# Utility profiles publish role directories while algorithm profiles retain flat paths.
+@pytest.mark.parametrize(
+    ("task_id", "kind", "directory", "entry"),
+    (
+        ("cat", BenchmarkKind.COREUTILS, "bench/utils/cat", "Impl/Cat.dfy"),
+        ("algorithm-1", BenchmarkKind.ALGORITHM, "bench/algorithm/1", "Algorithm1.dfy"),
+    ),
+)
+def test_profile_source_paths_follow_task_layout(
+    task_id: str, kind: BenchmarkKind, directory: str, entry: str
+) -> None:
+    definition = BenchmarkDefinition.model_validate(
+        {
+            "schema_version": "benchmark.definition.v2",
+            "task_id": task_id,
+            "kind": kind,
+            "source": {"status": "legacy-unverified", "name": "Existing task"},
+            "capabilities": {},
+        }
+    )
+    resolved = ResolvedBenchmark.from_definition(definition)
+    paths = utility_paths(resolved, task_id)
+    assert resolved.task_profile.execution_entry.source_path == entry
+    assert paths["wrapper"] == f"{directory}/{entry}"
+    for key, role in (
+        ("schema", "Spec"),
+        ("spec", "Spec"),
+        ("core", "Impl"),
+        ("proof", "Proof"),
+        ("cli", "Impl"),
+        ("cli_support", "Impl"),
+    ):
+        expected = f"{directory}/{role}" if kind is BenchmarkKind.COREUTILS else directory
+        assert str(Path(paths[key]).parent) == expected
+    assert paths["project_config"] == f"{directory}/dfyconfig.toml"
 
 
 # Registered definitions preserve canonical IDs across utility and algorithm directory layouts.
@@ -105,7 +143,7 @@ def test_verified_provenance_rejects_placeholder_or_malformed_fields(
 def test_affected_task_selection_uses_manifest_families() -> None:
     repository = BenchmarkRepository.open(ROOT)
 
-    assert affected_task_ids(repository, ("bench/utils/cat/CatSpec.dfy",)) == ("cat",)
+    assert affected_task_ids(repository, ("bench/utils/cat/Spec/CatSpec.dfy",)) == ("cat",)
     assert affected_task_ids(repository, ("bench/algorithm/1/Algorithm1Spec.dfy",)) == (
         "algorithm-1",
     )

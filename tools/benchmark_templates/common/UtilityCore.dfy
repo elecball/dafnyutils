@@ -1,5 +1,5 @@
-include "../../core/IO.dfy"
-include "{{CLASS_NAME}}Schema.dfy"
+include "{{CORE_PREFIX}}IO.dfy"
+include "{{SPEC_PREFIX}}{{CLASS_NAME}}Schema.dfy"
 
 module {{CLASS_NAME}}Core {
   import BenchIO

@@ -24,11 +24,11 @@ ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 BENCH_PASTE_DLL = bench_dll_path(ROOT, ROOT / "_build" / "bench" / "paste_bench.dll")
 COREUTILS_PASTE = coreutils_binary_path(ROOT, ROOT / "_build" / "coreutils" / "src" / "paste")
 PASTE_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "paste" / "PasteSchema.dfy",
-    ROOT / "bench" / "utils" / "paste" / "PasteCore.dfy",
-    ROOT / "bench" / "utils" / "paste" / "PasteSpec.dfy",
-    ROOT / "bench" / "utils" / "paste" / "PasteProof.dfy",
-    ROOT / "bench" / "utils" / "paste" / "Paste.dfy",
+    ROOT / "bench" / "utils" / "paste" / "Spec/PasteSchema.dfy",
+    ROOT / "bench" / "utils" / "paste" / "Impl/PasteCore.dfy",
+    ROOT / "bench" / "utils" / "paste" / "Spec/PasteSpec.dfy",
+    ROOT / "bench" / "utils" / "paste" / "Proof/PasteProof.dfy",
+    ROOT / "bench" / "utils" / "paste" / "Impl/Paste.dfy",
 ]
 
 

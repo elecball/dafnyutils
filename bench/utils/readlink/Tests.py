@@ -31,9 +31,9 @@ COREUTILS_READLINK = coreutils_binary_path(
     ROOT / "_build" / "coreutils" / "src" / "readlink",
 )
 READLINK_VERIFY_TARGETS = [
-    ROOT / "bench" / "utils" / "readlink" / "ReadlinkCore.dfy",
-    ROOT / "bench" / "utils" / "readlink" / "ReadlinkProof.dfy",
-    ROOT / "bench" / "utils" / "readlink" / "Readlink.dfy",
+    ROOT / "bench" / "utils" / "readlink" / "Impl/ReadlinkCore.dfy",
+    ROOT / "bench" / "utils" / "readlink" / "Proof/ReadlinkProof.dfy",
+    ROOT / "bench" / "utils" / "readlink" / "Impl/Readlink.dfy",
 ]
 
 

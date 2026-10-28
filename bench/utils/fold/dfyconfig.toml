@@ -1,4 +1,4 @@
-includes = ["FoldCli.dfy"]
+includes = ["Impl/FoldCli.dfy"]
 
 [options]
 target = "cs"

@@ -1,4 +1,4 @@
-includes = ["FactorCli.dfy"]
+includes = ["Impl/FactorCli.dfy"]
 
 [options]
 target = "cs"
