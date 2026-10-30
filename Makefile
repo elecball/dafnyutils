@@ -22,3 +22,11 @@ clean:
 	@test "$(abspath $(or $(BUILD_DIR),_build))" = "$(CURDIR)/_build" || \
 		{ echo 'clean only removes the default _build directory' >&2; exit 2; }
 	rm -rf -- "$(CURDIR)/_build"
+
+# Release maintenance only; these tools never change task delivery or grading.
+.PHONY: public-input-lock public-input-lint
+public-input-lock:
+	@python3 -m tools.public_inputs.cli lock $(if $(TASK),--task $(TASK))
+
+public-input-lint:
+	@python3 -m tools.public_inputs.cli lint $(if $(TASK),--task $(TASK))
