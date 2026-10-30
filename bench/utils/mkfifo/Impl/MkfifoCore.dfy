@@ -1,7 +1,7 @@
-include "../../core/Utf8.dfy"
-include "MkfifoSpec.dfy"
+include "../../../core/Utf8.dfy"
+include "../Spec/MkfifoSpec.dfy"
 include "MkfifoModeCore.dfy"
-include "MkfifoProof.dfy"
+include "../Proof/MkfifoProof.dfy"
 
 module MkfifoCore {
   import BenchIO

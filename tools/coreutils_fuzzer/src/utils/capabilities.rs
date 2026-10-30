@@ -544,8 +544,8 @@ mod tests {
             BTreeSet::from([
                 "cat", "chmod", "comm", "cp", "csplit", "cut", "date", "dd", "du", "expand",
                 "head", "join", "link", "ln", "ls", "mkdir", "mkfifo", "mv", "nl", "paste",
-                "readlink", "realpath", "rm", "rmdir", "stat", "tail", "touch", "truncate", "tsort",
-                "uniq", "unlink", "wc",
+                "readlink", "realpath", "rm", "rmdir", "stat", "tail", "touch", "truncate",
+                "tsort", "uniq", "unlink", "wc",
             ])
         );
     }

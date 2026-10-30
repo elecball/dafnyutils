@@ -1,7 +1,7 @@
-include "MkfifoSpec.dfy"
+include "../Spec/MkfifoSpec.dfy"
 include "CliSupport.dfy"
 include "MkfifoCore.dfy"
-include "MkfifoProof.dfy"
+include "../Proof/MkfifoProof.dfy"
 
 module Mkfifo {
   // CLI codecs are fixed protocol details, outside the candidate API.

@@ -7,10 +7,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-
-from evaluation.environment import EVAL_COREUTILS_BIN_ENV
-from evaluation.submission.candidate_execution import run_candidate
-from tools.bench_test_support import (
+from evaluation.benchmark_test_support import (
     BENCH_COMMAND_TIMEOUT_SEC,
     assert_result_matches_reference,
     bench_dll_path,
@@ -23,6 +20,8 @@ from tools.bench_test_support import (
     run_coreutils_utility,
     run_dafny_verify,
 )
+from evaluation.environment import EVAL_COREUTILS_BIN_ENV
+from evaluation.submission.candidate_execution import run_candidate
 
 ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 UTILITY = "tsort"
@@ -257,15 +256,15 @@ def test_access_denied_matches_coreutils(
 @pytest.mark.parametrize(
     "filename",
     [
-        "TsortCore.dfy",
-        "TsortGraphBuildCore.dfy",
-        "TsortGraphBuildProof.dfy",
-        "TsortState.dfy",
-        "TsortCycleCore.dfy",
-        "TsortStepCore.dfy",
-        "TsortSortCore.dfy",
-        "TsortProof.dfy",
-        "Tsort.dfy",
+        "Impl/TsortCore.dfy",
+        "Impl/TsortGraphBuildCore.dfy",
+        "Proof/TsortGraphBuildProof.dfy",
+        "Impl/TsortState.dfy",
+        "Impl/TsortCycleCore.dfy",
+        "Impl/TsortStepCore.dfy",
+        "Impl/TsortSortCore.dfy",
+        "Proof/TsortProof.dfy",
+        "Impl/Tsort.dfy",
     ],
 )
 def test_verify_module(filename: str) -> None:

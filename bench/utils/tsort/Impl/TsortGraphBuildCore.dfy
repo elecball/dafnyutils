@@ -1,7 +1,7 @@
-include "../../core/World.dfy"
-include "TsortGraphBuildSpec.dfy"
-include "TsortGraphBuildProof.dfy"
-include "TsortSpec.dfy"
+include "../../../core/World.dfy"
+include "../Spec/TsortGraphBuildSpec.dfy"
+include "../Proof/TsortGraphBuildProof.dfy"
+include "../Spec/TsortSpec.dfy"
 
 module TsortGraphBuildCore {
   import BenchWorld

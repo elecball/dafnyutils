@@ -1,4 +1,4 @@
-include "TsortSortSpec.dfy"
+include "../Spec/TsortSortSpec.dfy"
 include "TsortStepProof.dfy"
 
 module TsortSortProof {

@@ -1,5 +1,5 @@
-include "TsortStepSpec.dfy"
-include "TsortSpec.dfy"
+include "../Spec/TsortStepSpec.dfy"
+include "../Spec/TsortSpec.dfy"
 
 module TsortStepProof {
   import BenchWorld
@@ -31,12 +31,19 @@ module TsortStepProof {
     var nextAdded := if ready then added + [successors[count]] else added;
     var nextPositions := if ready then positions + [count] else positions;
     var next := successors[..count + 1];
+    assert forall vertex | vertex in next :: vertex in before;
     forall j: nat | j < |nextPositions|
       ensures nextPositions[j] < |next| && nextAdded[j] == next[nextPositions[j]] &&
               before[next[nextPositions[j]]] == multiset(next[..nextPositions[j] + 1])[next[nextPositions[j]]]
     {
       if j < |positions| {
         assert (successors[..count])[..positions[j] + 1] == successors[..positions[j] + 1];
+      } else {
+        assert ready;
+        assert j == |positions| == |added|;
+        assert nextPositions[j] == count;
+        assert nextAdded[j] == successors[count];
+        assert next[..nextPositions[j] + 1] == next;
       }
       assert next[..nextPositions[j] + 1] == successors[..nextPositions[j] + 1];
     }
@@ -55,6 +62,13 @@ module TsortStepProof {
       if p < count {
         assert (successors[..count])[..p + 1] == successors[..p + 1];
         assert p in positions;
+      } else {
+        assert p == count;
+        assert next[p] == successors[count];
+        assert next[..p + 1] == next;
+        assert ready;
+        assert nextPositions == positions + [count];
+        assert nextPositions[|positions|] == p;
       }
     }
     assert Spec.Released(next, before, nextAdded, nextPositions) by {

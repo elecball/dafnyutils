@@ -1,9 +1,9 @@
 include "TsortSchema.dfy"
 include "TsortGraphBuildSpec.dfy"
 include "TsortSortSpec.dfy"
-include "../../core/IO.dfy"
-include "../../core/Utf8.dfy"
-include "CliSupport.dfy"
+include "../../../core/IO.dfy"
+include "../../../core/Utf8.dfy"
+include "../Impl/CliSupport.dfy"
 
 module TsortSpec {
   import BenchIO

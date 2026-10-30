@@ -1,7 +1,7 @@
 include "MkfifoSchema.dfy"
-include "../../core/IO.dfy"
-include "../../core/Utf8.dfy"
-include "CliSupport.dfy"
+include "../../../core/IO.dfy"
+include "../../../core/Utf8.dfy"
+include "../Impl/CliSupport.dfy"
 
 // Observable behavior of GNU mkfifo (coreutils src/mkfifo.c at
 // 2cf491412c199e2211880ec3f4ba387026638a33). MODE follows gnulib

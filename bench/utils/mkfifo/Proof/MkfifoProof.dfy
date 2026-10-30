@@ -1,5 +1,5 @@
-include "MkfifoSpec.dfy"
-include "MkfifoModeCore.dfy"
+include "../Spec/MkfifoSpec.dfy"
+include "../Impl/MkfifoModeCore.dfy"
 include "MkfifoModeProof.dfy"
 
 module MkfifoProof {

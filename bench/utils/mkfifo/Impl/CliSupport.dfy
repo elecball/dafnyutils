@@ -1,7 +1,7 @@
 // Task-local CLI protocol scaffolding; not a library of utility algorithms.
-include "../../core/IO.dfy"
-include "../../core/CliTypes.dfy"
-include "../../core/Utf8.dfy"
+include "../../../core/IO.dfy"
+include "../../../core/CliTypes.dfy"
+include "../../../core/Utf8.dfy"
 
 module CliModel {
   import opened CliTypes

@@ -1,5 +1,5 @@
-include "TsortGraphBuildSpec.dfy"
-include "TsortSpec.dfy"
+include "../Spec/TsortGraphBuildSpec.dfy"
+include "../Spec/TsortSpec.dfy"
 
 module TsortGraphBuildProof {
   import BenchWorld

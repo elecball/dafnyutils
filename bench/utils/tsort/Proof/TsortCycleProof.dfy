@@ -1,6 +1,6 @@
 include "TsortSortProof.dfy"
-include "TsortCycleSpec.dfy"
-include "TsortSpec.dfy"
+include "../Spec/TsortCycleSpec.dfy"
+include "../Spec/TsortSpec.dfy"
 
 module TsortCycleProof {
   import BenchWorld

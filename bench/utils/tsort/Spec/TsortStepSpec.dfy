@@ -1,4 +1,4 @@
-include "../../core/World.dfy"
+include "../../../core/World.dfy"
 include "TsortSortSpec.dfy"
 
 module TsortStepSpec {

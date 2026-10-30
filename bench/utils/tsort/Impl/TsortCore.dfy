@@ -1,11 +1,11 @@
-include "../../core/IO.dfy"
-include "TsortSchema.dfy"
+include "../../../core/IO.dfy"
+include "../Spec/TsortSchema.dfy"
 include "TsortGraphBuildCore.dfy"
 include "TsortSortCore.dfy"
 include "TsortStepCore.dfy"
 include "TsortCycleCore.dfy"
-include "TsortSpec.dfy"
-include "TsortProof.dfy"
+include "../Spec/TsortSpec.dfy"
+include "../Proof/TsortProof.dfy"
 
 module TsortCore {
   import BenchIO
@@ -107,6 +107,7 @@ module TsortCore {
                          state.queue, state.visited, state.indeg);
         event := Spec.Emit(vertex);
         ordered := ordered + [vertex];
+        assert diagnostics == beforeErr + (if event.Cut? then Spec.LoopText(quoted) + Spec.CycleLines(event.cycle) else []) by { hide *; }
         output := output + Spec.OneLine(vertex, false);
         assert output == beforeOut + (if event.Emit? then event.vertex + "\n" else []) by {
           hide *;
@@ -144,7 +145,9 @@ module TsortCore {
         origins := origins[source := origins[source][..index] + origins[source][index + 1..]];
         graph := remaining;
         var lines := Serialize(cycle, true);
+        assert lines == Spec.CycleLines(event.cycle) by { hide *; }
         diagnostics := diagnostics + Spec.LoopText(quoted) + lines;
+        assert diagnostics == beforeErr + (if event.Cut? then Spec.LoopText(quoted) + Spec.CycleLines(event.cycle) else []) by { hide *; }
         exit := 1;
       }
       assert diagnostics == beforeErr + (if event.Cut? then Spec.LoopText(quoted) + Spec.CycleLines(event.cycle) else []) by { hide *; }
@@ -154,7 +157,8 @@ module TsortCore {
         hide *;
         run := Trace.Extend(initial, run, Trace.SnapshotOf(initial, origins, state.visited, state.queue), event);
         Proof.AppendText(beforeEvents, quoted, beforeOut, beforeErr, beforeExit, offsets, errOffsets, event);
-        offsets := offsets + [|output|];
+        ghost var nextOffset: nat := |output|;
+        offsets := offsets + [nextOffset];
         errOffsets := errOffsets + [|diagnostics|];
       }
       assert Proof.Text(run.events, quoted, output, diagnostics, exit, offsets, errOffsets) by { hide *; }
@@ -175,12 +179,21 @@ module TsortCore {
     output := [];
     diagnostics := [];
     exit := 0;
-    if raw.mode == Schema.ModeHelp { output := Spec.HelpTextSpec(); return; }
-    if raw.mode == Schema.ModeVersion { output := Spec.VersionTextSpec(); return; }
+    if raw.mode == Schema.ModeHelp {
+      output := Spec.HelpTextSpec();
+      assert Spec.Prepared(raw, io, exit, output, diagnostics) by { hide *; reveal Spec.Prepared(); }
+      return;
+    }
+    if raw.mode == Schema.ModeVersion {
+      output := Spec.VersionTextSpec();
+      assert Spec.Prepared(raw, io, exit, output, diagnostics) by { hide *; reveal Spec.Prepared(); }
+      return;
+    }
     if raw.mode.ModeExtraOperand? {
       var quoted := io.QuoteArgument(Utf8.Encode(raw.mode.operand));
       diagnostics := Spec.ExtraOperandText(quoted);
       exit := 1;
+      assert Spec.Prepared(raw, io, exit, output, diagnostics) by { hide *; reveal Spec.Prepared(); }
       return;
     }
     var path := Spec.InputPath(raw);
@@ -189,10 +202,10 @@ module TsortCore {
     var read: BenchWorld.IOResult<BenchWorld.Bytes>;
     if path == "-" { read := io.ReadStdin(); } else { read := io.ReadFile(path); }
     if path == "-" {
-      assert read == C.ObservedReadStdinResultFields(old(io.stdin()), io.trustedStreams());
-      assert io.stdin() == C.ObservedReadStdinRemainingFields(old(io.stdin()), io.trustedStreams());
+      assert read == C.ObservedReadStdinResultFields(old(io.stdin()), io.trustedStreams()) by { hide *; }
+      assert io.stdin() == C.ObservedReadStdinRemainingFields(old(io.stdin()), io.trustedStreams()) by { hide *; }
     } else {
-      assert read == C.ObservedReadFileResultFields(io.fs(), io.trustedStreams(), path);
+      assert read == C.ObservedReadFileResultFields(io.fs(), io.trustedStreams(), path) by { hide *; }
     }
     var alwaysQuoted := io.QuoteafPath(path);
     var quoted := Spec.FilenameText(path, alwaysQuoted);
@@ -202,6 +215,7 @@ module TsortCore {
       diagnostics := if path != "-" && C.ReadResultStage(read) == BenchWorld.OpenFailed
       then Spec.FileErrorText(quoted, reason) else Spec.ReadErrorText(quoted, reason);
       exit := 1;
+      assert Spec.Prepared(raw, io, exit, output, diagnostics) by { hide *; reveal Spec.Prepared(); }
       return;
     }
     assert !(read.Err? && C.ReadResultStage(read) != BenchWorld.CloseFailed);
@@ -231,7 +245,11 @@ module TsortCore {
         var closeError := C.ReadResultStage(read) == BenchWorld.CloseFailed && !(expectedExit == 1 && output == []);
         diagnostics == expectedErrors +
         (if closeError then Spec.FileErrorText(quoted, C.CLocaleErrnoTextResult(C.ResultErrno(read))) else []) &&
-        exit == (if closeError then 1 else expectedExit);
+        exit == (if closeError then 1 else expectedExit) by { hide *; }
+    {
+      hide *;
+      Proof.PreparedRun(raw, io, read, quoted, exit, output, diagnostics);
+    }
   }
 
   method Flush(io: BenchIO.IO, output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes, normalExit: int)
@@ -279,5 +297,6 @@ module TsortCore {
     reveal Spec.Spec();
     var normalExit, output, diagnostics := Prepare(raw, io);
     exit := Flush(io, output, diagnostics, normalExit);
+    assert Spec.Spec(raw, io, exit) by { hide *; reveal Spec.Spec(); }
   }
 }

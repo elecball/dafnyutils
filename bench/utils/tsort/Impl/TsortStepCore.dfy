@@ -1,7 +1,7 @@
 include "TsortState.dfy"
-include "TsortStepSpec.dfy"
-include "TsortStepProof.dfy"
-include "TsortSortProof.dfy"
+include "../Spec/TsortStepSpec.dfy"
+include "../Proof/TsortStepProof.dfy"
+include "../Proof/TsortSortProof.dfy"
 
 module TsortStepCore {
   import BenchWorld

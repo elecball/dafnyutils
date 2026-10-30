@@ -1,5 +1,5 @@
-include "MkfifoSpec.dfy"
-include "MkfifoModeCore.dfy"
+include "../Spec/MkfifoSpec.dfy"
+include "../Impl/MkfifoModeCore.dfy"
 
 // The parser in MkfifoModeCore inverts MkfifoSpec.Render:
 // - completeness: ParseMode(Render(e)) == Some(e) for every well-formed e;

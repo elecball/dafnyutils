@@ -1,4 +1,4 @@
-include "MkfifoSpec.dfy"
+include "../Spec/MkfifoSpec.dfy"
 
 // Executable MODE parser. It reads the string from left to right, as GNU
 // mode_compile does, and builds the abstract syntax defined in MkfifoSpec.

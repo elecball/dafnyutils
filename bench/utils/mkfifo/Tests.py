@@ -8,9 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-
-from evaluation.submission.candidate_execution import run_candidate
-from tools.bench_test_support import (
+from evaluation.benchmark_test_support import (
     BENCH_COMMAND_TIMEOUT_SEC,
     assert_result_matches_reference,
     bench_dll_path,
@@ -23,6 +21,7 @@ from tools.bench_test_support import (
     run_coreutils_utility,
     run_dafny_verify,
 )
+from evaluation.submission.candidate_execution import run_candidate
 
 ROOT = evaluation_target_root(Path(__file__).resolve().parents[3])
 UTILITY = "mkfifo"
@@ -469,12 +468,12 @@ def test_full_stderr_failure(executables: tuple[Path, Path], tmp_path: Path) -> 
 @pytest.mark.parametrize(
     "filename",
     [
-        "MkfifoSpec.dfy",
-        "MkfifoModeCore.dfy",
-        "MkfifoModeProof.dfy",
-        "MkfifoCore.dfy",
-        "MkfifoProof.dfy",
-        "Mkfifo.dfy",
+        "Spec/MkfifoSpec.dfy",
+        "Impl/MkfifoModeCore.dfy",
+        "Proof/MkfifoModeProof.dfy",
+        "Impl/MkfifoCore.dfy",
+        "Proof/MkfifoProof.dfy",
+        "Impl/Mkfifo.dfy",
     ],
 )
 def test_verify_module(filename: str) -> None:

@@ -1,11 +1,38 @@
 include "TsortCycleProof.dfy"
 
 module TsortProof {
+  import BenchIO
+  import BenchWorld
+  import Schema = TsortSchema
+  import C = IOContract
   import Spec = TsortSpec
   import SortSpec = TsortSortSpec
   import CycleProof = TsortCycleProof
   import opened Trace = TsortStepProof
   import opened SortProof = TsortSortProof
+
+  twostate lemma PreparedRun(
+    raw: Schema.TsortCmdRaw, io: BenchIO.IO, read: BenchWorld.IOResult<BenchWorld.Bytes>,
+                                                                       quoted: BenchWorld.Bytes, exit: int, output: BenchWorld.Bytes, diagnostics: BenchWorld.Bytes
+  )
+    requires raw.mode == Schema.ModeRun
+    requires read == (if Spec.InputPath(raw) == "-" then C.ObservedReadStdinResultFields(old(io.stdin()), io.trustedStreams())
+                      else C.ObservedReadFileResultFields(io.fs(), io.trustedStreams(), Spec.InputPath(raw)))
+    requires quoted == Spec.FilenameText(Spec.InputPath(raw), C.QuoteafPathResult(Spec.InputPath(raw)))
+    requires if Spec.InputPath(raw) == "-" then
+               C.ReadStdinSpec(old(io.stdin()), io.trustedStreams(), io.stdin(), C.ReadResultData(read), C.ResultErrno(read))
+             else C.ReadFileSpec(io.fs(), io.trustedStreams(), Spec.InputPath(raw), C.ReadResultData(read), C.ResultErrno(read), C.ReadResultStage(read))
+    requires Spec.InputPath(raw) != "-" || io.stdin() == C.ObservedReadStdinRemainingFields(old(io.stdin()), io.trustedStreams())
+    requires !(read.Err? && C.ReadResultStage(read) != BenchWorld.CloseFailed)
+    requires exists expectedExit: int, expectedErrors: BenchWorld.Bytes ::
+               Spec.DataResult(C.ReadResultData(read), quoted, output, expectedErrors, expectedExit) &&
+               var closeError := C.ReadResultStage(read) == BenchWorld.CloseFailed && !(expectedExit == 1 && output == []);
+               diagnostics == expectedErrors + (if closeError then Spec.FileErrorText(quoted, C.CLocaleErrnoTextResult(C.ResultErrno(read))) else []) &&
+               exit == (if closeError then 1 else expectedExit)
+    ensures Spec.Prepared(raw, io, exit, output, diagnostics)
+  {
+    reveal Spec.Prepared();
+  }
 
   lemma {:isolate_assertions} Certificate(graph: Graph, run: Run) returns (release: map<Bytes, nat>, position: map<Bytes, nat>)
     requires Schedule(graph, run) && |run.states| == |run.events| + 1 && run.states[|run.events|].pending == {}

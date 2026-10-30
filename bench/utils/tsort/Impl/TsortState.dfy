@@ -1,4 +1,4 @@
-include "../../core/World.dfy"
+include "../../../core/World.dfy"
 
 module TsortState {
   import BenchWorld

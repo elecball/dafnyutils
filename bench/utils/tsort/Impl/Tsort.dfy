@@ -1,7 +1,7 @@
 include "CliSupport.dfy"
-include "TsortSpec.dfy"
+include "../Spec/TsortSpec.dfy"
 include "TsortCore.dfy"
-include "TsortProof.dfy"
+include "../Proof/TsortProof.dfy"
 
 module Tsort {
   import BenchIO

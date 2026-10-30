@@ -1,4 +1,4 @@
-include "../../core/CliTypes.dfy"
+include "../../../core/CliTypes.dfy"
 
 module TsortSchema {
   import CliTypes

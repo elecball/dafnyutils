@@ -1,4 +1,4 @@
-includes = ["MkfifoCli.dfy"]
+includes = ["Impl/MkfifoCli.dfy"]
 
 [options]
 target = "cs"
