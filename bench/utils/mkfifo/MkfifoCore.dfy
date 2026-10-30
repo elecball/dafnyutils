@@ -55,7 +55,7 @@ module MkfifoCore {
       if parsed.None? {
         plan := Spec.RejectInvalidMode;
       } else {
-        var bits := Spec.Meaning(parsed.value, umask);
+        var bits := P.ComputeMeaning(parsed.value, umask);
         plan := if Spec.OnlyPermissionBits(bits) then Spec.ExplicitMode(bits)
         else Spec.RejectSpecialBits;
       }

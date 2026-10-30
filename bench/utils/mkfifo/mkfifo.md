@@ -43,7 +43,7 @@ prevent later operands from being tried.
   `mkfifo --mode='ug+rw,o+r'` cases); GPL-3.0-or-later,
   <https://www.gnu.org/software/coreutils/>.
 - Model/API revision: repository revision
-  `37b35bac3d4cf84cdd8ea02eb3279e8aa49307df`; shared `bench/core/IO.dfy` and
+  `3c704ee78884a4e764354431bb72b27771c02980`; shared `bench/core/IO.dfy` and
   `IOContract.dfy` are the trusted native boundary.
 - AllowedInput: finite sequences of Linux paths representable as UTF-8 strings,
   including empty operands, repeated paths, relative/absolute paths, trailing
@@ -127,7 +127,10 @@ Examples with umask `022`:
 - Proof of MODE: Core's parser is proved to invert `Render`
   (`Parse(Render(e)) == Some(e)` for every well-formed `e`, and a successful
   parse renders back to its input). This makes the `invalid mode` decision exact
-  and shows that a valid string has one meaning.
+  and shows that a valid string has one meaning. At run time the parser and
+  `Meaning` are computed by loops over string indices (`ParseMode`'s
+  `by method` and `ComputeMeaning`), proved equal to the recursive definitions,
+  so the call depth does not grow with the length of MODE.
 - Frame: `RunCore` modifies only `fsRegion` and `stderrRegion`. Its
   specification also reads `nowRegion`, `umaskRegion` (the umask the native
   creation applies), `propsRegion` (the umask value `GetUmask` returns, used to
@@ -161,13 +164,14 @@ error, and creating anything after an invalid MODE.
 
 The pull request records the tested commit, the artifact hashes, the fuzzer
 image and the full outputs. The results below were measured from base revision
-`37b35bac3d4cf84cdd8ea02eb3279e8aa49307df` in the contributor container on
+`3c704ee78884a4e764354431bb72b27771c02980` in the contributor container on
 Linux x86-64: Dafny 4.11.1+10dca3ba4a2909c11299176440401fc31413b53d, .NET SDK
 8.0.132, Python 3.12.3, pytest 9.1.1, Ruff 0.15.12, Rust/Cargo 1.94.0, Z3 4.16.0.
 
-- Tests: `make -C bench/utils/mkfifo test` passes 145 runtime cases against the
+- Tests: `make -C bench/utils/mkfifo test` passes 153 runtime cases against the
   pinned GNU build, comparing stdout, stderr, exit status and the resulting
-  filesystem, including the two `mkfifo` cases of `tests/misc/mknod.sh`.
+  filesystem, including the two `mkfifo` cases of `tests/misc/mknod.sh` and
+  MODE strings of 100,000 characters.
 - Fuzzing: `python3 tools/coreutils_fuzzer/run.py fuzz mkfifo --seeds 1,7,19
   --iterations 1000` completed 1000 matches per seed with no mismatch, timeout
   or other error; option coverage was 4/4 singles and 6/6 pairs for each seed.
