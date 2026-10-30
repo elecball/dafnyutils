@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: mv
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/mv/Spec/MvSpec.dfy
+- bench/utils/mv/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/mv/Impl/Mv.dfy
+  symbol: Mv.MvBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: MvSchema.MvCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.fsRegion, io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion
+          ensures MS.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/mv/Impl/MvCore.dfy
+  - bench/utils/mv/Proof/MvProof.dfy
+  - bench/utils/mv/Impl/MvCli.dfy
+specification_exceptions: []

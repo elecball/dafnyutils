@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: stat
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/stat/Spec/StatSpec.dfy
+- bench/utils/stat/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/stat/Impl/Stat.dfy
+  symbol: Stat.StatBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: S.StatCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.statusObservationsRegion, io.stdoutRegion, io.stderrRegion
+          ensures Spec.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/stat/Impl/StatCore.dfy
+  - bench/utils/stat/Proof/StatProof.dfy
+  - bench/utils/stat/Impl/StatCli.dfy
+specification_exceptions: []

@@ -1,0 +1,29 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: truncate
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/truncate/Spec/TruncateSpec.dfy
+- bench/utils/truncate/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/truncate/Impl/Truncate.dfy
+  symbol: Truncate.TruncateBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: S.TruncateCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.fsRegion, io.statusObservationsRegion, io.stdoutRegion, io.stderrRegion
+          ensures Spec.Spec(raw, io, exit)
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/truncate/Impl/TruncateCore.dfy
+  - bench/utils/truncate/Proof/TruncateProof.dfy
+  - bench/utils/truncate/Impl/TruncateCli.dfy
+specification_exceptions: []

@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: algorithm-59
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/algorithm/59/Algorithm59Spec.dfy
+- bench/algorithm/59/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/algorithm/59/Algorithm59.dfy
+  symbol: Algorithm59.Algorithm59BenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: SchemaMod.Algorithm59CmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.stdoutRegion, io.stderrRegion
+          ensures Spec.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/algorithm/59/Algorithm59Core.dfy
+  - bench/algorithm/59/Algorithm59Proof.dfy
+  - bench/algorithm/59/Algorithm59Cli.dfy
+specification_exceptions: []

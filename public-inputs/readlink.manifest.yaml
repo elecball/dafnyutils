@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: readlink
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/readlink/Spec/ReadlinkSpec.dfy
+- bench/utils/readlink/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/readlink/Impl/Readlink.dfy
+  symbol: Readlink.ReadlinkBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: ReadlinkSchema.ReadlinkCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.stdoutRegion, io.stderrRegion,io.directoryStateRegion
+          ensures RS.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/readlink/Impl/ReadlinkCore.dfy
+  - bench/utils/readlink/Proof/ReadlinkProof.dfy
+  - bench/utils/readlink/Impl/ReadlinkCli.dfy
+specification_exceptions: []

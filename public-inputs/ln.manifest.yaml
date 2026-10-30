@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: ln
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/ln/Spec/LnSpec.dfy
+- bench/utils/ln/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/ln/Impl/Ln.dfy
+  symbol: Ln.LnBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: LnSchema.LnCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.fsRegion, io.stdoutRegion, io.stderrRegion, io.statusObservationsRegion
+          ensures LS.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/ln/Impl/LnCore.dfy
+  - bench/utils/ln/Proof/LnProof.dfy
+  - bench/utils/ln/Impl/LnCli.dfy
+specification_exceptions: []

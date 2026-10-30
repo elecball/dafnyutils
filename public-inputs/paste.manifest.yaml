@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: paste
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/paste/Spec/PasteSpec.dfy
+- bench/utils/paste/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/paste/Impl/Paste.dfy
+  symbol: Paste.PasteBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: PasteSchema.PasteCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+          ensures PS.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/paste/Impl/PasteCore.dfy
+  - bench/utils/paste/Proof/PasteProof.dfy
+  - bench/utils/paste/Impl/PasteCli.dfy
+specification_exceptions: []

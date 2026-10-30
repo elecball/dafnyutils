@@ -1,0 +1,31 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: rmdir
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/rmdir/Spec/RmdirSpec.dfy
+- bench/utils/rmdir/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/rmdir/Impl/Rmdir.dfy
+  symbol: Rmdir.RmdirBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: S.RmdirCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies if raw.mode != S.ModeRun || |raw.operands| == 0
+                   then {io.stdoutRegion as object, io.stderrRegion}
+                   else {io.fsRegion, io.stdoutRegion, io.stderrRegion, io.dirHandlesRegion}
+          ensures Spec.Spec(raw, io, exit)
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/rmdir/Impl/RmdirCore.dfy
+  - bench/utils/rmdir/Proof/RmdirProof.dfy
+  - bench/utils/rmdir/Impl/RmdirCli.dfy
+specification_exceptions: []

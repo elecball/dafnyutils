@@ -1,0 +1,31 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: dd
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/dd/Spec/DdSpec.dfy
+- bench/utils/dd/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/dd/Impl/Dd.dfy
+  symbol: Dd.DdBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: S.DdCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies if raw.mode == S.Copy && raw.error == S.None
+                   then {io.stdinRegion as object, io.stdoutRegion, io.stderrRegion}
+                   else {io.stdoutRegion as object, io.stderrRegion}
+          ensures Spec.Spec(raw, io, exit)
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/dd/Impl/DdCore.dfy
+  - bench/utils/dd/Proof/DdProof.dfy
+  - bench/utils/dd/Impl/DdCli.dfy
+specification_exceptions: []

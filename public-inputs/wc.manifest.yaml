@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: wc
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/wc/Spec/WcSpec.dfy
+- bench/utils/wc/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/wc/Impl/Wc.dfy
+  symbol: Wc.WcBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: WcSchema.WcCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+          ensures CS.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/wc/Impl/WcCore.dfy
+  - bench/utils/wc/Proof/WcProof.dfy
+  - bench/utils/wc/Impl/WcCli.dfy
+specification_exceptions: []

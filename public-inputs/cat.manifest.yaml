@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: cat
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/cat/Spec/CatSpec.dfy
+- bench/utils/cat/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/cat/Impl/Cat.dfy
+  symbol: Cat.CatBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: CatSchema.CatCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+          ensures CS.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/cat/Impl/CatCore.dfy
+  - bench/utils/cat/Proof/CatProof.dfy
+  - bench/utils/cat/Impl/CatCli.dfy
+specification_exceptions: []

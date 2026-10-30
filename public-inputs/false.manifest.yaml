@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: 'false'
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/false/Spec/FalseSpec.dfy
+- bench/utils/false/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/false/Impl/False.dfy
+  symbol: False.FalseBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: FalseSchema.FalseCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.stdoutRegion, io.stderrRegion
+          ensures FS.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/false/Impl/FalseCore.dfy
+  - bench/utils/false/Proof/FalseProof.dfy
+  - bench/utils/false/Impl/FalseCli.dfy
+specification_exceptions: []

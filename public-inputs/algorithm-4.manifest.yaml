@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: algorithm-4
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/algorithm/4/Algorithm4Spec.dfy
+- bench/algorithm/4/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/algorithm/4/Algorithm4.dfy
+  symbol: Algorithm4.Algorithm4BenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: SchemaMod.Algorithm4CmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.stdoutRegion, io.stderrRegion
+          ensures Spec.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/algorithm/4/Algorithm4Core.dfy
+  - bench/algorithm/4/Algorithm4Proof.dfy
+  - bench/algorithm/4/Algorithm4Cli.dfy
+specification_exceptions: []

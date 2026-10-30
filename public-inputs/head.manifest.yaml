@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: head
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/head/Spec/HeadSpec.dfy
+- bench/utils/head/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/head/Impl/Head.dfy
+  symbol: Head.HeadBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: HeadSchema.HeadCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+          ensures CS.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/head/Impl/HeadCore.dfy
+  - bench/utils/head/Proof/HeadProof.dfy
+  - bench/utils/head/Impl/HeadCli.dfy
+specification_exceptions: []

@@ -1,0 +1,30 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: chmod
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/chmod/Spec/ChmodSpec.dfy
+- bench/utils/chmod/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/chmod/Impl/Chmod.dfy
+  symbol: Chmod.ChmodBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: ChmodSchema.ChmodCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.fsRegion, io.stdoutRegion, io.stderrRegion, io.directoryStateRegion, io.statusObservationsRegion
+          ensures Spec.Spec(raw, io, exit)
+          decreases *
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/chmod/Impl/ChmodCore.dfy
+  - bench/utils/chmod/Proof/ChmodProof.dfy
+  - bench/utils/chmod/Impl/ChmodCli.dfy
+specification_exceptions: []

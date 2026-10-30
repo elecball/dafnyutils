@@ -1,0 +1,29 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: join
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/join/Spec/JoinSpec.dfy
+- bench/utils/join/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/join/Impl/Join.dfy
+  symbol: Join.JoinBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: S.JoinCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.stdinRegion, io.stdoutRegion, io.stderrRegion
+          ensures Spec.Spec(raw, io, exit)
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/join/Impl/JoinCore.dfy
+  - bench/utils/join/Proof/JoinProof.dfy
+  - bench/utils/join/Impl/JoinCli.dfy
+specification_exceptions: []

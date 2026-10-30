@@ -1,0 +1,29 @@
+schema_version: dafnyutils.public-input-manifest.v1
+task_id: unlink
+release: public-input-adoption-2026-10-28
+public_roots:
+- bench/utils/unlink/Spec/UnlinkSpec.dfy
+- bench/utils/unlink/dfyconfig.toml
+- bench/core/Result.dfy
+- bench/core/Errno.dfy
+- bench/core/World.dfy
+- bench/core/Utf8.dfy
+- bench/core/StringEscaping.dfy
+- bench/core/IO.dfy
+- bench/core/IOContract.dfy
+- bench/core/SecurityModel.dfy
+- bench/core/CliTypes.dfy
+- bench/core/IOExtern.cs
+obligation:
+  path: bench/utils/unlink/Impl/Unlink.dfy
+  symbol: Unlink.UnlinkBenchmarkItem.RunCore
+  signature: |-
+    method RunCore(raw: S.UnlinkCmdRaw, io: BenchIO.IO) returns (exit: int)
+          modifies io.fsRegion, io.stdoutRegion, io.stderrRegion
+          ensures Spec.Spec(raw, io, exit)
+  hole: method-body
+  candidate_outputs:
+  - bench/utils/unlink/Impl/UnlinkCore.dfy
+  - bench/utils/unlink/Proof/UnlinkProof.dfy
+  - bench/utils/unlink/Impl/UnlinkCli.dfy
+specification_exceptions: []
