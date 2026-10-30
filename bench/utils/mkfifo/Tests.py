@@ -199,6 +199,42 @@ def test_invalid_mode(executables: tuple[Path, Path], tmp_path: Path, mode: str)
     assert set(entries) == {"."}
 
 
+# Long MODE strings: one argument stays below Linux's 128 KiB limit.
+LONG_MODE = 100_000
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        pytest.param("0" * LONG_MODE + "600", id="leading-zeros"),
+        pytest.param("u" * LONG_MODE + "+r", id="who-letters"),
+        pytest.param("a+" + "r" * LONG_MODE, id="permission-letters"),
+        pytest.param("+r" * (LONG_MODE // 2), id="actions"),
+        pytest.param(",".join(["u+r"] * (LONG_MODE // 4)), id="clauses"),
+        pytest.param("+" + "0" * LONG_MODE + "644", id="octal-after-operator"),
+    ],
+)
+def test_long_mode(executables: tuple[Path, Path], tmp_path: Path, mode: str) -> None:
+    # upstream: none - Checks that a long MODE is parsed and applied without deep recursion.
+    result, entries = assert_parity(executables, ["-m", mode, "p"], tmp_path)
+    assert result == (b"", b"", 0)
+    assert stat.S_ISFIFO(entries["p"].kind)
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        pytest.param("7" * LONG_MODE, id="digits"),
+        pytest.param("0" * LONG_MODE + "10000", id="leading-zeros"),
+    ],
+)
+def test_long_invalid_mode(executables: tuple[Path, Path], tmp_path: Path, mode: str) -> None:
+    # upstream: none - Checks mode_compile's 07777 limit on a long digit run.
+    result, entries = assert_parity(executables, ["-m", mode, "p"], tmp_path)
+    assert result == (b"", INVALID_MODE, 1)
+    assert set(entries) == {"."}
+
+
 # A MODE whose result has set-ID or sticky bits is rejected before any creation.
 @pytest.mark.parametrize("mode", ["u+s", "+s", "+t", "4644", "7777", "g+s,o+t"])
 def test_special_bits(executables: tuple[Path, Path], tmp_path: Path, mode: str) -> None:
